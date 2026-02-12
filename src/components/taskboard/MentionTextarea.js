@@ -163,12 +163,86 @@ const MentionTextarea = ({
     onChange(newValue);
   };
 
+  // Pomocnicza funkcja: znajdź chip sąsiadujący z kursorem
+  const getAdjacentChip = (direction) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) return null;
+
+    const range = selection.getRangeAt(0);
+    const { startContainer, startOffset } = range;
+
+    // Kursor jest bezpośrednio w editorze (między węzłami potomnymi)
+    if (startContainer === editorRef.current) {
+      const children = Array.from(editorRef.current.childNodes);
+      if (direction === 'before' && startOffset > 0) {
+        const prev = children[startOffset - 1];
+        if (prev && prev.nodeType === Node.ELEMENT_NODE && prev.classList?.contains('mention-chip')) {
+          return prev;
+        }
+      }
+      if (direction === 'after' && startOffset < children.length) {
+        const next = children[startOffset];
+        if (next && next.nodeType === Node.ELEMENT_NODE && next.classList?.contains('mention-chip')) {
+          return next;
+        }
+      }
+      return null;
+    }
+
+    // Kursor jest w węźle tekstowym
+    if (startContainer.nodeType === Node.TEXT_NODE) {
+      if (direction === 'before' && startOffset === 0) {
+        // Kursor na początku tekstu – sprawdź poprzedni sibling
+        let prev = startContainer.previousSibling;
+        if (prev && prev.nodeType === Node.ELEMENT_NODE && prev.classList?.contains('mention-chip')) {
+          return prev;
+        }
+      }
+      if (direction === 'after' && startOffset === startContainer.textContent.length) {
+        // Kursor na końcu tekstu – sprawdź następny sibling
+        let next = startContainer.nextSibling;
+        if (next && next.nodeType === Node.ELEMENT_NODE && next.classList?.contains('mention-chip')) {
+          return next;
+        }
+      }
+    }
+
+    return null;
+  };
+
+  // Usuń chip i zaktualizuj wartość
+  const removeChip = (chip) => {
+    if (!chip || !editorRef.current) return;
+    chip.remove();
+    const newValue = htmlToValue(editorRef.current.innerHTML);
+    onChange(newValue);
+  };
+
   // Obsługa klawiszy
   const handleKeyDown = (e) => {
     if (menuOpen) {
       if (e.key === 'Escape') {
         closeMenu();
         e.preventDefault();
+        return;
+      }
+    }
+
+    // Obsługa usuwania chipów Backspace / Delete
+    if (e.key === 'Backspace') {
+      const chip = getAdjacentChip('before');
+      if (chip) {
+        e.preventDefault();
+        removeChip(chip);
+        return;
+      }
+    }
+
+    if (e.key === 'Delete') {
+      const chip = getAdjacentChip('after');
+      if (chip) {
+        e.preventDefault();
+        removeChip(chip);
         return;
       }
     }

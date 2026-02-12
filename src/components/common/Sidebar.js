@@ -177,7 +177,6 @@ const Sidebar = ({ onToggle }) => {
     const pathToIdMap = {
       // Dashboard
       '/': 'dashboard-main',
-      '/analytics': 'dashboard-analytics',
       '/taskboard': 'dashboard-taskboard',
       
       // Hall Data
@@ -186,7 +185,7 @@ const Sidebar = ({ onToggle }) => {
       
       // Sales
       '/sales': 'sales-invoices',
-      '/sales/material-advances': 'sales-material-advances',
+      '/sales/quotation': 'sales-quotation',
       '/invoices': 'sales-invoices',
       '/orders': 'sales-customer-orders',
       '/orders/customers': 'sales-customer-orders',
@@ -390,9 +389,16 @@ const Sidebar = ({ onToggle }) => {
       path: '/',
       hasSubmenu: true,
       children: [
-        { text: t('submenu.dashboard.analytics'), icon: <InsightsIcon />, path: '/analytics' },
         { text: t('submenu.dashboard.taskboard'), icon: <TaskboardIcon />, path: '/taskboard' },
       ].sort((a, b) => a.text.localeCompare(b.text))
+    },
+    { 
+      id: 'analytics',
+      text: t('analytics'), 
+      icon: <InsightsIcon />, 
+      path: '/analytics',
+      hasSubmenu: false,
+      children: []
     },
     { 
       id: 'hall-data',
@@ -414,7 +420,7 @@ const Sidebar = ({ onToggle }) => {
       hasSubmenu: true,
       children: [
         { text: t('submenu.sales.invoices'), icon: <InvoicesIcon />, path: '/sales' },
-        { text: t('submenu.sales.materialAdvances'), icon: <InvoicesIcon />, path: '/sales/material-advances' },
+        { text: t('submenu.sales.quotation'), icon: <CalculateIcon />, path: '/sales/quotation' },
         { text: t('submenu.sales.customerOrders'), icon: <OrdersIcon />, path: '/orders' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },

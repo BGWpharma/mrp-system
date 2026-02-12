@@ -728,6 +728,14 @@
       "missingRecipe": "Nie znaleziono receptury o ID: {{recipeId}}",
       "recipeNotFound": "Nie znaleziono receptury dla produktu {{product}}",
       "cannotCreateTask": "Nie udało się utworzyć zadania dla pozycji {{item}}"
+    },
+    "sequential": {
+      "label": "Planowanie gęsiego",
+      "description": "Zadania ustawiane jedno po drugim — data rozpoczęcia kolejnego zadania = data zakończenia poprzedniego. Weekendy są pomijane.",
+      "infoAlert": "Tryb gęsiego włączony — ustaw datę produkcji dla pierwszej pozycji, a pozostałe zostaną automatycznie obliczone na podstawie czasu produkcji z receptur. Weekendy są pomijane.",
+      "autoDate": "Data automatyczna",
+      "autoCalculated": "Data obliczona automatycznie na podstawie zakończenia poprzedniego zadania",
+      "chainedTooltip": "Powiązane z poprzednim zadaniem"
     }
   },
   "timeline": {

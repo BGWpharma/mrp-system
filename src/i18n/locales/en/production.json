@@ -680,6 +680,14 @@
       "missingRecipe": "Recipe not found with ID: {{recipeId}}",
       "recipeNotFound": "No recipe found for product {{product}}",
       "cannotCreateTask": "Cannot create task for item {{item}}"
+    },
+    "sequential": {
+      "label": "Sequential scheduling",
+      "description": "Tasks are scheduled one after another — each task starts when the previous one ends. Weekends are skipped.",
+      "infoAlert": "Sequential mode enabled — set the production date for the first item and the rest will be automatically calculated based on recipe production times. Weekends are skipped.",
+      "autoDate": "Auto date",
+      "autoCalculated": "Date automatically calculated based on the end of the previous task",
+      "chainedTooltip": "Chained to previous task"
     }
   },
   "timeline": {

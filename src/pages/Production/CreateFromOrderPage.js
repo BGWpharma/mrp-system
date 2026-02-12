@@ -23,7 +23,10 @@ import {
   TextField,
   CircularProgress,
   Chip,
-  FormHelperText
+  FormHelperText,
+  Switch,
+  FormControlLabel,
+  Tooltip
 } from '@mui/material';
 import { 
   ArrowBack as ArrowBackIcon,
@@ -32,7 +35,8 @@ import {
   Engineering as EngineeringIcon,
   ShoppingCart as ShoppingCartIcon,
   AttachMoney as AttachMoneyIcon,
-  Calculate as CalculateIcon
+  Calculate as CalculateIcon,
+  Link as LinkIcon
 } from '@mui/icons-material';
 import { getAllOrders, getOrderById, addProductionTaskToOrder, updateOrder } from '../../services/orderService';
 import { createTask, reserveMaterialsForTask } from '../../services/productionService';
@@ -73,6 +77,7 @@ const CreateFromOrderPage = () => {
   const [productDates, setProductDates] = useState({});
   const [workstations, setWorkstations] = useState([]);
   const [selectedWorkstations, setSelectedWorkstations] = useState({});
+  const [sequentialMode, setSequentialMode] = useState(false); // Tryb "gęsiego" - zadania jedno po drugim
   
   // Formularz nowego zadania
   const [taskForm, setTaskForm] = useState({
@@ -856,10 +861,14 @@ const CreateFromOrderPage = () => {
       }
       
       console.log("Wybrane produkty do produkcji:", selectedProductItemIds);
+      console.log(`[SEQUENTIAL] Tryb gęsiego: ${sequentialMode ? 'WŁĄCZONY' : 'WYŁĄCZONY'}`);
       
       // Tworzenie tablicy na utworzone zadania i listę błędów
       const createdTasks = [];
       const errors = [];
+      
+      // Śledzenie końca poprzedniego zadania dla trybu "gęsiego"
+      let lastEndDate = null;
       
       // Przetwarzanie każdego zaznaczonego przedmiotu
       for (const itemId of selectedProductItemIds) {
@@ -910,7 +919,14 @@ const CreateFromOrderPage = () => {
           const unit = orderItem.unit || 'szt.';
           
           // Sprawdź, czy mamy datę dla tego produktu, jeśli nie - użyj domyślnej
-          let orderItemDate = productDates[itemId] || new Date();
+          let orderItemDate;
+          if (sequentialMode && lastEndDate) {
+            // Tryb gęsiego: start = koniec poprzedniego zadania
+            orderItemDate = new Date(lastEndDate);
+            console.log(`[SEQUENTIAL] Zadanie "${orderItem.name}" startuje po poprzednim: ${orderItemDate.toISOString()}`);
+          } else {
+            orderItemDate = productDates[itemId] || new Date();
+          }
           
           // Upewnij się, że data rozpoczęcia przypada na dzień roboczy
           while (isWeekend(orderItemDate)) {
@@ -958,6 +974,10 @@ const CreateFromOrderPage = () => {
               endDate.setDate(endDate.getDate() + 1);
             }
           }
+          
+          // Aktualizuj lastEndDate dla trybu "gęsiego"
+          lastEndDate = new Date(endDate);
+          console.log(`[SEQUENTIAL] Zadanie "${orderItem.name}": start=${orderItemDate.toISOString()}, koniec=${endDate.toISOString()}`);
           
           // Sprawdź, czy dla tego elementu zostało wybrane stanowisko produkcyjne
           let workstationId = selectedWorkstations[itemId] || '';
@@ -1229,6 +1249,95 @@ const CreateFromOrderPage = () => {
     }));
   }, []);
 
+  // Funkcja przeliczająca daty "gęsiego" - każde zadanie zaczyna się po zakończeniu poprzedniego
+  const recalculateSequentialDates = useCallback((firstDate, itemIds) => {
+    if (!selectedOrder || !selectedOrder.items || !itemIds || itemIds.length === 0) return;
+
+    let currentStart = new Date(firstDate);
+    // Pomiń weekendy dla daty startu
+    while (isWeekend(currentStart)) {
+      currentStart.setDate(currentStart.getDate() + 1);
+      currentStart.setHours(8, 0, 0, 0);
+    }
+
+    const newDates = {};
+
+    for (const itemId of itemIds) {
+      const item = selectedOrder.items.find(i => i.id === itemId);
+      if (!item) continue;
+
+      // Znajdź recepturę dla produktu
+      const recipe = findRecipeForProduct(item.name);
+      const productionTimePerUnit = parseFloat(recipe?.productionTimePerUnit || 0);
+      const itemQuantity = parseFloat(item.quantity) || 0;
+      const estimatedDuration = productionTimePerUnit * itemQuantity;
+
+      // Upewnij się, że start jest w dniu roboczym
+      while (isWeekend(currentStart)) {
+        currentStart.setDate(currentStart.getDate() + 1);
+        currentStart.setHours(8, 0, 0, 0);
+      }
+
+      // Zapisz datę startu dla tego zadania
+      newDates[itemId] = new Date(currentStart);
+
+      // Oblicz datę zakończenia i ustaw ją jako start następnego zadania
+      if (estimatedDuration > 0) {
+        currentStart = calculateEndDateWithWorkingHours(new Date(currentStart), estimatedDuration, 16);
+      } else {
+        // Fallback: +1 dzień roboczy
+        currentStart = new Date(currentStart);
+        currentStart.setDate(currentStart.getDate() + 1);
+        while (isWeekend(currentStart)) {
+          currentStart.setDate(currentStart.getDate() + 1);
+        }
+        currentStart.setHours(8, 0, 0, 0);
+      }
+    }
+
+    setProductDates(prev => ({ ...prev, ...newDates }));
+  }, [selectedOrder, findRecipeForProduct]);
+
+  // Pobierz posortowaną listę ID wybranych (zaznaczonych) produktów z recepturami
+  const getSelectedItemIdsInOrder = useCallback(() => {
+    if (!selectedOrder || !selectedOrder.items) return [];
+    
+    // Filtruj produkty z recepturami (te same co w tabeli)
+    const productsWithRecipes = selectedOrder.items.filter(item => {
+      const recipe = findRecipeForProduct(item.name);
+      return !!recipe;
+    });
+
+    // Filtruj tylko zaznaczone (lub wszystkie z recepturami, jeśli chcemy przeliczać dla wszystkich widocznych)
+    const itemIds = productsWithRecipes
+      .filter(item => {
+        // Sprawdź czy nie ma już zadania
+        const hasTask = existingTasks.some(task => {
+          if (task.orderItemId && item.id) return task.orderItemId === item.id;
+          return task.productName === item.name && task.quantity === item.quantity;
+        });
+        return !hasTask;
+      })
+      .map(item => item.id);
+
+    return itemIds;
+  }, [selectedOrder, findRecipeForProduct, existingTasks]);
+
+  // Obsługa włączania/wyłączania trybu "gęsiego"
+  const handleSequentialModeToggle = useCallback((event) => {
+    const enabled = event.target.checked;
+    setSequentialMode(enabled);
+
+    if (enabled) {
+      const itemIds = getSelectedItemIdsInOrder();
+      if (itemIds.length > 0) {
+        // Użyj daty pierwszego elementu jako bazy
+        const firstItemDate = productDates[itemIds[0]] || new Date();
+        recalculateSequentialDates(firstItemDate, itemIds);
+      }
+    }
+  }, [getSelectedItemIdsInOrder, productDates, recalculateSequentialDates]);
+
   // ⚡ OPTYMALIZACJA: useCallback zapobiega recreating funkcji przy każdym renderze
   const renderProductsTable = useCallback(() => {
     if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
@@ -1277,7 +1386,7 @@ const CreateFromOrderPage = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {productsWithRecipes.map((item) => {
+            {productsWithRecipes.map((item, itemIndex) => {
               // Znajdź recepturę dla produktu
               const recipe = findRecipeForProduct(item.name);
               // Oblicz planowany czas produkcji dla 1 szt.
@@ -1392,28 +1501,75 @@ const CreateFromOrderPage = () => {
                     )}
                   </TableCell>
                   <TableCell>
-                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                      <DateTimePicker
-                        label={t('createFromOrder.placeholders.productionDateTime')}
-                        value={productDates[item.id] || null}
-                        onChange={(newDate) => {
-                          if (newDate) {
-                            setProductDates(prev => ({
-                              ...prev,
-                              [item.id]: newDate
-                            }));
-                          }
-                        }}
-                        disabled={hasTask}
-                        slotProps={{ 
-                          textField: { 
-                            size: "small",
-                            fullWidth: true
-                          } 
-                        }}
-                        format="dd.MM.yyyy HH:mm"
-                      />
-                    </LocalizationProvider>
+                    {(() => {
+                      // Sprawdź czy ten element jest "pierwszym" bez zadania (do trybu gęsiego)
+                      const availableItemIds = getSelectedItemIdsInOrder();
+                      const isFirstAvailable = availableItemIds.length > 0 && availableItemIds[0] === item.id;
+                      const isSequentialLocked = sequentialMode && !isFirstAvailable && !hasTask;
+
+                      return (
+                        <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                          <Tooltip 
+                            title={isSequentialLocked ? t('createFromOrder.sequential.autoCalculated') : ''}
+                            arrow
+                            placement="top"
+                          >
+                            <span>
+                              <DateTimePicker
+                                label={isSequentialLocked 
+                                  ? t('createFromOrder.sequential.autoDate') 
+                                  : t('createFromOrder.placeholders.productionDateTime')
+                                }
+                                value={productDates[item.id] || null}
+                                onChange={(newDate) => {
+                                  if (newDate) {
+                                    if (sequentialMode && isFirstAvailable) {
+                                      // W trybie gęsiego: zmiana daty pierwszego elementu przelicza wszystkie
+                                      setProductDates(prev => ({
+                                        ...prev,
+                                        [item.id]: newDate
+                                      }));
+                                      // Przelicz daty dla pozostałych elementów
+                                      recalculateSequentialDates(newDate, availableItemIds);
+                                    } else {
+                                      setProductDates(prev => ({
+                                        ...prev,
+                                        [item.id]: newDate
+                                      }));
+                                    }
+                                  }
+                                }}
+                                disabled={hasTask || isSequentialLocked}
+                                slotProps={{ 
+                                  textField: { 
+                                    size: "small",
+                                    fullWidth: true,
+                                    sx: isSequentialLocked ? {
+                                      '& .MuiInputBase-root': {
+                                        backgroundColor: 'rgba(25, 118, 210, 0.04)',
+                                        borderColor: 'primary.main'
+                                      },
+                                      '& .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: 'rgba(25, 118, 210, 0.3)',
+                                        borderStyle: 'dashed'
+                                      }
+                                    } : {},
+                                    InputProps: isSequentialLocked ? {
+                                      endAdornment: (
+                                        <Tooltip title={t('createFromOrder.sequential.chainedTooltip')}>
+                                          <LinkIcon color="primary" sx={{ fontSize: 18, mr: 0.5 }} />
+                                        </Tooltip>
+                                      )
+                                    } : undefined
+                                  } 
+                                }}
+                                format="dd.MM.yyyy HH:mm"
+                              />
+                            </span>
+                          </Tooltip>
+                        </LocalizationProvider>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     <FormControl fullWidth>
@@ -1461,7 +1617,7 @@ const CreateFromOrderPage = () => {
         </Table>
       </TableContainer>
     );
-  }, [selectedOrder, findRecipeForProduct, isAllSelected, handleSelectAllItems, isPartiallySelected, selectedItems, existingTasks, productDates, selectedWorkstations, workstations, t, handleProductDateChange, handleWorkstationChange]);
+  }, [selectedOrder, findRecipeForProduct, isAllSelected, handleSelectAllItems, isPartiallySelected, selectedItems, existingTasks, productDates, selectedWorkstations, workstations, t, handleProductDateChange, handleWorkstationChange, sequentialMode, recalculateSequentialDates, getSelectedItemIdsInOrder]);
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -1646,9 +1802,47 @@ const CreateFromOrderPage = () => {
                   </Grid>
                 </Grid>
                 
-                <Typography variant="h6" gutterBottom>
-                  {t('createFromOrder.selectProductsTitle')}
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>
+                    {t('createFromOrder.selectProductsTitle')}
+                  </Typography>
+                  
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Tooltip 
+                      title={t('createFromOrder.sequential.description')} 
+                      arrow 
+                      placement="left"
+                    >
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={sequentialMode}
+                            onChange={handleSequentialModeToggle}
+                            color="primary"
+                            size="small"
+                          />
+                        }
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <LinkIcon fontSize="small" color={sequentialMode ? 'primary' : 'disabled'} />
+                            <Typography variant="body2" color={sequentialMode ? 'primary' : 'text.secondary'}>
+                              {t('createFromOrder.sequential.label')}
+                            </Typography>
+                          </Box>
+                        }
+                        labelPlacement="start"
+                      />
+                    </Tooltip>
+                  </Box>
+                </Box>
+                
+                {sequentialMode && (
+                  <Alert severity="info" sx={{ mb: 1 }} variant="outlined">
+                    <Typography variant="body2">
+                      {t('createFromOrder.sequential.infoAlert')}
+                    </Typography>
+                  </Alert>
+                )}
                 
                 {renderProductsTable()}
                 

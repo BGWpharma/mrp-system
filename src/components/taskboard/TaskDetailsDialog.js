@@ -153,6 +153,16 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
     }
   };
 
+  // Zamknięcie dialogu (Esc / klik w tło) – automatyczny zapis
+  const handleDialogClose = async (event, reason) => {
+    // Jeśli tytuł jest wypełniony, zapisz przed zamknięciem
+    if (task && formData.title.trim()) {
+      await handleSave();
+    } else {
+      onClose();
+    }
+  };
+
   // Obsługa załączników - dodawanie linku URL
   const handleAddAttachment = () => {
     if (!newAttachment.url.trim()) return;
@@ -335,7 +345,7 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={handleDialogClose}
       maxWidth="md"
       fullWidth
       PaperProps={{

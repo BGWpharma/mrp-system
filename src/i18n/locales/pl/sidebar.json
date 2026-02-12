@@ -1,10 +1,11 @@
 {
   "aiAssistant": "Asystent AI",
-  "dashboard": "Dashboard",
+  "dashboard": "Zespół",
   "hallData": "Parametry hali",
   "sales": "Sprzedaż",
   "production": "Produkcja",
   "inventory": "Stany",
+  "analytics": "Analityka",
   "taskboard": "Taskboard",
   "reportBug": "Zgłoś błąd",
   "faq": "FAQ",
@@ -22,7 +23,7 @@
     },
     "sales": {
       "invoices": "Faktury",
-      "materialAdvances": "Zaliczki materiałowe",
+      "quotation": "Wycena",
       "customers": "Klienci",
       "priceLists": "Listy cenowe",
       "newProductionTask": "Nowe zadanie produkcyjne",
