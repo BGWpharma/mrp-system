@@ -423,7 +423,7 @@ export const updateUserProfile = async (userId, userProfile, adminId) => {
     }
     
     // Walidacja danych
-    const allowedFields = ['displayName', 'email', 'photoURL', 'phone', 'position', 'department'];
+    const allowedFields = ['displayName', 'email', 'photoURL', 'phone', 'position', 'department', 'employeeId'];
     const updateData = {};
     
     // Filtruj tylko dozwolone pola
@@ -584,7 +584,9 @@ export const getAvailableSidebarTabs = () => {
       hasSubmenu: true,
       children: [
         { id: 'dashboard-main', name: 'Dashboard główny', path: '/' },
-        { id: 'dashboard-analytics', name: 'Analityka', path: '/analytics' }
+        { id: 'dashboard-analytics', name: 'Analityka', path: '/analytics' },
+        { id: 'dashboard-worktime', name: 'Czas pracy', path: '/work-time' },
+        { id: 'dashboard-schedule', name: 'Grafik', path: '/schedule' }
       ]
     },
     { 
@@ -644,6 +646,111 @@ export const getAvailableSidebarTabs = () => {
   ];
 };
 
+/**
+ * Tworzy użytkownika kioskowego (bez konta Google/email).
+ * Taki użytkownik korzysta z systemu wyłącznie przez ID pracownika (Czas pracy, Grafik).
+ * @param {Object} data - Dane pracownika kioskowego
+ * @param {string} data.displayName - Imię i nazwisko
+ * @param {string} data.employeeId - Unikalny ID pracownika (np. BGW-001)
+ * @param {string} [data.position] - Stanowisko
+ * @param {string} [data.department] - Dział
+ * @param {string} [data.phone] - Telefon
+ * @param {string} adminId - ID administratora tworzącego użytkownika
+ * @returns {Promise<string>} - ID nowo utworzonego dokumentu
+ */
+export const createKioskUser = async (data, adminId) => {
+  try {
+    // Sprawdź uprawnienia admina
+    const adminData = await getUserById(adminId);
+    if (!adminData || adminData.role !== 'administrator') {
+      throw new Error('Brak uprawnień do tworzenia użytkowników');
+    }
+
+    // Walidacja wymaganych pól
+    if (!data.displayName || !data.displayName.trim()) {
+      throw new Error('Imię i nazwisko jest wymagane');
+    }
+    if (!data.employeeId || !data.employeeId.trim()) {
+      throw new Error('ID pracownika jest wymagane');
+    }
+
+    const employeeId = data.employeeId.toUpperCase().trim();
+
+    // Sprawdź unikalność employeeId
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('employeeId', '==', employeeId));
+    const existingSnapshot = await getDocs(q);
+    if (!existingSnapshot.empty) {
+      throw new Error(`Pracownik o ID "${employeeId}" już istnieje w systemie`);
+    }
+
+    // Utwórz dokument z auto-generowanym ID (prefix kiosk-)
+    const { addDoc } = await import('firebase/firestore');
+    const newUserRef = await addDoc(collection(db, 'users'), {
+      displayName: data.displayName.trim(),
+      employeeId: employeeId,
+      email: '',
+      photoURL: '',
+      phone: data.phone || '',
+      position: data.position || '',
+      department: data.department || '',
+      role: 'pracownik',
+      accountType: 'kiosk', // Oznaczenie konta kioskowego
+      disabled: false,
+      aiMessagesLimit: 0,
+      aiMessagesUsed: 0,
+      permissions: {},
+      createdBy: adminId,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    return newUserRef.id;
+  } catch (error) {
+    console.error('Błąd podczas tworzenia użytkownika kioskowego:', error);
+    throw error;
+  }
+};
+
+/**
+ * Usuwa użytkownika kioskowego (tylko konta typu kiosk)
+ * @param {string} userId - ID dokumentu użytkownika
+ * @param {string} adminId - ID administratora
+ * @returns {Promise<boolean>}
+ */
+export const deleteKioskUser = async (userId, adminId) => {
+  try {
+    // Sprawdź uprawnienia admina
+    const adminData = await getUserById(adminId);
+    if (!adminData || adminData.role !== 'administrator') {
+      throw new Error('Brak uprawnień do usuwania użytkowników');
+    }
+
+    // Sprawdź czy to konto kioskowe
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    if (!userDoc.exists()) {
+      throw new Error('Użytkownik nie istnieje');
+    }
+    
+    const userData = userDoc.data();
+    if (userData.accountType !== 'kiosk') {
+      throw new Error('Można usuwać tylko konta kioskowe. Konta z logowaniem Google nie mogą być usunięte z tego poziomu.');
+    }
+
+    const { deleteDoc } = await import('firebase/firestore');
+    await deleteDoc(userRef);
+    
+    // Wyczyść cache
+    userCache.delete(userId);
+
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas usuwania użytkownika kioskowego:', error);
+    throw error;
+  }
+};
+
 export default {
   getUserById,
   updateUserData,
@@ -661,5 +768,7 @@ export default {
   getUserPermissions,
   hasPermission,
   updateUserPermissions,
+  createKioskUser,
+  deleteKioskUser,
   AVAILABLE_PERMISSIONS
 }; 

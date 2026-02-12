@@ -51,7 +51,9 @@ import {
   TrendingUp as ForecastIcon,
   ViewKanban as TaskboardIcon,
   Home as HomeIcon,
-  Insights as InsightsIcon
+  Insights as InsightsIcon,
+  AccessTime as AccessTimeIcon,
+  CalendarMonth as CalendarMonthIcon
 } from '@mui/icons-material';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
@@ -178,6 +180,8 @@ const Sidebar = ({ onToggle }) => {
       // Dashboard
       '/': 'dashboard-main',
       '/taskboard': 'dashboard-taskboard',
+      '/work-time': 'dashboard-worktime',
+      '/schedule': 'dashboard-schedule',
       
       // Hall Data
       '/hall-data/conditions': 'hall-data-conditions',
@@ -267,8 +271,10 @@ const Sidebar = ({ onToggle }) => {
       setOpenSubmenu(t('sales'));
     } else if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders') || location.pathname.startsWith('/suppliers')) {
       setOpenSubmenu(t('inventory'));
-    } else if (location.pathname === '/' || location.pathname.startsWith('/analytics') || location.pathname.startsWith('/taskboard')) {
+    } else if (location.pathname === '/' || location.pathname.startsWith('/taskboard') || location.pathname.startsWith('/work-time') || location.pathname.startsWith('/schedule')) {
       setOpenSubmenu(t('dashboard'));
+    } else if (location.pathname.startsWith('/analytics')) {
+      setOpenSubmenu('');
     } else if (location.pathname.startsWith('/hall-data')) {
       setOpenSubmenu(t('hallData'));
     }
@@ -341,7 +347,7 @@ const Sidebar = ({ onToggle }) => {
   const isMenuActive = (menuPath) => {
     // Specjalne przypadki dla głównych sekcji
     if (menuPath === '/') {
-      return location.pathname === '/' || location.pathname.startsWith('/analytics') || location.pathname.startsWith('/taskboard');
+      return location.pathname === '/' || location.pathname.startsWith('/taskboard');
     } else if (menuPath === '/sales') {
       // Sales obejmuje wszystkie ścieżki związane ze sprzedażą
       return location.pathname.startsWith('/customers') || 
@@ -390,6 +396,8 @@ const Sidebar = ({ onToggle }) => {
       hasSubmenu: true,
       children: [
         { text: t('submenu.dashboard.taskboard'), icon: <TaskboardIcon />, path: '/taskboard' },
+        { text: t('submenu.dashboard.workTime'), icon: <AccessTimeIcon />, path: '/work-time' },
+        { text: t('submenu.dashboard.schedule'), icon: <CalendarMonthIcon />, path: '/schedule' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 
@@ -578,7 +586,7 @@ const Sidebar = ({ onToggle }) => {
         tabIndex={-1}
       >
         {menuItems.map((item) => (
-          item.children ? (
+          item.children && item.children.length > 0 ? (
             <React.Fragment key={item.text}>
               <StyledListItemButton 
                 onClick={() => handleSubmenuClick(item.text)} 

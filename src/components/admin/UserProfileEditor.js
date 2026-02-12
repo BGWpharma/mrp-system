@@ -31,7 +31,8 @@ const UserProfileEditor = ({ open, onClose, selectedUser, onUserUpdated }) => {
     photoURL: '',
     phone: '',
     position: '',
-    department: ''
+    department: '',
+    employeeId: ''
   });
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
@@ -48,7 +49,8 @@ const UserProfileEditor = ({ open, onClose, selectedUser, onUserUpdated }) => {
         photoURL: selectedUser.photoURL || '',
         phone: selectedUser.phone || '',
         position: selectedUser.position || '',
-        department: selectedUser.department || ''
+        department: selectedUser.department || '',
+        employeeId: selectedUser.employeeId || ''
       });
       setErrors({});
     }
@@ -125,7 +127,12 @@ const UserProfileEditor = ({ open, onClose, selectedUser, onUserUpdated }) => {
         return;
       }
       
-      await updateUserProfile(selectedUser.id, formData, currentUser.uid);
+      // Upewnij się, że employeeId jest uppercase
+      const dataToSave = {
+        ...formData,
+        employeeId: formData.employeeId ? formData.employeeId.toUpperCase().trim() : ''
+      };
+      await updateUserProfile(selectedUser.id, dataToSave, currentUser.uid);
       showSuccess(`Dane użytkownika ${formData.displayName} zostały zaktualizowane`);
       
       // Wywołaj callback do odświeżenia listy użytkowników
@@ -149,7 +156,8 @@ const UserProfileEditor = ({ open, onClose, selectedUser, onUserUpdated }) => {
       photoURL: '',
       phone: '',
       position: '',
-      department: ''
+      department: '',
+      employeeId: ''
     });
     setErrors({});
     onClose();
@@ -234,6 +242,21 @@ const UserProfileEditor = ({ open, onClose, selectedUser, onUserUpdated }) => {
             />
           </Grid>
           
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label="ID pracownika"
+              value={formData.employeeId}
+              onChange={handleInputChange('employeeId')}
+              error={!!errors.employeeId}
+              helperText={errors.employeeId || 'Unikalny identyfikator do rejestracji czasu pracy i grafiku (np. BGW-001)'}
+              placeholder="np. BGW-001"
+              InputProps={{
+                style: { textTransform: 'uppercase' }
+              }}
+            />
+          </Grid>
+
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth

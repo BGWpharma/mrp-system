@@ -192,6 +192,10 @@ const HallDataFormsResponsesPage = lazy(() => import('./pages/HallData/HallDataF
 const TaskboardView = lazy(() => import('./pages/Taskboard/TaskboardView'));
 const BoardDetail = lazy(() => import('./pages/Taskboard/BoardDetail'));
 
+// Zespół - Czas pracy i Grafik
+const WorkTimePage = lazy(() => import('./pages/WorkTime/WorkTimePage'));
+const SchedulePage = lazy(() => import('./pages/Schedule/SchedulePage'));
+
 // ============================================================================
 // KOMPONENT ŁADOWANIA DLA SUSPENSE
 // ============================================================================
@@ -551,6 +555,10 @@ function App() {
                     {/* Taskboard Routes */}
                     <Route path="/taskboard" element={<PrivateLayout><TaskboardView /></PrivateLayout>} />
                     <Route path="/taskboard/:boardId" element={<PrivateLayout><BoardDetail /></PrivateLayout>} />
+                    
+                    {/* Zespół - Czas pracy i Grafik */}
+                    <Route path="/work-time" element={<PrivateLayout><WorkTimePage /></PrivateLayout>} />
+                    <Route path="/schedule" element={<PrivateLayout><SchedulePage /></PrivateLayout>} />
                     
                     <Route path="*" element={<Navigate to="/" replace />} />
                           </Routes>

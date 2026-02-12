@@ -23,7 +23,12 @@ import {
   MenuItem,
   CircularProgress,
   Box,
-  Checkbox
+  Checkbox,
+  TextField,
+  Grid,
+  Divider,
+  Alert,
+  Tooltip
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -31,7 +36,11 @@ import {
   PersonOutline as PersonOutlineIcon,
   Visibility as VisibilityIcon,
   AccountBox as AccountBoxIcon,
-  Security as SecurityIcon
+  Security as SecurityIcon,
+  PersonAdd as PersonAddIcon,
+  Storefront as KioskIcon,
+  Delete as DeleteIcon,
+  Google as GoogleIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -40,6 +49,8 @@ import {
   changeUserRole, 
   getUserPermissions, 
   updateUserPermissions,
+  createKioskUser,
+  deleteKioskUser,
   AVAILABLE_PERMISSIONS 
 } from '../../services/userService';
 import SidebarTabsManager from '../../components/admin/SidebarTabsManager';
@@ -59,6 +70,23 @@ const UsersManagementPage = () => {
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [selectedUserForPermissions, setSelectedUserForPermissions] = useState(null);
   const [userPermissions, setUserPermissions] = useState({});
+  
+  // Dialog tworzenia pracownika kioskowego
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [newKioskUser, setNewKioskUser] = useState({
+    displayName: '',
+    employeeId: '',
+    position: '',
+    department: '',
+    phone: ''
+  });
+  const [createErrors, setCreateErrors] = useState({});
+  const [creating, setCreating] = useState(false);
+
+  // Dialog usuwania
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -187,6 +215,87 @@ const UsersManagementPage = () => {
       setProcessing(false);
     }
   };
+
+  // ===== Tworzenie pracownika kioskowego =====
+  const handleOpenCreateDialog = () => {
+    setNewKioskUser({
+      displayName: '',
+      employeeId: '',
+      position: '',
+      department: '',
+      phone: ''
+    });
+    setCreateErrors({});
+    setCreateDialogOpen(true);
+  };
+
+  const handleCloseCreateDialog = () => {
+    setCreateDialogOpen(false);
+    setNewKioskUser({ displayName: '', employeeId: '', position: '', department: '', phone: '' });
+    setCreateErrors({});
+  };
+
+  const handleCreateInputChange = (field) => (e) => {
+    let value = e.target.value;
+    if (field === 'employeeId') value = value.toUpperCase();
+    setNewKioskUser(prev => ({ ...prev, [field]: value }));
+    if (createErrors[field]) {
+      setCreateErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const validateCreateForm = () => {
+    const errors = {};
+    if (!newKioskUser.displayName.trim()) errors.displayName = 'Imię i nazwisko jest wymagane';
+    if (!newKioskUser.employeeId.trim()) errors.employeeId = 'ID pracownika jest wymagane';
+    setCreateErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateKioskUser = async () => {
+    if (!validateCreateForm()) return;
+
+    setCreating(true);
+    try {
+      await createKioskUser(newKioskUser, currentUser.uid);
+      showSuccess(`Pracownik "${newKioskUser.displayName}" (${newKioskUser.employeeId}) został utworzony`);
+      handleCloseCreateDialog();
+      fetchUsers();
+    } catch (error) {
+      console.error('Błąd tworzenia pracownika kioskowego:', error);
+      showError(error.message || 'Nie udało się utworzyć pracownika');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // ===== Usuwanie pracownika kioskowego =====
+  const handleOpenDeleteDialog = (user) => {
+    setUserToDelete(user);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setUserToDelete(null);
+  };
+
+  const handleDeleteKioskUser = async () => {
+    if (!userToDelete) return;
+
+    setDeleting(true);
+    try {
+      await deleteKioskUser(userToDelete.id, currentUser.uid);
+      showSuccess(`Pracownik "${userToDelete.displayName}" został usunięty`);
+      handleCloseDeleteDialog();
+      fetchUsers();
+    } catch (error) {
+      console.error('Błąd usuwania pracownika:', error);
+      showError(error.message || 'Nie udało się usunąć pracownika');
+    } finally {
+      setDeleting(false);
+    }
+  };
   
   return (
     <Container maxWidth="lg">
@@ -197,13 +306,23 @@ const UsersManagementPage = () => {
       <Paper sx={{ p: 2, mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6">Lista użytkowników systemu</Typography>
-          <Button 
-            variant="outlined" 
-            onClick={fetchUsers}
-            disabled={loading}
-          >
-            Odśwież
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button 
+              variant="contained" 
+              startIcon={<PersonAddIcon />}
+              onClick={handleOpenCreateDialog}
+              color="success"
+            >
+              Dodaj pracownika
+            </Button>
+            <Button 
+              variant="outlined" 
+              onClick={fetchUsers}
+              disabled={loading}
+            >
+              Odśwież
+            </Button>
+          </Box>
         </Box>
         
         {loading ? (
@@ -217,8 +336,10 @@ const UsersManagementPage = () => {
                 <TableRow>
                   <TableCell>Użytkownik</TableCell>
                   <TableCell>Email</TableCell>
+                  <TableCell>ID pracownika</TableCell>
                   <TableCell>Stanowisko</TableCell>
                   <TableCell>Dział</TableCell>
+                  <TableCell>Typ konta</TableCell>
                   <TableCell>Rola</TableCell>
                   <TableCell>Limit AI</TableCell>
                   <TableCell>Wykorzystano</TableCell>
@@ -244,6 +365,20 @@ const UsersManagementPage = () => {
                     </TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
+                      {user.employeeId ? (
+                        <Chip 
+                          label={user.employeeId} 
+                          size="small" 
+                          color="info" 
+                          variant="outlined"
+                        />
+                      ) : (
+                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          Brak
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <Typography variant="body2">
                         {user.position || 'Nie określono'}
                       </Typography>
@@ -252,6 +387,25 @@ const UsersManagementPage = () => {
                       <Typography variant="body2">
                         {user.department || 'Nie określono'}
                       </Typography>
+                    </TableCell>
+                    <TableCell>
+                      {user.accountType === 'kiosk' ? (
+                        <Chip 
+                          label="Kiosk" 
+                          size="small" 
+                          color="warning" 
+                          variant="outlined"
+                          icon={<KioskIcon />}
+                        />
+                      ) : (
+                        <Chip 
+                          label="Google" 
+                          size="small" 
+                          color="info" 
+                          variant="outlined"
+                          icon={<GoogleIcon />}
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
                       <Chip 
@@ -298,13 +452,27 @@ const UsersManagementPage = () => {
                       >
                         <SecurityIcon />
                       </IconButton>
-                      <IconButton 
-                        onClick={() => handleOpenSidebarTabsDialog(user)}
-                        title="Zarządzaj zakładkami sidebara"
-                        color="secondary"
-                      >
-                        <VisibilityIcon />
-                      </IconButton>
+                      {user.accountType !== 'kiosk' && (
+                        <IconButton 
+                          onClick={() => handleOpenSidebarTabsDialog(user)}
+                          title="Zarządzaj zakładkami sidebara"
+                          color="secondary"
+                          sx={{ mr: 0.5 }}
+                        >
+                          <VisibilityIcon />
+                        </IconButton>
+                      )}
+                      {user.accountType === 'kiosk' && (
+                        <Tooltip title="Usuń pracownika kioskowego">
+                          <IconButton 
+                            onClick={() => handleOpenDeleteDialog(user)}
+                            color="error"
+                            size="small"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -418,6 +586,129 @@ const UsersManagementPage = () => {
             disabled={processing}
           >
             {processing ? <CircularProgress size={24} /> : 'Zapisz uprawnienia'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog tworzenia pracownika kioskowego */}
+      <Dialog 
+        open={createDialogOpen} 
+        onClose={handleCloseCreateDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PersonAddIcon color="success" />
+            Dodaj pracownika (konto kioskowe)
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 3, mt: 1 }}>
+            Konto kioskowe nie wymaga adresu email ani logowania przez Google. 
+            Pracownik będzie mógł korzystać z systemu wyłącznie przez swoje <strong>ID pracownika</strong> — 
+            w panelach <strong>Czas pracy</strong> i <strong>Grafik</strong>.
+          </Alert>
+
+          <Grid container spacing={2.5}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Imię i nazwisko"
+                value={newKioskUser.displayName}
+                onChange={handleCreateInputChange('displayName')}
+                error={!!createErrors.displayName}
+                helperText={createErrors.displayName}
+                required
+                autoFocus
+                placeholder="np. Jan Kowalski"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="ID pracownika"
+                value={newKioskUser.employeeId}
+                onChange={handleCreateInputChange('employeeId')}
+                error={!!createErrors.employeeId}
+                helperText={createErrors.employeeId || 'Unikalny identyfikator (np. BGW-001)'}
+                required
+                placeholder="np. BGW-001"
+                InputProps={{
+                  style: { textTransform: 'uppercase' }
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Stanowisko"
+                value={newKioskUser.position}
+                onChange={handleCreateInputChange('position')}
+                placeholder="np. Operator produkcji"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Dział"
+                value={newKioskUser.department}
+                onChange={handleCreateInputChange('department')}
+                placeholder="np. Produkcja"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Telefon (opcjonalnie)"
+                value={newKioskUser.phone}
+                onChange={handleCreateInputChange('phone')}
+                placeholder="+48 123 456 789"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseCreateDialog} disabled={creating}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleCreateKioskUser} 
+            variant="contained" 
+            color="success"
+            disabled={creating}
+            startIcon={creating ? <CircularProgress size={20} color="inherit" /> : <PersonAddIcon />}
+          >
+            {creating ? 'Tworzenie...' : 'Utwórz pracownika'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog potwierdzenia usunięcia */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleCloseDeleteDialog}
+      >
+        <DialogTitle>Potwierdź usunięcie</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz usunąć pracownika kioskowego <strong>{userToDelete?.displayName}</strong> ({userToDelete?.employeeId})?
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 1, color: 'error.main' }}>
+            Ta operacja jest nieodwracalna. Wpisy czasu pracy i wnioski powiązane z tym pracownikiem zostaną zachowane.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeleteDialog} disabled={deleting}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleDeleteKioskUser} 
+            color="error" 
+            variant="contained"
+            disabled={deleting}
+          >
+            {deleting ? <CircularProgress size={24} color="inherit" /> : 'Usuń'}
           </Button>
         </DialogActions>
       </Dialog>

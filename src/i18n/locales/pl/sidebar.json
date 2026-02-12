@@ -14,7 +14,9 @@
       "main": "Główny",
       "analytics": "Analityka",
       "financialReport": "Raport Finansowy",
-      "taskboard": "Taskboard"
+      "taskboard": "Taskboard",
+      "workTime": "Czas pracy",
+      "schedule": "Grafik"
     },
     "hallData": {
       "environmentalConditions": "Warunki środowiskowe",

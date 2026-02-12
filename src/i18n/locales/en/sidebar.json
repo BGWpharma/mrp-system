@@ -14,7 +14,9 @@
       "main": "Main",
       "analytics": "Analytics",
       "financialReport": "Financial Report",
-      "taskboard": "Taskboard"
+      "taskboard": "Taskboard",
+      "workTime": "Work Time",
+      "schedule": "Schedule"
     },
     "hallData": {
       "environmentalConditions": "Environmental Conditions",
