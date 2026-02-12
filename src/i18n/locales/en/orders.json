@@ -402,6 +402,7 @@
       "save": "Save",
       "saving": "Saving...",
       "addProduct": "Add Product",
+      "importCSV": "Import from CSV",
       "calculating": "Calculating...",
       "calculateEstimatedCosts": "Calculate Estimated Costs",
       "generating": "Generating...",
@@ -453,6 +454,7 @@
     "table": {
       "productRecipe": "Product / Recipe",
       "quantity": "Quantity",
+      "produced": "Produced",
       "unit": "Unit",
       "priceEUR": "Price EUR",
       "value": "Value",
@@ -484,6 +486,32 @@
       "noPurchaseOrders": "No related purchase orders. Click \"Generate Purchase Orders\" to automatically create orders for recipe materials.",
       "noInvoices": "No invoices. Use the button above to add an invoice.",
       "noAdditionalCosts": "No additional costs or discounts. Use the buttons above to add them."
+    },
+    "import": {
+      "title": "Import items from CSV (recipes)",
+      "formatTitle": "CSV file format:",
+      "formatDescription": "• Required columns: SKU (recipe name), QUANTITY (amount)",
+      "formatSkip": "• Rows with empty or 0 QUANTITY are skipped",
+      "formatPrices": "• Prices are automatically fetched from customer price list",
+      "noCustomer": "No customer selected. Prices will be calculated from production cost + margin.",
+      "requireCustomer": "Select customer to import items with price list",
+      "downloadTemplate": "Download template",
+      "selectFile": "Select CSV file",
+      "fileLoaded": "File loaded:",
+      "matchedCount": "To add: {{count}}",
+      "skippedCount": "Skipped (quantity 0/empty): {{count}}",
+      "notFoundCount": "Not found: {{count}}",
+      "notFoundList": "Not found in database:",
+      "tableSku": "SKU",
+      "tableQuantity": "Quantity",
+      "tableUnit": "Unit",
+      "addToOrder": "Add to order",
+      "importing": "Importing...",
+      "errorFileType": "Select a CSV file",
+      "errorFileSize": "File is too large (max 5 MB)",
+      "noValidRows": "No valid rows to import. Rows with 0 or empty quantity are skipped.",
+      "errorParse": "Error parsing CSV file",
+      "errorPrepare": "Error preparing items"
     },
     "dialogs": {
       "generatePurchaseOrders": {

@@ -137,11 +137,15 @@ export const parsePriceListCSV = (csvText) => {
   
   console.log(`✅ Sparsowano ${items.length} pozycji`);
   
+  // Informacja które kolumny opcjonalne były w pliku (do warunkowej aktualizacji)
+  const columnsInFile = Object.keys(columnIndices);
+  
   return {
     items,
     duplicates: Object.entries(skuCounts)
       .filter(([sku, count]) => count > 1)
-      .map(([sku, count]) => ({ sku, count }))
+      .map(([sku, count]) => ({ sku, count })),
+    columnsInFile
   };
 };
 
@@ -280,7 +284,7 @@ export const previewPriceListImport = async (csvText, priceListId) => {
     console.log('🔍 Rozpoczynam analizę pliku CSV...');
     
     // 1. Parsuj CSV
-    const { items: parsedItems, duplicates } = parsePriceListCSV(csvText);
+    const { items: parsedItems, duplicates, columnsInFile } = parsePriceListCSV(csvText);
     
     // 2. Waliduj dane
     const { valid, errors } = validatePriceListItems(parsedItems);
@@ -304,7 +308,7 @@ export const previewPriceListImport = async (csvText, priceListId) => {
       const existing = existingMap.get(item.productId);
       
       if (existing) {
-        // Produkt już istnieje - sprawdź różnice
+        // Produkt już istnieje - sprawdź różnice (tylko dla kolumn obecnych w CSV)
         const changes = [];
         
         if (existing.price !== item.price) {
@@ -315,7 +319,7 @@ export const previewPriceListImport = async (csvText, priceListId) => {
           });
         }
         
-        if (existing.minQuantity !== item.minQuantity) {
+        if (columnsInFile.includes('minQuantity') && existing.minQuantity !== item.minQuantity) {
           changes.push({ 
             field: 'MOQ', 
             oldValue: existing.minQuantity, 
@@ -323,7 +327,7 @@ export const previewPriceListImport = async (csvText, priceListId) => {
           });
         }
         
-        if (existing.unit !== item.unit) {
+        if (columnsInFile.includes('unit') && existing.unit !== item.unit) {
           changes.push({ 
             field: 'Jednostka', 
             oldValue: existing.unit, 
@@ -331,7 +335,7 @@ export const previewPriceListImport = async (csvText, priceListId) => {
           });
         }
         
-        if ((existing.currency || 'EUR') !== (item.currency || 'EUR')) {
+        if (columnsInFile.includes('currency') && (existing.currency || 'EUR') !== (item.currency || 'EUR')) {
           changes.push({ 
             field: 'Waluta', 
             oldValue: existing.currency || 'EUR', 
@@ -339,7 +343,7 @@ export const previewPriceListImport = async (csvText, priceListId) => {
           });
         }
         
-        if ((existing.notes || '') !== item.notes) {
+        if (columnsInFile.includes('notes') && (existing.notes || '') !== item.notes) {
           changes.push({ 
             field: 'Komentarz', 
             oldValue: existing.notes || '-', 
@@ -385,6 +389,7 @@ export const previewPriceListImport = async (csvText, priceListId) => {
       notFound,
       errors,
       warnings,
+      columnsInFile,
       summary: {
         total: parsedItems.length,
         valid: valid.length,
@@ -465,19 +470,29 @@ export const executePriceListImport = async (
       }
     }
     
-    // Aktualizuj istniejące pozycje
+    // Aktualizuj istniejące pozycje (tylko pola obecne w CSV - unikamy nadpisywania pustymi wartościami)
+    const columnsInFile = preview.columnsInFile || [];
     if (updateExisting) {
       for (const item of preview.toUpdate) {
         const docRef = doc(db, PRICE_LIST_ITEMS_COLLECTION, item.existingId);
-        batch.update(docRef, {
+        const updatePayload = {
           price: item.price,
-          currency: item.currency || 'EUR',
-          unit: item.unit,
-          minQuantity: item.minQuantity,
-          notes: item.notes,
           updatedBy: userId,
           updatedAt: serverTimestamp()
-        });
+        };
+        if (columnsInFile.includes('currency')) {
+          updatePayload.currency = item.currency || 'EUR';
+        }
+        if (columnsInFile.includes('unit')) {
+          updatePayload.unit = item.unit;
+        }
+        if (columnsInFile.includes('minQuantity')) {
+          updatePayload.minQuantity = item.minQuantity;
+        }
+        if (columnsInFile.includes('notes')) {
+          updatePayload.notes = item.notes ?? '';
+        }
+        batch.update(docRef, updatePayload);
         results.updated++;
         batchCount++;
         

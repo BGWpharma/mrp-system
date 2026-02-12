@@ -414,6 +414,7 @@
       "save": "Zapisz",
       "saving": "Zapisywanie...",
       "addProduct": "Dodaj produkt",
+      "importCSV": "Importuj z CSV",
       "calculating": "Obliczam...",
       "calculateEstimatedCosts": "Oblicz szacowane koszty",
       "generating": "Generowanie...",
@@ -465,6 +466,7 @@
     "table": {
       "productRecipe": "Produkt / Receptura",
       "quantity": "Ilość",
+      "produced": "Wyprodukowano",
       "unit": "Jedn.",
       "priceEUR": "Cena EUR",
       "value": "Wartość",
@@ -496,6 +498,32 @@
       "noPurchaseOrders": "Brak powiązanych zamówień zakupu. Kliknij \"Generuj zamówienia zakupu\", aby automatycznie utworzyć zamówienia dla materiałów z receptur.",
       "noInvoices": "Brak faktur. Użyj przycisku powyżej, aby dodać fakturę.",
       "noAdditionalCosts": "Brak dodatkowych kosztów lub rabatów. Użyj przycisków powyżej, aby je dodać."
+    },
+    "import": {
+      "title": "Import pozycji z CSV (receptury)",
+      "formatTitle": "Format pliku CSV:",
+      "formatDescription": "• Wymagane kolumny: SKU (nazwa receptury), QUANTITY (ilość)",
+      "formatSkip": "• Wiersze z QUANTITY pustym lub 0 są pomijane",
+      "formatPrices": "• Ceny są automatycznie pobierane z listy cenowej klienta",
+      "noCustomer": "Nie wybrano klienta. Ceny będą obliczane z kosztu produkcji + marży.",
+      "requireCustomer": "Wybierz klienta, aby móc importować pozycje z listą cenową",
+      "downloadTemplate": "Pobierz szablon",
+      "selectFile": "Wybierz plik CSV",
+      "fileLoaded": "Wczytano plik:",
+      "matchedCount": "Do dodania: {{count}}",
+      "skippedCount": "Pominięto (quantity 0/puste): {{count}}",
+      "notFoundCount": "Nie znaleziono: {{count}}",
+      "notFoundList": "Nie znaleziono w bazie:",
+      "tableSku": "SKU",
+      "tableQuantity": "Ilość",
+      "tableUnit": "Jedn.",
+      "addToOrder": "Dodaj do zamówienia",
+      "importing": "Importowanie...",
+      "errorFileType": "Wybierz plik CSV",
+      "errorFileSize": "Plik jest za duży (max 5 MB)",
+      "noValidRows": "Brak poprawnych wierszy do importu. Wiersze z ilością 0 lub pustą są pomijane.",
+      "errorParse": "Błąd podczas analizy pliku CSV",
+      "errorPrepare": "Błąd podczas przygotowywania pozycji"
     },
     "dialogs": {
       "generatePurchaseOrders": {

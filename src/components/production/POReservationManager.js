@@ -77,7 +77,7 @@ import {
   refreshLinkedBatchesQuantities
 } from '../../services/poReservationService';
 
-const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger }) => {
+const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger, hideTitle = false }) => {
   const { t } = useTranslation('taskDetails');
   const { showSuccess, showError, showInfo } = useNotification();
   const { currentUser } = useAuth();
@@ -654,10 +654,12 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
     <Box>
       {/* Nagłówek */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6" component="h2">
-          {t('poReservations.title')}
-        </Typography>
-        <Box>
+        {!hideTitle && (
+          <Typography variant="h6" component="h2">
+            {t('poReservations.title')}
+          </Typography>
+        )}
+        <Box sx={hideTitle ? { width: '100%', display: 'flex', justifyContent: 'flex-end' } : {}}>
           <Button
             variant="outlined"
             startIcon={<AddIcon />}

@@ -1585,14 +1585,17 @@ export const updateTask = async (taskId, taskData, userId) => {
       
       const currentTask = taskDoc.data();
       
-      // Upewnij się, że endDate jest ustawiona
+      // Upewnij się, że endDate jest ustawiona (tylko gdy mamy poprawną scheduledDate)
       if (!taskData.endDate) {
-        // Jeśli nie ma endDate, ustaw na 1 godzinę po scheduledDate
-        const scheduledDate = taskData.scheduledDate instanceof Date 
-          ? taskData.scheduledDate 
-          : new Date(taskData.scheduledDate);
-        
-        taskData.endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000);
+        const scheduledSource = taskData.scheduledDate ?? currentTask?.scheduledDate;
+        if (scheduledSource) {
+          const scheduledDate = scheduledSource instanceof Date
+            ? scheduledSource
+            : (scheduledSource?.toDate ? scheduledSource.toDate() : new Date(scheduledSource));
+          if (!isNaN(scheduledDate.getTime())) {
+            taskData.endDate = new Date(scheduledDate.getTime() + 60 * 60 * 1000);
+          }
+        }
       }
       
       // Zachowaj pola kosztów, jeśli nie są aktualizowane
@@ -5818,12 +5821,32 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
 
     console.log(`[AUTO] Koszt procesowy: ${processingCostPerUnit.toFixed(4)}€/szt × ${completedQuantity} wyprodukowanych (z ${taskQuantity} planowanych) = ${totalProcessingCost.toFixed(4)}€`);
 
+    // 4. DODATKOWE KOSZTY (przeliczone na EUR kursem NBP z dnia przed datą faktury)
+    if (task.additionalCosts && Array.isArray(task.additionalCosts) && task.additionalCosts.length > 0) {
+      const { convertAdditionalCostToEUR } = await import('../utils/nbpExchangeRates');
+      let totalAdditionalCostsInEUR = 0;
+      for (const item of task.additionalCosts) {
+        const amount = parseFloat(item.amount) || 0;
+        if (amount <= 0) continue;
+        const currency = (item.currency || 'EUR').toUpperCase();
+        const invoiceDate = item.invoiceDate
+          ? (item.invoiceDate?.toDate ? item.invoiceDate.toDate() : new Date(item.invoiceDate))
+          : new Date();
+        const { amountInEUR } = await convertAdditionalCostToEUR(amount, currency, invoiceDate);
+        totalAdditionalCostsInEUR = preciseAdd(totalAdditionalCostsInEUR, amountInEUR);
+      }
+      totalMaterialCost = preciseAdd(totalMaterialCost, totalAdditionalCostsInEUR);
+      totalFullProductionCost = preciseAdd(totalFullProductionCost, totalAdditionalCostsInEUR);
+      console.log(`[AUTO] Dodatkowe koszty: ${totalAdditionalCostsInEUR.toFixed(4)} €`);
+    }
+
     // ZABEZPIECZENIE: Nie nadpisuj kosztów zerami jeśli nie ma danych do obliczeń
     const hasConsumedMaterials = task.consumedMaterials && task.consumedMaterials.length > 0;
     const hasReservedMaterials = task.materialBatches && Object.keys(task.materialBatches).length > 0;
     const hasPOReservations = task.poReservationIds && task.poReservationIds.length > 0;
     const hasEstimatedCosts = Object.keys(estimatedCostDetails).length > 0; // NOWE: uwzględnij szacunkowe koszty
-    const hasDataForCalculation = hasConsumedMaterials || hasReservedMaterials || hasPOReservations || hasEstimatedCosts || totalProcessingCost > 0;
+    const hasAdditionalCosts = task.additionalCosts && task.additionalCosts.length > 0;
+    const hasDataForCalculation = hasConsumedMaterials || hasReservedMaterials || hasPOReservations || hasEstimatedCosts || totalProcessingCost > 0 || hasAdditionalCosts;
     
     if (!hasDataForCalculation) {
       console.log(`[AUTO] Zadanie ${taskId} nie ma danych do obliczenia kosztów (brak konsumpcji, rezerwacji, rezerwacji PO, szacunkowych kosztów i kosztu procesowego). Pomijam aktualizację aby nie wyzerować istniejących kosztów.`);

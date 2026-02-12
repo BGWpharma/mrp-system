@@ -367,6 +367,7 @@
     },
     "consumedMaterials": {
         "title": "Skonsumowane materiały",
+        "itemsCount": "{{count}} pozycji",
         "manageConsumption": "Zarządzaj zużyciem",
         "confirmedConsumption": "Zatwierdzona konsumpcja",
         "table": {
@@ -380,8 +381,37 @@
             "actions": "Akcje"
         }
     },
+    "additionalCosts": {
+        "title": "Dodatkowe koszty",
+        "addCost": "Dodaj dodatkowy koszt",
+        "itemsCount": "{{count}} pozycji",
+        "noCosts": "Brak dodatkowych kosztów",
+        "table": {
+            "name": "Nazwa",
+            "amount": "Kwota",
+            "currency": "Waluta",
+            "invoiceDate": "Data wystawienia faktury",
+            "actions": "Akcje"
+        },
+        "dialog": {
+            "addTitle": "Dodaj dodatkowy koszt",
+            "editTitle": "Edytuj dodatkowy koszt",
+            "namePlaceholder": "np. Transport, Outsourcing",
+            "amountLabel": "Kwota",
+            "currencyLabel": "Waluta",
+            "invoiceDateLabel": "Data wystawienia faktury",
+            "rateInfo": "Kurs NBP z dnia poprzedzającego (Art. 31a VAT)",
+            "save": "Zapisz",
+            "cancel": "Anuluj",
+            "errorName": "Podaj nazwę",
+            "errorAmount": "Kwota musi być większa od zera",
+            "errorDate": "Podaj datę wystawienia faktury"
+        },
+        "deleteConfirm": "Czy na pewno usunąć ten dodatkowy koszt?"
+    },
     "poReservations": {
         "title": "Rezerwacje z zamówień zakupowych (PO)",
+        "itemsCount": "{{count}} rezerwacji",
         "addReservation": "Dodaj rezerwację",
         "noReservations": "Brak rezerwacji z zamówień zakupowych",
         "noReservationsDescription": "Nie utworzono jeszcze żadnych rezerwacji z PO dla tego zadania.",

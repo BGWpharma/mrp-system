@@ -538,6 +538,30 @@ async function calculateTaskCosts(db, taskData) {
   }
 
   // ============================================================
+  // KROK 7: DODATKOWE KOSZTY (kurs NBP z dnia przed fakturą)
+  // ============================================================
+  const additionalCosts = taskData.additionalCosts || [];
+  if (Array.isArray(additionalCosts) && additionalCosts.length > 0) {
+    const {convertAdditionalCostToEUR} = require("./exchangeRates");
+    let totalAdditionalInEUR = 0;
+    for (const item of additionalCosts) {
+      const amount = parseFloat(item.amount) || 0;
+      if (amount <= 0) continue;
+      const currency = (item.currency || "EUR").toUpperCase();
+      const invoiceDate = item.invoiceDate;
+      const {amountInEUR} = await convertAdditionalCostToEUR(
+          amount,
+          currency,
+          invoiceDate,
+      );
+      totalAdditionalInEUR = preciseAdd(totalAdditionalInEUR, amountInEUR);
+    }
+    totalMaterialCost = preciseAdd(totalMaterialCost, totalAdditionalInEUR);
+    totalFullProductionCost = preciseAdd(totalFullProductionCost, totalAdditionalInEUR);
+    logger.info("Additional costs", {total: totalAdditionalInEUR.toFixed(4)});
+  }
+
+  // ============================================================
   // FINALIZACJA Z PRECYZJĄ
   // ============================================================
   const finalTotalMaterialCost = parseFloat(totalMaterialCost.toFixed(4));

@@ -151,6 +151,44 @@ const convertToPLN = async (amount, currency, date) => {
 };
 
 /**
+ * Convert additional cost to EUR (Art. 31a VAT - NBP rate from day BEFORE invoice date)
+ * @param {number} amount - Amount in source currency
+ * @param {string} currency - Source currency (EUR, PLN, USD, etc.)
+ * @param {Date|string|Object} invoiceDate - Invoice date (Firestore Timestamp or Date)
+ * @return {Promise<{amountInEUR: number}>}
+ */
+const convertAdditionalCostToEUR = async (amount, currency, invoiceDate) => {
+  if (!amount || amount <= 0) return {amountInEUR: 0};
+  const currencyUpper = (currency || "EUR").toUpperCase();
+  if (currencyUpper === "EUR") return {amountInEUR: parseFloat(amount)};
+
+  let dateObj;
+  if (invoiceDate && typeof invoiceDate.toDate === "function") {
+    dateObj = invoiceDate.toDate();
+  } else if (typeof invoiceDate === "string") {
+    dateObj = new Date(invoiceDate);
+  } else if (invoiceDate instanceof Date) {
+    dateObj = invoiceDate;
+  } else {
+    dateObj = new Date();
+  }
+  const previousDay = new Date(dateObj);
+  previousDay.setDate(previousDay.getDate() - 1);
+
+  try {
+    const eurRateInfo = await getNBPExchangeRate("EUR", previousDay);
+    const srcRateInfo = await getNBPExchangeRate(currencyUpper, previousDay);
+    const amountInPLN = amount * srcRateInfo.rate;
+    const amountInEUR = amountInPLN / eurRateInfo.rate;
+    logger.info(`[Convert] ${amount} ${currency} = ${amountInEUR.toFixed(4)} EUR`);
+    return {amountInEUR: parseFloat(amountInEUR.toFixed(4))};
+  } catch (err) {
+    logger.error(`[NBP] Error converting ${amount} ${currency} to EUR:`, err);
+    return {amountInEUR: 0};
+  }
+};
+
+/**
  * Format date for NBP API (YYYY-MM-DD)
  * @param {Date|string} date - Date to format
  * @return {string} Formatted date
@@ -171,4 +209,5 @@ module.exports = {
   getNBPExchangeRate,
   getNBPCurrentExchangeRate,
   convertToPLN,
+  convertAdditionalCostToEUR,
 };

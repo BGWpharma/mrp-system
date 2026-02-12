@@ -217,6 +217,44 @@ export const calculateInvoiceTotalInPLN = async (total, currency, invoiceDate) =
 };
 
 /**
+ * Przelicza kwotę dodatkowego kosztu na EUR zgodnie z Art. 31a VAT
+ * (kurs NBP z dnia poprzedzającego datę wystawienia faktury)
+ *
+ * @param {number} amount - Kwota w walucie źródłowej
+ * @param {string} currency - Kod waluty (EUR, PLN, USD, etc.)
+ * @param {Date|string} invoiceDate - Data wystawienia faktury
+ * @returns {Promise<{amountInEUR: number, exchangeRate?: number, exchangeRateDate?: string}>}
+ */
+export const convertAdditionalCostToEUR = async (amount, currency, invoiceDate) => {
+  if (!amount || amount <= 0) {
+    return { amountInEUR: 0 };
+  }
+
+  const currencyUpper = (currency || "EUR").toUpperCase();
+  if (currencyUpper === "EUR") {
+    return { amountInEUR: parseFloat(amount) };
+  }
+
+  const invoiceDateObj = typeof invoiceDate === "string" ? new Date(invoiceDate) : (invoiceDate || new Date());
+  const previousDay = new Date(invoiceDateObj);
+  previousDay.setDate(previousDay.getDate() - 1);
+
+  try {
+    const { getExchangeRate } = await import("../services/exchangeRateService");
+    const rate = await getExchangeRate(currencyUpper, "EUR", previousDay);
+    const amountInEUR = amount * rate;
+    return {
+      amountInEUR: parseFloat(amountInEUR.toFixed(4)),
+      exchangeRate: rate,
+      exchangeRateDate: formatDateForNBP(previousDay),
+    };
+  } catch (error) {
+    console.error(`[NBP] Błąd przeliczania ${amount} ${currency} na EUR:`, error);
+    return { amountInEUR: 0 };
+  }
+};
+
+/**
  * Formatuje datę dla API NBP (YYYY-MM-DD)
  * 
  * @param {Date|string} date - Data do sformatowania

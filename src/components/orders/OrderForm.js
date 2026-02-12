@@ -87,6 +87,7 @@ import {
   getOrderById, 
   ORDER_STATUSES,
   DEFAULT_ORDER,
+  DEFAULT_ORDER_ITEM,
   uploadDeliveryProof,
   deleteDeliveryProof,
   calculateOrderTotal
@@ -130,6 +131,7 @@ import {
 } from '../../services/inventory';
 import { getExchangeRate } from '../../services/exchangeRateService';
 import { getLastRecipeUsageInfo } from '../../services/orderService';
+import ImportOrderItemsDialog from './ImportOrderItemsDialog';
 
 const DEFAULT_ITEM = {
   id: '',
@@ -658,6 +660,7 @@ const OrderForm = ({ orderId }) => {
   const [recipes, setRecipes] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
+  const [isImportOrderItemsDialogOpen, setIsImportOrderItemsDialogOpen] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
   const [refreshingPTs, setRefreshingPTs] = useState(false); // Dodana zmienna stanu dla odświeżania danych kosztów produkcji
   const [recalculatingTransport, setRecalculatingTransport] = useState(false); // Stan dla przeliczania usługi transportowej z CMR
@@ -739,7 +742,7 @@ const OrderForm = ({ orderId }) => {
           
           if (!fetchedOrder.items || fetchedOrder.items.length === 0) {
             console.log("DEBUG - Zastępuję pozycje zamówienia domyślną pozycją");
-            fetchedOrder.items = [{ ...DEFAULT_ORDER.items[0], id: generateItemId() }];
+            fetchedOrder.items = [{ ...DEFAULT_ORDER_ITEM, id: generateItemId() }];
           } else {
             console.log("DEBUG - Pozycje zamówienia zostały zachowane:", fetchedOrder.items.length, "pozycji");
             // Upewnij się, że wszystkie pozycje mają unikalne ID i zachowaj kompatybilność z starymi danymi
@@ -1565,6 +1568,17 @@ const OrderForm = ({ orderId }) => {
       ...prev,
       items: [...prev.items, { ...DEFAULT_ITEM, id: generateItemId() }]
     }));
+  };
+
+  const handleImportOrderItems = (importedItems) => {
+    if (!importedItems || importedItems.length === 0) return;
+    // Usuń puste pozycje placeholder (bez nazwy) i dodaj zaimportowane
+    const nonEmptyItems = orderData.items.filter((item) => item.name && item.name.trim() !== '');
+    setOrderData(prev => ({
+      ...prev,
+      items: [...nonEmptyItems, ...importedItems]
+    }));
+    showSuccess(`Dodano ${importedItems.length} pozycji z pliku CSV`);
   };
 
   const removeItem = (index) => {
@@ -2501,7 +2515,7 @@ const OrderForm = ({ orderId }) => {
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
               <ShoppingCartIcon sx={mr1} /> {t('orderForm.sections.products')}
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               <Button 
                 variant="contained" 
                 startIcon={<AddIcon />} 
@@ -2511,6 +2525,21 @@ const OrderForm = ({ orderId }) => {
               >
                 {t('orderForm.buttons.addProduct')}
               </Button>
+              <Tooltip
+                title={!orderData.customer?.id ? t('orderForm.import.requireCustomer', 'Wybierz klienta, aby móc importować pozycje z listą cenową') : ''}
+              >
+                <span>
+                  <Button
+                    variant="outlined"
+                    startIcon={<UploadIcon />}
+                    onClick={() => setIsImportOrderItemsDialogOpen(true)}
+                    disabled={!orderData.customer?.id}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    {t('orderForm.buttons.importCSV')}
+                  </Button>
+                </span>
+              </Tooltip>
               <Button
                 variant="outlined"
                 startIcon={calculatingCosts ? <CircularProgress size={16} /> : <CalculateIcon />}
@@ -2535,7 +2564,7 @@ const OrderForm = ({ orderId }) => {
                     <TableCell width="4%" sx={tableCellSx}></TableCell>
                     <TableCell width="22%" sx={tableCellSx}>{t('orderForm.table.productRecipe')}</TableCell>
                     <TableCell width="8%" sx={tableCellSx}>{t('orderForm.table.quantity')}</TableCell>
-                    <TableCell width="8%" sx={tableCellSx}>Wyprodukowano</TableCell>
+                    <TableCell width="8%" sx={tableCellSx}>{t('orderForm.table.produced')}</TableCell>
                     <TableCell width="7%" sx={tableCellSx}>{t('orderForm.table.unit')}</TableCell>
                     <TableCell width="10%" sx={tableCellSx}>{t('orderForm.table.priceEUR')}</TableCell>
                     <TableCell width="10%" sx={tableCellSx}>{t('orderForm.table.value')}</TableCell>
@@ -2863,6 +2892,13 @@ const OrderForm = ({ orderId }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ImportOrderItemsDialog
+        open={isImportOrderItemsDialogOpen}
+        onClose={() => setIsImportOrderItemsDialogOpen(false)}
+        customerId={orderData.customer?.id || null}
+        onImport={handleImportOrderItems}
+      />
     </>
   );
 };

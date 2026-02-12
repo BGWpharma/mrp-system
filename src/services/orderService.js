@@ -1293,6 +1293,18 @@ export const PAYMENT_METHODS = [
 ];
 
 /**
+ * Domyślna pusta pozycja zamówienia (używana m.in. przy fallbacku dla zamówień bez pozycji)
+ */
+export const DEFAULT_ORDER_ITEM = {
+  id: '',
+  name: '',
+  description: '',
+  quantity: 1,
+  unit: 'szt.',
+  price: 0
+};
+
+/**
  * Domyślne dane nowego zamówienia
  */
 export const DEFAULT_ORDER = {
@@ -1305,16 +1317,7 @@ export const DEFAULT_ORDER = {
     shippingAddress: '',
     orderAffix: ''
   },
-  items: [
-    {
-      id: '',
-      name: '',
-      description: '',
-      quantity: 1,
-      unit: 'szt.',
-      price: 0
-    }
-  ],
+  items: [],
   productionTasks: [], // Lista powiązanych zadań produkcyjnych (MO)
   orderDate: formatDateForInput(new Date()),
   expectedDeliveryDate: '',

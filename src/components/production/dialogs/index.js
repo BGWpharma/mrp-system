@@ -15,6 +15,7 @@ export { default as AddHistoryDialog } from './AddHistoryDialog';
 export { default as ReserveMaterialsDialog } from './ReserveMaterialsDialog';
 export { default as PackagingDialog } from './PackagingDialog';
 export { default as RawMaterialsDialog } from './RawMaterialsDialog';
+export { default as AdditionalCostDialog } from './AdditionalCostDialog';
 
 // Dialogi uniwersalne
 export { default as DeleteConfirmDialog } from './DeleteConfirmDialog';

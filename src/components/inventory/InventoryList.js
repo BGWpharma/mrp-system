@@ -1619,6 +1619,10 @@ const InventoryList = () => {
         });
       }
       
+      // Sprawdź które kolumny są w pliku (aby nie nadpisywać pustymi wartościami gdy kolumny brak)
+      const csvHeaders = csvData.length > 0 ? Object.keys(csvData[0]) : [];
+      const hasDescriptionColumn = csvHeaders.some(h => h.trim().toLowerCase() === 'description');
+      
       console.log('\n═══════════════════════════════════════════════════════');
       console.log('🔍 ANALIZA PLIKU CSV - SZCZEGÓŁOWE PORÓWNANIE');
       console.log('═══════════════════════════════════════════════════════\n');
@@ -1826,16 +1830,19 @@ const InventoryList = () => {
           updateData.weight = csvWeight;
         }
         
-        // Sprawdź opis (tylko jeśli CSV zawiera wartość)
-        const csvDesc = (row['Description'] || '').trim();
-        const dbDesc = (existingItem.description || '').trim();
-        if (csvDesc && csvDesc !== dbDesc) {
-          changes.push({
-            field: 'Opis',
-            oldValue: dbDesc,
-            newValue: csvDesc
-          });
-          updateData.description = csvDesc;
+        // Sprawdź opis (tylko jeśli kolumna Description jest w CSV i zawiera wartość)
+        if (hasDescriptionColumn) {
+          const descKey = csvHeaders.find(h => h.trim().toLowerCase() === 'description');
+          const csvDesc = (row[descKey] || '').trim();
+          const dbDesc = (existingItem.description || '').trim();
+          if (csvDesc && csvDesc !== dbDesc) {
+            changes.push({
+              field: 'Opis',
+              oldValue: dbDesc,
+              newValue: csvDesc
+            });
+            updateData.description = csvDesc;
+          }
         }
         
         // Dodaj do podglądu

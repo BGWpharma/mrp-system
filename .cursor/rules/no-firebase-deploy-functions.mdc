@@ -1,0 +1,26 @@
+---
+description: Zabrania Cursorowi wykonywania firebase deploy --only functions
+alwaysApply: true
+---
+
+# ZABRONIONO: firebase deploy funkcji
+
+## ZASADA
+NIGDY nie uruchamiaj komend:
+- `firebase deploy --only functions`
+- `firebase deploy --only function`
+- `firebase deploy` (gdy celem jest deployment funkcji)
+
+## POWÓD
+Te komendy nadpisują funkcje Cloud w projekcie Firebase. Jeśli projekt jest źle wskazany lub użytkownik nie zdaje sobie sprawy ze skutków, deployment może nadpisać funkcje z innej aplikacji/projektu, co grozi utratą danych lub awarią produkcji.
+
+## CO ZAMIAST TEGO
+1. **Nie uruchamiaj** tych komend ani nie proponuj ich automatycznego wykonania
+2. **Pokaż użytkownikowi** gotowe komendy do skopiowania i wykonania ręcznie w terminalu
+3. Użytkownik sam decyduje, kiedy i gdzie wykona deployment
+
+## DOPUSZCZALNE
+- Deploy hosting: `firebase deploy --only hosting`
+- Inne komendy Firebase (np. emulator, firebase use)
+- Czytanie konfiguracji Firebase, analiza kodu funkcji
+- Proponowanie zmian w kodzie funkcji (bez deployu)

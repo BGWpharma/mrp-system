@@ -359,6 +359,7 @@
     },
     "consumedMaterials": {
         "title": "Consumed Materials",
+        "itemsCount": "{{count}} items",
         "manageConsumption": "Manage Consumption",
         "confirmedConsumption": "Confirmed Consumption",
         "table": {
@@ -372,8 +373,37 @@
             "actions": "Actions"
         }
     },
+    "additionalCosts": {
+        "title": "Additional Costs",
+        "addCost": "Add Additional Cost",
+        "itemsCount": "{{count}} items",
+        "noCosts": "No additional costs",
+        "table": {
+            "name": "Name",
+            "amount": "Amount",
+            "currency": "Currency",
+            "invoiceDate": "Invoice Date",
+            "actions": "Actions"
+        },
+        "dialog": {
+            "addTitle": "Add Additional Cost",
+            "editTitle": "Edit Additional Cost",
+            "namePlaceholder": "e.g. Transport, Outsourcing",
+            "amountLabel": "Amount",
+            "currencyLabel": "Currency",
+            "invoiceDateLabel": "Invoice Date",
+            "rateInfo": "NBP rate from day before invoice (Art. 31a VAT)",
+            "save": "Save",
+            "cancel": "Cancel",
+            "errorName": "Enter name",
+            "errorAmount": "Amount must be greater than zero",
+            "errorDate": "Enter invoice date"
+        },
+        "deleteConfirm": "Are you sure you want to delete this additional cost?"
+    },
     "poReservations": {
         "title": "Purchase Order Reservations (PO)",
+        "itemsCount": "{{count}} reservations",
         "addReservation": "Add Reservation",
         "noReservations": "No purchase order reservations",
         "noReservationsDescription": "No PO reservations have been created for this task yet.",

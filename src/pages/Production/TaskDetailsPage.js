@@ -243,7 +243,7 @@ import {
 } from '../../hooks/production';
 
 // ✅ Import komponentów dialogów refaktoryzowanych
-import { StartProductionDialog, AddHistoryDialog, DeleteConfirmDialog, RawMaterialsDialog } from '../../components/production/dialogs';
+import { StartProductionDialog, AddHistoryDialog, DeleteConfirmDialog, RawMaterialsDialog, AdditionalCostDialog } from '../../components/production/dialogs';
 import { CommentsDrawer } from '../../components/production/shared';
 
 // ✅ Dodatkowy styl mt4 (nie ma w common styles)
@@ -538,6 +538,13 @@ const TaskDetailsPage = () => {
   // Nowe stany dla funkcjonalności usuwania materiałów
   const [deleteMaterialDialogOpen, setDeleteMaterialDialogOpen] = useState(false);
   const [materialToDelete, setMaterialToDelete] = useState(null);
+
+  // Stany dla dodatkowych kosztów MO
+  const [additionalCostDialogOpen, setAdditionalCostDialogOpen] = useState(false);
+  const [editingAdditionalCost, setEditingAdditionalCost] = useState(null);
+  const [savingAdditionalCost, setSavingAdditionalCost] = useState(false);
+  const [deleteAdditionalCostDialogOpen, setDeleteAdditionalCostDialogOpen] = useState(false);
+  const [additionalCostToDelete, setAdditionalCostToDelete] = useState(null);
 
   // ✅ FAZA 1: Stany konsumpcji przeniesione do useConsumptionState
   // ✅ POPRAWKA: restoreReservation i deletingConsumption teraz z hooka useConsumptionState
@@ -3235,6 +3242,98 @@ const TaskDetailsPage = () => {
     }
   };
 
+  // Handlery dla dodatkowych kosztów MO
+  const handleAddAdditionalCost = () => {
+    setEditingAdditionalCost(null);
+    setAdditionalCostDialogOpen(true);
+  };
+
+  const handleEditAdditionalCost = (item, index) => {
+    setEditingAdditionalCost({ ...item, _editIndex: index });
+    setAdditionalCostDialogOpen(true);
+  };
+
+  const handleDeleteAdditionalCost = (item) => {
+    setAdditionalCostToDelete(item);
+    setDeleteAdditionalCostDialogOpen(true);
+  };
+
+  const handleSaveAdditionalCost = async (data) => {
+    try {
+      setSavingAdditionalCost(true);
+      const { updateTask } = await import('../../services/productionService');
+      const currentAdditionalCosts = Array.isArray(task?.additionalCosts) ? [...task.additionalCosts] : [];
+      let newList;
+      const editIndex = editingAdditionalCost?._editIndex;
+      if (data.id && editIndex >= 0 && editIndex < currentAdditionalCosts.length) {
+        newList = currentAdditionalCosts.map((c, i) =>
+          i === editIndex
+            ? { ...c, id: c.id || data.id, name: data.name, amount: data.amount, currency: data.currency || 'EUR', invoiceDate: data.invoiceDate }
+            : c
+        );
+      } else if (data.id && currentAdditionalCosts.some((c) => c.id === data.id)) {
+        newList = currentAdditionalCosts.map((c) =>
+          c.id === data.id ? { ...c, name: data.name, amount: data.amount, currency: data.currency || 'EUR', invoiceDate: data.invoiceDate } : c
+        );
+      } else {
+        const newItem = {
+          id: data.id || `ac_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+          name: data.name,
+          amount: data.amount,
+          currency: data.currency || 'EUR',
+          invoiceDate: data.invoiceDate
+        };
+        newList = [...currentAdditionalCosts, newItem];
+      }
+      await updateTask(id, { additionalCosts: newList }, currentUser?.uid || 'system');
+      const { updateTaskCostsAutomatically } = await import('../../services/productionService');
+      await updateTaskCostsAutomatically(id, currentUser?.uid || 'system', 'Aktualizacja po zmianie dodatkowych kosztów');
+      const updatedTask = await getTaskById(id);
+      setTask(updatedTask);
+      setAdditionalCostDialogOpen(false);
+      setEditingAdditionalCost(null);
+      showSuccess('Dodatkowy koszt został zapisany');
+      return { success: true };
+    } catch (error) {
+      console.error('Błąd zapisywania dodatkowego kosztu:', error);
+      showError('Błąd zapisywania: ' + (error?.message || error));
+      return { success: false, error: { message: error?.message } };
+    } finally {
+      setSavingAdditionalCost(false);
+    }
+  };
+
+  const handleConfirmDeleteAdditionalCost = async () => {
+    if (!additionalCostToDelete) return { success: false };
+    try {
+      const { updateTask } = await import('../../services/productionService');
+      const currentAdditionalCosts = Array.isArray(task?.additionalCosts) ? task.additionalCosts : [];
+      const itemToMatch = additionalCostToDelete;
+      const invDateStr = itemToMatch.invoiceDate?.toDate
+        ? itemToMatch.invoiceDate.toDate().toISOString().slice(0, 10)
+        : (typeof itemToMatch.invoiceDate === 'string' ? itemToMatch.invoiceDate.slice(0, 10) : '');
+      const newList = currentAdditionalCosts.filter((c) => {
+        if (c.id && itemToMatch.id && c.id === itemToMatch.id) return false;
+        const cDate = c.invoiceDate?.toDate ? c.invoiceDate.toDate().toISOString().slice(0, 10) : (typeof c.invoiceDate === 'string' ? c.invoiceDate.slice(0, 10) : '');
+        if (c.name === itemToMatch.name && Number(c.amount) === Number(itemToMatch.amount) && cDate === invDateStr) return false;
+        return true;
+      });
+      await updateTask(id, { additionalCosts: newList }, currentUser?.uid || 'system');
+      const { updateTaskCostsAutomatically } = await import('../../services/productionService');
+      await updateTaskCostsAutomatically(id, currentUser?.uid || 'system', 'Aktualizacja po usunięciu dodatkowego kosztu');
+      const updatedTask = await getTaskById(id);
+      setTask(updatedTask);
+      setDeleteAdditionalCostDialogOpen(false);
+      setAdditionalCostToDelete(null);
+      showSuccess('Dodatkowy koszt został usunięty');
+      return { success: true };
+    } catch (error) {
+      console.error('Błąd usuwania dodatkowego kosztu:', error);
+      showError('Błąd usuwania: ' + (error?.message || error));
+      return { success: false };
+    }
+  };
+
   // Zmodyfikowana funkcja do rezerwacji materiałów z obsługą ręcznego wyboru partii
   const handleReserveMaterials = async (singleMaterialId = null) => {
     // Sprawdź czy pierwszy argument to event object (gdy kliknięty jest przycisk bez argumentów)
@@ -5297,7 +5396,8 @@ const TaskDetailsPage = () => {
         materialsLength: materials.length,
         taskQuantity: task?.quantity,
         completedQuantity: task?.completedQuantity,
-        processingCost: task?.processingCostPerUnit
+        processingCost: task?.processingCostPerUnit,
+        additionalCosts: (task?.additionalCosts?.length || 0)
       });
       
       // ⚡ SKRÓCONY TTL: 2 sekundy zamiast 3 dla większego bezpieczeństwa
@@ -5743,7 +5843,26 @@ const TaskDetailsPage = () => {
 
       console.log(`[UI-COSTS] Koszt procesowy: ${processingCostPerUnit.toFixed(4)}€/szt × ${completedQuantity} wyprodukowanych = ${totalProcessingCost.toFixed(4)}€`);
 
-      // ===== 4. OBLICZ KOSZTY NA JEDNOSTKĘ =====
+      // ===== 4. DODATKOWE KOSZTY (przeliczone na EUR kursem NBP z dnia przed datą faktury) =====
+      let totalAdditionalCostsInEUR = 0;
+      if (task?.additionalCosts && Array.isArray(task.additionalCosts) && task.additionalCosts.length > 0) {
+        const { convertAdditionalCostToEUR } = await import('../../utils/nbpExchangeRates');
+        for (const item of task.additionalCosts) {
+          const amount = parseFloat(item.amount) || 0;
+          if (amount <= 0) continue;
+          const currency = (item.currency || 'EUR').toUpperCase();
+          const invoiceDate = item.invoiceDate
+            ? (item.invoiceDate?.toDate ? item.invoiceDate.toDate() : new Date(item.invoiceDate))
+            : new Date();
+          const { amountInEUR } = await convertAdditionalCostToEUR(amount, currency, invoiceDate);
+          totalAdditionalCostsInEUR = preciseAdd(totalAdditionalCostsInEUR, amountInEUR);
+        }
+        totalMaterialCost = preciseAdd(totalMaterialCost, totalAdditionalCostsInEUR);
+        totalFullProductionCost = preciseAdd(totalFullProductionCost, totalAdditionalCostsInEUR);
+        console.log(`[UI-COSTS] Dodatkowe koszty: ${totalAdditionalCostsInEUR.toFixed(4)} € (wliczone do Łączny koszt materiałów i Pełny koszt produkcji)`);
+      }
+
+      // ===== 5. OBLICZ KOSZTY NA JEDNOSTKĘ =====
       const taskQuantity = fixFloatingPointPrecision(parseFloat(task?.quantity) || 1);
       const unitMaterialCost = taskQuantity > 0 ? preciseDivide(totalMaterialCost, taskQuantity) : 0;
       const unitFullProductionCost = taskQuantity > 0 ? preciseDivide(totalFullProductionCost, taskQuantity) : 0;
@@ -5771,7 +5890,8 @@ const TaskDetailsPage = () => {
         totalMaterialCost: fixFloatingPointPrecision(totalMaterialCost),
         unitMaterialCost: fixFloatingPointPrecision(unitMaterialCost),
         totalFullProductionCost: fixFloatingPointPrecision(totalFullProductionCost),
-        unitFullProductionCost: fixFloatingPointPrecision(unitFullProductionCost)
+        unitFullProductionCost: fixFloatingPointPrecision(unitFullProductionCost),
+        totalAdditionalCosts: fixFloatingPointPrecision(totalAdditionalCostsInEUR)
       };
 
       console.log('✅ [UI-COSTS] Zakończono zunifikowane obliczanie kosztów w UI:', {
@@ -5803,7 +5923,8 @@ const TaskDetailsPage = () => {
         totalMaterialCost: 0,
         unitMaterialCost: 0,
         totalFullProductionCost: 0,
-        unitFullProductionCost: 0
+        unitFullProductionCost: 0,
+        totalAdditionalCosts: 0
       };
     }
   };
@@ -5924,14 +6045,16 @@ const TaskDetailsPage = () => {
   // ⚡ OPTYMALIZACJA: Ten useEffect został usunięty i połączony z głównym useEffect synchronizacji kosztów (linia ~1665)
   // aby uniknąć wielokrotnego wywoływania calculateAllCosts przy tej samej zmianie
 
-  const renderMaterialCostsSummary = () => {
+  const renderMaterialCostsSummary = (options = {}) => {
+    const { hideTitle = false } = options;
     const {
       consumed: consumedCosts,
       reserved: reservedCosts,
       totalMaterialCost,
       unitMaterialCost,
       totalFullProductionCost,
-      unitFullProductionCost
+      unitFullProductionCost,
+      totalAdditionalCosts = 0
     } = costsSummary;
     
     // Pobierz koszty z bazy danych
@@ -5949,161 +6072,123 @@ const TaskDetailsPage = () => {
     const costChanged = totalMaterialCostChanged || unitMaterialCostChanged || 
                         totalFullProductionCostChanged || unitFullProductionCostChanged;
     
-    return (
-      <Box sx={{ ...mt2, ...p2, bgcolor: 'background.default', borderRadius: 1 }}>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
-            <Typography variant="h6">{t('materialsSummary.title')}</Typography>
-            {costChanged && (
-              <Alert severity="info" sx={mt1}>
-                {t('materialsSummary.costChanged')}
-              </Alert>
-            )}
-            {consumedCosts.totalCost > 0 && (
-              <Typography variant="body2" color="text.secondary" sx={mt1}>
-                {t('materialsSummary.consumed')}: {consumedCosts.totalCost.toFixed(2)} € | 
-                {t('materialsSummary.reserved')}: {reservedCosts.totalCost.toFixed(2)} €
+    const CostCard = ({ label, value, unit, changed, dbValue, color }) => (
+      <Card variant="outlined" sx={{ height: '100%', borderColor: color ? `${color}.main` : 'divider' }}>
+        <CardContent sx={{ pb: '12px !important' }}>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            {label}
+          </Typography>
+          <Typography variant="h6" sx={{ color: color ? `${color}.main` : 'inherit', fontWeight: 600 }}>
+            {value}
+            {unit && (
+              <Typography component="span" variant="body2" sx={{ fontWeight: 400, opacity: 0.9 }}>
+                {' '}/{unit}
               </Typography>
             )}
+          </Typography>
+          {changed && dbValue != null && (
+            <Typography variant="caption" sx={{ color: 'warning.main', fontStyle: 'italic', display: 'block' }}>
+              w bazie: {dbValue}
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+    );
+
+    return (
+      <Box sx={{ ...(hideTitle ? {} : mt2), ...p2, bgcolor: 'transparent', borderRadius: 1 }}>
+        {costChanged && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {t('materialsSummary.costChanged')}
+          </Alert>
+        )}
+        {(consumedCosts.totalCost > 0 || reservedCosts.totalCost > 0 || totalAdditionalCosts > 0) && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {consumedCosts.totalCost > 0 && `${t('materialsSummary.consumed')}: ${consumedCosts.totalCost.toFixed(2)} €`}
+            {consumedCosts.totalCost > 0 && reservedCosts.totalCost > 0 && ' | '}
+            {reservedCosts.totalCost > 0 && `${t('materialsSummary.reserved')}: ${reservedCosts.totalCost.toFixed(2)} €`}
+            {totalAdditionalCosts > 0 && (consumedCosts.totalCost > 0 || reservedCosts.totalCost > 0 ? ' | ' : '')}
+            {totalAdditionalCosts > 0 && `${t('additionalCosts.title')}: ${totalAdditionalCosts.toFixed(2)} €`}
+          </Typography>
+        )}
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6} md={4}>
+            <CostCard
+              label={t('materialsSummary.totalCost')}
+              value={`${totalMaterialCost.toFixed(2)} €`}
+              changed={totalMaterialCostChanged}
+              dbValue={`${dbTotalMaterialCost.toFixed(2)} €`}
+            />
           </Grid>
-          <Grid item xs={12} md={6} sx={textRight}>
-            {/* Sekcja: Koszty materiałów */}
-            <Box sx={{ mb: 1.5 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <Typography variant="body2" color="text.secondary">
-                  {t('materialsSummary.totalCost')}:
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <Typography variant="body1">
-                    {totalMaterialCost.toFixed(2)} €
-                  </Typography>
-                  {totalMaterialCostChanged && (
-                    <Typography variant="caption" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
-                      (w bazie: {dbTotalMaterialCost.toFixed(2)} €)
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <Typography variant="body2" color="text.secondary">
-                  {t('materialsSummary.unitCost')}:
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <Typography variant="body1">
-                    ~{unitMaterialCost.toFixed(4)} €/{task.unit}
-                  </Typography>
-                  {unitMaterialCostChanged && (
-                    <Typography variant="caption" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
-                      (w bazie: ~{dbUnitMaterialCost.toFixed(4)} €/{task.unit})
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-            </Box>
-
-            {/* Sekcja: Koszty produkcji */}
-            <Box sx={{ mb: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <Typography variant="body2" sx={{ color: 'primary.main' }}>
-                  {t('taskDetails:materialsSummary.totalFullProductionCost')}:
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <Typography variant="body1" sx={{ color: 'primary.main' }}>
-                    {totalFullProductionCost.toFixed(2)} €
-                  </Typography>
-                  {totalFullProductionCostChanged && (
-                    <Typography variant="caption" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
-                      (w bazie: {dbTotalFullProductionCost.toFixed(2)} €)
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <Typography variant="body2" sx={{ color: 'primary.main' }}>
-                  {t('taskDetails:materialsSummary.unitFullProductionCost')}:
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <Typography variant="body1" sx={{ color: 'primary.main' }}>
-                    ~{unitFullProductionCost.toFixed(4)} €/{task.unit}
-                  </Typography>
-                  {unitFullProductionCostChanged && (
-                    <Typography variant="caption" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
-                      (w bazie: ~{dbUnitFullProductionCost.toFixed(4)} €/{task.unit})
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-            </Box>
-
-            {/* Sekcja: Koszt zakładu */}
-            {(task.factoryCostPerUnit !== undefined && task.factoryCostPerUnit > 0) && (
-              <Box sx={{ mb: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <Typography variant="body2" sx={{ color: 'secondary.main' }}>
-                    {t('taskDetails:materialsSummary.factoryCostPerUnit', 'Koszt zakładu na jednostkę')}:
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: 'secondary.main' }}>
-                    ~{task.factoryCostPerUnit.toFixed(4)} €/{task.unit}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', opacity: 0.7 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    ({task.factoryCostMinutes?.toFixed(0) || 0} min proporcjonalnie)
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Łącznie: {task.factoryCostTotal?.toFixed(2) || '0.00'} €
-                  </Typography>
-                </Box>
-              </Box>
-            )}
-
-            {/* Sekcja: SUMA - Pełny koszt z zakładem */}
-            {(task.factoryCostPerUnit !== undefined && task.factoryCostPerUnit > 0) && (
-              <Box sx={{ 
-                pt: 1.5, 
-                borderTop: 2, 
-                borderColor: 'success.main',
-                bgcolor: 'success.main',
-                borderRadius: 1,
-                px: 1.5,
-                py: 1,
-                mx: -1
-              }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <Typography variant="body1" sx={{ color: 'success.contrastText', fontWeight: 'bold' }}>
-                    {t('taskDetails:materialsSummary.totalUnitCostWithFactory', 'Pełny koszt + zakład')}:
-                  </Typography>
-                  <Typography variant="h6" sx={{ color: 'success.contrastText', fontWeight: 'bold' }}>
-                    {/* Zawsze obliczaj na bieżąco: pełny koszt produkcji + koszt zakładu */}
-                    ~{(unitFullProductionCost + (task.factoryCostPerUnit || 0)).toFixed(4)} €/{task.unit}
-                  </Typography>
-                </Box>
-                {/* Pokaż łączny koszt z zakładem */}
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
-                  <Typography variant="caption" sx={{ color: 'success.contrastText', opacity: 0.85 }}>
-                    {/* Zawsze obliczaj na bieżąco */}
-                    Łącznie: {(totalFullProductionCost + (task.factoryCostTotal || 0)).toFixed(2)} €
-                  </Typography>
-                </Box>
-              </Box>
-            )}
-
-            {/* Przycisk aktualizacji */}
-            <Box sx={{ ...mt1, display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {costChanged && (
-                <Button 
-                  variant="outlined" 
-                  color="primary" 
-                  startIcon={<SaveIcon />}
-                  onClick={updateMaterialCostsManually}
-                  size="small"
-                >
-                  {t('materialsSummary.updateManually')}
-                </Button>
-              )}
-            </Box>
+          <Grid item xs={12} sm={6} md={4}>
+            <CostCard
+              label={t('materialsSummary.unitCost')}
+              value={`~${unitMaterialCost.toFixed(4)} €`}
+              unit={task.unit}
+              changed={unitMaterialCostChanged}
+              dbValue={`~${dbUnitMaterialCost.toFixed(4)} €/${task.unit}`}
+            />
           </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <CostCard
+              label={t('taskDetails:materialsSummary.totalFullProductionCost')}
+              value={`${totalFullProductionCost.toFixed(2)} €`}
+              color="primary"
+              changed={totalFullProductionCostChanged}
+              dbValue={`${dbTotalFullProductionCost.toFixed(2)} €`}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <CostCard
+              label={t('taskDetails:materialsSummary.unitFullProductionCost')}
+              value={`~${unitFullProductionCost.toFixed(4)} €`}
+              unit={task.unit}
+              color="primary"
+              changed={unitFullProductionCostChanged}
+              dbValue={`~${dbUnitFullProductionCost.toFixed(4)} €/${task.unit}`}
+            />
+          </Grid>
+          {(task.factoryCostPerUnit !== undefined && task.factoryCostPerUnit > 0) && (
+            <>
+              <Grid item xs={12} sm={6} md={4}>
+                <CostCard
+                  label={t('taskDetails:materialsSummary.factoryCostPerUnit', 'Koszt zakładu na jednostkę')}
+                  value={`~${task.factoryCostPerUnit.toFixed(4)} €`}
+                  unit={task.unit}
+                  color="secondary"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <Card sx={{ height: '100%', bgcolor: 'success.main', color: 'success.contrastText' }}>
+                  <CardContent sx={{ pb: '12px !important' }}>
+                    <Typography variant="body2" sx={{ opacity: 0.95 }} gutterBottom>
+                      {t('taskDetails:materialsSummary.totalUnitCostWithFactory', 'Pełny koszt + zakład')}
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                      ~{(unitFullProductionCost + (task.factoryCostPerUnit || 0)).toFixed(4)} €/{task.unit}
+                    </Typography>
+                    <Typography variant="caption" sx={{ opacity: 0.85, display: 'block' }}>
+                      Łącznie: {(totalFullProductionCost + (task.factoryCostTotal || 0)).toFixed(2)} €
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </>
+          )}
         </Grid>
+        {costChanged && (
+          <Box sx={{ mt: 2 }}>
+            <Button 
+              variant="outlined" 
+              color="primary" 
+              startIcon={<SaveIcon />}
+              onClick={updateMaterialCostsManually}
+              size="small"
+            >
+              {t('materialsSummary.updateManually')}
+            </Button>
+          </Box>
+        )}
       </Box>
     );
   };
@@ -9366,6 +9451,9 @@ const TaskDetailsPage = () => {
                 handleDeleteConsumption={handleDeleteConsumption}
                 handleSaveChanges={handleSaveChanges}
                 handleDeleteSingleReservation={handleDeleteSingleReservation}
+                handleAddAdditionalCost={handleAddAdditionalCost}
+                handleEditAdditionalCost={handleEditAdditionalCost}
+                handleDeleteAdditionalCost={handleDeleteAdditionalCost}
                 
                 // Settery
                 setReserveDialogOpen={setReserveDialogOpen}
@@ -9816,6 +9904,33 @@ const TaskDetailsPage = () => {
             title="Potwierdź usunięcie materiału"
             message={`Czy na pewno chcesz usunąć materiał "${materialToDelete?.name}" z zadania produkcyjnego? Ta operacja jest nieodwracalna.`}
             confirmText="Usuń materiał"
+            loading={loading}
+          />
+
+          {/* Dialog dodatkowego kosztu MO */}
+          <AdditionalCostDialog
+            open={additionalCostDialogOpen}
+            onClose={() => {
+              setAdditionalCostDialogOpen(false);
+              setEditingAdditionalCost(null);
+            }}
+            onSave={handleSaveAdditionalCost}
+            initialData={editingAdditionalCost}
+            loading={savingAdditionalCost}
+            t={(key) => t(key)}
+          />
+
+          {/* Dialog potwierdzenia usunięcia dodatkowego kosztu */}
+          <DeleteConfirmDialog
+            open={deleteAdditionalCostDialogOpen}
+            onClose={() => {
+              setDeleteAdditionalCostDialogOpen(false);
+              setAdditionalCostToDelete(null);
+            }}
+            onConfirm={handleConfirmDeleteAdditionalCost}
+            title={t('additionalCosts.title')}
+            message={t('additionalCosts.deleteConfirm')}
+            confirmText={t('deleteTask')}
             loading={loading}
           />
 

@@ -3,7 +3,7 @@
  * Wydzielony z TaskDetailsPage.js w celu lepszej organizacji kodu
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Typography,
@@ -23,7 +23,10 @@ import {
   Checkbox,
   Alert,
   Tooltip,
-  CircularProgress
+  CircularProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -34,7 +37,9 @@ import {
   Inventory as InventoryIcon,
   BookmarkAdd as BookmarkAddIcon,
   Close as CloseIcon,
-  BuildCircle as BuildCircleIcon
+  BuildCircle as BuildCircleIcon,
+  ExpandMore as ExpandMoreIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 
 // Import ikon z parent komponentu - będą przekazane jako props
@@ -81,6 +86,9 @@ const MaterialsAndCostsTab = ({
   handleDeleteConsumption,
   handleSaveChanges,
   handleDeleteSingleReservation,
+  handleAddAdditionalCost,
+  handleEditAdditionalCost,
+  handleDeleteAdditionalCost,
   
   // Settery
   setReserveDialogOpen,
@@ -98,6 +106,31 @@ const MaterialsAndCostsTab = ({
 }) => {
   const { t } = useTranslation('taskDetails');
   const navigate = useNavigate();
+
+  // Stan zwiniętych sekcji - zapisywany w localStorage
+  const STORAGE_KEY = 'materialsCostsTab_expanded';
+  const getDefaultExpanded = () => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return { costs: true, consumed: true, additionalCosts: false, poReservations: false };
+  };
+  const [expandedSections, setExpandedSections] = useState(getDefaultExpanded);
+
+  const handleAccordionChange = (section) => (event, isExpanded) => {
+    const newState = { ...expandedSections, [section]: isExpanded };
+    setExpandedSections(newState);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+    } catch (e) {
+      /* ignore */
+    }
+  };
 
   // Sprawdź czy wszystkie materiały mają taką samą wygenerowaną i zaplanowaną ilość
   // LUB czy jest aktywny tryb edycji (wtedy zawsze pokaż kolumnę)
@@ -620,17 +653,63 @@ const MaterialsAndCostsTab = ({
               </TableBody>
             </Table>
           </TableContainer>
-          {renderMaterialCostsSummary()}
+          <Accordion
+            expanded={expandedSections.costs}
+            onChange={handleAccordionChange('costs')}
+            sx={{
+              mt: 2,
+              '&:before': { display: 'none' },
+              boxShadow: 'none',
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              overflow: 'hidden'
+            }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                <Typography variant="h6" component="h3">
+                  {t('materialsSummary.title')}
+                </Typography>
+                {costsSummary && (
+                  <Typography variant="body1" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                    {t('materialsSummary.totalFullProductionCost')}: {costsSummary.totalFullProductionCost?.toFixed(2) || '0.00'} €
+                  </Typography>
+                )}
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails sx={{ pt: 0, bgcolor: 'background.default' }}>
+              {renderMaterialCostsSummary({ hideTitle: true })}
+            </AccordionDetails>
+          </Accordion>
         </Paper>
       </Grid>
       
       {/* Sekcja skonsumowanych materiałów */}
       {task.consumedMaterials && task.consumedMaterials.length > 0 && (
         <Grid item xs={12}>
-          <Paper sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" component="h2">{t('consumedMaterials.title')}</Typography>
-              {(() => {
+          <Accordion
+            expanded={expandedSections.consumed}
+            onChange={handleAccordionChange('consumed')}
+            sx={{
+              '&:before': { display: 'none' },
+              boxShadow: 'none',
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              overflow: 'hidden'
+            }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', pr: 2 }}>
+                <Typography variant="h6" component="h2">{t('consumedMaterials.title')}</Typography>
+                <Chip
+                  label={t('consumedMaterials.itemsCount', { count: task.consumedMaterials.length })}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                />
+                {(() => {
                 const totalCompletedQuantity = task.totalCompletedQuantity || 0;
                 const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
                 const isFullyProduced = remainingQuantity === 0;
@@ -651,6 +730,7 @@ const MaterialsAndCostsTab = ({
                       component={Link} 
                       to={`/production/consumption/${task.id}`} 
                       size="small"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       {buttonText}
                     </Button>
@@ -659,6 +739,8 @@ const MaterialsAndCostsTab = ({
                 return null;
               })()}
             </Box>
+            </AccordionSummary>
+            <AccordionDetails sx={{ pt: 0 }}>
             <TableContainer>
               <Table size="small">
                 <TableHead>
@@ -741,26 +823,143 @@ const MaterialsAndCostsTab = ({
                 </TableBody>
               </Table>
             </TableContainer>
-          </Paper>
+            </AccordionDetails>
+          </Accordion>
         </Grid>
       )}
       
+      {/* Sekcja dodatkowych kosztów */}
+      <Grid item xs={12}>
+        <Accordion
+          expanded={expandedSections.additionalCosts}
+          onChange={handleAccordionChange('additionalCosts')}
+          sx={{
+            '&:before': { display: 'none' },
+            boxShadow: 'none',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            overflow: 'hidden'
+          }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', pr: 2 }}>
+              <Typography variant="h6" component="h2">{t('additionalCosts.title')}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {Array.isArray(task?.additionalCosts) && task.additionalCosts.length > 0 && (
+                  <Chip
+                    label={t('additionalCosts.itemsCount', { count: task.additionalCosts.length })}
+                    size="small"
+                    color="secondary"
+                    variant="outlined"
+                  />
+                )}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAddAdditionalCost?.();
+                  }}
+                >
+                  {t('additionalCosts.addCost')}
+                </Button>
+              </Box>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails sx={{ pt: 0 }}>
+            {(!task?.additionalCosts || task.additionalCosts.length === 0) ? (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                {t('additionalCosts.noCosts')}
+              </Typography>
+            ) : (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t('additionalCosts.table.name')}</TableCell>
+                      <TableCell>{t('additionalCosts.table.amount')}</TableCell>
+                      <TableCell>{t('additionalCosts.table.currency')}</TableCell>
+                      <TableCell>{t('additionalCosts.table.invoiceDate')}</TableCell>
+                      <TableCell>{t('additionalCosts.table.actions')}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {task.additionalCosts.map((item, index) => {
+                      const invDate = item.invoiceDate?.toDate
+                        ? item.invoiceDate.toDate().toISOString().slice(0, 10)
+                        : (typeof item.invoiceDate === 'string' ? item.invoiceDate.slice(0, 10) : '—');
+                      return (
+                        <TableRow key={item.id || index}>
+                          <TableCell>{item.name}</TableCell>
+                          <TableCell>{Number(item.amount || 0).toFixed(2)}</TableCell>
+                          <TableCell>{item.currency || 'EUR'}</TableCell>
+                          <TableCell>{invDate}</TableCell>
+                          <TableCell>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleEditAdditionalCost?.(item, index)}
+                              title={t('common.update')}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleDeleteAdditionalCost?.(item)}
+                              title={t('deleteTask')}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </AccordionDetails>
+        </Accordion>
+      </Grid>
+
       {/* Sekcja rezerwacji PO */}
       <Grid item xs={12}>
-        <Paper sx={{ p: 3 }}>
-          <POReservationManager 
-            taskId={task?.id}
-            materials={task?.materials || []}
-            refreshTrigger={poRefreshTrigger}
-            onUpdate={async () => {
-              // Odśwież podstawowe dane zadania i rezerwacje PO
-              await Promise.all([
-                fetchTaskBasicData(),
-                fetchPOReservations()
-              ]);
-            }}
-          />
-        </Paper>
+        <Accordion
+          expanded={expandedSections.poReservations}
+          onChange={handleAccordionChange('poReservations')}
+          sx={{
+            '&:before': { display: 'none' },
+            boxShadow: 'none',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            overflow: 'hidden'
+          }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="h6" component="h2">
+              {t('poReservations.title')}
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ pt: 0 }}>
+            <POReservationManager 
+              taskId={task?.id}
+              materials={task?.materials || []}
+              refreshTrigger={poRefreshTrigger}
+              hideTitle
+              onUpdate={async () => {
+                // Odśwież podstawowe dane zadania i rezerwacje PO
+                await Promise.all([
+                  fetchTaskBasicData(),
+                  fetchPOReservations()
+                ]);
+              }}
+            />
+          </AccordionDetails>
+        </Accordion>
       </Grid>
     </Grid>
   );
