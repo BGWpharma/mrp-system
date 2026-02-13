@@ -394,7 +394,7 @@
     "noCostPerMinuteSource": "Brak danych - wprowadź ręcznie",
     "noCostPerMinuteData": "Brak danych o kosztach zakładu - wprowadź koszt/minutę ręcznie",
     "laborInfoWithSource": "Koszt/minutę pobrany z najnowszego wpisu kosztów zakładu",
-    "laborInfoNoSource": "Brak wpisów kosztów zakładu. Wprowadź koszt/minutę ręcznie lub dodaj wpis w zakładce \"Koszty zakładu\".",
+    "laborInfoNoSource": "Brak wpisów kosztów zakładu. Koszt/minutę ustawiony na domyślną wartość ({{defaultCost}} €).",
     "effectiveTime": "efektywny czas",
     "packWeight": "Gramatura opakowania",
     "packWeightNone": "— Nie wybrano —",
@@ -402,8 +402,7 @@
     "flavored": "Produkt smakowy",
     "targetTime": "Czas/szt.",
     "costPerHour": "Koszt/h",
-    "laborInfoFormat": "Koszt pracy z matrycy formatu produktu (gramatura opakowania + smak).",
-    "laborInfoSelectFormat": "Wybierz gramaturę opakowania dla precyzyjniejszej kalkulacji.",
+    "laborInfoFormat": "Koszt pracy z matrycy formatu produktu ({{packWeight}}g, {{flavorLabel}}).",
     "summary": "Podsumowanie COGS",
     "componentsTotal": "Koszt komponentów",
     "packagingTotal": "Koszt opakowania",
@@ -463,6 +462,23 @@
       "date": "Data",
       "actions": "Akcje"
     },
+    "loadFromRecipe": "Z receptury",
+    "loadFromRecipeTitle": "Wczytaj składniki z receptury",
+    "loadFromRecipeDesc": "Wyszukaj recepturę i załaduj jej składniki jako komponenty wyceny. Ceny zostaną automatycznie dopasowane z magazynu.",
+    "recipeSearchPlaceholder": "Szukaj receptury po nazwie...",
+    "recipeNoResults": "Brak wyników dla \"{{term}}\"",
+    "recipeTypeToSearch": "Wpisz nazwę receptury aby wyszukać",
+    "recipeNoIngredients": "Receptura nie zawiera składników",
+    "recipeLoaded": "Załadowano {{total}} składników z receptury ({{matched}} z cenami)",
+    "recipeLoadedComponents": "{{count}} składników",
+    "recipeLoadedPackaging": "+ opakowanie: {{name}}",
+    "ingredientsShort": "skł.",
+    "costPerMinuteDefault": "Domyślnie {{defaultCost}} €/min",
+    "autoFormat": "Format",
+    "flavoredLabel": "smakowy",
+    "unflavored": "bez smaku",
+    "timeOverridden": "Ręcznie zmieniony (matryca: {{matrixTime}} sek)",
+    "laborFormula": "Formuła: ({{time}} sek / 60) × {{costPerMin}} €/min × {{qty}} szt. = {{total}} €",
     "errors": {
       "loadData": "Błąd podczas ładowania danych",
       "noComponents": "Dodaj co najmniej jeden komponent",
@@ -471,7 +487,8 @@
       "nameRequired": "Podaj nazwę wyceny",
       "loadQuotations": "Błąd podczas ładowania zapisanych wycen",
       "save": "Błąd podczas zapisywania wyceny",
-      "delete": "Błąd podczas usuwania wyceny"
+      "delete": "Błąd podczas usuwania wyceny",
+      "loadRecipe": "Błąd podczas ładowania receptury"
     }
   },
   "factoryCosts": {

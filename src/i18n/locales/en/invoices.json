@@ -395,7 +395,7 @@
     "noCostPerMinuteSource": "No data - enter manually",
     "noCostPerMinuteData": "No factory cost data - enter cost/minute manually",
     "laborInfoWithSource": "Cost/minute from latest factory costs entry",
-    "laborInfoNoSource": "No factory cost entries. Enter cost/minute manually or add an entry in the \"Factory Costs\" tab.",
+    "laborInfoNoSource": "No factory cost entries. Cost/minute set to default value ({{defaultCost}} €).",
     "effectiveTime": "effective time",
     "packWeight": "Pack Weight",
     "packWeightNone": "— Not selected —",
@@ -403,8 +403,7 @@
     "flavored": "Flavored product",
     "targetTime": "Time/unit",
     "costPerHour": "Cost/hour",
-    "laborInfoFormat": "Labor cost from product format matrix (pack weight + flavor).",
-    "laborInfoSelectFormat": "Select pack weight for more precise calculation.",
+    "laborInfoFormat": "Labor cost from product format matrix ({{packWeight}}g, {{flavorLabel}}).",
     "summary": "COGS Summary",
     "componentsTotal": "Components Cost",
     "packagingTotal": "Packaging Cost",
@@ -464,6 +463,23 @@
       "date": "Date",
       "actions": "Actions"
     },
+    "loadFromRecipe": "From recipe",
+    "loadFromRecipeTitle": "Load ingredients from recipe",
+    "loadFromRecipeDesc": "Search for a recipe and load its ingredients as quotation components. Prices will be automatically matched from inventory.",
+    "recipeSearchPlaceholder": "Search recipe by name...",
+    "recipeNoResults": "No results for \"{{term}}\"",
+    "recipeTypeToSearch": "Type recipe name to search",
+    "recipeNoIngredients": "Recipe has no ingredients",
+    "recipeLoaded": "Loaded {{total}} ingredients from recipe ({{matched}} with prices)",
+    "recipeLoadedComponents": "{{count}} ingredients",
+    "recipeLoadedPackaging": "+ packaging: {{name}}",
+    "ingredientsShort": "ing.",
+    "costPerMinuteDefault": "Default {{defaultCost}} €/min",
+    "autoFormat": "Format",
+    "flavoredLabel": "flavored",
+    "unflavored": "unflavored",
+    "timeOverridden": "Manually changed (matrix: {{matrixTime}} sec)",
+    "laborFormula": "Formula: ({{time}} sec / 60) × {{costPerMin}} €/min × {{qty}} pcs = {{total}} €",
     "errors": {
       "loadData": "Error loading data",
       "noComponents": "Add at least one component",
@@ -472,7 +488,8 @@
       "nameRequired": "Enter quotation name",
       "loadQuotations": "Error loading saved quotations",
       "save": "Error saving quotation",
-      "delete": "Error deleting quotation"
+      "delete": "Error deleting quotation",
+      "loadRecipe": "Error loading recipe"
     }
   },
   "factoryCosts": {

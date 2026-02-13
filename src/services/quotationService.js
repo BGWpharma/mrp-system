@@ -19,6 +19,7 @@ import {
   query, 
   orderBy, 
   where,
+  limit as firestoreLimit,
   Timestamp 
 } from 'firebase/firestore';
 import { getInventoryItemsByCategory, getIngredientPrices } from './inventory/inventoryItemsService';
@@ -101,25 +102,41 @@ export const calculateTotalWeight = (components) => {
 
 // ==================== MATRYCA CZASU PRACY ====================
 
+/** Domyślny koszt minuty pracy (EUR) */
+export const DEFAULT_COST_PER_MINUTE = 2;
+
 /**
- * Matryca czasu/kosztu według formatu produktu (Pack weight + flavored)
- * Źródło: CSV - Target Time (sec), At cost factory per hour
+ * Matryca czasu według formatu produktu (Pack weight + flavored)
+ * Źródło: CSV - Target Time (sec)
+ * Formuła kosztu: (targetTimeSec / 60) * costPerMinute
  */
 export const LABOR_MATRIX_BY_FORMAT = [
-  { packWeightMin: 60, packWeightMax: 180, flavored: null, targetTimeSec: 15, costPerHourEur: 0.60 },  // ALL CAPS FORMAT
-  { packWeightMin: 300, packWeightMax: 300, flavored: true, targetTimeSec: 17, costPerHourEur: 0.68 },   // 300g FLAVORED
-  { packWeightMin: 300, packWeightMax: 300, flavored: false, targetTimeSec: 15, costPerHourEur: 0.60 },  // 300g UNFLAVORED
-  { packWeightMin: 900, packWeightMax: 900, flavored: null, targetTimeSec: 40, costPerHourEur: 1.59 }, // 900g FORMAT
+  { packWeightMin: 60, packWeightMax: 180, flavored: null, targetTimeSec: 15 },   // ALL CAPS FORMAT
+  { packWeightMin: 300, packWeightMax: 300, flavored: true, targetTimeSec: 17 },   // 300g FLAVORED
+  { packWeightMin: 300, packWeightMax: 300, flavored: false, targetTimeSec: 15 },  // 300g UNFLAVORED
+  { packWeightMin: 900, packWeightMax: 900, flavored: null, targetTimeSec: 40 },   // 900g FORMAT
 ];
 
 /** Dostępne gramatury opakowań do wyboru (g) */
 export const PACK_WEIGHT_OPTIONS = [60, 90, 120, 180, 300, 900];
 
 /**
- * Pobiera parametry czasu i kosztu z matrycy na podstawie formatu (pack weight + flavored)
+ * Auto-detekcja formatu opakowania na podstawie gramatury surowców.
+ * Zwraca najmniejszą gramaturę opakowania >= gramatura surowców.
+ * @param {number} gramatura - Łączna gramatura surowców (g)
+ * @returns {number|null} - Gramatura opakowania (g) lub null
+ */
+export const getAutoPackWeight = (gramatura) => {
+  if (!gramatura || gramatura <= 0) return null;
+  const match = PACK_WEIGHT_OPTIONS.find(w => w >= gramatura);
+  return match || PACK_WEIGHT_OPTIONS[PACK_WEIGHT_OPTIONS.length - 1];
+};
+
+/**
+ * Pobiera parametry czasu z matrycy na podstawie formatu (pack weight + flavored)
  * @param {number} packWeight - Gramatura opakowania (g)
  * @param {boolean|null} flavored - Czy produkt smakowy (tylko dla 300g)
- * @returns {Object|null} - { targetTimeSec, costPerHourEur } lub null jeśli brak dopasowania
+ * @returns {Object|null} - { targetTimeSec } lub null jeśli brak dopasowania
  */
 export const getLaborParamsByFormat = (packWeight, flavored = false) => {
   if (!packWeight) return null;
@@ -132,32 +149,37 @@ export const getLaborParamsByFormat = (packWeight, flavored = false) => {
     return true;
   });
 
-  return match ? { targetTimeSec: match.targetTimeSec, costPerHourEur: match.costPerHourEur } : null;
+  return match ? { targetTimeSec: match.targetTimeSec } : null;
 };
 
 /**
  * Oblicza koszt pracy na jednostkę według matrycy formatu
- * Formuła: (targetTimeSec / 3600) * costPerHourEur
+ * Formuła: (targetTimeSec / 60) * costPerMinute
  * @param {number} packWeight - Gramatura opakowania (g)
  * @param {boolean} flavored - Czy produkt smakowy (dla 300g)
  * @param {number} quantity - Ilość jednostek (domyślnie 1)
- * @returns {Object|null} - { targetTimeSec, costPerHourEur, laborCostPerUnit, laborCostTotal } lub null
+ * @param {number} costPerMinute - Koszt za minutę pracy (EUR), domyślnie DEFAULT_COST_PER_MINUTE
+ * @param {number|null} overrideTargetTimeSec - Nadpisany czas na sztukę (sekundy), null = z matrycy
+ * @returns {Object|null} - { targetTimeSec, costPerMinute, laborCostPerUnit, laborCostTotal } lub null
  */
-export const calculateLaborCostByFormat = (packWeight, flavored = false, quantity = 1) => {
+export const calculateLaborCostByFormat = (packWeight, flavored = false, quantity = 1, costPerMinute = DEFAULT_COST_PER_MINUTE, overrideTargetTimeSec = null) => {
   const params = getLaborParamsByFormat(packWeight, flavored);
   if (!params) return null;
 
-  const laborCostPerUnit = (params.targetTimeSec / 3600) * params.costPerHourEur;
+  const effectiveTargetTimeSec = overrideTargetTimeSec != null ? overrideTargetTimeSec : params.targetTimeSec;
+  const laborCostPerUnit = (effectiveTargetTimeSec / 60) * costPerMinute;
   const laborCostTotal = laborCostPerUnit * quantity;
-  const estimatedMinutes = (params.targetTimeSec / 60) * quantity;
+  const estimatedMinutes = (effectiveTargetTimeSec / 60) * quantity;
 
   return {
-    targetTimeSec: params.targetTimeSec,
-    costPerHourEur: params.costPerHourEur,
+    targetTimeSec: effectiveTargetTimeSec,
+    matrixTargetTimeSec: params.targetTimeSec,
+    costPerMinute,
     laborCostPerUnit,
     laborCostTotal,
     estimatedMinutes,
-    source: 'format'
+    source: 'format',
+    timeOverridden: overrideTargetTimeSec != null
   };
 };
 
@@ -361,7 +383,7 @@ export const getCurrentCostPerMinute = async () => {
  * @returns {Promise<Object>} - Obliczona wycena
  */
 export const calculateQuotation = async (quotationData) => {
-  const { components, packaging, laborMatrix, customCostPerMinute, packWeight, flavored } = quotationData;
+  const { components, packaging, laborMatrix, customCostPerMinute, packWeight, flavored, customTargetTimeSec } = quotationData;
   
   // 1. Oblicz koszt komponentów
   let componentsCost = 0;
@@ -441,31 +463,35 @@ export const calculateQuotation = async (quotationData) => {
   let laborDetails;
   let laborCost;
 
-  // Tryb nowej matrycy (pack weight + flavored) - koszt z matrycy formatu
-  const formatLabor = calculateLaborCostByFormat(packWeight, flavored, packagingQuantity);
+  // Ustal koszt/minutę: priorytet customCostPerMinute > factory costs > DEFAULT_COST_PER_MINUTE
+  let effectiveCostPerMinute = customCostPerMinute;
+  if (!effectiveCostPerMinute || effectiveCostPerMinute <= 0) {
+    const costData = await getCurrentCostPerMinute();
+    effectiveCostPerMinute = costData.costPerMinute || DEFAULT_COST_PER_MINUTE;
+  }
+
+  // Tryb matrycy formatu (pack weight + flavored) - formuła: (targetTimeSec / 60) * costPerMinute
+  const formatLabor = calculateLaborCostByFormat(packWeight, flavored, packagingQuantity, effectiveCostPerMinute, customTargetTimeSec);
   if (formatLabor) {
     laborCost = formatLabor.laborCostTotal;
     laborDetails = {
       gramatura: totalGramatura,
       estimatedMinutes: formatLabor.estimatedMinutes,
       targetTimeSec: formatLabor.targetTimeSec,
-      costPerHourEur: formatLabor.costPerHourEur,
+      matrixTargetTimeSec: formatLabor.matrixTargetTimeSec,
+      costPerMinute: effectiveCostPerMinute,
       totalCost: laborCost,
-      source: 'format'
+      source: 'format',
+      timeOverridden: formatLabor.timeOverridden
     };
   } else {
     // Fallback: stara matryca (gramatura -> minuty) × costPerMinute
     const estimatedMinutes = calculateLaborTime(totalGramatura, laborMatrix);
-    let costPerMinute = customCostPerMinute;
-    if (!costPerMinute || costPerMinute <= 0) {
-      const costData = await getCurrentCostPerMinute();
-      costPerMinute = costData.costPerMinute;
-    }
-    laborCost = estimatedMinutes * (costPerMinute || 0);
+    laborCost = estimatedMinutes * (effectiveCostPerMinute || 0);
     laborDetails = {
       gramatura: totalGramatura,
       estimatedMinutes,
-      costPerMinute: costPerMinute || 0,
+      costPerMinute: effectiveCostPerMinute || 0,
       totalCost: laborCost,
       source: 'gramatura'
     };
@@ -592,6 +618,109 @@ export const getAllQuotations = async (filters = {}) => {
   }
 };
 
+// ==================== WYSZUKIWANIE RECEPTUR ====================
+
+const RECIPES_COLLECTION = 'recipes';
+
+/**
+ * Wyszukuje receptury on-demand z filtrowaniem po stronie serwera (Firestore prefix query).
+ * Gdy searchTerm jest pusty, zwraca ostatnio zaktualizowane receptury.
+ * @param {string} searchTerm - Fraza wyszukiwania (prefix na nazwie)
+ * @param {number} maxResults - Maksymalna liczba wyników (domyślnie 15)
+ * @returns {Promise<Array>} - Tablica { id, name, description, ingredientsCount, status }
+ */
+export const searchRecipesForQuotation = async (searchTerm = '', maxResults = 15) => {
+  try {
+    const recipesRef = collection(db, RECIPES_COLLECTION);
+    let q;
+
+    const trimmed = searchTerm.trim();
+    if (trimmed) {
+      // Firestore prefix query na nazwie (case-sensitive, nazwy receptur zazwyczaj uppercase)
+      const upper = trimmed.toUpperCase();
+      const lower = trimmed.toLowerCase();
+      
+      // Próbujemy oba warianty i łączymy wyniki (nazwy mogą być uppercase lub mixed-case)
+      const qUpper = query(
+        recipesRef,
+        where('name', '>=', upper),
+        where('name', '<=', upper + '\uf8ff'),
+        firestoreLimit(maxResults)
+      );
+      const qLower = query(
+        recipesRef,
+        where('name', '>=', lower),
+        where('name', '<=', lower + '\uf8ff'),
+        firestoreLimit(maxResults)
+      );
+      // Oryginalna forma (jak wpisana)
+      const qOriginal = query(
+        recipesRef,
+        where('name', '>=', trimmed),
+        where('name', '<=', trimmed + '\uf8ff'),
+        firestoreLimit(maxResults)
+      );
+
+      const [snapUpper, snapLower, snapOriginal] = await Promise.all([
+        getDocs(qUpper),
+        getDocs(qLower),
+        getDocs(qOriginal)
+      ]);
+
+      // Merge wyników (unikaj duplikatów)
+      const seen = new Set();
+      const allDocs = [];
+      [snapOriginal, snapUpper, snapLower].forEach(snap => {
+        snap.docs.forEach(d => {
+          if (!seen.has(d.id)) {
+            seen.add(d.id);
+            allDocs.push(d);
+          }
+        });
+      });
+
+      return allDocs.slice(0, maxResults).map(mapRecipeDoc);
+    } else {
+      // Brak frazy - zwróć ostatnio zaktualizowane
+      q = query(
+        recipesRef,
+        orderBy('updatedAt', 'desc'),
+        firestoreLimit(maxResults)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(mapRecipeDoc);
+    }
+  } catch (error) {
+    console.error('Błąd wyszukiwania receptur:', error);
+    return [];
+  }
+};
+
+/**
+ * Pobiera pełną recepturę z składnikami (do załadowania do wyceny).
+ * @param {string} recipeId - ID receptury
+ * @returns {Promise<Object>} - Pełna receptura z ingredients
+ */
+export const getRecipeForQuotation = async (recipeId) => {
+  const docRef = doc(db, RECIPES_COLLECTION, recipeId);
+  const docSnap = await getDoc(docRef);
+  if (!docSnap.exists()) throw new Error('Receptura nie istnieje');
+  return { id: docSnap.id, ...docSnap.data() };
+};
+
+/** Helper: mapuje dokument Firestore receptury na minimalną strukturę */
+const mapRecipeDoc = (docSnap) => {
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    name: data.name || '',
+    description: data.description || '',
+    ingredientsCount: Array.isArray(data.ingredients) ? data.ingredients.length : 0,
+    status: data.status || '',
+    customerId: data.customerId || null
+  };
+};
+
 // ==================== EKSPORT ====================
 
 export default {
@@ -619,6 +748,11 @@ export default {
   DEFAULT_LABOR_TIME_MATRIX,
   LABOR_MATRIX_BY_FORMAT,
   PACK_WEIGHT_OPTIONS,
+  getAutoPackWeight,
   getLaborParamsByFormat,
-  calculateLaborCostByFormat
+  calculateLaborCostByFormat,
+  
+  // Receptury
+  searchRecipesForQuotation,
+  getRecipeForQuotation
 };

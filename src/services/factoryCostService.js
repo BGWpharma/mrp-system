@@ -1100,9 +1100,43 @@ export const updateFactoryCostInTasks = async (factoryCostId) => {
     // Oblicz koszty dla każdego zadania
     const taskCostMap = await calculateFactoryCostForTasks(factoryCost);
     
+    // Najpierw wyczyść koszty zakładu dla wykluczonych zadań
+    const excludedTaskIds = factoryCost.excludedTaskIds || [];
+    for (const taskId of excludedTaskIds) {
+      try {
+        const taskRef = doc(db, 'productionTasks', taskId);
+        const taskDoc = await getDoc(taskRef);
+        if (taskDoc.exists()) {
+          const taskData = taskDoc.data();
+          const totalFullProductionCost = parseFloat(taskData.totalFullProductionCost) || 0;
+          const unitFullProductionCost = parseFloat(taskData.unitFullProductionCost) || 0;
+          
+          await updateDoc(taskRef, {
+            factoryCostTotal: 0,
+            factoryCostPerUnit: 0,
+            factoryCostMinutes: 0,
+            factoryCostId: null,
+            factoryCostUpdatedAt: serverTimestamp(),
+            totalCostWithFactory: Math.round(totalFullProductionCost * 100) / 100,
+            unitCostWithFactory: Math.round(unitFullProductionCost * 10000) / 10000
+          });
+          console.log(`[FACTORY COST] Wyczyszczono koszt zakładu dla wykluczonego zadania ${taskId}`);
+        }
+      } catch (error) {
+        console.error(`[FACTORY COST] Błąd czyszczenia kosztu dla wykluczonego zadania ${taskId}:`, error);
+      }
+    }
+
     if (Object.keys(taskCostMap).length === 0) {
-      console.log('[FACTORY COST] Brak zadań do aktualizacji');
-      return { updated: 0 };
+      console.log('[FACTORY COST] Brak zadań do aktualizacji (wszystkie wykluczone lub brak sesji)');
+      
+      // Mimo braku zadań do aktualizacji, propaguj do zamówień aby wyczyścić koszty
+      if (excludedTaskIds.length > 0) {
+        console.log(`[FACTORY COST] Propagowanie wyczyszczonych kosztów do zamówień dla ${excludedTaskIds.length} wykluczonych zadań...`);
+        await propagateFactoryCostToOrders(excludedTaskIds, taskCostMap, excludedTaskIds);
+      }
+      
+      return { updated: 0, excludedCleared: excludedTaskIds.length };
     }
 
     // Aktualizuj zadania
@@ -1142,27 +1176,6 @@ export const updateFactoryCostInTasks = async (factoryCostId) => {
         console.log(`[FACTORY COST] Zaktualizowano zadanie ${costData.moNumber}: ${costData.factoryCostPerUnit.toFixed(4)} EUR/szt (pełny koszt: ${unitCostWithFactory.toFixed(4)} EUR/szt)`);
       } catch (error) {
         console.error(`[FACTORY COST] Błąd aktualizacji zadania ${taskId}:`, error);
-      }
-    }
-
-    // Oznacz wykluczone zadania jako bez kosztu zakładu
-    const excludedTaskIds = factoryCost.excludedTaskIds || [];
-    for (const taskId of excludedTaskIds) {
-      try {
-        const taskRef = doc(db, 'productionTasks', taskId);
-        const taskDoc = await getDoc(taskRef);
-        if (taskDoc.exists()) {
-          await updateDoc(taskRef, {
-            factoryCostTotal: 0,
-            factoryCostPerUnit: 0,
-            factoryCostMinutes: 0,
-            factoryCostId: null,
-            factoryCostUpdatedAt: serverTimestamp()
-          });
-          console.log(`[FACTORY COST] Wyczyszczono koszt zakładu dla wykluczonego zadania ${taskId}`);
-        }
-      } catch (error) {
-        console.error(`[FACTORY COST] Błąd czyszczenia kosztu dla wykluczonego zadania ${taskId}:`, error);
       }
     }
 

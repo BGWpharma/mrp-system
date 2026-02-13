@@ -521,14 +521,58 @@ const updateTasksWithFactoryCost = async (db, factoryCostId, factoryCostData) =>
       sessions, costStart, costEnd, excludedTaskIds,
   );
 
+  // Najpierw wyczyść koszty dla wykluczonych zadań - BATCH QUERY
+  const tasksRef = db.collection("productionTasks");
+  if (excludedTaskIds.length > 0) {
+    const excludedChunks = chunkArray(excludedTaskIds, 10);
+
+    for (const chunk of excludedChunks) {
+      const excludedSnapshot = await tasksRef
+          .where(admin.firestore.FieldPath.documentId(), "in", chunk)
+          .get();
+
+      if (excludedSnapshot.empty) continue;
+
+      const clearBatch = db.batch();
+
+      excludedSnapshot.forEach((taskDoc) => {
+        const taskData = taskDoc.data();
+        const existingTotalFullProductionCost =
+          parseFloat(taskData.totalFullProductionCost) || 0;
+        const existingUnitFullProductionCost =
+          parseFloat(taskData.unitFullProductionCost) || 0;
+
+        clearBatch.update(taskDoc.ref, {
+          factoryCostTotal: 0,
+          factoryCostPerUnit: 0,
+          factoryCostMinutes: 0,
+          factoryCostId: null,
+          factoryCostUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          totalCostWithFactory: existingTotalFullProductionCost,
+          unitCostWithFactory: existingUnitFullProductionCost,
+        });
+
+        logger.info(`Cleared factory cost for excluded task ${taskDoc.id}`);
+      });
+
+      await clearBatch.commit();
+    }
+  }
+
   const taskIds = Object.keys(taskTimeMap);
   if (taskIds.length === 0) {
-    logger.info("No tasks to update");
-    return {updated: 0};
+    logger.info("No tasks to update (all excluded or no sessions)");
+
+    // Mimo braku zadań, propaguj do zamówień aby wyczyścić koszty
+    if (excludedTaskIds.length > 0) {
+      await propagateToOrders(db, [], excludedTaskIds);
+    }
+
+    return {updated: 0, excludedCleared: excludedTaskIds.length};
   }
 
   // Pobierz i aktualizuj zadania batch'ami (max 10 w zapytaniu "in")
-  const tasksRef = db.collection("productionTasks");
   let updatedCount = 0;
   const updatedTaskIds = [];
 
@@ -589,44 +633,6 @@ const updateTasksWithFactoryCost = async (db, factoryCostId, factoryCostData) =>
     }
 
     await writeBatch.commit();
-  }
-
-  // Wyczyść koszty dla wykluczonych zadań - BATCH QUERY
-  if (excludedTaskIds.length > 0) {
-    const excludedChunks = chunkArray(excludedTaskIds, 10);
-
-    for (const chunk of excludedChunks) {
-      const excludedSnapshot = await tasksRef
-          .where(admin.firestore.FieldPath.documentId(), "in", chunk)
-          .get();
-
-      if (excludedSnapshot.empty) continue;
-
-      const clearBatch = db.batch();
-
-      excludedSnapshot.forEach((taskDoc) => {
-        const taskData = taskDoc.data();
-        const existingTotalFullProductionCost =
-          parseFloat(taskData.totalFullProductionCost) || 0;
-        const existingUnitFullProductionCost =
-          parseFloat(taskData.unitFullProductionCost) || 0;
-
-        clearBatch.update(taskDoc.ref, {
-          factoryCostTotal: 0,
-          factoryCostPerUnit: 0,
-          factoryCostMinutes: 0,
-          factoryCostId: null,
-          factoryCostUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          totalCostWithFactory: existingTotalFullProductionCost,
-          unitCostWithFactory: existingUnitFullProductionCost,
-        });
-
-        logger.info(`Cleared factory cost for excluded task ${taskDoc.id}`);
-      });
-
-      await clearBatch.commit();
-    }
   }
 
   logger.info(`✅ Updated ${updatedCount} tasks with factory cost`);
@@ -1074,13 +1080,66 @@ const recalculateSingleFactoryCost = async (db, costId, costData) => {
   // Filtruj wykluczone sesje
   const filteredSessions = sessions.filter((s) => !excludedTaskIds.includes(s.taskId));
 
+  // Najpierw wyczyść koszty dla wykluczonych zadań
+  const tasksRef = db.collection("productionTasks");
+  if (excludedTaskIds.length > 0) {
+    const excludedChunks = chunkArray(excludedTaskIds, 10);
+
+    for (const chunk of excludedChunks) {
+      const excludedSnapshot = await tasksRef
+          .where(admin.firestore.FieldPath.documentId(), "in", chunk)
+          .get();
+
+      if (excludedSnapshot.empty) continue;
+
+      const clearBatch = db.batch();
+
+      excludedSnapshot.forEach((taskDoc) => {
+        const taskData = taskDoc.data();
+        const existingTotalFullProductionCost =
+          parseFloat(taskData.totalFullProductionCost) || 0;
+        const existingUnitFullProductionCost =
+          parseFloat(taskData.unitFullProductionCost) || 0;
+
+        clearBatch.update(taskDoc.ref, {
+          factoryCostTotal: 0,
+          factoryCostPerUnit: 0,
+          factoryCostMinutes: 0,
+          factoryCostId: null,
+          factoryCostUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          totalCostWithFactory: existingTotalFullProductionCost,
+          unitCostWithFactory: existingUnitFullProductionCost,
+        });
+
+        logger.info(`Cleared factory cost for excluded task ${taskDoc.id}`);
+      });
+
+      await clearBatch.commit();
+    }
+  }
+
   // Oblicz proporcjonalny czas dla każdego zadania
   const taskTimeMap = calculateProportionalTime(filteredSessions, startDate, endDate);
 
   // Zaktualizuj zadania produkcyjne - BATCH QUERIES
-  const tasksRef = db.collection("productionTasks");
   const taskIds = Array.from(taskTimeMap.keys());
   let tasksUpdated = 0;
+
+  if (taskIds.length === 0) {
+    logger.info(`No tasks to update (all excluded or no sessions) for cost ${costId}`);
+
+    // Mimo braku zadań, propaguj do zamówień aby wyczyścić koszty
+    if (excludedTaskIds.length > 0) {
+      await propagateToOrders(db, [], excludedTaskIds);
+    }
+
+    logger.info(`✅ Propagated factory cost ${costId} (excluded only)`, {
+      costPerMinute,
+      excludedCleared: excludedTaskIds.length,
+    });
+    return;
+  }
 
   const taskChunks = chunkArray(taskIds, 10);
 

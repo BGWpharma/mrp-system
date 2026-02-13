@@ -59,6 +59,7 @@ import {
   Info as InfoIcon,
   FolderOpen as LoadIcon,
   History as HistoryIcon,
+  MenuBook as RecipeIcon,
   ContentCopy as CopyIcon
 } from '@mui/icons-material';
 import { useTranslation } from '../../../hooks/useTranslation';
@@ -76,7 +77,10 @@ import {
   updateQuotation,
   deleteQuotation,
   getAllQuotations,
-  PACK_WEIGHT_OPTIONS
+  getAutoPackWeight,
+  searchRecipesForQuotation,
+  getRecipeForQuotation,
+  DEFAULT_COST_PER_MINUTE
 } from '../../../services/quotationService';
 
 // Jednostki dostępne dla komponentów
@@ -101,7 +105,7 @@ const QuotationTool = () => {
   // Stan danych źródłowych
   const [rawMaterials, setRawMaterials] = useState([]);
   const [packagingItems, setPackagingItems] = useState([]);
-  const [costPerMinute, setCostPerMinute] = useState(0);
+  const [costPerMinute, setCostPerMinute] = useState(DEFAULT_COST_PER_MINUTE);
   const [costPerMinuteSource, setCostPerMinuteSource] = useState(null); // Źródło kosztu/min
   const [loading, setLoading] = useState(true);
 
@@ -111,8 +115,8 @@ const QuotationTool = () => {
   const [components, setComponents] = useState([]);
   const [packaging, setPackaging] = useState(null);
   const [packagingQuantity, setPackagingQuantity] = useState(1);
-  const [packWeight, setPackWeight] = useState(null);  // Gramatura opakowania (g): 60, 90, 120, 180, 300, 900
-  const [flavored, setFlavored] = useState(false);    // Produkt smakowy (tylko dla 300g)
+  const [flavored, setFlavored] = useState(false);    // Produkt smakowy
+  const [customTargetTimeSec, setCustomTargetTimeSec] = useState(null); // Nadpisany czas/szt (null = z matrycy)
 
   // Stan kalkulacji
   const [calculatedQuotation, setCalculatedQuotation] = useState(null);
@@ -134,6 +138,13 @@ const QuotationTool = () => {
     unitPrice: ''
   });
 
+  // Dialog wczytywania z receptury
+  const [recipeDialog, setRecipeDialog] = useState(false);
+  const [recipeSearchTerm, setRecipeSearchTerm] = useState('');
+  const [recipeSearchResults, setRecipeSearchResults] = useState([]);
+  const [recipeSearchLoading, setRecipeSearchLoading] = useState(false);
+  const [recipeLoading, setRecipeLoading] = useState(false);
+
   // Ładowanie danych początkowych
   useEffect(() => {
     loadInitialData();
@@ -152,11 +163,12 @@ const QuotationTool = () => {
       setPackagingItems(packagings);
       
       // costMinData to obiekt { costPerMinute, source, hasData }
-      setCostPerMinute(costMinData.costPerMinute || 0);
-      setCostPerMinuteSource(costMinData.source || null);
-      
-      if (!costMinData.hasData) {
-        showNotification(t('quotation.noCostPerMinuteData', 'Brak danych o kosztach zakładu - wprowadź koszt/minutę ręcznie'), 'warning');
+      // Jeśli są dane z kosztów zakładu, użyj ich; w przeciwnym razie zostaw DEFAULT_COST_PER_MINUTE
+      if (costMinData.hasData && costMinData.costPerMinute > 0) {
+        setCostPerMinute(costMinData.costPerMinute);
+        setCostPerMinuteSource(costMinData.source || null);
+      } else {
+        setCostPerMinuteSource(null);
       }
     } catch (error) {
       console.error('Błąd ładowania danych:', error);
@@ -212,9 +224,10 @@ const QuotationTool = () => {
           unitPrice: parseFloat(packaging.unitPrice) || 0,
           quantity: packagingQuantity
         } : null,
-        packWeight,
+        packWeight: effectivePackWeight,
         flavored,
         costPerMinute,
+        customTargetTimeSec,
         summary: quickCalculation
       };
 
@@ -284,9 +297,11 @@ const QuotationTool = () => {
       setCostPerMinute(quotation.costPerMinute);
     }
 
-    // Ustaw format produktu (pack weight, flavored)
-    setPackWeight(quotation.packWeight ?? null);
+    // Ustaw format produktu (flavored)
     setFlavored(quotation.flavored ?? false);
+
+    // Ustaw nadpisany czas/szt. (null = z matrycy)
+    setCustomTargetTimeSec(quotation.customTargetTimeSec ?? null);
 
     setQuotationsDialog(false);
     showNotification(t('quotation.loaded', 'Wycena została załadowana'), 'success');
@@ -330,15 +345,23 @@ const QuotationTool = () => {
     return calculateTotalWeight(components);
   }, [components]);
 
+  // Auto-detekcja formatu opakowania z gramatury surowców
+  const effectivePackWeight = useMemo(() => {
+    return getAutoPackWeight(totalGramatura);
+  }, [totalGramatura]);
+
   // Koszt pracy: tryb matrycy formatu (pack weight) lub fallback (gramatura)
+  // Formuła: (targetTimeSec / 60) * costPerMinute * quantity
   const laborCalculation = useMemo(() => {
-    const formatLabor = calculateLaborCostByFormat(packWeight, flavored, packagingQuantity);
+    const formatLabor = calculateLaborCostByFormat(effectivePackWeight, flavored, packagingQuantity, costPerMinute, customTargetTimeSec);
     if (formatLabor) {
       return {
         laborCost: formatLabor.laborCostTotal,
         estimatedMinutes: formatLabor.estimatedMinutes,
         targetTimeSec: formatLabor.targetTimeSec,
-        costPerHourEur: formatLabor.costPerHourEur,
+        matrixTargetTimeSec: formatLabor.matrixTargetTimeSec,
+        costPerMinute,
+        timeOverridden: formatLabor.timeOverridden,
         source: 'format'
       };
     }
@@ -347,10 +370,12 @@ const QuotationTool = () => {
       laborCost: estimatedMinutes * costPerMinute,
       estimatedMinutes,
       targetTimeSec: null,
-      costPerHourEur: null,
+      matrixTargetTimeSec: null,
+      costPerMinute,
+      timeOverridden: false,
       source: 'gramatura'
     };
-  }, [components, packWeight, flavored, packagingQuantity, totalGramatura, costPerMinute]);
+  }, [components, effectivePackWeight, flavored, packagingQuantity, totalGramatura, costPerMinute, customTargetTimeSec]);
 
   // Szybka kalkulacja bez zapytań do API
   const quickCalculation = useMemo(() => {
@@ -451,6 +476,132 @@ const QuotationTool = () => {
     showNotification(t('quotation.componentAdded', 'Komponent dodany'), 'success');
   };
 
+  // ==================== WCZYTYWANIE Z RECEPTURY ====================
+
+  // Debounced wyszukiwanie receptur
+  const recipeSearchTimerRef = React.useRef(null);
+
+  const handleRecipeSearch = useCallback((term) => {
+    setRecipeSearchTerm(term);
+    
+    if (recipeSearchTimerRef.current) {
+      clearTimeout(recipeSearchTimerRef.current);
+    }
+
+    recipeSearchTimerRef.current = setTimeout(async () => {
+      setRecipeSearchLoading(true);
+      try {
+        const results = await searchRecipesForQuotation(term, 15);
+        setRecipeSearchResults(results);
+      } catch (error) {
+        console.error('Błąd wyszukiwania receptur:', error);
+      } finally {
+        setRecipeSearchLoading(false);
+      }
+    }, 300);
+  }, []);
+
+  // Otwieranie dialogu - załaduj ostatnie receptury
+  const handleOpenRecipeDialog = useCallback(async () => {
+    setRecipeDialog(true);
+    setRecipeSearchTerm('');
+    setRecipeSearchLoading(true);
+    try {
+      const results = await searchRecipesForQuotation('', 15);
+      setRecipeSearchResults(results);
+    } catch (error) {
+      console.error('Błąd ładowania receptur:', error);
+    } finally {
+      setRecipeSearchLoading(false);
+    }
+  }, []);
+
+  // Załadowanie składników z wybranej receptury
+  const handleLoadFromRecipe = useCallback(async (recipe) => {
+    if (!recipe?.id) return;
+    
+    setRecipeLoading(true);
+    try {
+      const fullRecipe = await getRecipeForQuotation(recipe.id);
+      const ingredients = fullRecipe.ingredients || [];
+
+      if (ingredients.length === 0) {
+        showNotification(t('quotation.recipeNoIngredients', 'Receptura nie zawiera składników'), 'warning');
+        setRecipeLoading(false);
+        return;
+      }
+
+      // Rozdziel składniki: surowce vs opakowania jednostkowe
+      const componentIngredients = [];
+      let foundPackaging = null;
+
+      ingredients.forEach(ing => {
+        // Sprawdź czy składnik to opakowanie jednostkowe
+        const packMatch = packagingItems.find(p => 
+          (ing.id && p.id === ing.id) || 
+          (ing.itemId && p.id === ing.itemId) ||
+          (ing.name && p.name === ing.name)
+        );
+
+        if (packMatch) {
+          // Pierwsze znalezione opakowanie ustawiamy w sekcji opakowanie
+          if (!foundPackaging) {
+            foundPackaging = {
+              item: packMatch,
+              quantity: parseInt(ing.quantity) || 1
+            };
+          }
+          return; // Nie dodawaj do komponentów
+        }
+
+        // Szukaj dopasowania w surowcach
+        const rawMatch = rawMaterials.find(m => 
+          (ing.id && m.id === ing.id) || 
+          (ing.itemId && m.id === ing.itemId) ||
+          (ing.name && m.name === ing.name)
+        );
+
+        componentIngredients.push({
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+          inventoryItemId: rawMatch?.id || ing.id || null,
+          name: ing.name || '',
+          quantity: parseFloat(ing.quantity) || 0,
+          unit: ing.unit || 'g',
+          unitPrice: rawMatch?.unitPrice || 0,
+          isManual: !rawMatch,
+          hasBatchPrice: rawMatch?.hasBatchPrice ?? null
+        });
+      });
+
+      setComponents(componentIngredients);
+
+      // Ustaw opakowanie jeśli znaleziono
+      if (foundPackaging) {
+        setPackaging(foundPackaging.item);
+        setPackagingQuantity(foundPackaging.quantity);
+      }
+      
+      // Ustaw nazwę wyceny z nazwy receptury jeśli pusta
+      if (!quotationName.trim()) {
+        setQuotationName(fullRecipe.name || '');
+      }
+
+      setRecipeDialog(false);
+      const matchedCount = componentIngredients.filter(c => !c.isManual).length;
+      const parts = [];
+      parts.push(t('quotation.recipeLoadedComponents', '{{count}} składników', { count: componentIngredients.length }));
+      if (foundPackaging) {
+        parts.push(t('quotation.recipeLoadedPackaging', '+ opakowanie: {{name}}', { name: foundPackaging.item.name }));
+      }
+      showNotification(parts.join(' '), 'success');
+    } catch (error) {
+      console.error('Błąd ładowania receptury:', error);
+      showNotification(t('quotation.errors.loadRecipe', 'Błąd podczas ładowania receptury'), 'error');
+    } finally {
+      setRecipeLoading(false);
+    }
+  }, [rawMaterials, packagingItems, quotationName, showNotification, t]);
+
   // Wybór opakowania
   const handleSelectPackaging = (item) => {
     setPackaging(item);
@@ -473,9 +624,10 @@ const QuotationTool = () => {
           unitPrice: packaging.unitPrice,
           quantity: packagingQuantity
         } : null,
-        packWeight,
+        packWeight: effectivePackWeight,
         flavored,
-        customCostPerMinute: costPerMinute
+        customCostPerMinute: costPerMinute,
+        customTargetTimeSec
       });
 
       setCalculatedQuotation(result);
@@ -495,8 +647,8 @@ const QuotationTool = () => {
     setComponents([]);
     setPackaging(null);
     setPackagingQuantity(1);
-    setPackWeight(null);
     setFlavored(false);
+    setCustomTargetTimeSec(null);
     setCalculatedQuotation(null);
   };
 
@@ -596,13 +748,22 @@ const QuotationTool = () => {
       </Paper>
 
       {/* Sekcja komponentów */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <InventoryIcon fontSize="small" />
+      <Paper sx={{ p: 2, mb: 2, borderLeft: '4px solid', borderLeftColor: 'primary.main', borderRadius: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, pb: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600 }}>
+            <InventoryIcon fontSize="small" color="primary" />
             {t('quotation.components', 'Komponenty (Surowce)')}
           </Typography>
           <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<RecipeIcon />}
+              onClick={handleOpenRecipeDialog}
+              color="info"
+            >
+              {t('quotation.loadFromRecipe', 'Z receptury')}
+            </Button>
             <Button
               variant="outlined"
               size="small"
@@ -625,7 +786,7 @@ const QuotationTool = () => {
         <TableContainer>
           <Table size="small">
             <TableHead>
-              <TableRow sx={{ backgroundColor: theme.palette.action.hover }}>
+              <TableRow sx={{ '& .MuiTableCell-head': { fontWeight: 600, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'text.secondary', borderBottom: 2, borderColor: 'primary.main', py: 1.5 } }}>
                 <TableCell sx={{ minWidth: 200 }}>{t('quotation.table.sku', 'SKU')}</TableCell>
                 <TableCell sx={{ width: 80 }} align="center">{t('quotation.table.percentage', '%')}</TableCell>
                 <TableCell sx={{ width: 100 }}>{t('quotation.table.quantity', 'Ilość')}</TableCell>
@@ -786,18 +947,18 @@ const QuotationTool = () => {
 
         {/* Suma komponentów */}
         {components.length > 0 && (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-            <Typography variant="subtitle2">
-              {t('quotation.componentsTotal', 'Suma komponentów')}: <strong>{quickCalculation.componentsCost.toFixed(2)} €</strong>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mt: 2, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+            <Typography variant="subtitle2" fontWeight={600}>
+              {t('quotation.componentsTotal', 'Koszt komponentów')}: {quickCalculation.componentsCost.toFixed(2)} €
             </Typography>
           </Box>
         )}
       </Paper>
 
       {/* Sekcja opakowania */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <PackagingIcon fontSize="small" />
+      <Paper sx={{ p: 2, mb: 2, borderLeft: '4px solid', borderLeftColor: 'secondary.main', borderRadius: 2 }}>
+        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, pb: 1.5, borderBottom: 1, borderColor: 'divider', fontWeight: 600 }}>
+          <PackagingIcon fontSize="small" color="secondary" />
           {t('quotation.packaging', 'Opakowanie')}
         </Typography>
 
@@ -843,18 +1004,18 @@ const QuotationTool = () => {
               disabled={!packaging}
             />
           </Grid>
-          <Grid item xs={12} md={2}>
-            <Typography variant="body2" align="right">
-              {t('quotation.packagingCost', 'Koszt')}: <strong>{quickCalculation.packagingCost.toFixed(2)} €</strong>
+          <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+            <Typography variant="subtitle2" fontWeight={600}>
+              {t('quotation.packagingCost', 'Koszt')}: {quickCalculation.packagingCost.toFixed(2)} €
             </Typography>
           </Grid>
         </Grid>
       </Paper>
 
       {/* Sekcja kosztu pracy */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <TimeIcon fontSize="small" />
+      <Paper sx={{ p: 2, mb: 2, borderLeft: '4px solid', borderLeftColor: 'warning.main', borderRadius: 2 }}>
+        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, pb: 1.5, borderBottom: 1, borderColor: 'divider', fontWeight: 600 }}>
+          <TimeIcon fontSize="small" color="warning" />
           {t('quotation.laborCost', 'Koszt pracy')}
         </Typography>
 
@@ -870,115 +1031,81 @@ const QuotationTool = () => {
                 endAdornment: <InputAdornment position="end">g</InputAdornment>,
                 readOnly: true
               }}
+              helperText={effectivePackWeight ? `${t('quotation.autoFormat', 'Format')}: ${effectivePackWeight}g` : ''}
             />
           </Grid>
-          {/* Gramatura opakowania (format produktu) */}
-          <Grid item xs={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{t('quotation.packWeight', 'Gramatura opakowania')}</InputLabel>
-              <Select
-                value={packWeight ?? ''}
-                label={t('quotation.packWeight', 'Gramatura opakowania')}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setPackWeight(val === '' ? null : Number(val));
-                  if (val !== 300) setFlavored(false);
-                }}
-              >
-                <MenuItem value="">{t('quotation.packWeightNone', '— Nie wybrano —')}</MenuItem>
-                {PACK_WEIGHT_OPTIONS.map(w => (
-                  <MenuItem key={w} value={w}>{w} g</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              {t('quotation.packWeightHelp', 'Matryca czasu/kosztu')}
-            </Typography>
+          {/* Produkt smakowy */}
+          <Grid item xs={6} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={flavored}
+                  onChange={(e) => { setFlavored(e.target.checked); setCustomTargetTimeSec(null); }}
+                  color="primary"
+                  size="small"
+                />
+              }
+              label={t('quotation.flavored', 'Produkt smakowy')}
+            />
           </Grid>
-          {/* Produkt smakowy - tylko gdy 300g */}
-          {packWeight === 300 && (
-            <Grid item xs={12} md={2}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={flavored}
-                    onChange={(e) => setFlavored(e.target.checked)}
-                    color="primary"
-                    size="small"
-                  />
-                }
-                label={t('quotation.flavored', 'Produkt smakowy')}
-              />
-            </Grid>
-          )}
-          {/* Szacowany czas / Czas z matrycy */}
+          {/* Czas/szt. - edytowalny */}
           <Grid item xs={6} md={2}>
             <TextField
               size="small"
               fullWidth
+              type="number"
               label={laborCalculation.source === 'format' ? t('quotation.targetTime', 'Czas/szt.') : t('quotation.estimatedTime', 'Szacowany czas')}
-              value={laborCalculation.source === 'format' 
-                ? `${laborCalculation.targetTimeSec} s` 
-                : laborCalculation.estimatedMinutes}
-              InputProps={{
-                endAdornment: <InputAdornment position="end">{laborCalculation.source === 'format' ? '' : 'min'}</InputAdornment>,
-                readOnly: true
+              value={laborCalculation.source === 'format'
+                ? (customTargetTimeSec != null ? customTargetTimeSec : laborCalculation.matrixTargetTimeSec ?? '')
+                : Math.round(laborCalculation.estimatedMinutes * 60)}
+              onChange={(e) => {
+                if (laborCalculation.source === 'format') {
+                  const val = e.target.value;
+                  setCustomTargetTimeSec(val === '' ? null : parseFloat(val));
+                }
               }}
+              InputProps={{
+                endAdornment: <InputAdornment position="end">sek</InputAdornment>,
+                readOnly: laborCalculation.source !== 'format'
+              }}
+              inputProps={{ min: 0, step: 1 }}
+              helperText={
+                laborCalculation.source === 'format' && customTargetTimeSec != null
+                  ? t('quotation.timeOverridden', 'Ręcznie zmieniony (matryca: {{matrixTime}} sek)', { matrixTime: laborCalculation.matrixTargetTimeSec })
+                  : undefined
+              }
             />
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              {t('quotation.fromMatrix', '(z matrycy czasu)')}
-            </Typography>
           </Grid>
-          {/* Koszt/h - tylko w trybie formatu; w fallback kost/min */}
-          {laborCalculation.source === 'format' ? (
-            <Grid item xs={6} md={2}>
+          {/* Koszt/minutę - zawsze widoczny i edytowalny */}
+          <Grid item xs={6} md={2}>
+            <Tooltip
+              title={
+                costPerMinuteSource 
+                  ? t('quotation.costPerMinuteSourceTooltip', 'Źródło: Koszty zakładu {{startDate}} - {{endDate}}', {
+                      startDate: costPerMinuteSource.startDate?.toLocaleDateString?.() || '?',
+                      endDate: costPerMinuteSource.endDate?.toLocaleDateString?.() || '?'
+                    })
+                  : t('quotation.costPerMinuteDefault', 'Domyślnie {{defaultCost}} €/min', { defaultCost: DEFAULT_COST_PER_MINUTE })
+              }
+              arrow
+            >
               <TextField
                 size="small"
                 fullWidth
-                label={t('quotation.costPerHour', 'Koszt/h')}
-                value={laborCalculation.costPerHourEur?.toFixed(2)}
+                type="number"
+                label={t('quotation.costPerMinute', 'Koszt/minutę')}
+                value={costPerMinute}
+                onChange={(e) => setCostPerMinute(parseFloat(e.target.value) || 0)}
                 InputProps={{
-                  endAdornment: <InputAdornment position="end">€</InputAdornment>,
-                  readOnly: true
+                  endAdornment: <InputAdornment position="end">€</InputAdornment>
                 }}
+                inputProps={{ min: 0, step: 0.01 }}
               />
-            </Grid>
-          ) : (
-            <Grid item xs={6} md={2}>
-              <Tooltip
-                title={
-                  costPerMinuteSource 
-                    ? t('quotation.costPerMinuteSourceTooltip', 'Źródło: Koszty zakładu {{startDate}} - {{endDate}}', {
-                        startDate: costPerMinuteSource.startDate?.toLocaleDateString?.() || '?',
-                        endDate: costPerMinuteSource.endDate?.toLocaleDateString?.() || '?'
-                      })
-                    : t('quotation.noCostPerMinuteSource', 'Brak danych - wprowadź ręcznie')
-                }
-                arrow
-              >
-                <TextField
-                  size="small"
-                  fullWidth
-                  type="number"
-                  label={t('quotation.costPerMinute', 'Koszt/minutę')}
-                  value={costPerMinute}
-                  onChange={(e) => setCostPerMinute(parseFloat(e.target.value) || 0)}
-                  InputProps={{
-                    endAdornment: <InputAdornment position="end">€</InputAdornment>
-                  }}
-                  inputProps={{ min: 0, step: 0.01 }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      backgroundColor: costPerMinuteSource ? 'inherit' : 'rgba(255, 152, 0, 0.1)'
-                    }
-                  }}
-                />
-              </Tooltip>
-            </Grid>
-          )}
-          <Grid item xs={6} md={2}>
-            <Typography variant="body2" align="right">
-              {t('quotation.laborTotal', 'Koszt pracy')}: <strong>{quickCalculation.laborCost.toFixed(2)} €</strong>
+            </Tooltip>
+          </Grid>
+          <Grid item xs={6} md={2} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+            <Typography variant="subtitle2" fontWeight={600}>
+              {t('quotation.laborTotal', 'Koszt pracy')}: {quickCalculation.laborCost.toFixed(2)} €
             </Typography>
           </Grid>
         </Grid>
@@ -991,7 +1118,19 @@ const QuotationTool = () => {
         >
           <Typography variant="body2">
             {laborCalculation.source === 'format' ? (
-              t('quotation.laborInfoFormat', 'Koszt pracy z matrycy formatu produktu (gramatura opakowania + smak).')
+              <>
+                {t('quotation.laborInfoFormat', 'Koszt pracy z matrycy formatu produktu ({{packWeight}}g, {{flavorLabel}}).', {
+                  packWeight: effectivePackWeight,
+                  flavorLabel: flavored ? t('quotation.flavoredLabel', 'smakowy') : t('quotation.unflavored', 'bez smaku')
+                })}
+                {' '}
+                {t('quotation.laborFormula', 'Formuła: ({{time}}s / 60) × {{costPerMin}} €/min × {{qty}} szt. = {{total}} €', {
+                  time: laborCalculation.targetTimeSec,
+                  costPerMin: costPerMinute,
+                  qty: packagingQuantity,
+                  total: quickCalculation.laborCost.toFixed(2)
+                })}
+              </>
             ) : costPerMinuteSource ? (
               <>
                 {t('quotation.laborInfoWithSource', 'Koszt/minutę pobrany z najnowszego wpisu kosztów zakładu')}
@@ -1002,86 +1141,102 @@ const QuotationTool = () => {
                 {costPerMinuteSource.effectiveHours && (
                   <> — {t('quotation.effectiveTime', 'efektywny czas')}: {costPerMinuteSource.effectiveHours?.toFixed(1)}h</>
                 )}
-                {' '}
-                {t('quotation.laborInfoSelectFormat', 'Wybierz gramaturę opakowania dla precyzyjniejszej kalkulacji.')}
               </>
             ) : (
-              t('quotation.laborInfoNoSource', 'Brak wpisów kosztów zakładu. Wprowadź koszt/minutę ręcznie lub dodaj wpis w zakładce "Koszty zakładu". Wybierz gramaturę opakowania dla precyzyjniejszej kalkulacji.')
+              t('quotation.laborInfoNoSource', 'Brak wpisów kosztów zakładu. Koszt/minutę ustawiony na domyślną wartość ({{defaultCost}} €).', { defaultCost: DEFAULT_COST_PER_MINUTE })
             )}
           </Typography>
         </Alert>
       </Paper>
 
       {/* Podsumowanie COGS */}
-      <Paper sx={{ p: 2, backgroundColor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50' }}>
-        <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <EuroIcon fontSize="small" />
-          {t('quotation.summary', 'Podsumowanie COGS')}
-        </Typography>
+      <Paper sx={{ 
+        p: 0, overflow: 'hidden', borderRadius: 2,
+        border: '1px solid',
+        borderColor: theme.palette.mode === 'dark' ? 'rgba(46,125,50,0.3)' : 'rgba(46,125,50,0.2)'
+      }}>
+        {/* Nagłówek sekcji */}
+        <Box sx={{ 
+          px: 3, py: 1.5,
+          background: theme.palette.mode === 'dark' 
+            ? 'linear-gradient(135deg, rgba(46,125,50,0.18) 0%, rgba(27,94,32,0.08) 100%)'
+            : 'linear-gradient(135deg, rgba(46,125,50,0.1) 0%, rgba(200,230,201,0.3) 100%)',
+          borderBottom: '1px solid',
+          borderColor: 'divider'
+        }}>
+          <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600 }}>
+            <EuroIcon fontSize="small" color="success" />
+            {t('quotation.summary', 'Podsumowanie COGS')}
+          </Typography>
+        </Box>
 
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={8}>
-            <Table size="small">
-              <TableBody>
-                <TableRow>
-                  <TableCell>{t('quotation.componentsTotal', 'Koszt komponentów')}</TableCell>
-                  <TableCell align="right">{quickCalculation.componentsCost.toFixed(2)} €</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>{t('quotation.packagingTotal', 'Koszt opakowania')}</TableCell>
-                  <TableCell align="right">{quickCalculation.packagingCost.toFixed(2)} €</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>{t('quotation.laborTotal', 'Koszt pracy')}</TableCell>
-                  <TableCell align="right">{quickCalculation.laborCost.toFixed(2)} €</TableCell>
-                </TableRow>
-                <TableRow sx={{ '& td': { borderTop: 2, borderColor: 'divider' } }}>
-                  <TableCell>
-                    <Typography variant="subtitle1" fontWeight="bold">
-                      {t('quotation.totalCOGS', 'SZACOWANY COGS')}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Typography variant="h6" color="primary" fontWeight="bold">
-                      {quickCalculation.totalCOGS.toFixed(2)} €
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </Grid>
-
-          {/* Wizualizacja struktury kosztów */}
-          <Grid item xs={12} md={4}>
-            <Typography variant="caption" color="text.secondary" gutterBottom>
-              {t('quotation.costStructure', 'Struktura kosztów')}
-            </Typography>
-            <Box sx={{ mt: 1 }}>
-              {quickCalculation.totalCOGS > 0 && (
-                <>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                    <Box sx={{ width: `${(quickCalculation.componentsCost / quickCalculation.totalCOGS) * 100}%`, height: 8, bgcolor: 'primary.main', borderRadius: 1, mr: 1, minWidth: 4 }} />
-                    <Typography variant="caption">
-                      {((quickCalculation.componentsCost / quickCalculation.totalCOGS) * 100).toFixed(1)}% {t('quotation.materials', 'Materiały')}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                    <Box sx={{ width: `${(quickCalculation.packagingCost / quickCalculation.totalCOGS) * 100}%`, height: 8, bgcolor: 'secondary.main', borderRadius: 1, mr: 1, minWidth: 4 }} />
-                    <Typography variant="caption">
-                      {((quickCalculation.packagingCost / quickCalculation.totalCOGS) * 100).toFixed(1)}% {t('quotation.packagingLabel', 'Opakowanie')}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Box sx={{ width: `${(quickCalculation.laborCost / quickCalculation.totalCOGS) * 100}%`, height: 8, bgcolor: 'warning.main', borderRadius: 1, mr: 1, minWidth: 4 }} />
-                    <Typography variant="caption">
-                      {((quickCalculation.laborCost / quickCalculation.totalCOGS) * 100).toFixed(1)}% {t('quotation.laborLabel', 'Praca')}
-                    </Typography>
-                  </Box>
-                </>
-              )}
+        <Box sx={{ px: 3, py: 2.5 }}>
+          {/* Pasek proporcji */}
+          {quickCalculation.totalCOGS > 0 && (
+            <Box sx={{ mb: 2.5 }}>
+              <Box sx={{ display: 'flex', height: 8, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
+                <Box sx={{ width: `${(quickCalculation.componentsCost / quickCalculation.totalCOGS) * 100}%`, bgcolor: 'primary.main', transition: 'width 0.5s ease' }} />
+                <Box sx={{ width: `${(quickCalculation.packagingCost / quickCalculation.totalCOGS) * 100}%`, bgcolor: 'secondary.main', transition: 'width 0.5s ease' }} />
+                <Box sx={{ width: `${(quickCalculation.laborCost / quickCalculation.totalCOGS) * 100}%`, bgcolor: 'warning.main', transition: 'width 0.5s ease' }} />
+              </Box>
             </Box>
-          </Grid>
-        </Grid>
+          )}
+
+          {/* Pozycje kosztów - jednoliniowy układ: kropka | nazwa | kwota | procent */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5 }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'primary.main', flexShrink: 0, mr: 1.5 }} />
+              <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                {t('quotation.componentsTotal', 'Koszt komponentów')}
+              </Typography>
+              <Typography variant="body2" fontWeight={600} sx={{ minWidth: 80, textAlign: 'right' }}>
+                {quickCalculation.componentsCost.toFixed(2)} €
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 55, textAlign: 'right', ml: 1 }}>
+                {quickCalculation.totalCOGS > 0 ? `${((quickCalculation.componentsCost / quickCalculation.totalCOGS) * 100).toFixed(1)}%` : '—'}
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5 }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'secondary.main', flexShrink: 0, mr: 1.5 }} />
+              <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                {t('quotation.packagingTotal', 'Koszt opakowania')}
+              </Typography>
+              <Typography variant="body2" fontWeight={600} sx={{ minWidth: 80, textAlign: 'right' }}>
+                {quickCalculation.packagingCost.toFixed(2)} €
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 55, textAlign: 'right', ml: 1 }}>
+                {quickCalculation.totalCOGS > 0 ? `${((quickCalculation.packagingCost / quickCalculation.totalCOGS) * 100).toFixed(1)}%` : '—'}
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5 }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'warning.main', flexShrink: 0, mr: 1.5 }} />
+              <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                {t('quotation.laborTotal', 'Koszt pracy')}
+              </Typography>
+              <Typography variant="body2" fontWeight={600} sx={{ minWidth: 80, textAlign: 'right' }}>
+                {quickCalculation.laborCost.toFixed(2)} €
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 55, textAlign: 'right', ml: 1 }}>
+                {quickCalculation.totalCOGS > 0 ? `${((quickCalculation.laborCost / quickCalculation.totalCOGS) * 100).toFixed(1)}%` : '—'}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Suma COGS */}
+          <Box sx={{ 
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            mt: 2, pt: 2, borderTop: 2, borderColor: 'divider'
+          }}>
+            <Typography variant="subtitle1" fontWeight={700}>
+              {t('quotation.totalCOGS', 'SZACOWANY COGS')}
+            </Typography>
+            <Typography variant="h5" color="success.main" fontWeight={700}>
+              {quickCalculation.totalCOGS.toFixed(2)} €
+            </Typography>
+          </Box>
+        </Box>
       </Paper>
 
       {/* Dialog dodawania komponentu ręcznego */}
@@ -1275,6 +1430,101 @@ const QuotationTool = () => {
             onClick={() => handleDeleteQuotation(deleteConfirmDialog)}
           >
             {t('common.delete', 'Usuń')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog wczytywania z receptury */}
+      <Dialog
+        open={recipeDialog}
+        onClose={() => setRecipeDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <RecipeIcon color="info" />
+          {t('quotation.loadFromRecipeTitle', 'Wczytaj składniki z receptury')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t('quotation.loadFromRecipeDesc', 'Wyszukaj recepturę i załaduj jej składniki jako komponenty wyceny. Ceny zostaną automatycznie dopasowane z magazynu.')}
+          </Typography>
+          
+          <TextField
+            fullWidth
+            size="small"
+            autoFocus
+            placeholder={t('quotation.recipeSearchPlaceholder', 'Szukaj receptury po nazwie...')}
+            value={recipeSearchTerm}
+            onChange={(e) => handleRecipeSearch(e.target.value)}
+            InputProps={{
+              endAdornment: recipeSearchLoading ? (
+                <InputAdornment position="end">
+                  <CircularProgress size={18} />
+                </InputAdornment>
+              ) : null
+            }}
+            sx={{ mb: 2 }}
+          />
+
+          {/* Wyniki wyszukiwania */}
+          {recipeLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : recipeSearchResults.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 3 }}>
+              {recipeSearchTerm
+                ? t('quotation.recipeNoResults', 'Brak wyników dla "{{term}}"', { term: recipeSearchTerm })
+                : t('quotation.recipeTypeToSearch', 'Wpisz nazwę receptury aby wyszukać')}
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, maxHeight: 350, overflowY: 'auto' }}>
+              {recipeSearchResults.map((recipe) => (
+                <Box
+                  key={recipe.id}
+                  onClick={() => handleLoadFromRecipe(recipe)}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    px: 2, py: 1.5,
+                    borderRadius: 1.5,
+                    cursor: 'pointer',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    transition: 'all 0.15s ease',
+                    '&:hover': {
+                      borderColor: 'info.main',
+                      bgcolor: theme.palette.mode === 'dark' ? 'rgba(33, 150, 243, 0.08)' : 'rgba(33, 150, 243, 0.04)'
+                    }
+                  }}
+                >
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" fontWeight={600} noWrap>
+                      {recipe.name}
+                    </Typography>
+                    {recipe.description && (
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        {recipe.description}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Chip 
+                    size="small" 
+                    label={`${recipe.ingredientsCount} ${t('quotation.ingredientsShort', 'skł.')}`}
+                    variant="outlined"
+                    color="info"
+                    sx={{ ml: 1, flexShrink: 0 }}
+                  />
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRecipeDialog(false)}>
+            {t('common.close', 'Zamknij')}
           </Button>
         </DialogActions>
       </Dialog>
