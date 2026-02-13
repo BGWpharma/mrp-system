@@ -213,7 +213,7 @@ const NotificationsHistoryPage = () => {
           navigate(`/invoices/${notification.entityId}`);
           break;
         case 'waybill':
-          navigate(`/logistics/waybills/${notification.entityId}`);
+          navigate(`/inventory/cmr/${notification.entityId}`);
           break;
         case 'cmr':
           navigate(`/inventory/cmr/${notification.entityId}`);

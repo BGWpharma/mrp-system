@@ -27,10 +27,9 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Sprawdź, czy jest przekierowanie
   const from = location.state?.from?.pathname || '/';
 
-  // Animacja wejścia
+  // Entry animation
   React.useEffect(() => {
     const timer = setTimeout(() => setShowContent(true), 100);
     return () => clearTimeout(timer);
@@ -42,7 +41,7 @@ const Login = () => {
       await loginWithGoogle();
       navigate(from);
     } catch (err) {
-      setError('Wystąpił błąd podczas logowania przez Google');
+      setError('An error occurred while signing in with Google');
       console.error('Error during Google login:', err);
     } finally {
       setLoading(false);
@@ -198,7 +197,7 @@ const Login = () => {
                         opacity: 0.8
                       }}
                     >
-                      Aplikacja dostępna wyłącznie dla pracowników firmy BGW Pharma
+                      Application available exclusively for BGW Pharma employees
                     </Typography>
                   </Fade>
                 </Box>
@@ -259,7 +258,7 @@ const Login = () => {
                         }
                       }}
                     >
-                      {loading ? 'Logowanie...' : 'Zaloguj się przez Google'}
+                      {loading ? 'Signing in...' : 'Sign in with Google'}
                     </Button>
                   </Box>
                 </Fade>

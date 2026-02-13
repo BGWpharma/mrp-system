@@ -85,6 +85,7 @@ import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { useInventoryListState } from '../../contexts/InventoryListStateContext';
 import { INVENTORY_CATEGORIES } from '../../utils/constants';
 import { useTranslation } from '../../hooks/useTranslation';
+import { getAllCustomers } from '../../services/customerService';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
   flexCenter, 
@@ -170,6 +171,10 @@ const InventoryList = () => {
   const [exportCategoryDialogOpen, setExportCategoryDialogOpen] = useState(false);
   const [selectedExportCategories, setSelectedExportCategories] = useState([]);
   
+  // Stany dla klientów przypisanych do pozycji
+  const [customers, setCustomers] = useState([]);
+  const [customerFilter, setCustomerFilter] = useState('');
+  
   // Zamiast lokalnego stanu, użyjmy kontekstu preferencji kolumn
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
   
@@ -206,9 +211,25 @@ const InventoryList = () => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
   const [debouncedSearchCategory, setDebouncedSearchCategory] = useState(searchCategory);
 
-  // Dodaj nowy useEffect do pobrania lokalizacji
+  // Filtrowanie pozycji po przypisanym kliencie (front-end)
+  const displayedItems = useMemo(() => {
+    if (!customerFilter) return filteredItems;
+    return filteredItems.filter(item =>
+      item.allCustomers || (item.customerIds && item.customerIds.includes(customerFilter))
+    );
+  }, [filteredItems, customerFilter]);
+
+  // Helper: mapa ID klienta -> nazwa
+  const customerNameMap = useMemo(() => {
+    const map = {};
+    customers.forEach(c => { map[c.id] = c.name; });
+    return map;
+  }, [customers]);
+
+  // Dodaj nowy useEffect do pobrania lokalizacji i klientów
   useEffect(() => {
     fetchWarehouses();
+    getAllCustomers().then(setCustomers).catch(err => console.warn('Błąd pobierania klientów:', err));
   }, []);
 
   // Przeniesiona funkcja fetchWarehouses
@@ -2285,6 +2306,21 @@ const InventoryList = () => {
                   ))}
                 </Select>
               </FormControl>
+              <FormControl sx={{ minWidth: '200px' }}>
+                <InputLabel id="customer-filter-label">Klient</InputLabel>
+                <Select
+                  labelId="customer-filter-label"
+                  value={customerFilter}
+                  label="Klient"
+                  onChange={(e) => setCustomerFilter(e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">Wszyscy klienci</MenuItem>
+                  {customers.map((customer) => (
+                    <MenuItem key={customer.id} value={customer.id}>{customer.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
               <Button 
                 variant="contained" 
                 onClick={handleSearch}
@@ -2332,6 +2368,7 @@ const InventoryList = () => {
                       {visibleColumns.reservedQuantity && <TableCell>{t('inventory.states.table.reservedQuantity')}</TableCell>}
                       {visibleColumns.availableQuantity && <TableCell>{t('inventory.states.table.availableQuantity')}</TableCell>}
                       {visibleColumns.status && <TableCell>{t('inventory.states.table.status')}</TableCell>}
+                      {visibleColumns.customers && <TableCell>Klienci</TableCell>}
                       {visibleColumns.location && <TableCell>{t('inventory.states.table.location')}</TableCell>}
                       {visibleColumns.actions && <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>}
                     </TableRow>
@@ -2352,6 +2389,7 @@ const InventoryList = () => {
                         {visibleColumns.reservedQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
                         {visibleColumns.availableQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
                         {visibleColumns.status && <TableCell><Skeleton variant="rectangular" width={60} height={24} /></TableCell>}
+                        {visibleColumns.customers && <TableCell><Skeleton variant="text" width="70%" /></TableCell>}
                         {visibleColumns.location && <TableCell><Skeleton variant="text" width="60%" /></TableCell>}
                         {visibleColumns.actions && (
                           <TableCell align="right">
@@ -2369,7 +2407,7 @@ const InventoryList = () => {
                 </Table>
               </TableContainer>
             </Fade>
-          ) : filteredItems.length === 0 ? (
+          ) : displayedItems.length === 0 ? (
             <Fade in={!mainTableLoading} timeout={300}>
               <Typography variant="body1" align="center">
                 {t('inventory.states.noItemsFound')}
@@ -2502,6 +2540,13 @@ const InventoryList = () => {
                             </Box>
                           </TableCell>
                         )}
+                        {visibleColumns.customers && (
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              Klienci
+                            </Box>
+                          </TableCell>
+                        )}
                         {visibleColumns.location && (
                           <TableCell onClick={() => handleTableSort('location')} style={{ cursor: 'pointer' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -2521,7 +2566,7 @@ const InventoryList = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {filteredItems.map((item, index) => {
+                      {displayedItems.map((item, index) => {
                         // Oblicz ilość dostępną (całkowita - zarezerwowana)
                         const bookedQuantity = item.bookedQuantity || 0;
                         const availableQuantity = item.quantity - bookedQuantity;
@@ -2638,6 +2683,38 @@ const InventoryList = () => {
                                   {getStockLevelIndicator(availableQuantity, item.minStockLevel, item.optimalStockLevel)}
                                 </TableCell>
                               )}
+                              {visibleColumns.customers && (
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                    {item.allCustomers ? (
+                                      <Chip
+                                        label="Wszyscy"
+                                        size="small"
+                                        color="primary"
+                                      />
+                                    ) : (
+                                      <>
+                                        {(item.customerIds || []).slice(0, 2).map(cId => (
+                                          <Chip
+                                            key={cId}
+                                            label={customerNameMap[cId] || '...'}
+                                            size="small"
+                                            variant="outlined"
+                                            color="secondary"
+                                          />
+                                        ))}
+                                        {(item.customerIds || []).length > 2 && (
+                                          <Chip
+                                            label={`+${item.customerIds.length - 2}`}
+                                            size="small"
+                                            color="default"
+                                          />
+                                        )}
+                                      </>
+                                    )}
+                                  </Box>
+                                </TableCell>
+                              )}
                               {visibleColumns.location && (
                                 <TableCell>
                                   {item.location || '-'}
@@ -2729,7 +2806,7 @@ const InventoryList = () => {
                       color="primary" 
                     />
                     <Typography variant="body2">
-                      {t('inventory.states.pagination.showing', { shown: filteredItems.length, total: totalItems })}
+                      {t('inventory.states.pagination.showing', { shown: displayedItems.length, total: totalItems })}
                     </Typography>
                   </Box>
                 </Fade>
@@ -2774,6 +2851,10 @@ const InventoryList = () => {
             <MenuItem onClick={() => toggleColumnVisibility('status')}>
               <Checkbox checked={visibleColumns.status} />
               <ListItemText primary={t('inventory.states.table.status')} />
+            </MenuItem>
+            <MenuItem onClick={() => toggleColumnVisibility('customers')}>
+              <Checkbox checked={visibleColumns.customers} />
+              <ListItemText primary="Klienci" />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('location')}>
               <Checkbox checked={visibleColumns.location} />

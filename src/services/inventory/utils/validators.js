@@ -349,6 +349,20 @@ export const validateInventoryItemData = (itemData) => {
     validated.batchPrice = itemData.batchPrice;
   }
   
+  // Flaga "wszyscy klienci"
+  if (itemData.hasOwnProperty('allCustomers')) {
+    validated.allCustomers = Boolean(itemData.allCustomers);
+  }
+
+  // Przypisani klienci (tablica ID klientów)
+  if (itemData.hasOwnProperty('customerIds')) {
+    if (Array.isArray(itemData.customerIds)) {
+      validated.customerIds = itemData.customerIds.filter(id => typeof id === 'string' && id.trim() !== '');
+    } else {
+      validated.customerIds = [];
+    }
+  }
+  
   return validated;
 };
 

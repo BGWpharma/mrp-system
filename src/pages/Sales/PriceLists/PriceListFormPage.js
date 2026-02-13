@@ -31,7 +31,8 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
 import { useTranslation } from '../../../hooks/useTranslation';
 import Loader from '../../../components/common/Loader';
-import GoBackButton from '../../../components/common/GoBackButton';
+import BackButton from '../../../components/common/BackButton';
+import ROUTES from '../../../constants/routes';
 import PriceListItemsTable from '../../../components/sales/priceLists/PriceListItemsTable';
 
 const PriceListFormPage = () => {
@@ -80,7 +81,7 @@ const PriceListFormPage = () => {
         console.error('Błąd podczas ładowania danych:', error);
         showNotification(t('priceLists.messages.errors.loadDataFailed'), 'error');
         if (isEditMode) {
-          navigate('/sales/price-lists');
+          navigate('/orders/price-lists');
         }
       } finally {
         setInitialLoading(false);
@@ -131,11 +132,11 @@ const PriceListFormPage = () => {
       } else {
         const newId = await createPriceList(formData, currentUser.uid);
         showNotification(t('priceLists.messages.success.created'), 'success');
-        navigate(`/sales/price-lists/${newId}`);
+        navigate(`/orders/price-lists/${newId}`);
         return; // Zapobiegamy przejściu do strony listy cenowych
       }
       
-      navigate('/sales/price-lists');
+      navigate('/orders/price-lists');
     } catch (error) {
       console.error('Błąd podczas zapisywania listy cenowej:', error);
       showNotification(error.message || t('priceLists.messages.errors.saveFailed'), 'error');
@@ -152,7 +153,7 @@ const PriceListFormPage = () => {
     <Container maxWidth="lg">
       <Box sx={{ mt: 3, mb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <GoBackButton />
+          <BackButton to={ROUTES.ORDERS_PRICE_LISTS} iconOnly sx={{ mr: 2 }} />
           <Typography variant="h4" component="h1">
             {isEditMode ? t('priceLists.form.editTitle') : t('priceLists.form.newTitle')}
           </Typography>
@@ -270,7 +271,7 @@ const PriceListFormPage = () => {
                   <Button
                     variant="outlined"
                     color="secondary"
-                    onClick={() => navigate('/sales/price-lists')}
+                    onClick={() => navigate('/orders/price-lists')}
                     sx={{ mr: 2 }}
                   >
                     {t('priceLists.form.cancel')}

@@ -5,7 +5,8 @@ import {
   Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Chip, IconButton, Tabs, Tab, Fade, CircularProgress,
   InputAdornment, MenuItem, Select, FormControl, InputLabel, Grid,
-  Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Stack
+  Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Stack,
+  useMediaQuery, useTheme
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -103,6 +104,13 @@ const SchedulePage = () => {
   const { t } = useTranslation('schedule');
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'administrator';
+  const theme = useTheme();
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Nazwy dni – pełne lub skrócone w zależności od rozmiaru ekranu
+  const dayNamesFull = [t('calendar.monday'), t('calendar.tuesday'), t('calendar.wednesday'), t('calendar.thursday'), t('calendar.friday'), t('calendar.saturday'), t('calendar.sunday')];
+  const dayNamesShort = [t('calendar.monShort'), t('calendar.tueShort'), t('calendar.wedShort'), t('calendar.thuShort'), t('calendar.friShort'), t('calendar.satShort'), t('calendar.sunShort')];
+  const dayNames = isSmallScreen ? dayNamesShort : dayNamesFull;
 
   // ===================== LOAD DATA =====================
 
@@ -206,19 +214,28 @@ const SchedulePage = () => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
-  // Kliknięcie w komórkę — przypisuje aktualnie wybrany preset
+  // Kliknięcie w komórkę — przypisuje aktualnie wybrany preset (toggle: jeśli ta sama zmiana — usuwa)
   const handleCellClick = (date, emp) => {
     const key = `${fmtDateKey(date)}_${emp.employeeId}`;
     const preset = getActivePreset();
-    setWeekShifts(prev => ({
-      ...prev,
-      [key]: {
-        shiftType: preset.type,
-        startTime: preset.start,
-        endTime: preset.end,
-        color: preset.color,
+    setWeekShifts(prev => {
+      const existing = prev[key];
+      // Jeśli komórka ma tę samą zmianę co aktualnie wybrany preset — usuń (toggle)
+      if (existing && existing.shiftType === preset.type) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
       }
-    }));
+      return {
+        ...prev,
+        [key]: {
+          shiftType: preset.type,
+          startTime: preset.start,
+          endTime: preset.end,
+          color: preset.color,
+        }
+      };
+    });
   };
 
   // Usuń zmianę
@@ -439,11 +456,11 @@ const SchedulePage = () => {
                 {calendarLoading ? (
                   <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
                 ) : (
-                  <TableContainer>
-                    <Table sx={{ tableLayout: 'fixed' }}>
+                  <TableContainer sx={{ overflowX: 'auto' }}>
+                    <Table sx={{ tableLayout: 'fixed', minWidth: 700 }}>
                       <TableHead>
                         <TableRow>
-                          {[t('calendar.monday'), t('calendar.tuesday'), t('calendar.wednesday'), t('calendar.thursday'), t('calendar.friday'), t('calendar.saturday'), t('calendar.sunday')].map(d => (
+                          {dayNames.map(d => (
                             <TableCell key={d} align="center" sx={{ fontWeight: 'bold', py: 1.5, fontSize: '0.85rem' }}>{d}</TableCell>
                           ))}
                         </TableRow>
@@ -458,7 +475,7 @@ const SchedulePage = () => {
                           return weeks.map((week, wi) => (
                             <TableRow key={wi}>
                               {week.map((day, di) => {
-                                if (!day) return <TableCell key={di} />;
+                                if (!day) return <TableCell key={di} sx={{ minHeight: 44 }} />;
                                 const shifts = getShiftsForDay(day);
                                 const reqs = getRequestsForDay(day);
                                 const today = isSameDay(day, new Date());
@@ -594,12 +611,12 @@ const SchedulePage = () => {
 
                   {/* Akcje */}
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Button variant="outlined" size="small" startIcon={<ContentCopyIcon />}
-                      onClick={handleCopyWeek} sx={{ borderRadius: 2 }}>
+                    <Button variant="outlined" size="medium" startIcon={<ContentCopyIcon />}
+                      onClick={handleCopyWeek} sx={{ borderRadius: 2, minHeight: 44 }}>
                       {t('shifts.copyNextWeek')}
                     </Button>
-                    <Button variant="contained" size="small" startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
-                      onClick={handleSaveSchedule} disabled={saving} sx={{ borderRadius: 2 }}>
+                    <Button variant="contained" size="medium" startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+                      onClick={handleSaveSchedule} disabled={saving} sx={{ borderRadius: 2, minHeight: 44 }}>
                       {saving ? t('shifts.savingSchedule') : t('shifts.saveSchedule')}
                     </Button>
                   </Box>
@@ -615,6 +632,7 @@ const SchedulePage = () => {
                       <Chip key={key} label={`${val.label}${val.start ? ` (${val.start}–${val.end})` : ''}`}
                         onClick={() => setSelectedPreset(key)}
                         sx={{
+                          height: 36, fontSize: '0.8rem',
                           backgroundColor: selectedPreset === key ? val.color : 'transparent',
                           color: selectedPreset === key ? '#fff' : 'text.primary',
                           border: `2px solid ${val.color}`,
@@ -630,6 +648,7 @@ const SchedulePage = () => {
                         onClick={() => setSelectedPreset(t.id)}
                         onDelete={() => handleDeleteTemplate(t.id)}
                         sx={{
+                          height: 36, fontSize: '0.8rem',
                           backgroundColor: selectedPreset === t.id ? t.color : 'transparent',
                           color: selectedPreset === t.id ? '#fff' : 'text.primary',
                           border: `2px solid ${t.color}`,
@@ -640,7 +659,7 @@ const SchedulePage = () => {
                       />
                     ))}
                     <Chip label={t('shifts.addTemplate')} variant="outlined" onClick={() => setTemplateDialogOpen(true)}
-                      sx={{ cursor: 'pointer', borderStyle: 'dashed' }} />
+                      sx={{ cursor: 'pointer', borderStyle: 'dashed', height: 36 }} />
                   </Box>
                 </Paper>
 
@@ -651,11 +670,11 @@ const SchedulePage = () => {
                     {t('shifts.noEmployees')}
                   </Alert>
                 ) : (
-                  <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
-                    <Table size="small" sx={{ tableLayout: 'fixed' }}>
+                  <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, overflowX: 'auto' }}>
+                    <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 800 }}>
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ fontWeight: 'bold', width: 160, position: 'sticky', left: 0, backgroundColor: 'background.paper', zIndex: 1 }}>
+                          <TableCell sx={{ fontWeight: 'bold', width: { xs: 120, md: 160 }, position: 'sticky', left: 0, backgroundColor: 'background.paper', zIndex: 1 }}>
                             {t('shifts.employee')}
                           </TableCell>
                           {weekDays.map((d, i) => (
@@ -664,7 +683,7 @@ const SchedulePage = () => {
                               backgroundColor: isSameDay(d, new Date()) ? 'primary.main' : isWeekend(d) ? 'action.hover' : 'transparent',
                               color: isSameDay(d, new Date()) ? '#fff' : 'text.primary',
                             }}>
-                              <Typography variant="caption" display="block">{format(d, 'EEEE', { locale: pl })}</Typography>
+                              <Typography variant="caption" display="block">{isSmallScreen ? format(d, 'EEE', { locale: pl }) : format(d, 'EEEE', { locale: pl })}</Typography>
                               <Typography variant="body2" fontWeight="bold">{format(d, 'd.MM')}</Typography>
                             </TableCell>
                           ))}
@@ -682,7 +701,7 @@ const SchedulePage = () => {
                               const dayReqs = getEmployeeRequestsForDay(day, emp.employeeId);
                               return (
                                 <TableCell key={di} align="center" sx={{
-                                  cursor: 'pointer', p: 0.5,
+                                  cursor: 'pointer', p: 0.75, minHeight: 48,
                                   transition: 'all 0.15s',
                                   '&:hover': { backgroundColor: 'action.hover' },
                                   backgroundColor: dayReqs.length > 0
@@ -691,18 +710,17 @@ const SchedulePage = () => {
                                   border: '1px solid', borderColor: 'divider',
                                 }}
                                   onClick={() => handleCellClick(day, emp)}
-                                  onContextMenu={(e) => { e.preventDefault(); handleCellClear(day, emp); }}
                                 >
                                   {/* Wnioski pracownika */}
                                   {dayReqs.map((r, ri) => (
-                                    <Tooltip key={ri} title={`${REQUEST_TYPE_LABELS[r.type] || r.type}: ${fmtDate(r.startDate)} – ${fmtDate(r.endDate)} • kliknij ✕ aby usunąć`}>
+                                    <Tooltip key={ri} title={`${REQUEST_TYPE_LABELS[r.type] || r.type}: ${fmtDate(r.startDate)} – ${fmtDate(r.endDate)}`}>
                                       <Chip size="small"
                                         icon={React.cloneElement(TYPE_ICONS[r.type] || <MoreHorizIcon fontSize="small" />, { sx: { fontSize: 14, color: '#fff !important' } })}
                                         label={REQUEST_TYPE_LABELS[r.type]?.split(' ')[0] || r.type}
                                         onDelete={(e) => { e.stopPropagation(); handleDeleteRequest(r.id); }}
                                         sx={{
                                           backgroundColor: TYPE_COLORS[r.type] || '#999', color: '#fff',
-                                          fontWeight: 600, fontSize: '0.65rem', height: 22, mb: 0.25,
+                                          fontWeight: 600, fontSize: '0.65rem', height: 28, mb: 0.25,
                                           '& .MuiChip-icon': { color: '#fff' },
                                           '& .MuiChip-deleteIcon': { color: '#fff', fontSize: 16, '&:hover': { color: '#ffcdd2' } },
                                         }} />
@@ -710,15 +728,14 @@ const SchedulePage = () => {
                                   ))}
                                   {/* Zmiana */}
                                   {info ? (
-                                    <Tooltip title={t('shifts.rightClickToRemove')}>
-                                      <Box>
-                                        <Chip size="small" label={info.startTime && info.endTime ? `${info.startTime}–${info.endTime}` : t('calendar.off')}
-                                          sx={{
-                                            backgroundColor: info.color, color: '#fff',
-                                            fontWeight: 600, fontSize: '0.7rem', height: 24,
-                                          }} />
-                                      </Box>
-                                    </Tooltip>
+                                    <Chip size="small"
+                                      label={info.startTime && info.endTime ? `${info.startTime}–${info.endTime}` : t('calendar.off')}
+                                      onDelete={(e) => { e.stopPropagation(); handleCellClear(day, emp); }}
+                                      sx={{
+                                        backgroundColor: info.color, color: '#fff',
+                                        fontWeight: 600, fontSize: '0.7rem', height: 28,
+                                        '& .MuiChip-deleteIcon': { color: 'rgba(255,255,255,0.7)', '&:hover': { color: '#fff' } },
+                                      }} />
                                   ) : dayReqs.length === 0 ? (
                                     <Typography variant="caption" color="text.disabled">—</Typography>
                                   ) : null}

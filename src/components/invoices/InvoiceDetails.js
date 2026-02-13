@@ -222,7 +222,7 @@ const InvoiceDetails = () => {
   
   const handleViewCustomer = () => {
     if (invoice?.customer?.id) {
-      navigate(`/customers/${invoice.customer.id}`);
+      navigate(`/orders/customers/${invoice.customer.id}`);
     }
   };
   

@@ -608,7 +608,7 @@ export const getAvailableSidebarTabs = () => {
       children: [
         { id: 'sales-invoices', name: 'Faktury', path: '/invoices' },
         { id: 'sales-customers', name: 'Klienci', path: '/customers' },
-        { id: 'sales-pricelists', name: 'Cenniki', path: '/sales/price-lists' },
+        { id: 'sales-pricelists', name: 'Cenniki', path: '/orders/price-lists' },
         { id: 'sales-production-task', name: 'Nowe zadanie produkcyjne', path: '/production/create-from-order' },
         { id: 'sales-co-reports', name: 'Raporty CO', path: '/sales/co-reports' },
         { id: 'sales-customer-orders', name: 'Zamówienia klientów', path: '/orders' }

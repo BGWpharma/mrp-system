@@ -582,7 +582,7 @@ const RecipeDetailsPage = () => {
                               cursor: 'pointer'
                             }}
                             component={Link}
-                            to={`/sales/price-lists/${priceListInfo.priceList.id}`}
+                            to={`/orders/price-lists/${priceListInfo.priceList.id}`}
                             style={{ textDecoration: 'none' }}
                             title={`Lista cenowa: ${priceListInfo.priceList.name}${priceListInfo.notes ? '\nUwagi: ' + priceListInfo.notes : ''}`}
                           />

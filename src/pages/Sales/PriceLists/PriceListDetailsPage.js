@@ -21,7 +21,8 @@ import { useNotification } from '../../../hooks/useNotification';
 import { useTranslation } from '../../../hooks/useTranslation';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Loader from '../../../components/common/Loader';
-import GoBackButton from '../../../components/common/GoBackButton';
+import BackButton from '../../../components/common/BackButton';
+import ROUTES from '../../../constants/routes';
 import PriceListItemsTable from '../../../components/sales/priceLists/PriceListItemsTable';
 import ImportPriceListDialog from '../../../components/sales/priceLists/ImportPriceListDialog';
 
@@ -51,7 +52,7 @@ const PriceListDetailsPage = () => {
     } catch (error) {
       console.error('Błąd podczas pobierania listy cenowej:', error);
       showNotification(t('priceLists.messages.errors.fetchDetailsFailed'), 'error');
-      navigate('/sales/price-lists');
+      navigate('/orders/price-lists');
     } finally {
       setLoading(false);
     }
@@ -65,7 +66,7 @@ const PriceListDetailsPage = () => {
     try {
       await deletePriceList(id);
       showNotification(t('priceLists.messages.success.deleted'), 'success');
-      navigate('/sales/price-lists');
+      navigate('/orders/price-lists');
     } catch (error) {
       console.error('Błąd podczas usuwania listy cenowej:', error);
       showNotification(t('priceLists.messages.errors.deleteFailed'), 'error');
@@ -110,9 +111,7 @@ const PriceListDetailsPage = () => {
         <Typography variant="h5">
           {t('priceLists.details.notFound')}
         </Typography>
-        <Button component={Link} to="/sales/price-lists">
-          {t('priceLists.details.backToLists')}
-        </Button>
+        <BackButton to={ROUTES.ORDERS_PRICE_LISTS} label={t('priceLists.details.backToLists')} />
       </Container>
     );
   }
@@ -121,7 +120,7 @@ const PriceListDetailsPage = () => {
     <Container maxWidth="lg">
       <Box sx={{ mt: 3, mb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <GoBackButton />
+          <BackButton to={ROUTES.ORDERS_PRICE_LISTS} iconOnly sx={{ mr: 2 }} />
           <Typography variant="h4" component="h1">
             {priceList.name}
           </Typography>
@@ -147,7 +146,7 @@ const PriceListDetailsPage = () => {
           </Button>
           <Button
             component={Link}
-            to={`/sales/price-lists/${id}/edit`}
+            to={`/orders/price-lists/${id}/edit`}
             variant="outlined"
             color="primary"
             startIcon={<EditIcon />}

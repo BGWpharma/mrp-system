@@ -618,7 +618,7 @@ const InvoicesList = () => {
   };
 
   const handleViewCustomer = (customerId) => {
-    navigate(`/customers/${customerId}`);
+    navigate(`/orders/customers/${customerId}`);
   };
 
   const renderInvoiceStatus = (status) => {

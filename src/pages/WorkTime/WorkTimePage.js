@@ -290,14 +290,14 @@ const WorkTimePage = () => {
             {/* Gradient header */}
             <Box sx={{
               background: gradients.login,
-              py: 5, px: 3, textAlign: 'center', position: 'relative',
+              py: { xs: 3, md: 5 }, px: 3, textAlign: 'center', position: 'relative',
             }}>
               <Avatar sx={{
-                width: 80, height: 80, mx: 'auto', mb: 2,
+                width: { xs: 64, md: 80 }, height: { xs: 64, md: 80 }, mx: 'auto', mb: 2,
                 backgroundColor: 'rgba(255,255,255,0.2)',
                 backdropFilter: 'blur(10px)',
               }}>
-                <FingerprintIcon sx={{ fontSize: 44, color: '#fff' }} />
+                <FingerprintIcon sx={{ fontSize: { xs: 36, md: 44 }, color: '#fff' }} />
               </Avatar>
               <Typography variant="h4" fontWeight="800" color="#fff" gutterBottom>
                 {t('title')}
@@ -399,7 +399,7 @@ const WorkTimePage = () => {
             ) : (
               <Grid container spacing={3}>
                 {/* ======== ZEGAR START ======== */}
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} sm={6}>
                   <Grow in timeout={500}>
                     <Paper
                       elevation={4}
@@ -480,7 +480,7 @@ const WorkTimePage = () => {
                 </Grid>
 
                 {/* ======== ZEGAR KONIEC ======== */}
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} sm={6}>
                   <Grow in timeout={700}>
                     <Paper
                       elevation={4}
@@ -564,15 +564,15 @@ const WorkTimePage = () => {
             <Paper elevation={2} sx={{ p: 2, borderRadius: 4, mt: 3 }}>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <Button
-                  variant="outlined" fullWidth onClick={handleReset}
-                  startIcon={<ArrowBackIcon />} sx={{ borderRadius: 3 }}
+                  variant="outlined" fullWidth size="large" onClick={handleReset}
+                  startIcon={<ArrowBackIcon />} sx={{ borderRadius: 3, minHeight: 48 }}
                 >
                   {t('changeEmployee')}
                 </Button>
                 <Button
-                  variant="outlined" fullWidth onClick={handleShowHistory}
+                  variant="outlined" fullWidth size="large" onClick={handleShowHistory}
                   startIcon={historyLoading ? <CircularProgress size={16} /> : <HistoryIcon />}
-                  sx={{ borderRadius: 3 }}
+                  sx={{ borderRadius: 3, minHeight: 48 }}
                 >
                   {showHistory ? t('hideHistory') : t('history')}
                 </Button>
@@ -629,13 +629,13 @@ const WorkTimePage = () => {
           <Paper elevation={6} sx={{ borderRadius: 4, overflow: 'hidden' }}>
             <Box sx={{
               background: gradients.success,
-              py: 5, textAlign: 'center',
+              py: { xs: 3, md: 5 }, textAlign: 'center',
             }}>
               <Avatar sx={{
-                width: 80, height: 80, mx: 'auto', mb: 2,
+                width: { xs: 64, md: 80 }, height: { xs: 64, md: 80 }, mx: 'auto', mb: 2,
                 backgroundColor: 'rgba(255,255,255,0.25)',
               }}>
-                <CelebrationIcon sx={{ fontSize: 44, color: '#fff' }} />
+                <CelebrationIcon sx={{ fontSize: { xs: 36, md: 44 }, color: '#fff' }} />
               </Avatar>
               <Typography variant="h4" fontWeight="800" color="#fff" gutterBottom>
                 {t('successTitle')}

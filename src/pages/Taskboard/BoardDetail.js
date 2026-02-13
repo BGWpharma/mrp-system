@@ -5,7 +5,6 @@ import {
   Box,
   Typography,
   Button,
-  IconButton,
   CircularProgress,
   Dialog,
   DialogTitle,
@@ -15,7 +14,6 @@ import {
   useMediaQuery,
   useTheme
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
 import FolderIcon from '@mui/icons-material/Folder';
 import WorkIcon from '@mui/icons-material/Work';
@@ -31,9 +29,11 @@ import BuildIcon from '@mui/icons-material/Build';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LockIcon from '@mui/icons-material/Lock';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
+import BackButton from '../../components/common/BackButton';
+import ROUTES from '../../constants/routes';
 import {
   getBoard,
   getBoardColumns,
@@ -80,7 +80,6 @@ const BoardDetail = ({
   const boardId = propBoardId || paramBoardId;
   
   const { currentUser } = useAuth();
-  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
@@ -343,13 +342,12 @@ const BoardDetail = ({
         <Box display="flex" alignItems="center" flex={1} width="100%">
           {/* Przycisk wstecz tylko w trybie standalone */}
           {!embedded && (
-            <IconButton 
-              onClick={() => navigate('/taskboard')} 
+            <BackButton 
+              to={ROUTES.TASKBOARD} 
+              iconOnly 
               sx={{ mr: isMobile ? 1 : 2 }}
               size={isMobile ? 'small' : 'medium'}
-            >
-              <ArrowBackIcon sx={{ fontSize: isMobile ? 20 : 24 }} />
-            </IconButton>
+            />
           )}
           
           <Box

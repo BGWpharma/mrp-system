@@ -283,10 +283,10 @@ const NotificationsMenu = () => {
           navigate(`/invoices/${notification.entityId}`);
           break;
         case 'waybill':
-          navigate(`/logistics/waybills/${notification.entityId}`);
+          navigate(`/inventory/cmr/${notification.entityId}`);
           break;
         case 'cmr':
-          navigate(`/logistics/cmr/${notification.entityId}`);
+          navigate(`/inventory/cmr/${notification.entityId}`);
           break;
         case 'inventory':
           navigate(`/inventory/${notification.entityId}`);

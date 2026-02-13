@@ -284,21 +284,9 @@ const CRMDashboardPage = () => {
             </MenuItem>
             <MenuItem 
               component={Link} 
-              to="/crm/leads/new"
-            >
-              Nowy lead
-            </MenuItem>
-            <MenuItem 
-              component={Link} 
               to="/crm/opportunities/new"
             >
               Nowa szansa sprzedaży
-            </MenuItem>
-            <MenuItem 
-              component={Link} 
-              to="/crm/campaigns/new"
-            >
-              Nowa kampania
             </MenuItem>
           </Box>
         </Box>

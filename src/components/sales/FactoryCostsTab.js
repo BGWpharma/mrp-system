@@ -49,7 +49,10 @@ import {
   CalendarMonth as CalendarIcon,
   Calculate as CalculateIcon,
   ExpandMore as ExpandMoreIcon,
-  FilterAlt as FilterIcon
+  FilterAlt as FilterIcon,
+  AutoMode as AutoModeIcon,
+  EditNote as EditNoteIcon,
+  AccountBalance as AccountBalanceIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -297,6 +300,15 @@ const FactoryCostsTab = () => {
     }).format(value || 0);
   };
 
+  const formatCurrencyPLN = (value) => {
+    return new Intl.NumberFormat('pl-PL', {
+      style: 'currency',
+      currency: 'PLN',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value || 0);
+  };
+
   // Formatowanie czasu
   const formatTime = (minutes) => {
     if (!minutes) return '0 min';
@@ -373,6 +385,7 @@ const FactoryCostsTab = () => {
               <TableHead>
                 <TableRow>
                   <TableCell>{t('factoryCosts.table.period', 'Okres')}</TableCell>
+                  <TableCell align="center">{'Źródło'}</TableCell>
                   <TableCell align="right">{t('factoryCosts.table.amount', 'Kwota')}</TableCell>
                   <TableCell align="right">{t('factoryCosts.table.effectiveTime', 'Efektywny czas')}</TableCell>
                   <TableCell align="right">{t('factoryCosts.table.costPerMinute', 'Koszt/min')}</TableCell>
@@ -384,7 +397,7 @@ const FactoryCostsTab = () => {
               <TableBody>
                 {costs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">
                         {t('factoryCosts.noCosts', 'Brak wpisów kosztów zakładu')}
                       </Typography>
@@ -400,7 +413,8 @@ const FactoryCostsTab = () => {
                   </TableRow>
                 ) : (
                   costs.map((cost) => (
-                    <TableRow key={cost.id} hover>
+                    <React.Fragment key={cost.id}>
+                    <TableRow hover>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <CalendarIcon fontSize="small" color="action" />
@@ -408,8 +422,36 @@ const FactoryCostsTab = () => {
                             <Typography variant="body2">
                               {format(cost.startDate, 'dd.MM.yyyy')} - {format(cost.endDate, 'dd.MM.yyyy')}
                             </Typography>
+                            {cost.periodKey && (
+                              <Typography variant="caption" color="text.secondary">
+                                {cost.periodKey}
+                              </Typography>
+                            )}
                           </Box>
                         </Box>
+                      </TableCell>
+                      <TableCell align="center">
+                        {cost.source === 'accounting' ? (
+                          <Tooltip title={`Automatycznie z księgowości${cost.bgwAmountPLN ? ` (${formatCurrencyPLN(cost.bgwAmountPLN)} / ${cost.bgwExchangeRate || '?'} = ${formatCurrency(cost.amount)})` : ''}`}>
+                            <Chip
+                              icon={<AutoModeIcon />}
+                              label="Księgowość"
+                              color="info"
+                              size="small"
+                              variant="outlined"
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Tooltip title="Kwota wpisana ręcznie">
+                            <Chip
+                              icon={<EditNoteIcon />}
+                              label="Ręczny"
+                              color="default"
+                              size="small"
+                              variant="outlined"
+                            />
+                          </Tooltip>
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         <Chip
@@ -418,6 +460,11 @@ const FactoryCostsTab = () => {
                           size="small"
                           sx={{ fontWeight: 600 }}
                         />
+                        {cost.source === 'accounting' && cost.bgwAmountPLN > 0 && (
+                          <Typography variant="caption" display="block" color="text.secondary">
+                            {formatCurrencyPLN(cost.bgwAmountPLN)}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         <Tooltip title={`${cost.sessionsCount || 0} ${t('factoryCosts.sessions', 'sesji')} → ${cost.mergedPeriodsCount || 0} ${t('factoryCosts.periods', 'okresów')}`}>
@@ -487,6 +534,82 @@ const FactoryCostsTab = () => {
                         </Tooltip>
                       </TableCell>
                     </TableRow>
+                    {/* Wiersz rozbicia BGW - tylko dla kosztów z księgowości */}
+                    {cost.source === 'accounting' && cost.bgwBreakdown?.length > 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} sx={{ py: 0, px: 2, borderBottom: `2px solid ${theme.palette.divider}` }}>
+                          <Accordion 
+                            disableGutters 
+                            elevation={0}
+                            sx={{ 
+                              backgroundColor: 'transparent',
+                              '&:before': { display: 'none' }
+                            }}
+                          >
+                            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0, minHeight: 36 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <AccountBalanceIcon fontSize="small" color="info" />
+                                <Typography variant="caption" color="text.secondary">
+                                  Rozbicie po kontach księgowych ({cost.bgwBreakdown.length} kont, {cost.bgwEntriesCount || 0} wpisów)
+                                  {cost.bgwExchangeRate && (
+                                    <> &bull; Kurs EUR: {cost.bgwExchangeRate} PLN ({cost.bgwRateDate})</>
+                                  )}
+                                </Typography>
+                              </Box>
+                            </AccordionSummary>
+                            <AccordionDetails sx={{ px: 0, pt: 0 }}>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell sx={{ fontWeight: 600 }}>Konto</TableCell>
+                                    <TableCell sx={{ fontWeight: 600 }}>Nazwa</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 600 }}>Obroty Wn (PLN)</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 600 }}>Udział</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {cost.bgwBreakdown.map((item, idx) => (
+                                    <TableRow key={idx}>
+                                      <TableCell>
+                                        <Typography variant="body2" fontFamily="monospace" fontSize={12}>
+                                          {item.accountNumber}
+                                        </Typography>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Typography variant="body2" fontSize={12}>
+                                          {item.accountName}
+                                        </Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontSize={12}>
+                                          {formatCurrencyPLN(item.debitTotalPLN)}
+                                        </Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontSize={12} color="text.secondary">
+                                          {cost.bgwAmountPLN > 0
+                                            ? `${((item.debitTotalPLN / cost.bgwAmountPLN) * 100).toFixed(1)}%`
+                                            : '-'
+                                          }
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                  <TableRow>
+                                    <TableCell colSpan={2} sx={{ fontWeight: 600 }}>Razem</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                      {formatCurrencyPLN(cost.bgwAmountPLN)}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 600 }}>100%</TableCell>
+                                  </TableRow>
+                                </TableBody>
+                              </Table>
+                            </AccordionDetails>
+                          </Accordion>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    </React.Fragment>
                   ))
                 )}
               </TableBody>
@@ -522,6 +645,14 @@ const FactoryCostsTab = () => {
                   />
                 </Grid>
               </Grid>
+              {editingCost?.source === 'accounting' && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  Kwota obliczona automatycznie z księgowości (Pula BGW).
+                  {editingCost.bgwAmountPLN > 0 && (
+                    <> Suma obrotów Wn: {formatCurrencyPLN(editingCost.bgwAmountPLN)} / kurs {editingCost.bgwExchangeRate} = {formatCurrency(editingCost.amount)}</>
+                  )}
+                </Alert>
+              )}
               <TextField
                 label={t('factoryCosts.dialog.amount', 'Kwota')}
                 type="number"
@@ -529,6 +660,11 @@ const FactoryCostsTab = () => {
                 onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
                 fullWidth
                 required
+                disabled={editingCost?.source === 'accounting'}
+                helperText={editingCost?.source === 'accounting' 
+                  ? 'Kwota synchronizowana automatycznie z księgowości' 
+                  : undefined
+                }
                 InputProps={{
                   endAdornment: <InputAdornment position="end">EUR</InputAdornment>
                 }}

@@ -128,7 +128,7 @@ const PriceListsPage = () => {
           
           <Button
             component={Link}
-            to="/sales/price-lists/new"
+            to="/orders/price-lists/new"
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
@@ -178,7 +178,7 @@ const PriceListsPage = () => {
                           <Tooltip title={t('priceLists.table.details')}>
                             <IconButton 
                               component={Link} 
-                              to={`/sales/price-lists/${priceList.id}`}
+                              to={`/orders/price-lists/${priceList.id}`}
                               size="small"
                             >
                               <VisibilityIcon />
@@ -187,7 +187,7 @@ const PriceListsPage = () => {
                           <Tooltip title={t('priceLists.table.edit')}>
                             <IconButton 
                               component={Link} 
-                              to={`/sales/price-lists/${priceList.id}/edit`}
+                              to={`/orders/price-lists/${priceList.id}/edit`}
                               size="small"
                             >
                               <EditIcon />

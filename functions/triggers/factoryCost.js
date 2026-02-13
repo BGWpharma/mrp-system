@@ -44,7 +44,9 @@ const chunkArray = (array, size) => {
 
 /**
  * Pobiera sesje produkcyjne nachodzące na podany zakres dat
- * ZOPTYMALIZOWANE: używa filtrowania po stronie Firestore
+ * UWAGA: startTime/endTime w productionHistory mogą być zarówno
+ * Firestore Timestamp jak i string ISO (zależnie od źródła zapisu).
+ * Dlatego pobieramy wszystkie dokumenty i filtrujemy w kodzie.
  * @param {Firestore} db - Instancja Firestore
  * @param {Date} rangeStart - Początek zakresu
  * @param {Date} rangeEnd - Koniec zakresu
@@ -53,13 +55,9 @@ const chunkArray = (array, size) => {
 const getOverlappingSessions = async (db, rangeStart, rangeEnd) => {
   const historyRef = db.collection("productionHistory");
 
-  // Używamy filtrowania po stronie Firestore zamiast pobierania całej kolekcji
-  // Sesja nachodzi na zakres jeśli: startTime <= rangeEnd
-  // (drugie sprawdzenie endTime >= rangeStart robimy w kodzie)
-  const snapshot = await historyRef
-      .where("startTime", "<=", admin.firestore.Timestamp.fromDate(rangeEnd))
-      .orderBy("startTime", "asc")
-      .get();
+  // Pobieramy wszystkie dokumenty - startTime może być string lub Timestamp,
+  // Firestore nie obsługuje porównań cross-type w where()
+  const snapshot = await historyRef.get();
 
   const sessions = [];
   snapshot.forEach((doc) => {
@@ -68,9 +66,10 @@ const getOverlappingSessions = async (db, rangeStart, rangeEnd) => {
     const endTime = toDate(data.endTime);
 
     if (!startTime || !endTime) return;
+    if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) return;
 
-    // Dodatkowe sprawdzenie: endTime >= rangeStart
-    if (endTime >= rangeStart) {
+    // Sesja nachodzi na zakres jeśli: startTime <= rangeEnd AND endTime >= rangeStart
+    if (startTime <= rangeEnd && endTime >= rangeStart) {
       sessions.push({
         id: doc.id,
         taskId: data.taskId,
@@ -79,6 +78,9 @@ const getOverlappingSessions = async (db, rangeStart, rangeEnd) => {
       });
     }
   });
+
+  // Sortuj po startTime
+  sessions.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 
   return sessions;
 };

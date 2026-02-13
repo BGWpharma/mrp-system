@@ -18,7 +18,6 @@ import {
   CardActions
 } from '@mui/material';
 import { 
-  ArrowBack as ArrowBackIcon,
   ReceiptOutlined as ReceiptIcon,
   AddCircleOutline as AddIcon,
   Download as DownloadIcon,
@@ -30,13 +29,11 @@ import {
   Business as SupplierIcon,
   ShoppingCart as PurchaseIcon
 } from '@mui/icons-material';
+import BackButton from '../../components/common/BackButton';
+import ROUTES from '../../constants/routes';
 
 const InvoicesPage = () => {
   const navigate = useNavigate();
-
-  const handleBack = () => {
-    navigate('/');
-  };
 
   const navigateTo = (path) => {
     navigate(path);
@@ -45,13 +42,7 @@ const InvoicesPage = () => {
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={handleBack}
-        >
-          Powrót do pulpitu
-        </Button>
+        <BackButton to={ROUTES.HOME} label="Powrót do pulpitu" />
         <Typography variant="h5">System fakturowania</Typography>
         <Button
           variant="contained"
@@ -102,7 +93,7 @@ const InvoicesPage = () => {
                 </List>
               </CardContent>
               <CardActions>
-                <Button size="small" onClick={() => navigateTo('/invoices/list')}>
+                <Button size="small" onClick={() => navigateTo('/sales')}>
                   Przeglądaj faktury
                 </Button>
                 <Button size="small" onClick={() => navigateTo('/invoices/new')}>
@@ -209,13 +200,9 @@ const InvoicesPage = () => {
           <Grid item xs={12} md={6}>
             <Paper elevation={0} sx={{ p: 2, bgcolor: 'background.default' }}>
               <List dense>
-                <ListItem button component={RouterLink} to="/settings">
+                <ListItem button component={RouterLink} to="/invoices/company-settings">
                   <ListItemIcon><SettingsIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Ustawienia ogólne" secondary="Konfiguracja systemu fakturowania" />
-                </ListItem>
-                <ListItem button component={RouterLink} to="/invoices/templates">
-                  <ListItemIcon><ReceiptIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Szablony faktur" secondary="Zarządzaj wyglądem i strukturą faktur" />
+                  <ListItemText primary="Ustawienia firmy" secondary="Konfiguracja danych firmy do faktur" />
                 </ListItem>
               </List>
             </Paper>

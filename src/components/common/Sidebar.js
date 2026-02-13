@@ -195,7 +195,7 @@ const Sidebar = ({ onToggle }) => {
       '/orders/customers': 'sales-customer-orders',
       '/orders/price-lists': 'sales-customer-orders',
       '/customers': 'sales-customer-orders',
-      '/sales/price-lists': 'sales-customer-orders',
+      '/sales/price-lists': 'sales-customer-orders', // legacy - redirect
       '/production/create-from-order': 'sales-production-task',
       
       // Production

@@ -20,16 +20,19 @@ import {
   DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions
+  DialogActions,
+  Chip,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import {
   Save as SaveIcon,
-  ArrowBack as ArrowBackIcon,
   Inventory as InventoryIcon,
   LocalShipping as ShippingIcon,
   WarehouseOutlined as WarehouseIcon,
   Category as CategoryIcon,
-  QrCode as QrCodeIcon
+  QrCode as QrCodeIcon,
+  People as PeopleIcon
 } from '@mui/icons-material';
 import { 
   createInventoryItem, 
@@ -38,16 +41,20 @@ import {
   getAllInventoryItems
 } from '../../services/inventory';
 import { getRecipesContainingIngredient } from '../../services/recipeService';
+import { getAllCustomers } from '../../services/customerService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import SupplierPricesList from './SupplierPricesList';
+import BackButton from '../common/BackButton';
+import ROUTES from '../../constants/routes';
 
 const InventoryItemForm = ({ itemId }) => {
   const [loading, setLoading] = useState(!!itemId);
   const [saving, setSaving] = useState(false);
   const [packageItems, setPackageItems] = useState([]);
   const [selectedPackageItem, setSelectedPackageItem] = useState(null);
+  const [customers, setCustomers] = useState([]);
   const [originalName, setOriginalName] = useState('');
   const [recipeUpdateDialog, setRecipeUpdateDialog] = useState({ open: false, count: 0 });
   const { currentUser } = useAuth();
@@ -72,16 +79,22 @@ const InventoryItemForm = ({ itemId }) => {
     itemsPerBox: '',
     currency: 'EUR',
     barcode: '',
-    parentPackageItemId: ''
+    parentPackageItemId: '',
+    customerIds: [],
+    allCustomers: false
   });
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Pobierz pozycje magazynowe kategorii "Opakowania zbiorcze"
-        const allItems = await getAllInventoryItems();
+        // Pobierz pozycje magazynowe kategorii "Opakowania zbiorcze" i klientów równolegle
+        const [allItems, allCustomers] = await Promise.all([
+          getAllInventoryItems(),
+          getAllCustomers()
+        ]);
         const packages = allItems.filter(item => item.category === 'Opakowania zbiorcze');
         setPackageItems(packages);
+        setCustomers(allCustomers);
 
         if (itemId) {
           const item = await getInventoryItemById(itemId);
@@ -195,17 +208,13 @@ const InventoryItemForm = ({ itemId }) => {
             : 'linear-gradient(to right, #f5f7fa, #e4eaf0)'
         }}
       >
-        <Button 
-          variant="outlined"
-          startIcon={<ArrowBackIcon />} 
-          onClick={() => itemId ? navigate(`/inventory/${itemId}`) : navigate('/inventory')}
+        <BackButton 
+          to={itemId ? ROUTES.INVENTORY_ITEM(itemId) : ROUTES.INVENTORY}
           sx={{ 
             borderRadius: '8px', 
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
           }}
-        >
-          Powrót
-        </Button>
+        />
         <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
           {itemId ? 'Edytuj pozycję magazynową' : 'Dodaj nową pozycję magazynową'}
         </Typography>
@@ -315,6 +324,59 @@ const InventoryItemForm = ({ itemId }) => {
                 rows={2}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: itemData.allCustomers ? 0 : 1 }}>
+                <PeopleIcon color="action" fontSize="small" />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={!!itemData.allCustomers}
+                      onChange={(e) => {
+                        setItemData(prev => ({
+                          ...prev,
+                          allCustomers: e.target.checked,
+                          customerIds: e.target.checked ? [] : prev.customerIds
+                        }));
+                      }}
+                      color="primary"
+                    />
+                  }
+                  label="Wszyscy klienci"
+                />
+                {itemData.allCustomers && (
+                  <Chip label="Pozycja dostępna dla wszystkich klientów" color="primary" size="small" variant="outlined" />
+                )}
+              </Box>
+              {!itemData.allCustomers && (
+                <Autocomplete
+                  multiple
+                  options={customers}
+                  getOptionLabel={(option) => option.name || ''}
+                  value={customers.filter(c => (itemData.customerIds || []).includes(c.id))}
+                  onChange={(event, newValue) => {
+                    setItemData(prev => ({
+                      ...prev,
+                      customerIds: newValue.map(c => c.id)
+                    }));
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Przypisani klienci"
+                      fullWidth
+                      helperText="Wybierz konkretnych klientów powiązanych z tą pozycją magazynową"
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                    />
+                  )}
+                  isOptionEqualToValue={(option, value) => option.id === value?.id}
+                  noOptionsText="Brak klientów"
+                  clearText="Wyczyść"
+                  openText="Otwórz"
+                  closeText="Zamknij"
+                />
+              )}
             </Grid>
             
             <Grid item xs={12} sm={6}>

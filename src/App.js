@@ -471,11 +471,11 @@ function App() {
                     <Route path="/orders/price-lists/:id" element={<PrivateLayout><PriceListDetailsPage /></PrivateLayout>} />
                     <Route path="/orders/price-lists/:id/edit" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
                     
-                    {/* Legacy Price Lists Routes - przekierowanie dla starych linków */}
-                    <Route path="/sales/price-lists" element={<PrivateLayout><OrdersPage /></PrivateLayout>} />
-                    <Route path="/sales/price-lists/new" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
-                    <Route path="/sales/price-lists/:id" element={<PrivateLayout><PriceListDetailsPage /></PrivateLayout>} />
-                    <Route path="/sales/price-lists/:id/edit" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
+                    {/* Legacy Price Lists Routes - redirect do kanonicznych ścieżek */}
+                    <Route path="/sales/price-lists" element={<Navigate to="/orders/price-lists" replace />} />
+                    <Route path="/sales/price-lists/new" element={<Navigate to="/orders/price-lists/new" replace />} />
+                    <Route path="/sales/price-lists/:id" element={<PriceListRedirect />} />
+                    <Route path="/sales/price-lists/:id/edit" element={<PriceListEditRedirect />} />
                     
                     
                     {/* Sales Routes - nowa struktura z zakładkami */}
@@ -507,9 +507,9 @@ function App() {
                     {/* Customers Routes - teraz w ramach orders */}
                     <Route path="/orders/customers/:customerId" element={<PrivateLayout><CustomerDetail /></PrivateLayout>} />
                     
-                    {/* Legacy Customers Routes - przekierowanie dla starych linków */}
-                    <Route path="/customers" element={<PrivateLayout><OrdersPage /></PrivateLayout>} />
-                    <Route path="/customers/:customerId" element={<PrivateLayout><CustomerDetail /></PrivateLayout>} />
+                    {/* Legacy Customers Routes - redirect do kanonicznych ścieżek */}
+                    <Route path="/customers" element={<Navigate to="/orders/customers" replace />} />
+                    <Route path="/customers/:customerId" element={<CustomerRedirect />} />
                     
                     {/* AI Assistant Routes */}
                     <Route path="/ai-assistant" element={<PrivateLayout><AIAssistantPage /></PrivateLayout>} />
@@ -627,6 +627,25 @@ function EditOrderWrapper() {
   const { orderId } = useParams();
   // OrderForm jest lazy-loaded, więc już jest obsługiwany przez Suspense w PrivateLayout
   return <OrderForm orderId={orderId} />;
+}
+
+// ============================================================================
+// KOMPONENTY POMOCNICZE - redirect legacy ścieżek do kanonicznych
+// ============================================================================
+
+function CustomerRedirect() {
+  const { customerId } = useParams();
+  return <Navigate to={`/orders/customers/${customerId}`} replace />;
+}
+
+function PriceListRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/orders/price-lists/${id}`} replace />;
+}
+
+function PriceListEditRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/orders/price-lists/${id}/edit`} replace />;
 }
 
 export default App;

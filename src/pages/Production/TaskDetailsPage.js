@@ -6168,7 +6168,7 @@ const TaskDetailsPage = () => {
                       ~{(unitFullProductionCost + (task.factoryCostPerUnit || 0)).toFixed(4)} €/{task.unit}
                     </Typography>
                     <Typography variant="caption" sx={{ opacity: 0.85, display: 'block' }}>
-                      Łącznie: {(totalFullProductionCost + (task.factoryCostTotal || 0)).toFixed(2)} €
+                      {t('taskDetails:materialsSummary.totalLabel', 'Łącznie')}: {(totalFullProductionCost + (task.factoryCostTotal || 0)).toFixed(2)} €
                     </Typography>
                   </CardContent>
                 </Card>

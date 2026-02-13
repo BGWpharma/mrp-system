@@ -34,7 +34,6 @@ import {
 } from '@mui/material';
 import {
   Edit as EditIcon,
-  ArrowBack as ArrowBackIcon,
   ArrowUpward as ReceiveIcon,
   ArrowDownward as IssueIcon,
   History as HistoryIcon,
@@ -51,6 +50,7 @@ import {
 } from '@mui/icons-material';
 import { getInventoryItemById, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations, getAllWarehouses, recalculateItemQuantity, getAwaitingOrdersForInventoryItem } from '../../services/inventory';
 import { getAllSuppliers, getSuppliersByIds } from '../../services/supplierService';
+import { getAllCustomers } from '../../services/customerService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -58,6 +58,8 @@ import { formatDate, formatDateTime, formatQuantity } from '../../utils/formatte
 import { preciseAdd } from '../../utils/mathUtils';
 import { Timestamp } from 'firebase/firestore';
 import LabelDialog from '../../components/inventory/LabelDialog';
+import BackButton from '../../components/common/BackButton';
+import ROUTES from '../../constants/routes';
 
 // Lazy-loaded zakładki
 const BatchesTab = React.lazy(() => import('./ItemDetailsTabs/BatchesTab'));
@@ -118,6 +120,7 @@ const ItemDetailsPage = () => {
   const [awaitingOrders, setAwaitingOrders] = useState({});
   const [awaitingOrdersLoading, setAwaitingOrdersLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [assignedCustomers, setAssignedCustomers] = useState([]);
 
   
   // Dodajemy wykrywanie urządzeń mobilnych
@@ -159,6 +162,14 @@ const ItemDetailsPage = () => {
         // 🚀 ROZWIĄZANIE 5: Progressive Loading - pokazuj dane jak się ładują
         setItem(itemData);
         updateLoadingState('item', false);
+
+        // Pobierz nazwy przypisanych klientów
+        if (itemData.customerIds && itemData.customerIds.length > 0) {
+          getAllCustomers().then(allCustomers => {
+            const matched = allCustomers.filter(c => itemData.customerIds.includes(c.id));
+            setAssignedCustomers(matched);
+          }).catch(err => console.warn('Nie udało się pobrać klientów:', err));
+        }
         
         // Pobierz informacje o powiązanym kartonie jeśli istnieje
         if (itemData.parentPackageItemId) {
@@ -542,15 +553,12 @@ const ItemDetailsPage = () => {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Typography variant="h5">{t('inventory.itemDetails.itemNotFound')}</Typography>
-        <Button 
-          variant="contained" 
-          component={Link} 
-          to="/inventory"
-          startIcon={<ArrowBackIcon />}
+        <BackButton 
+          to={ROUTES.INVENTORY}
+          label={t('inventory.itemDetails.backToInventory')}
+          variant="contained"
           sx={{ mt: 2 }}
-        >
-          {t('inventory.itemDetails.backToInventory')}
-        </Button>
+        />
       </Container>
     );
   }
@@ -558,14 +566,10 @@ const ItemDetailsPage = () => {
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 2 : 0 }}>
-        <Button 
-          startIcon={<ArrowBackIcon />} 
-          onClick={() => navigate('/inventory')}
-          variant="outlined"
+        <BackButton 
+          to={ROUTES.INVENTORY}
           sx={{ alignSelf: isMobile ? 'stretch' : 'flex-start' }}
-        >
-          {t('common.back')}
-        </Button>
+        />
         <Typography variant="h5" fontWeight="bold" align={isMobile ? "center" : "left"}>
           {t('inventory.itemDetails.title')}
         </Typography>
@@ -625,14 +629,40 @@ const ItemDetailsPage = () => {
           <Typography variant="h4" gutterBottom fontWeight="bold">
             {item.name}
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
             <Chip 
               label={item.category || t('inventory.itemDetails.noCategory')} 
               color="primary" 
-              sx={{ mr: 2, fontWeight: 'medium' }}
+              sx={{ fontWeight: 'medium' }}
             />
             {getStockLevelIndicator(item.quantity, item.minStock, item.maxStock)}
           </Box>
+          {(item.allCustomers || assignedCustomers.length > 0) && (
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
+                Klienci:
+              </Typography>
+              {item.allCustomers ? (
+                <Chip
+                  label="Wszyscy klienci"
+                  size="small"
+                  color="primary"
+                />
+              ) : (
+                assignedCustomers.map(customer => (
+                  <Chip
+                    key={customer.id}
+                    label={customer.name}
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    onClick={() => navigate(`/orders/customers/${customer.id}`)}
+                    sx={{ cursor: 'pointer' }}
+                  />
+                ))
+              )}
+            </Box>
+          )}
           {item.description && (
             <Paper sx={{ p: 2, mb: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white', borderRadius: 1 }}>
               <Typography variant="body1">

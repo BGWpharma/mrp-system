@@ -27,7 +27,6 @@ import {
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
-  ArrowBack as ArrowBackIcon,
   Phone as CallIcon,
   Email as EmailIcon,
   EventNote as MeetingIcon,
@@ -47,6 +46,8 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { INTERACTION_TYPES, INTERACTION_STATUSES } from '../../utils/constants';
+import BackButton from '../../components/common/BackButton';
+import ROUTES from '../../constants/routes';
 
 const InteractionDetailsPage = () => {
   const { interactionId } = useParams();
@@ -212,14 +213,11 @@ const InteractionDetailsPage = () => {
     return (
       <Container>
         <Box mt={4} mb={4} display="flex" alignItems="center">
-          <Button 
-            component={Link} 
-            to="/inventory/interactions" 
-            startIcon={<ArrowBackIcon />}
+          <BackButton 
+            to={ROUTES.CRM_INTERACTIONS}
+            label="Powrót do listy"
             sx={{ mr: 2 }}
-          >
-            Powrót do listy
-          </Button>
+          />
           <Typography variant="h4" component="h1">
             Interakcja nie istnieje
           </Typography>
@@ -228,14 +226,12 @@ const InteractionDetailsPage = () => {
           <Typography>
             Nie znaleziono interakcji o podanym identyfikatorze. Interakcja mogła zostać usunięta.
           </Typography>
-          <Button 
-            variant="contained" 
-            component={Link}
-            to="/inventory/interactions"
+          <BackButton 
+            to={ROUTES.CRM_INTERACTIONS}
+            label="Wróć do listy interakcji"
+            variant="contained"
             sx={{ mt: 2 }}
-          >
-            Wróć do listy interakcji
-          </Button>
+          />
         </Paper>
       </Container>
     );
@@ -245,14 +241,11 @@ const InteractionDetailsPage = () => {
     <Container maxWidth="lg">
       <Box mt={4} mb={4} display="flex" justifyContent="space-between" alignItems="center">
         <Box display="flex" alignItems="center">
-          <Button 
-            component={Link} 
-            to="/crm/interactions" 
-            startIcon={<ArrowBackIcon />}
+          <BackButton 
+            to={ROUTES.CRM_INTERACTIONS}
+            label={t('purchaseInteractions.backToList')}
             sx={{ mr: 2 }}
-          >
-            {t('purchaseInteractions.backToList')}
-          </Button>
+          />
           <Box>
             <Typography variant="h4" component="h1" display="flex" alignItems="center">
               {getTypeIcon(interaction.type)}

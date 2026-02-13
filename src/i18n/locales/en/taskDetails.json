@@ -352,6 +352,7 @@
         "unitFullProductionCost": "Unit Production Cost",
         "factoryCostPerUnit": "Factory Cost per Unit",
         "totalUnitCostWithFactory": "Full Cost + Factory",
+        "totalLabel": "Total",
         "consumed": "Consumed",
         "reserved": "Reserved",
         "updateManually": "Update Manually",

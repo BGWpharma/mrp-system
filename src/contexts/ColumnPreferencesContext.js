@@ -18,6 +18,7 @@ const defaultColumnPreferences = {
     reservedQuantity: true,
     availableQuantity: true,
     status: true,
+    customers: false,
     location: true,
     actions: true
   },

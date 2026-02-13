@@ -1551,7 +1551,7 @@ const InvoiceForm = ({ invoiceId }) => {
       }
         
         if (redirectToList) {
-        navigate('/invoices/list');
+        navigate('/sales');
         } else {
         navigate(`/invoices/${submittedInvoiceId}`);
       }
