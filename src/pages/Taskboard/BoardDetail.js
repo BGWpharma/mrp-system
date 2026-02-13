@@ -453,15 +453,11 @@ const BoardDetail = ({
         onClose={() => setColumnDialogOpen(false)}
         PaperProps={{
           sx: {
-            backgroundColor: '#1a1a2e',
-            backgroundImage: 'none',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
             borderRadius: 2,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
           }
         }}
       >
-        <DialogTitle sx={{ borderBottom: '1px solid rgba(255, 255, 255, 0.12)', pb: 2 }}>
+        <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
           {t('newColumn')}
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -476,7 +472,7 @@ const BoardDetail = ({
             sx={{ mt: 1 }}
           />
         </DialogContent>
-        <DialogActions sx={{ borderTop: '1px solid rgba(255, 255, 255, 0.12)', px: 2.5, py: 2 }}>
+        <DialogActions sx={{ borderTop: 1, borderColor: 'divider', px: 2.5, py: 2 }}>
           <Button onClick={() => setColumnDialogOpen(false)}>{t('cancel')}</Button>
           <Button
             onClick={handleAddColumn}

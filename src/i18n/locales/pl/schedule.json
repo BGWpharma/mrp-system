@@ -1,0 +1,79 @@
+{
+  "tabs": {
+    "schedule": "Grafik",
+    "newRequest": "Złóż wniosek",
+    "createSchedule": "Utwórz grafik"
+  },
+  "calendar": {
+    "monday": "Poniedziałek",
+    "tuesday": "Wtorek",
+    "wednesday": "Środa",
+    "thursday": "Czwartek",
+    "friday": "Piątek",
+    "saturday": "Sobota",
+    "sunday": "Niedziela",
+    "off": "Wolne"
+  },
+  "shifts": {
+    "morning": "Ranna",
+    "afternoon": "Popołudniowa",
+    "night": "Nocna",
+    "off": "Wolne",
+    "selectShift": "Wybierz zmianę, a potem kliknij komórkę w tabeli:",
+    "addTemplate": "+ Szablon",
+    "employee": "Pracownik",
+    "noEmployees": "Brak pracowników z przypisanym ID. Dodaj pracowników w panelu \"Zarządzaj użytkownikami\".",
+    "rightClickToRemove": "PPM aby usunąć",
+    "cellHint": "Kliknij komórkę, aby przypisać wybraną zmianę. Prawy przycisk myszy (PPM) usuwa zmianę.",
+    "copyNextWeek": "Kopiuj na nast. tydzień",
+    "copiedSuccess": "Grafik skopiowany na następny tydzień",
+    "saveSchedule": "Zapisz grafik",
+    "savingSchedule": "Zapisywanie...",
+    "noChanges": "Brak zmian do zapisania",
+    "savedCount": "Zapisano {{saved}} zmian",
+    "savedAndDeleted": "Zapisano {{saved}} zmian, usunięto {{deleted}}",
+    "saveError": "Błąd zapisu grafiku"
+  },
+  "requests": {
+    "title": "Złóż wniosek",
+    "employeeId": "Twoje ID pracownika",
+    "employeeIdPlaceholder": "np. BGW-001",
+    "type": "Typ wniosku",
+    "dateFrom": "Data od",
+    "dateTo": "Data do",
+    "workDays": "Wybrany okres: {{count}} dni roboczych",
+    "reason": "Powód / uwagi",
+    "reasonPlaceholder": "np. Urlop wypoczynkowy",
+    "submit": "Złóż wniosek",
+    "submitting": "Wysyłanie...",
+    "successMessage": "Wniosek złożony jako {{name}}",
+    "notFound": "Nie znaleziono pracownika o podanym ID",
+    "enterEmployeeId": "Wpisz swoje ID pracownika",
+    "dateRequired": "Podaj datę od i do",
+    "dateError": "Data \"do\" nie może być wcześniejsza niż \"od\"",
+    "submitError": "Błąd składania wniosku",
+    "deleteSuccess": "Wniosek usunięty",
+    "deleteError": "Błąd usuwania wniosku"
+  },
+  "requestTypes": {
+    "vacation": "Urlop wypoczynkowy",
+    "sickLeave": "Zwolnienie lekarskie",
+    "dayOff": "Dzień wolny",
+    "unpaidLeave": "Urlop bezpłatny",
+    "scheduleChange": "Zmiana grafiku",
+    "other": "Inne"
+  },
+  "templates": {
+    "title": "Nowy szablon zmiany",
+    "name": "Nazwa",
+    "namePlaceholder": "np. Poranna zmiana",
+    "from": "Od",
+    "to": "Do",
+    "color": "Kolor",
+    "cancel": "Anuluj",
+    "add": "Dodaj",
+    "addedSuccess": "Szablon dodany",
+    "addError": "Błąd dodawania szablonu",
+    "deleteError": "Błąd usuwania szablonu"
+  }
+}

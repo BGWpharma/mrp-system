@@ -231,14 +231,11 @@ const ColumnHeader = React.memo(({
         fullWidth
         PaperProps={{
           sx: {
-            backgroundColor: '#1a1a2e',
-            backgroundImage: 'none',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
             borderRadius: 2
           }
         }}
       >
-        <DialogTitle sx={{ borderBottom: '1px solid rgba(255, 255, 255, 0.12)', pb: 2 }}>
+        <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
           {t('renameColumn')}
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -256,7 +253,7 @@ const ColumnHeader = React.memo(({
             sx={{ mt: 1 }}
           />
         </DialogContent>
-        <DialogActions sx={{ borderTop: '1px solid rgba(255, 255, 255, 0.12)', px: 2.5, py: 2 }}>
+        <DialogActions sx={{ borderTop: 1, borderColor: 'divider', px: 2.5, py: 2 }}>
           <Button onClick={() => setEditDialogOpen(false)}>{t('cancel')}</Button>
           <Button
             onClick={handleRename}
@@ -357,22 +354,31 @@ const AddTaskInput = React.memo(({ columnId, onAdd, placeholder }) => {
 
   return (
     <Box display="flex" gap={1}>
-      <input
+      <Box
+        component="input"
         ref={inputRef}
         type="text"
         placeholder={placeholder}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onKeyPress={handleKeyPress}
-        style={{
+        sx={{
           flex: 1,
           padding: '8px 12px',
-          backgroundColor: 'rgba(255, 255, 255, 0.05)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
+          bgcolor: 'action.hover',
+          border: 1,
+          borderColor: 'divider',
           borderRadius: '4px',
-          color: 'inherit',
+          color: 'text.primary',
           fontSize: '14px',
-          outline: 'none'
+          outline: 'none',
+          '&::placeholder': {
+            color: 'text.secondary',
+            opacity: 0.7,
+          },
+          '&:focus': {
+            borderColor: 'primary.main',
+          }
         }}
       />
       <Button
@@ -417,10 +423,10 @@ const DroppableColumn = ({ column, children }) => {
           width: 6,
         },
         '&::-webkit-scrollbar-track': {
-          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+          backgroundColor: 'action.hover',
         },
         '&::-webkit-scrollbar-thumb': {
-          backgroundColor: 'rgba(255, 255, 255, 0.2)',
+          backgroundColor: 'action.disabled',
           borderRadius: 3,
         },
       }}
@@ -801,10 +807,10 @@ const ColumnList = ({
             height: 8,
           },
           '&::-webkit-scrollbar-track': {
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+            backgroundColor: 'action.hover',
           },
           '&::-webkit-scrollbar-thumb': {
-            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+            backgroundColor: 'action.disabled',
             borderRadius: 4,
           },
         }}
@@ -837,8 +843,9 @@ const ColumnList = ({
                   maxWidth: isMobile ? 280 : 320,
                   display: 'flex',
                   flexDirection: 'column',
-                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  backgroundColor: 'action.hover',
+                  border: 1,
+                  borderColor: 'divider',
                   borderRadius: 1.5,
                   p: 2,
                   maxHeight: '75vh',
@@ -887,7 +894,9 @@ const ColumnList = ({
                           textAlign: 'center',
                           color: 'text.secondary',
                           fontSize: '0.875rem',
-                          border: '2px dashed rgba(255, 255, 255, 0.1)',
+                          border: 2,
+                          borderStyle: 'dashed',
+                          borderColor: 'divider',
                           borderRadius: 1,
                           minHeight: 80,
                           display: 'flex',
@@ -917,7 +926,7 @@ const ColumnList = ({
                             borderRadius: 1,
                             mb: 0.75,
                             '&:hover': {
-                              backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                              backgroundColor: 'action.hover',
                             }
                           }}
                         >

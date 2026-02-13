@@ -1,0 +1,49 @@
+{
+  "title": "Rejestracja czasu pracy",
+  "enterEmployeeId": "Wpisz swoje ID pracownika",
+  "employeeIdLabel": "ID pracownika",
+  "employeeIdPlaceholder": "np. BGW-001",
+  "next": "Dalej",
+  "notFound": "Nie znaleziono pracownika o podanym ID.",
+  "verifyError": "Wystąpił błąd podczas weryfikacji.",
+  "start": "Rozpoczęcie",
+  "end": "Zakończenie",
+  "saved": "Zapisano",
+  "saveStart": "Zapisz start",
+  "saveEnd": "Zapisz koniec",
+  "saving": "Zapisywanie...",
+  "firstSaveStart": "Najpierw zapisz godzinę rozpoczęcia",
+  "workStarted": "Rozpoczęto pracę o {{time}}",
+  "workEnded": "Zakończono pracę o {{time}}",
+  "saveError": "Błąd zapisu. Spróbuj ponownie.",
+  "changeEmployee": "Zmień pracownika",
+  "history": "Historia",
+  "hideHistory": "Ukryj historię",
+  "historyTitle": "Historia tego miesiąca ({{count}} wpisów)",
+  "noEntries": "Brak wpisów w tym miesiącu",
+  "successTitle": "Zapisano!",
+  "successMessage": "Czas pracy został zarejestrowany dla:",
+  "back": "Powrót",
+  "historyError": "Błąd pobierania historii",
+  "table": {
+    "date": "Data",
+    "start": "Start",
+    "end": "Koniec",
+    "time": "Czas",
+    "status": "Status"
+  },
+  "statuses": {
+    "inProgress": "W trakcie",
+    "submitted": "Zgłoszony",
+    "approved": "Zatwierdzony",
+    "rejected": "Odrzucony"
+  },
+  "validation": {
+    "selectValidTime": "Wybierz prawidłową godzinę",
+    "tooEarly": "Nie można ustawić godziny wcześniejszej niż {{time}} (max {{margin}} min wstecz)",
+    "tooLate": "Nie można ustawić godziny późniejszej niż {{time}} (max {{margin}} min do przodu)",
+    "startNotFuture": "Godzina rozpoczęcia nie może być w przyszłości",
+    "endAfterStart": "Godzina zakończenia musi być późniejsza niż rozpoczęcia ({{time}})",
+    "firstSaveStart": "Najpierw zapisz godzinę rozpoczęcia pracy"
+  }
+}

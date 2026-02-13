@@ -265,19 +265,19 @@ const TaskboardView = () => {
               {t('mainBoard').toUpperCase()}
             </Typography>
             <Card
-              sx={{
+              sx={(theme) => ({
                 cursor: 'pointer',
                 backgroundColor: selectedBoard?.id === mainBoard.id 
                   ? 'rgba(78, 205, 196, 0.15)' 
-                  : 'rgba(255, 255, 255, 0.03)',
+                  : theme.palette.action.hover,
                 border: selectedBoard?.id === mainBoard.id 
                   ? '2px solid rgba(78, 205, 196, 0.5)' 
-                  : '1px solid rgba(255, 255, 255, 0.08)',
+                  : `1px solid ${theme.palette.divider}`,
                 borderLeft: `4px solid ${mainBoard.color}`,
                 '&:hover': {
                   backgroundColor: 'rgba(78, 205, 196, 0.1)',
                 }
-              }}
+              })}
               onClick={() => handleSelectBoard(mainBoard)}
             >
               <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
@@ -340,20 +340,20 @@ const TaskboardView = () => {
               {boards.map((board) => (
                 <Card
                   key={board.id}
-                  sx={{
+                  sx={(theme) => ({
                     mb: 1,
                     cursor: 'pointer',
                     backgroundColor: selectedBoard?.id === board.id 
                       ? 'rgba(63, 140, 255, 0.15)' 
-                      : 'rgba(255, 255, 255, 0.03)',
+                      : theme.palette.action.hover,
                     border: selectedBoard?.id === board.id 
                       ? '2px solid rgba(63, 140, 255, 0.5)' 
-                      : '1px solid rgba(255, 255, 255, 0.08)',
+                      : `1px solid ${theme.palette.divider}`,
                     borderLeft: `4px solid ${board.color}`,
                     '&:hover': {
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      backgroundColor: theme.palette.action.selected,
                     }
-                  }}
+                  })}
                   onClick={() => handleSelectBoard(board)}
                 >
                   <CardContent sx={{ py: 1, px: 2, '&:last-child': { pb: 1 } }}>
@@ -430,15 +430,11 @@ const TaskboardView = () => {
         fullWidth
         PaperProps={{
           sx: {
-            backgroundColor: '#1a1a2e',
-            backgroundImage: 'none',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
             borderRadius: 2,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
           }
         }}
       >
-        <DialogTitle sx={{ borderBottom: '1px solid rgba(255, 255, 255, 0.12)', pb: 2 }}>
+        <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
           {editingBoard ? t('editBoard') : t('newBoard')}
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -476,22 +472,24 @@ const TaskboardView = () => {
               return (
                 <Tooltip key={iconItem.name} title={iconItem.label}>
                   <Box
-                    sx={{
+                    sx={(theme) => ({
                       width: 48,
                       height: 48,
                       borderRadius: 1,
-                      bgcolor: isSelected ? formData.color : 'rgba(255, 255, 255, 0.05)',
+                      bgcolor: isSelected ? formData.color : theme.palette.action.hover,
                       cursor: 'pointer',
-                      border: isSelected ? '2px solid white' : '2px solid rgba(255, 255, 255, 0.1)',
+                      border: isSelected 
+                        ? `2px solid ${theme.palette.text.primary}` 
+                        : `2px solid ${theme.palette.divider}`,
                       transition: 'all 0.2s',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       '&:hover': {
                         transform: 'scale(1.1)',
-                        bgcolor: isSelected ? formData.color : 'rgba(255, 255, 255, 0.1)'
+                        bgcolor: isSelected ? formData.color : theme.palette.action.selected,
                       }
-                    }}
+                    })}
                     onClick={() => setFormData({ ...formData, icon: iconItem.name })}
                   >
                     <IconComponent sx={{ color: 'white', fontSize: 24 }} />
@@ -514,7 +512,9 @@ const TaskboardView = () => {
                   borderRadius: 1,
                   bgcolor: color,
                   cursor: 'pointer',
-                  border: formData.color === color ? '3px solid white' : '3px solid transparent',
+                  border: (theme) => formData.color === color 
+                    ? `3px solid ${theme.palette.text.primary}` 
+                    : '3px solid transparent',
                   transition: 'all 0.2s',
                   '&:hover': {
                     transform: 'scale(1.1)'
@@ -525,7 +525,7 @@ const TaskboardView = () => {
             ))}
           </Box>
         </DialogContent>
-        <DialogActions sx={{ borderTop: '1px solid rgba(255, 255, 255, 0.12)', px: 2.5, py: 2 }}>
+        <DialogActions sx={{ borderTop: 1, borderColor: 'divider', px: 2.5, py: 2 }}>
           <Button onClick={handleCloseDialog}>{t('cancel')}</Button>
           <Button
             onClick={handleSaveBoard}

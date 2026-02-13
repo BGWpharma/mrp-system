@@ -170,15 +170,11 @@ const BoardSettingsDialog = ({ open, onClose, board, onBoardUpdated }) => {
       fullWidth
       PaperProps={{
         sx: {
-          backgroundColor: '#1a1a2e',
-          backgroundImage: 'none',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
           borderRadius: 2,
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
         }
       }}
     >
-      <DialogTitle sx={{ borderBottom: '1px solid rgba(255, 255, 255, 0.12)', pb: 2 }}>
+      <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
         {t('boardSettings')}
       </DialogTitle>
       
@@ -205,8 +201,9 @@ const BoardSettingsDialog = ({ open, onClose, board, onBoardUpdated }) => {
                 sx={{
                   p: 2,
                   borderRadius: 1,
-                  bgcolor: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)'
+                  bgcolor: 'action.hover',
+                  border: 1,
+                  borderColor: 'divider',
                 }}
               >
                 <FormControlLabel
@@ -327,14 +324,16 @@ const BoardSettingsDialog = ({ open, onClose, board, onBoardUpdated }) => {
                       maxHeight: 300,
                       overflow: 'auto',
                       borderRadius: 1,
-                      border: '1px solid rgba(255, 255, 255, 0.08)'
+                      border: 1,
+                      borderColor: 'divider',
                     }}
                   >
                     {/* Właściciel (zawsze na górze) */}
                     <ListItem
                       sx={{
                         bgcolor: 'rgba(78, 205, 196, 0.1)',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
+                        borderBottom: 1,
+                        borderColor: 'divider',
                       }}
                     >
                       <ListItemAvatar>
@@ -370,7 +369,8 @@ const BoardSettingsDialog = ({ open, onClose, board, onBoardUpdated }) => {
                           <ListItem
                             key={user.id}
                             sx={{
-                              borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                              borderBottom: 1,
+                              borderColor: 'divider',
                               '&:last-child': { borderBottom: 'none' }
                             }}
                           >
@@ -407,7 +407,7 @@ const BoardSettingsDialog = ({ open, onClose, board, onBoardUpdated }) => {
         )}
       </DialogContent>
       
-      <DialogActions sx={{ borderTop: '1px solid rgba(255, 255, 255, 0.12)', px: 2.5, py: 2 }}>
+      <DialogActions sx={{ borderTop: 1, borderColor: 'divider', px: 2.5, py: 2 }}>
         <Button onClick={onClose}>{t('close')}</Button>
       </DialogActions>
     </Dialog>

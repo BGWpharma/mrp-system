@@ -199,7 +199,7 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
           mb: isMobile ? 0.75 : 1,
           backgroundColor: isHighPriority && task.status !== 'completed'
             ? priorityConfig[task.priority].bgColor
-            : 'rgba(255, 255, 255, 0.02)',
+            : 'action.hover',
           borderRadius: isMobile ? 1 : 1.5,
           touchAction: 'pan-y',
           WebkitTapHighlightColor: 'transparent',
@@ -209,18 +209,20 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
           borderLeft: task.priority 
             ? `3px solid ${priorityConfig[task.priority].color}` 
             : '3px solid transparent',
-          border: getDueDateInfo?.isOverdue
-            ? '1px solid rgba(211, 47, 47, 0.5)'
-            : '1px solid rgba(255, 255, 255, 0.06)',
+          borderWidth: 1,
+          borderStyle: 'solid',
+          borderColor: getDueDateInfo?.isOverdue
+            ? 'rgba(211, 47, 47, 0.5)'
+            : 'divider',
           opacity: task.status === 'completed' ? 0.6 : 1,
           transition: 'all 0.2s ease',
           cursor: disableDrag ? 'pointer' : (isDragging ? 'grabbing' : (isMobile ? 'pointer' : 'grab')),
           position: 'relative',
           '&:hover': {
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+            backgroundColor: 'action.selected',
             borderColor: getDueDateInfo?.isOverdue 
               ? 'rgba(211, 47, 47, 0.7)' 
-              : 'rgba(255, 255, 255, 0.15)',
+              : 'action.disabled',
             transform: isDragging ? 'none' : 'translateY(-1px)',
             boxShadow: isDragging ? 'none' : '0 4px 12px rgba(0, 0, 0, 0.2)'
           }
@@ -332,7 +334,8 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
                                 height: isMobile ? 16 : 18,
                                 fontSize: isMobile ? '0.55rem' : '0.6rem',
                                 bgcolor: 'primary.main',
-                                border: '1px solid rgba(255, 255, 255, 0.2)'
+                                border: 1,
+                        borderColor: 'divider'
                               }}
                             >
                               {userName.charAt(0).toUpperCase()}

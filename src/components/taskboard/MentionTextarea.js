@@ -418,16 +418,20 @@ const MentionTextarea = ({
       )}
       
       <Box
-        sx={{
+        sx={(theme) => ({
           position: 'relative',
           border: '1px solid',
-          borderColor: isFocused ? 'primary.main' : 'rgba(255, 255, 255, 0.23)',
+          borderColor: isFocused 
+            ? theme.palette.primary.main 
+            : (theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.23)' : 'rgba(0, 0, 0, 0.23)'),
           borderRadius: 1,
           transition: 'border-color 0.2s',
           '&:hover': {
-            borderColor: isFocused ? 'primary.main' : 'rgba(255, 255, 255, 0.5)'
+            borderColor: isFocused 
+              ? theme.palette.primary.main 
+              : (theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)')
           }
-        }}
+        })}
       >
         <Box
           ref={editorRef}
@@ -489,14 +493,15 @@ const MentionTextarea = ({
               width: 320,
               maxHeight: 400,
               overflow: 'auto',
-              bgcolor: '#1a1a2e',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
+              bgcolor: 'background.paper',
+              border: 1,
+              borderColor: 'divider',
               mt: 1
             }}
           >
             {menuStep === 'type' ? (
               <Box>
-                <Box sx={{ p: 1.5, borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
                   <Typography variant="subtitle2" color="text.secondary">
                     {t('selectDocumentType')}
                   </Typography>
@@ -534,7 +539,7 @@ const MentionTextarea = ({
               </Box>
             ) : (
               <Box>
-                <Box sx={{ p: 1.5, borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
                   <Box display="flex" alignItems="center" gap={1} mb={1}>
                     <Chip
                       size="small"
@@ -593,7 +598,7 @@ const MentionTextarea = ({
                                     sx={{ 
                                       height: 18,
                                       fontSize: '0.65rem',
-                                      bgcolor: 'rgba(255,255,255,0.1)'
+                                      bgcolor: 'action.selected'
                                     }}
                                   />
                                 )}

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container, Paper, Typography, TextField, Button, Box,
   Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Chip, Divider, Fade, CircularProgress, InputAdornment, Grid
+  Chip, Divider, Fade, Grow, CircularProgress, InputAdornment, Grid, Avatar
 } from '@mui/material';
 import { StaticTimePicker } from '@mui/x-date-pickers/StaticTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -18,7 +18,11 @@ import HistoryIcon from '@mui/icons-material/History';
 import LoginIcon from '@mui/icons-material/Login';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SaveIcon from '@mui/icons-material/Save';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import CelebrationIcon from '@mui/icons-material/Celebration';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   getEmployeeByCode, 
@@ -67,6 +71,7 @@ const WorkTimePage = () => {
   const [endError, setEndError] = useState('');
 
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation('workTime');
   const { currentUser } = useAuth();
 
   const today = new Date();
@@ -101,7 +106,7 @@ const WorkTimePage = () => {
   // Weryfikacja ID pracownika
   const handleVerifyId = async () => {
     if (!employeeCode.trim()) {
-      showError('Wpisz swoje ID pracownika');
+      showError(t('enterEmployeeId'));
       return;
     }
     setVerifying(true);
@@ -112,10 +117,10 @@ const WorkTimePage = () => {
         await checkOpenEntry(emp.employeeId);
         setStep('clocks');
       } else {
-        showError('Nie znaleziono pracownika o podanym ID.');
+        showError(t('notFound'));
       }
     } catch (error) {
-      showError('Wystąpił błąd podczas weryfikacji.');
+      showError(t('verifyError'));
     } finally {
       setVerifying(false);
     }
@@ -127,34 +132,34 @@ const WorkTimePage = () => {
 
   // Walidacja startu: max 30 min wstecz od teraz
   const validateStartTime = (time) => {
-    if (!time || isNaN(time.getTime())) return 'Wybierz prawidłową godzinę';
+    if (!time || isNaN(time.getTime())) return t('validation.selectValidTime');
     const nowCheck = new Date();
     const min = subMinutes(nowCheck, TIME_MARGIN_MINUTES);
     if (time < min) {
-      return `Nie można ustawić godziny wcześniejszej niż ${format(min, 'HH:mm')} (max ${TIME_MARGIN_MINUTES} min wstecz)`;
+      return t('validation.tooEarly', { time: format(min, 'HH:mm'), margin: TIME_MARGIN_MINUTES });
     }
     // Start nie powinien być w przyszłości (z marginesem 5 min)
     const maxStart = addMinutes(nowCheck, 5);
     if (time > maxStart) {
-      return 'Godzina rozpoczęcia nie może być w przyszłości';
+      return t('validation.startNotFuture');
     }
     return '';
   };
 
   // Walidacja końca: max 30 min do przodu od teraz, musi być > start
   const validateEndTime = (time) => {
-    if (!time || isNaN(time.getTime())) return 'Wybierz prawidłową godzinę';
+    if (!time || isNaN(time.getTime())) return t('validation.selectValidTime');
     const nowCheck = new Date();
     const max = addMinutes(nowCheck, TIME_MARGIN_MINUTES);
     if (time > max) {
-      return `Nie można ustawić godziny późniejszej niż ${format(max, 'HH:mm')} (max ${TIME_MARGIN_MINUTES} min do przodu)`;
+      return t('validation.tooLate', { time: format(max, 'HH:mm'), margin: TIME_MARGIN_MINUTES });
     }
     // Sprawdź czy end > start
     const startRef = openEntry 
       ? (() => { const [h,m] = openEntry.startTime.split(':').map(Number); const d = new Date(); d.setHours(h,m,0,0); return d; })()
       : startTime;
     if (startRef && time <= startRef) {
-      return `Godzina zakończenia musi być późniejsza niż rozpoczęcia (${format(startRef, 'HH:mm')})`;
+      return t('validation.endAfterStart', { time: format(startRef, 'HH:mm') });
     }
     return '';
   };
@@ -174,11 +179,11 @@ const WorkTimePage = () => {
         startTime: formattedTime,
         endTime: null,
       });
-      showSuccess(`Rozpoczęto pracę o ${formattedTime}`);
+      showSuccess(t('workStarted', { time: formattedTime }));
       setStartSaved(true);
       await checkOpenEntry(employee.employeeId);
     } catch (error) {
-      showError('Błąd zapisu. Spróbuj ponownie.');
+      showError(t('saveError'));
     } finally {
       setSavingStart(false);
     }
@@ -190,7 +195,7 @@ const WorkTimePage = () => {
     if (error) { setEndError(error); showError(error); return; }
 
     if (!openEntry) {
-      showError('Najpierw zapisz godzinę rozpoczęcia pracy');
+      showError(t('validation.firstSaveStart'));
       return;
     }
 
@@ -198,11 +203,11 @@ const WorkTimePage = () => {
     try {
       const formattedTime = format(endTime, 'HH:mm');
       await clockOut(openEntry.id, formattedTime, openEntry.startTime);
-      showSuccess(`Zakończono pracę o ${formattedTime}`);
+      showSuccess(t('workEnded', { time: formattedTime }));
       setOpenEntry(null);
       setStep('success');
     } catch (error) {
-      showError('Błąd zapisu. Spróbuj ponownie.');
+      showError(t('saveError'));
     } finally {
       setSavingEnd(false);
     }
@@ -244,7 +249,7 @@ const WorkTimePage = () => {
       setHistory(entries);
       setShowHistory(true);
     } catch (err) {
-      showError('Błąd pobierania historii');
+      showError(t('historyError'));
     } finally {
       setHistoryLoading(false);
     }
@@ -258,13 +263,21 @@ const WorkTimePage = () => {
 
   const getStatusChip = (status) => {
     const map = {
-      in_progress: { label: 'W trakcie', color: 'warning' },
-      submitted: { label: 'Zgłoszony', color: 'info' },
-      approved: { label: 'Zatwierdzony', color: 'success' },
-      rejected: { label: 'Odrzucony', color: 'error' },
+      in_progress: { label: t('statuses.inProgress'), color: 'warning' },
+      submitted: { label: t('statuses.submitted'), color: 'info' },
+      approved: { label: t('statuses.approved'), color: 'success' },
+      rejected: { label: t('statuses.rejected'), color: 'error' },
     };
     const s = map[status] || { label: status, color: 'default' };
     return <Chip label={s.label} color={s.color} size="small" />;
+  };
+
+  // Gradient helpers
+  const gradients = {
+    login: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    start: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+    end: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)',
+    success: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
   };
 
   return (
@@ -272,66 +285,111 @@ const WorkTimePage = () => {
 
       {/* ==================== KROK 1: Logowanie ==================== */}
       {step === 'login' && (
-        <Fade in={true}>
-          <Paper elevation={3} sx={{ p: 4, borderRadius: 3, textAlign: 'center' }}>
-            <Box sx={{ mb: 3 }}>
-              <AccessTimeIcon sx={{ fontSize: 56, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h5" fontWeight="bold" gutterBottom>
-                Rejestracja czasu pracy
+        <Grow in timeout={500}>
+          <Paper elevation={6} sx={{ borderRadius: 4, overflow: 'hidden' }}>
+            {/* Gradient header */}
+            <Box sx={{
+              background: gradients.login,
+              py: 5, px: 3, textAlign: 'center', position: 'relative',
+            }}>
+              <Avatar sx={{
+                width: 80, height: 80, mx: 'auto', mb: 2,
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                backdropFilter: 'blur(10px)',
+              }}>
+                <FingerprintIcon sx={{ fontSize: 44, color: '#fff' }} />
+              </Avatar>
+              <Typography variant="h4" fontWeight="800" color="#fff" gutterBottom>
+                {t('title')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {formattedDate}
-              </Typography>
+              <Chip
+                label={formattedDate}
+                sx={{
+                  backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff',
+                  fontWeight: 600, backdropFilter: 'blur(4px)', textTransform: 'capitalize',
+                }}
+              />
             </Box>
-            <Divider sx={{ mb: 3 }} />
-            <Typography variant="body1" sx={{ mb: 2 }} color="text.secondary">
-              Wpisz swoje ID pracownika
-            </Typography>
-            <TextField
-              label="ID pracownika"
-              value={employeeCode}
-              onChange={(e) => setEmployeeCode(e.target.value.toUpperCase())}
-              onKeyPress={handleKeyPress}
-              fullWidth autoFocus
-              placeholder="np. BGW-001"
-              sx={{ mb: 3 }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <BadgeIcon color="action" />
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <Button 
-              variant="contained" fullWidth size="large"
-              onClick={handleVerifyId}
-              disabled={verifying || !employeeCode.trim()}
-              sx={{ py: 1.5, borderRadius: 2 }}
-            >
-              {verifying ? <CircularProgress size={24} color="inherit" /> : 'Dalej'}
-            </Button>
+
+            {/* Formularz */}
+            <Box sx={{ p: 4 }}>
+              <Typography variant="body1" sx={{ mb: 2.5, textAlign: 'center' }} color="text.secondary">
+                {t('enterEmployeeId')}
+              </Typography>
+              <TextField
+                label={t('employeeIdLabel')}
+                value={employeeCode}
+                onChange={(e) => setEmployeeCode(e.target.value.toUpperCase())}
+                onKeyPress={handleKeyPress}
+                fullWidth autoFocus
+                placeholder={t('employeeIdPlaceholder')}
+                sx={{
+                  mb: 3,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 3, fontSize: '1.1rem',
+                    '&.Mui-focused fieldset': { borderWidth: 2 },
+                  },
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <BadgeIcon color="primary" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <Button
+                variant="contained" fullWidth size="large"
+                onClick={handleVerifyId}
+                disabled={verifying || !employeeCode.trim()}
+                endIcon={!verifying && <ArrowForwardIcon />}
+                sx={{
+                  py: 1.8, borderRadius: 3, fontWeight: 'bold', fontSize: '1rem',
+                  background: gradients.login,
+                  boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+                  '&:hover': { boxShadow: '0 6px 20px rgba(102, 126, 234, 0.6)' },
+                }}
+              >
+                {verifying ? <CircularProgress size={26} color="inherit" /> : t('next')}
+              </Button>
+            </Box>
           </Paper>
-        </Fade>
+        </Grow>
       )}
 
       {/* ==================== KROK 2: Dwa zegary ==================== */}
       {step === 'clocks' && (
-        <Fade in={true}>
+        <Fade in timeout={400}>
           <Box>
-            {/* Nagłówek */}
-            <Paper elevation={3} sx={{ p: 3, borderRadius: 3, mb: 3, textAlign: 'center' }}>
-              <Typography variant="h5" fontWeight="bold" gutterBottom>
-                Rejestracja czasu pracy
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                {formattedDate}
-              </Typography>
-              <Alert severity="info" sx={{ borderRadius: 2, mt: 2 }} icon={<BadgeIcon />}>
-                <Typography variant="body2">
-                  <strong>{employee?.displayName}</strong> ({employee?.employeeId})
+            {/* Nagłówek z info o pracowniku */}
+            <Paper elevation={4} sx={{
+              borderRadius: 4, mb: 3, overflow: 'hidden',
+            }}>
+              <Box sx={{
+                background: gradients.login, py: 2.5, px: 3,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
+              }}>
+                <Typography variant="h5" fontWeight="800" color="#fff">
+                  {t('title')}
                 </Typography>
-              </Alert>
+                <Chip
+                  label={formattedDate}
+                  size="small"
+                  sx={{
+                    mt: 0.5, backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff',
+                    fontWeight: 600, textTransform: 'capitalize',
+                  }}
+                />
+              </Box>
+              <Box sx={{ px: 3, py: 1.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Avatar sx={{ bgcolor: 'primary.main', width: 36, height: 36 }}>
+                  {employee?.displayName?.charAt(0) || '?'}
+                </Avatar>
+                <Box>
+                  <Typography variant="body1" fontWeight="bold">{employee?.displayName}</Typography>
+                  <Typography variant="caption" color="text.secondary">{employee?.employeeId}</Typography>
+                </Box>
+              </Box>
             </Paper>
 
             {checkingOpen ? (
@@ -342,201 +400,205 @@ const WorkTimePage = () => {
               <Grid container spacing={3}>
                 {/* ======== ZEGAR START ======== */}
                 <Grid item xs={12} md={6}>
-                  <Paper 
-                    elevation={3} 
-                    sx={{ 
-                      borderRadius: 3, overflow: 'hidden',
-                      opacity: startSaved ? 0.7 : 1,
-                      position: 'relative',
-                    }}
-                  >
-                    {/* Nagłówek zegara */}
-                    <Box sx={{ 
-                      backgroundColor: 'success.main', color: '#fff', 
-                      py: 1.5, px: 2, 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 
-                    }}>
-                      <LoginIcon />
-                      <Typography variant="h6" fontWeight="bold">
-                        Rozpoczęcie
-                      </Typography>
-                    </Box>
-
-                    {/* Zapisany czas */}
-                    {startSaved && openEntry && (
-                      <Alert severity="success" sx={{ borderRadius: 0, py: 1 }}>
-                        <Typography variant="body1" fontWeight="bold">
-                          Zapisano: {openEntry.startTime}
+                  <Grow in timeout={500}>
+                    <Paper
+                      elevation={4}
+                      sx={{
+                        borderRadius: 4, overflow: 'hidden',
+                        opacity: startSaved ? 0.75 : 1,
+                        transition: 'all 0.3s ease',
+                      }}
+                    >
+                      <Box sx={{
+                        background: gradients.start, color: '#fff',
+                        py: 2, px: 2,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1,
+                      }}>
+                        <LoginIcon sx={{ fontSize: 28 }} />
+                        <Typography variant="h6" fontWeight="800">
+                          {t('start')}
                         </Typography>
-                      </Alert>
-                    )}
+                      </Box>
 
-                    {/* Zegar tarczowy */}
-                    {!startSaved && (
-                      <>
-                        <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1 }}>
-                          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                            <StaticTimePicker
-                              value={startTime}
-                              onChange={(newTime) => {
-                                if (newTime && !isNaN(newTime.getTime())) {
-                                  setStartTime(newTime);
-                                  setStartError('');
-                                }
-                              }}
-                              ampm={false}
-                              minutesStep={15}
-                              minTime={minStartTime}
-                              slotProps={{
-                                actionBar: { sx: { display: 'none' } },
-                              }}
-                            />
-                          </LocalizationProvider>
+                      {startSaved && openEntry && (
+                        <Box sx={{
+                          background: 'linear-gradient(90deg, #11998e22, #38ef7d22)',
+                          py: 2, textAlign: 'center',
+                        }}>
+                          <Typography variant="h3" fontWeight="900" color="success.main">
+                            {openEntry.startTime}
+                          </Typography>
+                          <Chip label={t('saved')} color="success" size="small" sx={{ mt: 0.5 }} />
                         </Box>
+                      )}
 
-                        {startError && (
-                          <Alert severity="error" sx={{ mx: 2, mb: 1, borderRadius: 2 }}>
-                            <Typography variant="caption">{startError}</Typography>
-                          </Alert>
-                        )}
+                      {!startSaved && (
+                        <>
+                          <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1 }}>
+                            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                              <StaticTimePicker
+                                value={startTime}
+                                onChange={(newTime) => {
+                                  if (newTime && !isNaN(newTime.getTime())) {
+                                    setStartTime(newTime);
+                                    setStartError('');
+                                  }
+                                }}
+                                ampm={false}
+                                minutesStep={15}
+                                minTime={minStartTime}
+                                slotProps={{ actionBar: { sx: { display: 'none' } } }}
+                              />
+                            </LocalizationProvider>
+                          </Box>
 
-                        <Box sx={{ p: 2, pt: 0 }}>
-                          <Button
-                            variant="contained"
-                            color="success"
-                            fullWidth
-                            size="large"
-                            onClick={handleSaveStart}
-                            disabled={savingStart}
-                            startIcon={savingStart ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                            sx={{ py: 1.5, borderRadius: 2, fontWeight: 'bold' }}
-                          >
-                            {savingStart ? 'Zapisywanie...' : `Zapisz start — ${startTime && !isNaN(startTime.getTime()) ? format(startTime, 'HH:mm') : ''}`}
-                          </Button>
-                        </Box>
-                      </>
-                    )}
-                  </Paper>
+                          {startError && (
+                            <Alert severity="error" sx={{ mx: 2, mb: 1, borderRadius: 2 }}>
+                              <Typography variant="caption">{startError}</Typography>
+                            </Alert>
+                          )}
+
+                          <Box sx={{ p: 2, pt: 0 }}>
+                            <Button
+                              variant="contained" fullWidth size="large"
+                              onClick={handleSaveStart} disabled={savingStart}
+                              startIcon={savingStart ? <CircularProgress size={20} color="inherit" /> : <LoginIcon />}
+                              sx={{
+                                py: 1.5, borderRadius: 3, fontWeight: 'bold',
+                                background: gradients.start,
+                                boxShadow: '0 4px 12px rgba(17,153,142,0.35)',
+                                '&:hover': { boxShadow: '0 6px 18px rgba(17,153,142,0.5)' },
+                              }}
+                            >
+                              {savingStart ? t('saving') : `${t('saveStart')} — ${startTime && !isNaN(startTime.getTime()) ? format(startTime, 'HH:mm') : ''}`}
+                            </Button>
+                          </Box>
+                        </>
+                      )}
+                    </Paper>
+                  </Grow>
                 </Grid>
 
                 {/* ======== ZEGAR KONIEC ======== */}
                 <Grid item xs={12} md={6}>
-                  <Paper 
-                    elevation={3} 
-                    sx={{ 
-                      borderRadius: 3, overflow: 'hidden',
-                      opacity: !startSaved ? 0.5 : 1,
-                      pointerEvents: !startSaved ? 'none' : 'auto',
-                    }}
-                  >
-                    {/* Nagłówek zegara */}
-                    <Box sx={{ 
-                      backgroundColor: 'error.main', color: '#fff', 
-                      py: 1.5, px: 2, 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 
-                    }}>
-                      <LogoutIcon />
-                      <Typography variant="h6" fontWeight="bold">
-                        Zakończenie
-                      </Typography>
-                    </Box>
-
-                    {!startSaved && (
-                      <Box sx={{ py: 6, textAlign: 'center' }}>
-                        <Typography variant="body1" color="text.secondary">
-                          Najpierw zapisz godzinę rozpoczęcia
+                  <Grow in timeout={700}>
+                    <Paper
+                      elevation={4}
+                      sx={{
+                        borderRadius: 4, overflow: 'hidden',
+                        opacity: !startSaved ? 0.45 : 1,
+                        pointerEvents: !startSaved ? 'none' : 'auto',
+                        transition: 'all 0.3s ease',
+                      }}
+                    >
+                      <Box sx={{
+                        background: gradients.end, color: '#fff',
+                        py: 2, px: 2,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1,
+                      }}>
+                        <LogoutIcon sx={{ fontSize: 28 }} />
+                        <Typography variant="h6" fontWeight="800">
+                          {t('end')}
                         </Typography>
                       </Box>
-                    )}
 
-                    {startSaved && (
-                      <>
-                        <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1 }}>
-                          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                            <StaticTimePicker
-                              value={endTime}
-                              onChange={(newTime) => {
-                                if (newTime && !isNaN(newTime.getTime())) {
-                                  setEndTime(newTime);
-                                  setEndError('');
-                                }
-                              }}
-                              ampm={false}
-                              minutesStep={15}
-                              maxTime={maxEndTime}
-                              slotProps={{
-                                actionBar: { sx: { display: 'none' } },
-                              }}
-                            />
-                          </LocalizationProvider>
+                      {!startSaved && (
+                        <Box sx={{ py: 8, textAlign: 'center' }}>
+                          <AccessTimeIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                          <Typography variant="body1" color="text.secondary">
+                            {t('firstSaveStart')}
+                          </Typography>
                         </Box>
+                      )}
 
-                        {endError && (
-                          <Alert severity="error" sx={{ mx: 2, mb: 1, borderRadius: 2 }}>
-                            <Typography variant="caption">{endError}</Typography>
-                          </Alert>
-                        )}
+                      {startSaved && (
+                        <>
+                          <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1 }}>
+                            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                              <StaticTimePicker
+                                value={endTime}
+                                onChange={(newTime) => {
+                                  if (newTime && !isNaN(newTime.getTime())) {
+                                    setEndTime(newTime);
+                                    setEndError('');
+                                  }
+                                }}
+                                ampm={false}
+                                minutesStep={15}
+                                maxTime={maxEndTime}
+                                slotProps={{ actionBar: { sx: { display: 'none' } } }}
+                              />
+                            </LocalizationProvider>
+                          </Box>
 
-                        <Box sx={{ p: 2, pt: 0 }}>
-                          <Button
-                            variant="contained"
-                            color="error"
-                            fullWidth
-                            size="large"
-                            onClick={handleSaveEnd}
-                            disabled={savingEnd}
-                            startIcon={savingEnd ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                            sx={{ py: 1.5, borderRadius: 2, fontWeight: 'bold' }}
-                          >
-                            {savingEnd ? 'Zapisywanie...' : `Zapisz koniec — ${endTime && !isNaN(endTime.getTime()) ? format(endTime, 'HH:mm') : ''}`}
-                          </Button>
-                        </Box>
-                      </>
-                    )}
-                  </Paper>
+                          {endError && (
+                            <Alert severity="error" sx={{ mx: 2, mb: 1, borderRadius: 2 }}>
+                              <Typography variant="caption">{endError}</Typography>
+                            </Alert>
+                          )}
+
+                          <Box sx={{ p: 2, pt: 0 }}>
+                            <Button
+                              variant="contained" fullWidth size="large"
+                              onClick={handleSaveEnd} disabled={savingEnd}
+                              startIcon={savingEnd ? <CircularProgress size={20} color="inherit" /> : <LogoutIcon />}
+                              sx={{
+                                py: 1.5, borderRadius: 3, fontWeight: 'bold',
+                                background: gradients.end,
+                                boxShadow: '0 4px 12px rgba(235,51,73,0.35)',
+                                '&:hover': { boxShadow: '0 6px 18px rgba(235,51,73,0.5)' },
+                              }}
+                            >
+                              {savingEnd ? t('saving') : `${t('saveEnd')} — ${endTime && !isNaN(endTime.getTime()) ? format(endTime, 'HH:mm') : ''}`}
+                            </Button>
+                          </Box>
+                        </>
+                      )}
+                    </Paper>
+                  </Grow>
                 </Grid>
               </Grid>
             )}
 
             {/* Dolne przyciski */}
-            <Paper elevation={3} sx={{ p: 2, borderRadius: 3, mt: 3 }}>
+            <Paper elevation={2} sx={{ p: 2, borderRadius: 4, mt: 3 }}>
               <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button 
-                  variant="text" fullWidth onClick={handleReset}
-                  startIcon={<ArrowBackIcon />} sx={{ borderRadius: 2 }}
+                <Button
+                  variant="outlined" fullWidth onClick={handleReset}
+                  startIcon={<ArrowBackIcon />} sx={{ borderRadius: 3 }}
                 >
-                  Zmień pracownika
+                  {t('changeEmployee')}
                 </Button>
-                <Button 
-                  variant="text" fullWidth onClick={handleShowHistory}
+                <Button
+                  variant="outlined" fullWidth onClick={handleShowHistory}
                   startIcon={historyLoading ? <CircularProgress size={16} /> : <HistoryIcon />}
-                  sx={{ borderRadius: 2 }}
+                  sx={{ borderRadius: 3 }}
                 >
-                  {showHistory ? 'Ukryj historię' : 'Historia'}
+                  {showHistory ? t('hideHistory') : t('history')}
                 </Button>
               </Box>
 
               {showHistory && (
-                <Fade in={true}>
+                <Fade in>
                   <Box sx={{ mt: 2 }}>
                     <Divider sx={{ mb: 2 }} />
                     <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                      Historia tego miesiąca ({history.length} wpisów)
+                      {t('historyTitle', { count: history.length })}
                     </Typography>
                     {history.length === 0 ? (
                       <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                        Brak wpisów w tym miesiącu
+                        {t('noEntries')}
                       </Typography>
                     ) : (
                       <TableContainer>
                         <Table size="small">
                           <TableHead>
                             <TableRow>
-                              <TableCell>Data</TableCell>
-                              <TableCell>Start</TableCell>
-                              <TableCell>Koniec</TableCell>
-                              <TableCell>Czas</TableCell>
-                              <TableCell>Status</TableCell>
+                              <TableCell>{t('table.date')}</TableCell>
+                              <TableCell>{t('table.start')}</TableCell>
+                              <TableCell>{t('table.end')}</TableCell>
+                              <TableCell>{t('table.time')}</TableCell>
+                              <TableCell>{t('table.status')}</TableCell>
                             </TableRow>
                           </TableHead>
                           <TableBody>
@@ -563,28 +625,44 @@ const WorkTimePage = () => {
 
       {/* ==================== KROK 3: Potwierdzenie ==================== */}
       {step === 'success' && (
-        <Fade in={true}>
-          <Paper elevation={3} sx={{ p: 4, borderRadius: 3, textAlign: 'center' }}>
-            <CheckCircleOutlineIcon sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
-            <Typography variant="h5" fontWeight="bold" gutterBottom>
-              Zapisano!
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-              Czas pracy został zarejestrowany dla:
-            </Typography>
-            <Typography variant="h6" color="primary" sx={{ mb: 3 }}>
-              {employee?.displayName}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1.5 }}>
-              <Button variant="contained" fullWidth onClick={handleNewEntry} sx={{ borderRadius: 2 }}>
-                Powrót
+        <Grow in timeout={500}>
+          <Paper elevation={6} sx={{ borderRadius: 4, overflow: 'hidden' }}>
+            <Box sx={{
+              background: gradients.success,
+              py: 5, textAlign: 'center',
+            }}>
+              <Avatar sx={{
+                width: 80, height: 80, mx: 'auto', mb: 2,
+                backgroundColor: 'rgba(255,255,255,0.25)',
+              }}>
+                <CelebrationIcon sx={{ fontSize: 44, color: '#fff' }} />
+              </Avatar>
+              <Typography variant="h4" fontWeight="800" color="#fff" gutterBottom>
+                {t('successTitle')}
+              </Typography>
+              <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.85)' }}>
+                {t('successMessage')}
+              </Typography>
+              <Typography variant="h5" fontWeight="bold" color="#fff" sx={{ mt: 1 }}>
+                {employee?.displayName}
+              </Typography>
+            </Box>
+            <Box sx={{ p: 3, display: 'flex', gap: 2 }}>
+              <Button variant="contained" fullWidth onClick={handleNewEntry}
+                sx={{
+                  borderRadius: 3, py: 1.5, fontWeight: 'bold',
+                  background: gradients.login,
+                  boxShadow: '0 4px 12px rgba(102,126,234,0.3)',
+                }}>
+                {t('back')}
               </Button>
-              <Button variant="outlined" fullWidth onClick={handleReset} sx={{ borderRadius: 2 }}>
-                Zmień pracownika
+              <Button variant="outlined" fullWidth onClick={handleReset}
+                sx={{ borderRadius: 3, py: 1.5, fontWeight: 'bold' }}>
+                {t('changeEmployee')}
               </Button>
             </Box>
           </Paper>
-        </Fade>
+        </Grow>
       )}
     </Container>
   );

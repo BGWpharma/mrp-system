@@ -67,7 +67,9 @@ export const useTranslation = (namespace) => {
         'faq': 'faq',
         'operationalCosts': 'operationalCosts',
         'users': 'users',
-        'ecoReport': 'ecoReport'
+        'ecoReport': 'ecoReport',
+        'workTime': 'workTime',
+        'schedule': 'schedule'
       };
       
       // Sprawdź czy pierwszy część klucza pasuje do namespace'u

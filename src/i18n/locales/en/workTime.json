@@ -1,0 +1,49 @@
+{
+  "title": "Work Time Registration",
+  "enterEmployeeId": "Enter your employee ID",
+  "employeeIdLabel": "Employee ID",
+  "employeeIdPlaceholder": "e.g. BGW-001",
+  "next": "Next",
+  "notFound": "No employee found with the given ID.",
+  "verifyError": "An error occurred during verification.",
+  "start": "Start",
+  "end": "End",
+  "saved": "Saved",
+  "saveStart": "Save start",
+  "saveEnd": "Save end",
+  "saving": "Saving...",
+  "firstSaveStart": "First save the start time",
+  "workStarted": "Work started at {{time}}",
+  "workEnded": "Work ended at {{time}}",
+  "saveError": "Save error. Please try again.",
+  "changeEmployee": "Change employee",
+  "history": "History",
+  "hideHistory": "Hide history",
+  "historyTitle": "This month's history ({{count}} entries)",
+  "noEntries": "No entries this month",
+  "successTitle": "Saved!",
+  "successMessage": "Work time has been registered for:",
+  "back": "Back",
+  "historyError": "Error loading history",
+  "table": {
+    "date": "Date",
+    "start": "Start",
+    "end": "End",
+    "time": "Time",
+    "status": "Status"
+  },
+  "statuses": {
+    "inProgress": "In progress",
+    "submitted": "Submitted",
+    "approved": "Approved",
+    "rejected": "Rejected"
+  },
+  "validation": {
+    "selectValidTime": "Select a valid time",
+    "tooEarly": "Cannot set time earlier than {{time}} (max {{margin}} min back)",
+    "tooLate": "Cannot set time later than {{time}} (max {{margin}} min ahead)",
+    "startNotFuture": "Start time cannot be in the future",
+    "endAfterStart": "End time must be later than start time ({{time}})",
+    "firstSaveStart": "First save the start time"
+  }
+}

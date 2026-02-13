@@ -20,7 +20,6 @@ import BadgeIcon from '@mui/icons-material/Badge';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import BeachAccessIcon from '@mui/icons-material/BeachAccess';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
@@ -28,24 +27,23 @@ import EventBusyIcon from '@mui/icons-material/EventBusy';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import MoneyOffIcon from '@mui/icons-material/MoneyOff';
-import DescriptionIcon from '@mui/icons-material/Description';
 import EditCalendarIcon from '@mui/icons-material/EditCalendar';
 import SendIcon from '@mui/icons-material/Send';
 import SaveIcon from '@mui/icons-material/Save';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../contexts/AuthContext';
 import { getEmployeeByCode } from '../../services/workTimeService';
 import { getAllActiveUsers } from '../../services/userService';
 import {
-  REQUEST_TYPES, REQUEST_TYPE_LABELS, REQUEST_STATUSES,
-  REQUEST_STATUS_LABELS, REQUEST_STATUS_COLORS,
-  addScheduleRequest, getAllRequests, getRequestsByMonth, updateRequestStatus
+  REQUEST_TYPES, REQUEST_TYPE_LABELS,
+  addScheduleRequest, getRequestsByMonth, getRequestsByDateRange, deleteScheduleRequest,
 } from '../../services/scheduleService';
 import {
   SHIFT_PRESETS, SHIFT_TYPES,
-  getShiftsForWeek, getShiftsByDateRange, saveShiftsBatch,
+  getShiftsForWeek, getShiftsByDateRange, saveShiftsBatch, deleteShift,
   getShiftTemplates, addShiftTemplate, deleteShiftTemplate, getMonday
 } from '../../services/shiftService';
 
@@ -91,6 +89,8 @@ const SchedulePage = () => {
   const [weekStart, setWeekStart] = useState(getMonday(new Date()));
   const [employees, setEmployees] = useState([]);
   const [weekShifts, setWeekShifts] = useState({}); // key: `YYYY-MM-DD_empId` → { shiftType, startTime, endTime, color }
+  const [originalShiftKeys, setOriginalShiftKeys] = useState(new Set()); // klucze załadowane z bazy — do wykrycia usunięć
+  const [weekRequests, setWeekRequests] = useState([]); // wnioski na dany tydzień
   const [templates, setTemplates] = useState([]);
   const [editorLoading, setEditorLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -99,11 +99,8 @@ const SchedulePage = () => {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [newTemplate, setNewTemplate] = useState({ name: '', startTime: '08:00', endTime: '16:00', color: '#4caf50' });
 
-  // ---- Admin wnioski ----
-  const [allRequestsAdmin, setAllRequestsAdmin] = useState([]);
-  const [adminLoading, setAdminLoading] = useState(false);
-
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation('schedule');
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'administrator';
 
@@ -111,11 +108,6 @@ const SchedulePage = () => {
 
   // Grafik: ładuj zmiany + wnioski na miesiąc
   useEffect(() => { loadCalendarData(); }, [currentMonth]);
-
-  // Admin: wnioski
-  useEffect(() => {
-    if (activeTab === 3 && isAdmin) loadAllRequestsAdmin();
-  }, [activeTab, isAdmin]);
 
   // Admin: editor grafiku
   useEffect(() => {
@@ -143,17 +135,21 @@ const SchedulePage = () => {
   const loadEditorData = useCallback(async () => {
     setEditorLoading(true);
     try {
-      const [emps, shifts, tmpls] = await Promise.all([
+      const weekEnd = addDays(weekStart, 6);
+      const [emps, shifts, tmpls, reqs] = await Promise.all([
         getAllActiveUsers(),
         getShiftsForWeek(weekStart),
         getShiftTemplates(),
+        getRequestsByDateRange(weekStart, weekEnd),
       ]);
+      setWeekRequests(reqs);
       // Tylko pracownicy z employeeId
       setEmployees(emps.filter(e => e.employeeId));
       setTemplates(tmpls);
 
       // Mapuj zmiany
       const map = {};
+      const keys = new Set();
       shifts.forEach(s => {
         const key = `${s.dateKey}_${s.employeeId}`;
         map[key] = {
@@ -162,21 +158,16 @@ const SchedulePage = () => {
           endTime: s.endTime,
           color: s.color,
         };
+        keys.add(key);
       });
       setWeekShifts(map);
+      setOriginalShiftKeys(keys);
     } catch (error) {
       console.error('Błąd ładowania edytora grafiku:', error);
     } finally {
       setEditorLoading(false);
     }
   }, [weekStart]);
-
-  const loadAllRequestsAdmin = async () => {
-    setAdminLoading(true);
-    try { setAllRequestsAdmin(await getAllRequests()); }
-    catch { showError('Błąd pobierania wniosków'); }
-    finally { setAdminLoading(false); }
-  };
 
   // ===================== NAWIGACJA =====================
   const handlePrevMonth = () => setCurrentMonth(p => new Date(p.getFullYear(), p.getMonth() - 1, 1));
@@ -186,35 +177,25 @@ const SchedulePage = () => {
 
   // ===================== WNIOSEK =====================
   const handleSubmitRequest = async () => {
-    if (!employeeCode.trim()) { showError('Wpisz swoje ID pracownika'); return; }
-    if (!newRequest.startDate || !newRequest.endDate) { showError('Podaj datę od i do'); return; }
-    if (newRequest.endDate < newRequest.startDate) { showError('Data "do" nie może być wcześniejsza niż "od"'); return; }
+    if (!employeeCode.trim()) { showError(t('requests.enterEmployeeId')); return; }
+    if (!newRequest.startDate || !newRequest.endDate) { showError(t('requests.dateRequired')); return; }
+    if (newRequest.endDate < newRequest.startDate) { showError(t('requests.dateError')); return; }
 
     setSubmitting(true);
     try {
       const emp = await getEmployeeByCode(employeeCode.trim());
-      if (!emp) { showError('Nie znaleziono pracownika o podanym ID'); setSubmitting(false); return; }
+      if (!emp) { showError(t('requests.notFound')); setSubmitting(false); return; }
 
       await addScheduleRequest({
         employeeId: emp.employeeId, userId: emp.id, employeeName: emp.displayName,
         type: newRequest.type, startDate: newRequest.startDate, endDate: newRequest.endDate,
         reason: newRequest.reason,
       });
-      showSuccess(`Wniosek złożony jako ${emp.displayName}`);
+      showSuccess(t('requests.successMessage', { name: emp.displayName }));
       setNewRequest({ type: REQUEST_TYPES.VACATION, startDate: null, endDate: null, reason: '' });
       setEmployeeCode('');
-    } catch { showError('Błąd składania wniosku'); }
+    } catch { showError(t('requests.submitError')); }
     finally { setSubmitting(false); }
-  };
-
-  // ===================== ADMIN: WNIOSKI =====================
-  const handleUpdateStatus = async (requestId, status) => {
-    try {
-      await updateRequestStatus(requestId, status, currentUser.uid);
-      showSuccess(status === REQUEST_STATUSES.APPROVED ? 'Wniosek zatwierdzony' : 'Wniosek odrzucony');
-      loadAllRequestsAdmin();
-      loadCalendarData();
-    } catch { showError('Błąd aktualizacji statusu'); }
   };
 
   // ===================== ADMIN: GRAFIK EDITOR =====================
@@ -266,15 +247,18 @@ const SchedulePage = () => {
     });
     setWeekShifts(newShifts);
     setWeekStart(nextWeekStart);
-    showSuccess('Grafik skopiowany na następny tydzień');
+    showSuccess(t('shifts.copiedSuccess'));
   };
 
   // Zapis grafiku
   const handleSaveSchedule = async () => {
     setSaving(true);
     try {
+      // 1. Zmiany do zapisania
       const shiftsToSave = [];
+      const currentKeys = new Set();
       Object.entries(weekShifts).forEach(([key, val]) => {
+        currentKeys.add(key);
         const [dateStr, ...empParts] = key.split('_');
         const empId = empParts.join('_');
         const emp = employees.find(e => e.employeeId === empId);
@@ -289,11 +273,31 @@ const SchedulePage = () => {
           color: val.color,
         });
       });
-      if (shiftsToSave.length === 0) { showError('Brak zmian do zapisania'); setSaving(false); return; }
-      await saveShiftsBatch(shiftsToSave);
-      showSuccess(`Zapisano ${shiftsToSave.length} zmian`);
+
+      // 2. Zmiany do usunięcia (były w oryginale, ale użytkownik je skasował)
+      const keysToDelete = [...originalShiftKeys].filter(k => !currentKeys.has(k));
+
+      if (shiftsToSave.length === 0 && keysToDelete.length === 0) {
+        showError(t('shifts.noChanges'));
+        setSaving(false);
+        return;
+      }
+
+      // Zapisz nowe/zmienione
+      if (shiftsToSave.length > 0) await saveShiftsBatch(shiftsToSave);
+      // Usuń skasowane
+      if (keysToDelete.length > 0) {
+        await Promise.all(keysToDelete.map(key => deleteShift(key)));
+      }
+
+      const saved = shiftsToSave.length;
+      const deleted = keysToDelete.length;
+      showSuccess(deleted > 0 
+        ? t('shifts.savedAndDeleted', { saved, deleted }) 
+        : t('shifts.savedCount', { saved }));
+      setOriginalShiftKeys(currentKeys);
       loadCalendarData();
-    } catch { showError('Błąd zapisu grafiku'); }
+    } catch { showError(t('shifts.saveError')); }
     finally { setSaving(false); }
   };
 
@@ -317,8 +321,8 @@ const SchedulePage = () => {
       setTemplateDialogOpen(false);
       const t = await getShiftTemplates();
       setTemplates(t);
-      showSuccess('Szablon dodany');
-    } catch { showError('Błąd dodawania szablonu'); }
+      showSuccess(t('templates.addedSuccess'));
+    } catch { showError(t('templates.addError')); }
   };
 
   const handleDeleteTemplate = async (id) => {
@@ -326,7 +330,7 @@ const SchedulePage = () => {
       await deleteShiftTemplate(id);
       setTemplates(prev => prev.filter(t => t.id !== id));
       if (selectedPreset === id) setSelectedPreset(SHIFT_TYPES.MORNING);
-    } catch { showError('Błąd usuwania szablonu'); }
+    } catch { showError(t('templates.deleteError')); }
   };
 
   // ===================== HELPERS =====================
@@ -365,6 +369,25 @@ const SchedulePage = () => {
     return weekShifts[key] || null;
   };
 
+  // Pobierz wnioski pracownika na dany dzień (w edytorze)
+  const getEmployeeRequestsForDay = (day, empId) => {
+    return weekRequests.filter(req => {
+      if (req.employeeId !== empId) return false;
+      const s = req.startDate?.toDate ? req.startDate.toDate() : new Date(req.startDate);
+      const e = req.endDate?.toDate ? req.endDate.toDate() : new Date(req.endDate);
+      return day >= new Date(new Date(s).setHours(0,0,0,0)) && day <= new Date(new Date(e).setHours(23,59,59,999));
+    });
+  };
+
+  // Usunięcie wniosku (z edytora grafiku)
+  const handleDeleteRequest = async (requestId) => {
+    try {
+      await deleteScheduleRequest(requestId);
+      setWeekRequests(prev => prev.filter(r => r.id !== requestId));
+      showSuccess(t('requests.deleteSuccess'));
+    } catch { showError(t('requests.deleteError')); }
+  };
+
   // ===================== RENDER =====================
   return (
     <Container maxWidth="xl" sx={{ mt: 3, mb: 4 }}>
@@ -376,10 +399,9 @@ const SchedulePage = () => {
           scrollButtons="auto"
           sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}
         >
-          <Tab label="Grafik" icon={<CalendarMonthIcon />} iconPosition="start" />
-          <Tab label="Złóż wniosek" icon={<AddIcon />} iconPosition="start" />
-          {isAdmin && <Tab label="Utwórz grafik" icon={<EditCalendarIcon />} iconPosition="start" />}
-          {isAdmin && <Tab label="Wnioski" icon={<DescriptionIcon />} iconPosition="start" />}
+          <Tab label={t('tabs.schedule')} icon={<CalendarMonthIcon />} iconPosition="start" />
+          <Tab label={t('tabs.newRequest')} icon={<AddIcon />} iconPosition="start" />
+          {isAdmin && <Tab label={t('tabs.createSchedule')} icon={<EditCalendarIcon />} iconPosition="start" />}
         </Tabs>
 
         <Box sx={{ p: { xs: 2, md: 3 } }}>
@@ -402,7 +424,7 @@ const SchedulePage = () => {
                   {Object.entries(SHIFT_PRESETS).filter(([k]) => k !== SHIFT_TYPES.OFF).map(([key, val]) => (
                     <Chip key={key} label={val.label} size="small" sx={{ backgroundColor: val.color, color: '#fff', fontWeight: 600 }} />
                   ))}
-                  <Chip label="Wolne" size="small" variant="outlined" sx={{ borderColor: '#9e9e9e' }} />
+                  <Chip label={t('calendar.off')} size="small" variant="outlined" sx={{ borderColor: '#9e9e9e' }} />
                 </Box>
                 {/* Legenda wniosków */}
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2, justifyContent: 'center' }}>
@@ -421,7 +443,7 @@ const SchedulePage = () => {
                     <Table sx={{ tableLayout: 'fixed' }}>
                       <TableHead>
                         <TableRow>
-                          {['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'].map(d => (
+                          {[t('calendar.monday'), t('calendar.tuesday'), t('calendar.wednesday'), t('calendar.thursday'), t('calendar.friday'), t('calendar.saturday'), t('calendar.sunday')].map(d => (
                             <TableCell key={d} align="center" sx={{ fontWeight: 'bold', py: 1.5, fontSize: '0.85rem' }}>{d}</TableCell>
                           ))}
                         </TableRow>
@@ -443,7 +465,7 @@ const SchedulePage = () => {
                                 const wknd = isWeekend(day);
                                 return (
                                   <TableCell key={di} align="center" sx={{
-                                    p: 0.75, verticalAlign: 'top', height: 100,
+                                    p: 0.75, verticalAlign: 'top', height: 110,
                                     border: '1px solid', borderColor: 'divider',
                                     backgroundColor: today ? 'primary.main' : wknd ? 'action.hover' : 'transparent',
                                     color: today ? '#fff' : 'inherit',
@@ -454,27 +476,30 @@ const SchedulePage = () => {
                                     </Typography>
                                     {/* Zmiany */}
                                     {shifts.map((s, i) => (
-                                      <Tooltip key={`s${i}`} title={`${s.employeeName}: ${s.startTime || ''}–${s.endTime || ''}`}>
-                                        <Chip label={`${(s.employeeName || '').split(' ')[0]} ${s.startTime || ''}`}
-                                          size="small" sx={{
-                                            fontSize: '0.65rem', height: 20, mb: 0.25,
-                                            backgroundColor: s.color || '#4caf50', color: '#fff',
-                                            display: 'block', maxWidth: '100%',
-                                          }} />
-                                      </Tooltip>
+                                      <Box key={`s${i}`} sx={{
+                                        backgroundColor: s.color || '#4caf50', color: '#fff',
+                                        borderRadius: 1, px: 0.5, py: 0.25, mb: 0.5,
+                                      }}>
+                                        <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 700, display: 'block', lineHeight: 1.2 }}>
+                                          {(s.employeeName || '').split(' ')[0]}
+                                        </Typography>
+                                        <Typography variant="caption" sx={{ fontSize: '0.75rem', display: 'block', lineHeight: 1.2 }}>
+                                          {s.startTime && s.endTime ? `${s.startTime}–${s.endTime}` : t('calendar.off')}
+                                        </Typography>
+                                      </Box>
                                     ))}
                                     {/* Wnioski */}
                                     {reqs.map((r, i) => (
-                                      <Tooltip key={`r${i}`} title={`${r.employeeName} — ${REQUEST_TYPE_LABELS[r.type] || r.type}`}>
-                                        <Chip label={r.employeeName?.split(' ')[0] || '?'}
-                                          size="small" icon={TYPE_ICONS[r.type]}
-                                          sx={{
-                                            fontSize: '0.65rem', height: 20, mb: 0.25,
-                                            backgroundColor: TYPE_COLORS[r.type] || '#999', color: '#fff',
-                                            display: 'block', maxWidth: '100%',
-                                            '& .MuiChip-icon': { color: '#fff', fontSize: 14 },
-                                          }} />
-                                      </Tooltip>
+                                      <Box key={`r${i}`} sx={{
+                                        backgroundColor: TYPE_COLORS[r.type] || '#999', color: '#fff',
+                                        borderRadius: 1, px: 0.5, py: 0.25, mb: 0.5,
+                                        display: 'flex', alignItems: 'center', gap: 0.5,
+                                      }}>
+                                        {React.cloneElement(TYPE_ICONS[r.type] || <MoreHorizIcon fontSize="small" />, { sx: { fontSize: 14, color: '#fff' } })}
+                                        <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 600, lineHeight: 1.2 }}>
+                                          {r.employeeName?.split(' ')[0] || '?'}
+                                        </Typography>
+                                      </Box>
                                     ))}
                                   </TableCell>
                                 );
@@ -494,18 +519,18 @@ const SchedulePage = () => {
           {activeTab === 1 && (
             <Fade in>
               <Box sx={{ maxWidth: 650, mx: 'auto' }}>
-                <Typography variant="h6" gutterBottom>Złóż wniosek</Typography>
+                <Typography variant="h6" gutterBottom>{t('requests.title')}</Typography>
 
                 <TextField
-                  label="Twoje ID pracownika" value={employeeCode} required
+                  label={t('requests.employeeId')} value={employeeCode} required
                   onChange={(e) => setEmployeeCode(e.target.value.toUpperCase())}
-                  fullWidth placeholder="np. BGW-001" sx={{ mb: 2.5 }}
+                  fullWidth placeholder={t('requests.employeeIdPlaceholder')} sx={{ mb: 2.5 }}
                   InputProps={{ startAdornment: <InputAdornment position="start"><BadgeIcon color="action" /></InputAdornment> }}
                 />
 
                 <FormControl fullWidth sx={{ mb: 2.5 }}>
-                  <InputLabel>Typ wniosku</InputLabel>
-                  <Select value={newRequest.type} label="Typ wniosku"
+                  <InputLabel>{t('requests.type')}</InputLabel>
+                  <Select value={newRequest.type} label={t('requests.type')}
                     onChange={(e) => setNewRequest(p => ({ ...p, type: e.target.value }))}>
                     {Object.entries(REQUEST_TYPE_LABELS).map(([k, l]) => (
                       <MenuItem key={k} value={k}>
@@ -518,12 +543,12 @@ const SchedulePage = () => {
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                   <Grid container spacing={2} sx={{ mb: 2.5 }}>
                     <Grid item xs={12} sm={6}>
-                      <DatePicker label="Data od" value={newRequest.startDate}
+                      <DatePicker label={t('requests.dateFrom')} value={newRequest.startDate}
                         onChange={(d) => setNewRequest(p => ({ ...p, startDate: d }))}
                         slotProps={{ textField: { fullWidth: true } }} />
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <DatePicker label="Data do" value={newRequest.endDate}
+                      <DatePicker label={t('requests.dateTo')} value={newRequest.endDate}
                         onChange={(d) => setNewRequest(p => ({ ...p, endDate: d }))}
                         minDate={newRequest.startDate}
                         slotProps={{ textField: { fullWidth: true } }} />
@@ -533,20 +558,20 @@ const SchedulePage = () => {
 
                 {newRequest.startDate && newRequest.endDate && (
                   <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
-                    Wybrany okres: <strong>{countWorkDays(newRequest.startDate, newRequest.endDate)} dni roboczych</strong>
+                    {t('requests.workDays', { count: countWorkDays(newRequest.startDate, newRequest.endDate) })}
                   </Alert>
                 )}
 
-                <TextField label="Powód / uwagi" value={newRequest.reason}
+                <TextField label={t('requests.reason')} value={newRequest.reason}
                   onChange={(e) => setNewRequest(p => ({ ...p, reason: e.target.value }))}
-                  fullWidth multiline rows={2} sx={{ mb: 3 }} placeholder="np. Urlop wypoczynkowy" />
+                  fullWidth multiline rows={2} sx={{ mb: 3 }} placeholder={t('requests.reasonPlaceholder')} />
 
                 <Button variant="contained" fullWidth size="large"
                   onClick={handleSubmitRequest}
                   disabled={submitting || !employeeCode.trim() || !newRequest.startDate || !newRequest.endDate}
                   sx={{ py: 1.5, borderRadius: 2 }}
                   startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}>
-                  {submitting ? 'Wysyłanie...' : 'Złóż wniosek'}
+                  {submitting ? t('requests.submitting') : t('requests.submit')}
                 </Button>
               </Box>
             </Fade>
@@ -571,11 +596,11 @@ const SchedulePage = () => {
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     <Button variant="outlined" size="small" startIcon={<ContentCopyIcon />}
                       onClick={handleCopyWeek} sx={{ borderRadius: 2 }}>
-                      Kopiuj na nast. tydzień
+                      {t('shifts.copyNextWeek')}
                     </Button>
                     <Button variant="contained" size="small" startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
                       onClick={handleSaveSchedule} disabled={saving} sx={{ borderRadius: 2 }}>
-                      {saving ? 'Zapisywanie...' : 'Zapisz grafik'}
+                      {saving ? t('shifts.savingSchedule') : t('shifts.saveSchedule')}
                     </Button>
                   </Box>
                 </Box>
@@ -583,7 +608,7 @@ const SchedulePage = () => {
                 {/* Wybór zmiany / presetu */}
                 <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Wybierz zmianę, a potem kliknij komórkę w tabeli:
+                    {t('shifts.selectShift')}
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
                     {Object.entries(SHIFT_PRESETS).map(([key, val]) => (
@@ -614,7 +639,7 @@ const SchedulePage = () => {
                         }}
                       />
                     ))}
-                    <Chip label="+ Szablon" variant="outlined" onClick={() => setTemplateDialogOpen(true)}
+                    <Chip label={t('shifts.addTemplate')} variant="outlined" onClick={() => setTemplateDialogOpen(true)}
                       sx={{ cursor: 'pointer', borderStyle: 'dashed' }} />
                   </Box>
                 </Paper>
@@ -623,7 +648,7 @@ const SchedulePage = () => {
                   <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
                 ) : employees.length === 0 ? (
                   <Alert severity="warning" sx={{ borderRadius: 2 }}>
-                    Brak pracowników z przypisanym ID. Dodaj pracowników w panelu "Zarządzaj użytkownikami".
+                    {t('shifts.noEmployees')}
                   </Alert>
                 ) : (
                   <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
@@ -631,7 +656,7 @@ const SchedulePage = () => {
                       <TableHead>
                         <TableRow>
                           <TableCell sx={{ fontWeight: 'bold', width: 160, position: 'sticky', left: 0, backgroundColor: 'background.paper', zIndex: 1 }}>
-                            Pracownik
+                            {t('shifts.employee')}
                           </TableCell>
                           {weekDays.map((d, i) => (
                             <TableCell key={i} align="center" sx={{
@@ -654,30 +679,49 @@ const SchedulePage = () => {
                             </TableCell>
                             {weekDays.map((day, di) => {
                               const info = getCellInfo(day, emp);
+                              const dayReqs = getEmployeeRequestsForDay(day, emp.employeeId);
                               return (
                                 <TableCell key={di} align="center" sx={{
                                   cursor: 'pointer', p: 0.5,
                                   transition: 'all 0.15s',
                                   '&:hover': { backgroundColor: 'action.hover' },
-                                  backgroundColor: info ? `${info.color}18` : 'transparent',
+                                  backgroundColor: dayReqs.length > 0
+                                    ? `${TYPE_COLORS[dayReqs[0].type] || '#999'}18`
+                                    : info ? `${info.color}18` : 'transparent',
                                   border: '1px solid', borderColor: 'divider',
                                 }}
                                   onClick={() => handleCellClick(day, emp)}
                                   onContextMenu={(e) => { e.preventDefault(); handleCellClear(day, emp); }}
                                 >
+                                  {/* Wnioski pracownika */}
+                                  {dayReqs.map((r, ri) => (
+                                    <Tooltip key={ri} title={`${REQUEST_TYPE_LABELS[r.type] || r.type}: ${fmtDate(r.startDate)} – ${fmtDate(r.endDate)} • kliknij ✕ aby usunąć`}>
+                                      <Chip size="small"
+                                        icon={React.cloneElement(TYPE_ICONS[r.type] || <MoreHorizIcon fontSize="small" />, { sx: { fontSize: 14, color: '#fff !important' } })}
+                                        label={REQUEST_TYPE_LABELS[r.type]?.split(' ')[0] || r.type}
+                                        onDelete={(e) => { e.stopPropagation(); handleDeleteRequest(r.id); }}
+                                        sx={{
+                                          backgroundColor: TYPE_COLORS[r.type] || '#999', color: '#fff',
+                                          fontWeight: 600, fontSize: '0.65rem', height: 22, mb: 0.25,
+                                          '& .MuiChip-icon': { color: '#fff' },
+                                          '& .MuiChip-deleteIcon': { color: '#fff', fontSize: 16, '&:hover': { color: '#ffcdd2' } },
+                                        }} />
+                                    </Tooltip>
+                                  ))}
+                                  {/* Zmiana */}
                                   {info ? (
-                                    <Tooltip title="PPM aby usunąć">
+                                    <Tooltip title={t('shifts.rightClickToRemove')}>
                                       <Box>
-                                        <Chip size="small" label={info.startTime && info.endTime ? `${info.startTime}–${info.endTime}` : 'Wolne'}
+                                        <Chip size="small" label={info.startTime && info.endTime ? `${info.startTime}–${info.endTime}` : t('calendar.off')}
                                           sx={{
                                             backgroundColor: info.color, color: '#fff',
                                             fontWeight: 600, fontSize: '0.7rem', height: 24,
                                           }} />
                                       </Box>
                                     </Tooltip>
-                                  ) : (
+                                  ) : dayReqs.length === 0 ? (
                                     <Typography variant="caption" color="text.disabled">—</Typography>
-                                  )}
+                                  ) : null}
                                 </TableCell>
                               );
                             })}
@@ -689,100 +733,34 @@ const SchedulePage = () => {
                 )}
 
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  Kliknij komórkę, aby przypisać wybraną zmianę. Prawy przycisk myszy (PPM) usuwa zmianę.
+                  {t('shifts.cellHint')}
                 </Typography>
               </Box>
             </Fade>
           )}
 
-          {/* ═══════════ TAB 3: ZARZĄDZANIE WNIOSKAMI (ADMIN) ═══════════ */}
-          {activeTab === 3 && isAdmin && (
-            <Fade in>
-              <Box>
-                <Typography variant="h6" gutterBottom>Wnioski pracowników</Typography>
-                {adminLoading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
-                ) : allRequestsAdmin.length === 0 ? (
-                  <Alert severity="info" sx={{ borderRadius: 2 }}>Brak wniosków.</Alert>
-                ) : (
-                  <TableContainer>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Pracownik</TableCell>
-                          <TableCell>Typ</TableCell>
-                          <TableCell>Od</TableCell>
-                          <TableCell>Do</TableCell>
-                          <TableCell>Dni</TableCell>
-                          <TableCell>Powód</TableCell>
-                          <TableCell>Status</TableCell>
-                          <TableCell>Akcje</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {allRequestsAdmin.map(req => (
-                          <TableRow key={req.id}>
-                            <TableCell>
-                              <Typography variant="body2" fontWeight="bold">{req.employeeName}</Typography>
-                              <Typography variant="caption" color="text.secondary">{req.employeeId}</Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Chip icon={TYPE_ICONS[req.type]} label={REQUEST_TYPE_LABELS[req.type] || req.type} size="small" variant="outlined" />
-                            </TableCell>
-                            <TableCell>{fmtDate(req.startDate)}</TableCell>
-                            <TableCell>{fmtDate(req.endDate)}</TableCell>
-                            <TableCell>{countWorkDays(req.startDate, req.endDate)}</TableCell>
-                            <TableCell>{req.reason || '-'}</TableCell>
-                            <TableCell>
-                              <Chip label={REQUEST_STATUS_LABELS[req.status] || req.status} color={REQUEST_STATUS_COLORS[req.status] || 'default'} size="small" />
-                            </TableCell>
-                            <TableCell>
-                              {req.status === REQUEST_STATUSES.PENDING ? (
-                                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                  <Tooltip title="Zatwierdź">
-                                    <IconButton size="small" color="success" onClick={() => handleUpdateStatus(req.id, REQUEST_STATUSES.APPROVED)}>
-                                      <CheckIcon />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="Odrzuć">
-                                    <IconButton size="small" color="error" onClick={() => handleUpdateStatus(req.id, REQUEST_STATUSES.REJECTED)}>
-                                      <CloseIcon />
-                                    </IconButton>
-                                  </Tooltip>
-                                </Box>
-                              ) : '-'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
-              </Box>
-            </Fade>
-          )}
         </Box>
       </Paper>
 
       {/* ═══════════ DIALOG: NOWY SZABLON ZMIANY ═══════════ */}
       <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)} maxWidth="xs" fullWidth
         PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle>Nowy szablon zmiany</DialogTitle>
+        <DialogTitle>{t('templates.title')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField label="Nazwa" value={newTemplate.name}
+            <TextField label={t('templates.name')} value={newTemplate.name}
               onChange={(e) => setNewTemplate(p => ({ ...p, name: e.target.value }))}
-              placeholder="np. Poranna zmiana" fullWidth />
+              placeholder={t('templates.namePlaceholder')} fullWidth />
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField label="Od" type="time" value={newTemplate.startTime}
+              <TextField label={t('templates.from')} type="time" value={newTemplate.startTime}
                 onChange={(e) => setNewTemplate(p => ({ ...p, startTime: e.target.value }))}
                 fullWidth InputLabelProps={{ shrink: true }} />
-              <TextField label="Do" type="time" value={newTemplate.endTime}
+              <TextField label={t('templates.to')} type="time" value={newTemplate.endTime}
                 onChange={(e) => setNewTemplate(p => ({ ...p, endTime: e.target.value }))}
                 fullWidth InputLabelProps={{ shrink: true }} />
             </Box>
             <Box>
-              <Typography variant="caption" gutterBottom display="block">Kolor</Typography>
+              <Typography variant="caption" gutterBottom display="block">{t('templates.color')}</Typography>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 {['#4caf50', '#2196f3', '#f44336', '#ff9800', '#9c27b0', '#795548', '#607d8b', '#e91e63'].map(c => (
                   <Box key={c} onClick={() => setNewTemplate(p => ({ ...p, color: c }))}
@@ -797,9 +775,9 @@ const SchedulePage = () => {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setTemplateDialogOpen(false)} sx={{ borderRadius: 2 }}>Anuluj</Button>
+          <Button onClick={() => setTemplateDialogOpen(false)} sx={{ borderRadius: 2 }}>{t('templates.cancel')}</Button>
           <Button variant="contained" onClick={handleAddTemplate} disabled={!newTemplate.name.trim()} sx={{ borderRadius: 2 }}>
-            Dodaj
+            {t('templates.add')}
           </Button>
         </DialogActions>
       </Dialog>

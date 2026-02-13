@@ -37,6 +37,8 @@ import faqPL from './locales/pl/faq.json';
 import operationalCostsPL from './locales/pl/operationalCosts.json';
 import taskboardPL from './locales/pl/taskboard.json';
 import ecoReportPL from './locales/pl/ecoReport.json';
+import workTimePL from './locales/pl/workTime.json';
+import schedulePL from './locales/pl/schedule.json';
 
 // Angielskie tłumaczenia
 import commonEN from './locales/en/common.json';
@@ -71,6 +73,8 @@ import faqEN from './locales/en/faq.json';
 import operationalCostsEN from './locales/en/operationalCosts.json';
 import taskboardEN from './locales/en/taskboard.json';
 import ecoReportEN from './locales/en/ecoReport.json';
+import workTimeEN from './locales/en/workTime.json';
+import scheduleEN from './locales/en/schedule.json';
 
 // Konfiguracja zasobów tłumaczeń z namespace'ami
 const resources = {
@@ -106,7 +110,9 @@ const resources = {
     faq: faqPL,
     operationalCosts: operationalCostsPL,
     taskboard: taskboardPL,
-    ecoReport: ecoReportPL
+    ecoReport: ecoReportPL,
+    workTime: workTimePL,
+    schedule: schedulePL
   },
   en: {
     common: commonEN,
@@ -140,7 +146,9 @@ const resources = {
     faq: faqEN,
     operationalCosts: operationalCostsEN,
     taskboard: taskboardEN,
-    ecoReport: ecoReportEN
+    ecoReport: ecoReportEN,
+    workTime: workTimeEN,
+    schedule: scheduleEN
   }
 };
 
@@ -175,7 +183,8 @@ if (!i18n.isInitialized) {
       'calculator', 'priceLists', 'aiAssistant', 
       'environmentalConditions', 'expiryDates', 'stocktaking',
       'interactions', 'sidebar', 'taskDetails', 'analytics', 
-      'financialReport', 'cashflow', 'faq', 'operationalCosts', 'taskboard', 'ecoReport'
+      'financialReport', 'cashflow', 'faq', 'operationalCosts', 'taskboard', 'ecoReport',
+      'workTime', 'schedule'
     ],
     
     // Konfiguracja wykrywania języka

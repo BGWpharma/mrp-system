@@ -350,15 +350,11 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
       fullWidth
       PaperProps={{
         sx: {
-          backgroundColor: '#1a1a2e',
-          backgroundImage: 'none',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
           borderRadius: 2,
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
         }
       }}
     >
-      <DialogTitle sx={{ borderBottom: '1px solid rgba(255, 255, 255, 0.12)', pb: 2 }}>
+      <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
         {t('taskDetails')}
       </DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
@@ -537,7 +533,7 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
 
           {/* Lista załączników */}
           {formData.attachments.length > 0 && (
-            <List dense sx={{ bgcolor: 'rgba(255, 255, 255, 0.02)', borderRadius: 1, mb: 2 }}>
+            <List dense sx={{ bgcolor: 'action.hover', borderRadius: 1, mb: 2 }}>
               {formData.attachments.map((attachment) => {
                 const IconComponent = getAttachmentIcon(attachment.url, attachment.type);
                 return (
@@ -564,7 +560,8 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
                       </Box>
                     }
                     sx={{
-                      borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                      borderBottom: 1,
+                      borderColor: 'divider',
                       '&:last-child': { borderBottom: 'none' }
                     }}
                   >
@@ -631,9 +628,11 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
           {/* Formularz dodawania załącznika */}
           <Box sx={{ 
             p: 2, 
-            bgcolor: 'rgba(255, 255, 255, 0.02)', 
+            bgcolor: 'action.hover', 
             borderRadius: 1,
-            border: '1px dashed rgba(255, 255, 255, 0.1)'
+            border: 1,
+            borderStyle: 'dashed',
+            borderColor: 'divider',
           }}>
             {/* Upload pliku */}
             <Box sx={{ mb: 2 }}>
@@ -731,7 +730,7 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
               </IconButton>
             </Box>
 
-            <List dense sx={{ bgcolor: 'rgba(255, 255, 255, 0.02)', borderRadius: 1, mb: 1 }}>
+            <List dense sx={{ bgcolor: 'action.hover', borderRadius: 1, mb: 1 }}>
               {list.subtasks.map((subtask) => (
                 <ListItem
                   key={subtask.id}
@@ -818,7 +817,7 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
           </Button>
         </Box>
       </DialogContent>
-      <DialogActions sx={{ borderTop: '1px solid rgba(255, 255, 255, 0.12)', px: 2.5, py: 2 }}>
+      <DialogActions sx={{ borderTop: 1, borderColor: 'divider', px: 2.5, py: 2 }}>
         <Button onClick={onClose}>{t('cancel')}</Button>
         <Button
           onClick={handleSave}

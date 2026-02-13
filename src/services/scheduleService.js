@@ -72,10 +72,7 @@ export const addScheduleRequest = async (data) => {
       endDate: Timestamp.fromDate(new Date(data.endDate)),
       reason: data.reason || '',
       notes: data.notes || '',
-      status: REQUEST_STATUSES.PENDING,
-      reviewedBy: null,
-      reviewedAt: null,
-      reviewNote: '',
+      status: REQUEST_STATUSES.APPROVED,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -163,6 +160,33 @@ export const getRequestsByMonth = async (month, year) => {
       });
   } catch (error) {
     console.error('Błąd podczas pobierania wniosków za miesiąc:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera zatwierdzone wnioski w zakresie dat
+ * @param {Date} rangeStart 
+ * @param {Date} rangeEnd
+ * @returns {Promise<Array>}
+ */
+export const getRequestsByDateRange = async (rangeStart, rangeEnd) => {
+  try {
+    const q = query(
+      collection(db, 'scheduleRequests'),
+      where('startDate', '<=', Timestamp.fromDate(rangeEnd)),
+      where('status', '==', REQUEST_STATUSES.APPROVED),
+      orderBy('startDate', 'asc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(req => {
+        const reqEnd = req.endDate.toDate ? req.endDate.toDate() : new Date(req.endDate);
+        return reqEnd >= rangeStart;
+      });
+  } catch (error) {
+    console.error('Błąd pobierania wniosków po zakresie dat:', error);
     throw error;
   }
 };

@@ -1,0 +1,79 @@
+{
+  "tabs": {
+    "schedule": "Schedule",
+    "newRequest": "Submit request",
+    "createSchedule": "Create schedule"
+  },
+  "calendar": {
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday",
+    "sunday": "Sunday",
+    "off": "Off"
+  },
+  "shifts": {
+    "morning": "Morning",
+    "afternoon": "Afternoon",
+    "night": "Night",
+    "off": "Off",
+    "selectShift": "Select a shift, then click a cell in the table:",
+    "addTemplate": "+ Template",
+    "employee": "Employee",
+    "noEmployees": "No employees with assigned ID. Add employees in the \"Manage users\" panel.",
+    "rightClickToRemove": "Right-click to remove",
+    "cellHint": "Click a cell to assign the selected shift. Right-click (RMB) removes a shift.",
+    "copyNextWeek": "Copy to next week",
+    "copiedSuccess": "Schedule copied to next week",
+    "saveSchedule": "Save schedule",
+    "savingSchedule": "Saving...",
+    "noChanges": "No changes to save",
+    "savedCount": "Saved {{saved}} shifts",
+    "savedAndDeleted": "Saved {{saved}} shifts, deleted {{deleted}}",
+    "saveError": "Error saving schedule"
+  },
+  "requests": {
+    "title": "Submit request",
+    "employeeId": "Your employee ID",
+    "employeeIdPlaceholder": "e.g. BGW-001",
+    "type": "Request type",
+    "dateFrom": "Date from",
+    "dateTo": "Date to",
+    "workDays": "Selected period: {{count}} work days",
+    "reason": "Reason / notes",
+    "reasonPlaceholder": "e.g. Annual leave",
+    "submit": "Submit request",
+    "submitting": "Submitting...",
+    "successMessage": "Request submitted as {{name}}",
+    "notFound": "No employee found with the given ID",
+    "enterEmployeeId": "Enter your employee ID",
+    "dateRequired": "Provide start and end date",
+    "dateError": "End date cannot be earlier than start date",
+    "submitError": "Error submitting request",
+    "deleteSuccess": "Request deleted",
+    "deleteError": "Error deleting request"
+  },
+  "requestTypes": {
+    "vacation": "Annual leave",
+    "sickLeave": "Sick leave",
+    "dayOff": "Day off",
+    "unpaidLeave": "Unpaid leave",
+    "scheduleChange": "Schedule change",
+    "other": "Other"
+  },
+  "templates": {
+    "title": "New shift template",
+    "name": "Name",
+    "namePlaceholder": "e.g. Morning shift",
+    "from": "From",
+    "to": "To",
+    "color": "Color",
+    "cancel": "Cancel",
+    "add": "Add",
+    "addedSuccess": "Template added",
+    "addError": "Error adding template",
+    "deleteError": "Error deleting template"
+  }
+}
