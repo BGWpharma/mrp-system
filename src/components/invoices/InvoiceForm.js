@@ -1342,7 +1342,7 @@ const InvoiceForm = ({ invoiceId }) => {
     
     // Sprawdź czy są pozycje faktury
     if (!invoice.items || invoice.items.length === 0) {
-      showError('Dodaj przynajmniej jedną pozycję do faktury');
+      showError(t('invoices.form.addAtLeastOneItem'));
       return false;
     }
     
@@ -1389,7 +1389,7 @@ const InvoiceForm = ({ invoiceId }) => {
       for (const allocation of (invoice.proformAllocation || [])) {
         const proforma = availableProformas.find(p => p.id === allocation.proformaId);
         if (!proforma) {
-          showError(`Nie znaleziono proformy ${allocation.proformaNumber}`);
+          showError(t('invoices.form.proformaNotFound', { number: allocation.proformaNumber }));
           return false;
         }
         
@@ -2000,12 +2000,12 @@ const InvoiceForm = ({ invoiceId }) => {
                         <TextField
                           {...params}
                           label={selectedOrderType === 'purchase' 
-                            ? '🔄 Wyszukaj Zamówienie Zakupowe (PO) dla refaktury'
+                            ? t('invoices.form.searchPurchaseOrderForReinvoice')
                             : t('invoices.form.fields.relatedOrder')
                           }
                           placeholder={selectedOrderType === 'purchase' 
                             ? "Wpisz numer PO (min. 2 znaki)..."
-                            : "Wyszukaj zamówienie..."
+                            : t('invoices.form.searchOrder')
                           }
                           InputProps={{
                             ...params.InputProps,
@@ -2024,7 +2024,7 @@ const InvoiceForm = ({ invoiceId }) => {
                           : "Brak zamówień do wyświetlenia"
                       }
                       clearText="Wyczyść"
-                      closeText="Zamknij"
+                      closeText={t('common:common.close')}
                       openText="Otwórz"
                     />
                     
@@ -2262,7 +2262,7 @@ const InvoiceForm = ({ invoiceId }) => {
                   color="error"
                   onClick={() => handleRemoveItem(index)}
                   disabled={invoice.items.length <= 1}
-                  title="Usuń pozycję"
+                  title={t('common:common.removeItem')}
                 >
                   <DeleteIcon />
                 </IconButton>
@@ -2721,7 +2721,7 @@ const InvoiceForm = ({ invoiceId }) => {
                 name="correctionReason"
                 value={invoice.correctionReason || ''}
                 onChange={handleChange}
-                placeholder="Np. Wyrównanie kosztów z rzeczywistym kosztem produkcji"
+                placeholder={t('invoices.form.adjustmentPlaceholder')}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     '& fieldset': { borderColor: 'error.light' },
@@ -2796,7 +2796,7 @@ const InvoiceForm = ({ invoiceId }) => {
             renderInput={(params) => (
               <TextField
                 {...params}
-                label="Wyszukaj klienta"
+                label={t('invoices.form.searchCustomer')}
                 fullWidth
                 margin="normal"
                 variant="outlined"
@@ -2815,7 +2815,7 @@ const InvoiceForm = ({ invoiceId }) => {
           
           {!customersLoading && customers.length === 0 && (
             <Typography variant="body1" align="center" sx={mt2}>
-              Brak klientów. Dodaj klientów w module zarządzania klientami.
+              {t('invoices.form.noCustomersMessage')}
             </Typography>
           )}
         </DialogContent>
@@ -3165,7 +3165,7 @@ const InvoiceForm = ({ invoiceId }) => {
             variant="contained"
             disabled={availableOrderItems.filter(item => item.selected).length === 0}
           >
-            Dodaj wybrane pozycje ({availableOrderItems.filter(item => item.selected).length})
+            {t('invoices.form.addSelectedItems', { count: availableOrderItems.filter(item => item.selected).length })}
           </Button>
         </DialogActions>
       </Dialog>

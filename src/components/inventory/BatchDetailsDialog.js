@@ -548,7 +548,7 @@ const BatchDetailsDialog = ({ open, onClose, batch }) => {
 
       <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
         <Button onClick={onClose} variant="contained">
-          Zamknij
+          {t('common:common.close')}
         </Button>
       </DialogActions>
     </Dialog>

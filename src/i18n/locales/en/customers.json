@@ -1,4 +1,9 @@
 {
+  "contacts": {
+    "firstName": "First name",
+    "mobilePhone": "Mobile phone",
+    "salesOpportunities": "Sales opportunities"
+  },
   "title": "Customers",
   "newCustomer": "New Customer",
   "editCustomer": "Edit Customer",

@@ -1,5 +1,13 @@
 {
   "title": "Produkcja",
+  "quality": {
+    "requirePhoto": "Wymagaj zdjęcia",
+    "frequency": "Częstotliwość",
+    "frequencyPlaceholder": "np. Co partię, Codziennie, Co tydzień",
+    "minValue": "Min. wartość",
+    "maxValue": "Maks. wartość",
+    "testInstructionsPlaceholder": "Szczegółowe instrukcje jak przeprowadzić test..."
+  },
   "taskList": {
     "title": "Zadania Produkcyjne",
     "searchPlaceholder": "Szukaj zadania...",
@@ -115,6 +123,10 @@
   "reports": {
     "startDate": "Data początkowa",
     "endDate": "Data końcowa",
+    "filterByProduct": "Filtruj według produktu",
+    "allProducts": "Wszystkie produkty",
+    "completedTasksTab": "Ukończone zadania",
+    "materialsUsageTab": "Zużycie materiałów",
     "taskCount": "Liczba zadań",
     "completedTasks": "Zadania zakończone",
     "tasksInProgress": "Zadania w trakcie",
@@ -145,7 +157,54 @@
         "cost": "Koszt",
         "user": "Użytkownik",
         "includeInCosts": "Wliczaj w koszty"
-      }
+      },
+      "csvHeaders": {
+        "summary": {
+          "material": "Materiał",
+          "totalQuantity": "Całkowita ilość",
+          "unit": "Jednostka",
+          "avgUnitPrice": "Średnia cena jednostkowa (EUR)",
+          "totalCost": "Całkowity koszt (EUR)",
+          "batchCount": "Liczba partii",
+          "taskCount": "Liczba zadań"
+        },
+        "details": {
+          "consumptionDate": "Data konsumpcji",
+          "task": "Zadanie",
+          "mo": "MO",
+          "order": "Zamówienie (CO)",
+          "customer": "Klient",
+          "product": "Produkt",
+          "material": "Materiał",
+          "batch": "Partia",
+          "quantity": "Ilość",
+          "unit": "Jednostka",
+          "unitPrice": "Cena jednostkowa (EUR)",
+          "totalCost": "Koszt całkowity (EUR)",
+          "user": "Użytkownik",
+          "includeInCosts": "Wliczane do kosztów"
+        }
+      },
+      "sumTotal": "SUMA:",
+      "summaryLabel": "PODSUMOWANIE:",
+      "exportErrorSummary": "Wystąpił błąd podczas eksportu podsumowania do CSV",
+      "exportErrorDetails": "Wystąpił błąd podczas eksportu do CSV",
+      "noConsumptionFound": "Nie znaleziono żadnej konsumpcji materiałów w wybranym okresie i filtrach.",
+      "noSummaryData": "Brak podsumowania konsumpcji",
+      "noConsumptionData": "Brak danych konsumpcji materiałów",
+      "instructionsTitle": "💡 Aby dane pojawiły się w raporcie:",
+      "instruction1": "Przejdź do szczegółów zadania produkcyjnego (MO)",
+      "instruction2": "W zakładce \"Materiały i koszty\" kliknij \"Konsumuj materiały\"",
+      "instruction3": "Wybierz rzeczywiście zużyte partie i ilości materiałów",
+      "instruction4": "Potwierdź konsumpcję - dane pojawią się w raporcie",
+      "howToConsumeTitle": "💡 Jak wykonać konsumpcję materiałów:",
+      "howToInstruction1": "Przejdź do zadania produkcyjnego → zakładka \"Materiały i koszty\"",
+      "howToInstruction2": "W sekcji \"Zarezerwowane materiały\" kliknij \"Konsumuj materiały\"",
+      "howToInstruction3": "Wybierz partie i wprowadź rzeczywiste ilości zużytych materiałów",
+      "howToInstruction4": "Potwierdź konsumpcję - dane automatycznie pojawią się w raporcie",
+      "period": "Okres:",
+      "noConsumptionInPeriod": "W wybranym okresie ({dateFrom} - {dateTo}) nie znaleziono żadnych danych konsumpcji materiałów.",
+      "restoreMaterialReservationInMO": "Przywróć rezerwację materiału w MO"
     }
   },
   "taskDetails": {
@@ -167,6 +226,7 @@
     "generalReport": "Ogólny raport",
     "moConsumption": "Konsumpcja MO",
     "productionTime": "Czas produkcji",
+    "progressReport": "Postęp Produkcji",
     "orderCO": "Zamówienie (CO)",
     "material": "Materiał",
     "tabs": {
@@ -738,6 +798,16 @@
       "chainedTooltip": "Powiązane z poprzednim zadaniem"
     }
   },
+  "shiftForm": {
+    "fillDate": "Data wypełnienia",
+    "fillTime": "Godzina wypełnienia",
+    "productQuantityMade": "Ilość zrobionego produktu",
+    "numericValueOnly": "Proszę podać tylko wartość liczbową!",
+    "typeProductNameOrFragment": "Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'",
+    "describeMaterialLoss": "Opisz straty surowca jeśli wystąpiły (opcjonalne)",
+    "withinMONumericOnly": "W ramach robionego MO. Proszę podać tylko wartość liczbową!",
+    "describeBreakdown": "Wpisujemy w przypadku awarii cały opis co się wydarzyło. Jeśli brak awarii - pole można pozostawić puste."
+  },
   "timeline": {
     "title": "Harmonogram produkcji",
     "legend": "Legenda:",
@@ -779,7 +849,11 @@
       "startDate": "Data rozpoczęcia od",
       "endDate": "Data rozpoczęcia do",
       "apply": "Zastosuj filtry",
-      "clear": "Wyczyść filtry"
+      "clear": "Wyczyść filtry",
+      "typeProductName": "Wpisz nazwę produktu...",
+      "typeMoNumber": "Wpisz numer zlecenia produkcyjnego...",
+      "typeOrderNumber": "Wpisz numer zamówienia...",
+      "typePoNumber": "Wpisz numer PO..."
     },
     "edit": {
       "title": "Edytuj zadanie",

@@ -34,6 +34,7 @@ import { getAllWarehouses } from '../../services/inventory';
 import { db } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDocs, query, where, getDoc } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting, useFilteredProductOptions } from '../../hooks/useFormOptions';
 
 // Funkcja do pobierania szczegółów zadania produkcyjnego (MO) na podstawie numeru MO
@@ -71,6 +72,7 @@ const ProductionShiftFormDialog = ({
 }) => {
   const { currentUser } = useAuth();
   const theme = useTheme();
+  const { t } = useTranslation('production');
 
   // Używamy hooków do pobierania opcji z bazy danych
   const { options: staffOptions, loading: staffLoading } = useStaffOptions();
@@ -595,7 +597,7 @@ const ProductionShiftFormDialog = ({
             <Grid item xs={12} sm={6}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DateTimePicker
-                  label="Data wypełnienia"
+                  label={t('shiftForm.fillDate')}
                   value={formData.fillDate}
                   onChange={handleDateChange}
                   renderInput={(params) => 
@@ -610,7 +612,7 @@ const ProductionShiftFormDialog = ({
               <TextField
                 required
                 fullWidth
-                label="Godzina wypełnienia"
+                label={t('shiftForm.fillTime')}
                 name="fillTime"
                 type="time"
                 value={formData.fillTime}
@@ -780,11 +782,11 @@ const ProductionShiftFormDialog = ({
               <TextField
                 required
                 fullWidth
-                label="Ilość zrobionego produktu"
+                label={t('shiftForm.productQuantityMade')}
                 name="productionQuantity"
                 value={formData.productionQuantity}
                 onChange={handleChange}
-                placeholder="Proszę podać tylko wartość liczbową!"
+                placeholder={t('shiftForm.numericValueOnly')}
                 error={!!validationErrors.productionQuantity}
                 helperText={validationErrors.productionQuantity}
               />
@@ -842,7 +844,7 @@ const ProductionShiftFormDialog = ({
                   <TextField
                     {...params}
                     label="Rodzaj nadrukowanych doypack/tub - 1"
-                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
+                    placeholder={t('shiftForm.typeProductNameOrFragment')}
                     helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
                   />
                 )}
@@ -910,7 +912,7 @@ const ProductionShiftFormDialog = ({
                   <TextField
                     {...params}
                     label="Rodzaj nadrukowanych doypack/tub - 2"
-                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
+                    placeholder={t('shiftForm.typeProductNameOrFragment')}
                     helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
                   />
                 )}
@@ -978,7 +980,7 @@ const ProductionShiftFormDialog = ({
                   <TextField
                     {...params}
                     label="Rodzaj nadrukowanych doypack/tub - 3"
-                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
+                    placeholder={t('shiftForm.typeProductNameOrFragment')}
                     helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
                   />
                 )}
@@ -1033,7 +1035,7 @@ const ProductionShiftFormDialog = ({
                 name="rawMaterialLoss"
                 value={formData.rawMaterialLoss}
                 onChange={handleChange}
-                placeholder="Opisz straty surowca jeśli wystąpiły (opcjonalne)"
+                placeholder={t('shiftForm.describeMaterialLoss')}
                 helperText="Pole opcjonalne - opisz rodzaj i ilość strat surowca"
               />
             </Grid>
@@ -1046,7 +1048,7 @@ const ProductionShiftFormDialog = ({
                 type="number"
                 value={formData.finishedProductLoss}
                 onChange={handleChange}
-                placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
+                placeholder={t('shiftForm.withinMONumericOnly')}
                 helperText="Pole opcjonalne - ilość strat produktu gotowego"
                 inputProps={{ min: 0, step: 'any' }}
               />
@@ -1060,7 +1062,7 @@ const ProductionShiftFormDialog = ({
                 type="number"
                 value={formData.lidLoss}
                 onChange={handleChange}
-                placeholder="Proszę podać tylko wartość liczbową!"
+                placeholder={t('shiftForm.numericValueOnly')}
                 helperText="Pole opcjonalne - ilość straconych wieczek"
                 inputProps={{ min: 0, step: 'any' }}
               />
@@ -1082,7 +1084,7 @@ const ProductionShiftFormDialog = ({
                 name="machineIssues"
                 value={formData.machineIssues}
                 onChange={handleChange}
-                placeholder="Wpisujemy w przypadku awarii cały opis co się wydarzyło. Jeśli brak awarii - pole można pozostawić puste."
+                placeholder={t('shiftForm.describeBreakdown')}
                 helperText="Pole opcjonalne - wypełnij tylko w przypadku awarii"
               />
             </Grid>

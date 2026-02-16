@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useTranslation } from '../../hooks/useTranslation';
 import { 
   Container, 
   Typography, 
@@ -34,6 +35,7 @@ import ROUTES from '../../constants/routes';
 
 const InvoicesPage = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation('invoices');
 
   const navigateTo = (path) => {
     navigate(path);
@@ -42,7 +44,7 @@ const InvoicesPage = () => {
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <BackButton to={ROUTES.HOME} label="Powrót do pulpitu" />
+        <BackButton to={ROUTES.HOME} label={t('common:common.backToDashboard')} />
         <Typography variant="h5">System fakturowania</Typography>
         <Button
           variant="contained"
@@ -176,7 +178,7 @@ const InvoicesPage = () => {
       
       <Paper sx={{ p: 4 }}>
         <Typography variant="h6" gutterBottom>
-          Ustawienia i konfiguracja
+          {t('settings.title')}
         </Typography>
         
         <Divider sx={{ my: 2 }} />
@@ -202,7 +204,7 @@ const InvoicesPage = () => {
               <List dense>
                 <ListItem button component={RouterLink} to="/invoices/company-settings">
                   <ListItemIcon><SettingsIcon color="primary" /></ListItemIcon>
-                  <ListItemText primary="Ustawienia firmy" secondary="Konfiguracja danych firmy do faktur" />
+                  <ListItemText primary={t('settings.companySettings')} secondary={t('settings.companySettingsDescription')} />
                 </ListItem>
               </List>
             </Paper>

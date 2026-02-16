@@ -141,11 +141,11 @@ const matchByReferencedNumber = async (db, referencedNumber, collectionName, exc
   if (!normalizedRef) return {matched: false};
 
   try {
-    // Get all proformas from the collection
+    // Get all proformas from the collection (including posted advances)
     const proformasQuery = await db
         .collection(collectionName)
         .where("isProforma", "==", true)
-        .where("status", "==", "proforma")
+        .where("status", "in", ["proforma", "proforma_posted"])
         .get();
 
     for (const doc of proformasQuery.docs) {
@@ -201,7 +201,7 @@ const matchBySameSource = async (db, sourceId, grossAmount, excludeId = null) =>
         .collection(PURCHASE_COLLECTION)
         .where("sourceId", "==", sourceId)
         .where("isProforma", "==", true)
-        .where("status", "==", "proforma")
+        .where("status", "in", ["proforma", "proforma_posted"])
         .get();
 
     const candidates = [];
@@ -296,7 +296,7 @@ const matchBySupplierAndAmount = async (
         .collection(collectionName)
         .where("supplier.taxId", "==", supplierTaxId)
         .where("isProforma", "==", true)
-        .where("status", "==", "proforma")
+        .where("status", "in", ["proforma", "proforma_posted"])
         .get();
 
     const candidates = [];

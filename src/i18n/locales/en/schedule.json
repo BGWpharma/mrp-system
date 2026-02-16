@@ -19,7 +19,14 @@
     "friShort": "Fri",
     "satShort": "Sat",
     "sunShort": "Sun",
-    "off": "Off"
+    "off": "Off",
+    "viewCalendar": "Calendar view",
+    "viewList": "List view",
+    "listShift": "shift",
+    "listShifts": "shifts",
+    "listRequest": "request",
+    "listRequests": "requests",
+    "listEmpty": "No shifts or requests this month"
   },
   "shifts": {
     "morning": "Morning",
@@ -67,7 +74,6 @@
     "sickLeave": "Sick leave",
     "dayOff": "Day off",
     "unpaidLeave": "Unpaid leave",
-    "scheduleChange": "Schedule change",
     "other": "Other"
   },
   "templates": {

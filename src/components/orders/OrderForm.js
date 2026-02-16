@@ -260,7 +260,7 @@ const SortableRow = ({
                 Receptura
               </ToggleButton>
               <ToggleButton value="service" size="small">
-                Usługa
+                {t('common:common.service')}
               </ToggleButton>
             </ToggleButtonGroup>
             
@@ -273,7 +273,7 @@ const SortableRow = ({
                 renderInput={(params) => (
                   <TextField 
                     {...params} 
-                    label="Usługa"
+                    label={t('common:common.service')}
                     size="small"
                     error={!!validationErrors[`item_${index}_name`]}
                     helperText={validationErrors[`item_${index}_name`]}
@@ -2859,7 +2859,7 @@ const OrderForm = ({ orderId }) => {
             <Grid item xs={12} md={6}>
               <TextField
                 name="customer_shippingAddress"
-                label="Adres do wysyłki"
+                label={t('common:common.shippingAddress')}
                 value={orderData.customer.shippingAddress || ''}
                 onChange={handleCustomerDetailChange}
                 fullWidth

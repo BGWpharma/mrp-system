@@ -86,7 +86,7 @@ import {
   Sort as SortIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { getAllTasks, updateTaskStatus, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction, getProductionTasksOptimized, clearProductionTasksCache, forceRefreshProductionTasksCache, removeDuplicatesFromCache, updateTaskInCache, addTaskToCache, removeTaskFromCache } from '../../services/productionService';
+import { getAllTasks, updateTaskStatus, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction, getProductionTasksOptimized, clearProductionTasksCache, forceRefreshProductionTasksCache, removeDuplicatesFromCache, updateTaskInCache, addTaskToCache, removeTaskFromCache, getProductionTasksCacheStatus } from '../../services/productionService';
 import { db } from '../../services/firebase/config';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { getAllWarehouses } from '../../services/inventory';
@@ -523,7 +523,7 @@ const TaskList = () => {
   const [mainTableLoading, setMainTableLoading] = useState(false);
   const [showContent, setShowContent] = useState(false);
 
-  const [isInitialized, setIsInitialized] = useState(false);
+  const isFirstRender = useRef(true);
   
   const [sortMenuAnchor, setSortMenuAnchor] = useState(null);
 
@@ -696,14 +696,19 @@ const TaskList = () => {
     };
   }, [searchTerm]);
 
-  // Pobierz zadania przy inicjalizacji
+  // Pobierz zadania przy inicjalizacji — JEDYNY efekt który fetchuje na mount
   useEffect(() => {
     fetchTasksOptimized();
     fetchWarehouses();
     
+    // Odrocz ustawienie flagi na po zakończeniu wszystkich efektów z tego renderowania
+    // — bez tego efekty statusFilter/page/search widzą false i też fetchują
+    const timer = setTimeout(() => {
+      isFirstRender.current = false;
+    }, 0);
+    
     // Nasłuchiwanie na zdarzenie aktualizacji zadań
-    const handleTasksUpdate = (event) => {
-      console.log('📨 Wykryto aktualizację zadań, odświeżam dane...');
+    const handleTasksUpdate = () => {
       fetchTasksOptimized();
     };
     
@@ -714,18 +719,15 @@ const TaskList = () => {
     if (typeof BroadcastChannel !== 'undefined') {
       broadcastChannel = new BroadcastChannel('production-costs-update');
       broadcastChannel.onmessage = (event) => {
-        const { type, updatedTasksCount, source } = event.data;
-        console.log(`📡 [TaskList] BroadcastChannel: ${type} z ${source}`, event.data);
-        
+        const { type } = event.data;
         if (type === 'BATCH_COSTS_UPDATED' || type === 'TASK_COSTS_UPDATED') {
-          console.log(`🔄 [TaskList] Odświeżam listę zadań po aktualizacji kosztów (${updatedTasksCount || 1} zadań)`);
-          // Wymuś pobranie świeżych danych
           fetchTasksOptimized(null, null, true);
         }
       };
     }
     
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('tasks-updated', handleTasksUpdate);
       if (broadcastChannel) {
         broadcastChannel.close();
@@ -735,23 +737,22 @@ const TaskList = () => {
 
   // Efekt reagujący na zmianę statusFilter - reset strony i odświeżenie danych
   useEffect(() => {
+    if (isFirstRender.current) return;
     if (statusFilter !== undefined) {
       listActions.setPage(1);
       fetchTasksOptimized();
     }
   }, [statusFilter]);
 
-  // Obsługa zmiany strony i rozmiaru strony z inicjalizacją
+  // Obsługa zmiany strony i rozmiaru strony
   useEffect(() => {
-    if (!isInitialized) {
-      setIsInitialized(true);
-      return;
-    }
+    if (isFirstRender.current) return;
     fetchTasksOptimized();
-  }, [page, pageSize, isInitialized]);
+  }, [page, pageSize]);
 
   // Reset strony po zmianie wyszukiwania (debounced)
   useEffect(() => {
+    if (isFirstRender.current) return;
     if (page !== 1) {
       listActions.setPage(1);
     } else {
@@ -762,26 +763,34 @@ const TaskList = () => {
   // Real-time updates listener - nasłuchuje zmian w zadaniach produkcyjnych
   useEffect(() => {
     let updateTimeout = null;
+    let isInitialSnapshot = true;
     
     const unsubscribe = onSnapshot(
       collection(db, 'productionTasks'),
       (snapshot) => {
-        console.log('📡 Real-time aktualizacja zadań:', snapshot.docChanges().length, 'zmian');
+        const changes = snapshot.docChanges();
+        // Pomiń initial snapshot — Firestore wysyła wszystkie dokumenty jako "added"
+        // przy pierwszym podłączeniu, dane są już pobierane przez efekt inicjalizacyjny
+        if (isInitialSnapshot) {
+          isInitialSnapshot = false;
+          changes.forEach((change) => {
+            const task = { id: change.doc.id, ...change.doc.data() };
+            addTaskToCache(task);
+          });
+          return;
+        }
+        
         let hasChanges = false;
         
-        snapshot.docChanges().forEach((change) => {
+        changes.forEach((change) => {
           const task = { id: change.doc.id, ...change.doc.data() };
           
           if (change.type === 'added') {
-            console.log('➕ Real-time: Dodano zadanie:', task.id);
-            // Dodaj zadanie do cache
             addTaskToCache(task);
             hasChanges = true;
           }
           
           if (change.type === 'modified') {
-            console.log('🔄 Real-time: Zmodyfikowano zadanie:', task.id);
-            // Użyj addTaskToCache które obsługuje zarówno dodanie jak i aktualizację
             const updated = addTaskToCache(task);
             if (updated) {
               hasChanges = true;
@@ -789,8 +798,6 @@ const TaskList = () => {
           }
           
           if (change.type === 'removed') {
-            console.log('🗑️ Real-time: Usunięto zadanie:', task.id);
-            // Usuń zadanie z cache
             const removed = removeTaskFromCache(task.id);
             if (removed) {
               hasChanges = true;
@@ -798,34 +805,27 @@ const TaskList = () => {
           }
         });
         
-        // Jeśli były zmiany, odśwież listę z uwzględnieniem filtrów i sortowania
         if (hasChanges) {
-          console.log('🔄 Planowanie odświeżenia listy zadań...');
-          // Użyj debounce aby uniknąć zbyt częstych aktualizacji
           if (updateTimeout) {
             clearTimeout(updateTimeout);
           }
-          
           updateTimeout = setTimeout(() => {
-            console.log('📋 Odświeżanie listy zadań z filtrami i sortowaniem');
-            // Odśwież listę z aktualnymi filtrami, sortowaniem i paginacją
             fetchTasksOptimized();
-          }, 500); // 500ms debounce
+          }, 500);
         }
       },
       (error) => {
-        console.error('❌ Błąd real-time listener:', error);
+        console.error('Błąd real-time listener:', error);
       }
     );
     
-    // Cleanup
     return () => {
       if (updateTimeout) {
         clearTimeout(updateTimeout);
       }
       unsubscribe();
     };
-  }, []); // Pusty array dependency - listener działa przez cały cykl życia komponentu
+  }, []);
 
 
 
@@ -860,17 +860,22 @@ const TaskList = () => {
     listActions.setSearchTerm(event.target.value);
   };
 
-  // Nowa zoptymalizowana funkcja pobierania zadań
+  // Zoptymalizowana funkcja pobierania zadań
   const fetchTasksOptimized = async (newSortField = null, newSortOrder = null, forceRefresh = false) => {
-    setMainTableLoading(true);
-    setShowContent(false);
+    // Silent refresh — jeśli serwis ma dane w cache lub komponent ma już dane,
+    // nie ukrywaj tabeli (unikaj migania przy powrocie z detali)
+    const cacheStatus = getProductionTasksCacheStatus();
+    const willBeFast = cacheStatus.isValid || tasks.length > 0;
+    
+    if (!willBeFast) {
+      setMainTableLoading(true);
+      setShowContent(false);
+    }
     
     try {
-      // Użyj przekazanych parametrów sortowania lub tych z kontekstu
       const sortFieldToUse = newSortField || tableSort.field;
       const sortOrderToUse = newSortOrder || tableSort.order;
       
-      // UŻYJ ZOPTYMALIZOWANEJ FUNKCJI dla lepszej wydajności
       const result = await getProductionTasksOptimized({
         page: page,
         pageSize: pageSize,
@@ -881,29 +886,30 @@ const TaskList = () => {
         forceRefresh: forceRefresh
       });
       
-      // Jeśli wynik to obiekt z właściwościami items i totalCount, to używamy paginacji
       if (result && result.items) {
         setTasks(result.items);
         setFilteredTasks(result.items);
         setTotalItems(result.totalCount);
         setTotalPages(Math.ceil(result.totalCount / pageSize));
       } else {
-        // Stara logika dla kompatybilności
         setTasks(result);
         setFilteredTasks(result);
       }
       
-      // PRZYŚPIESZONE ANIMACJE - zmniejszone opóźnienie dla lepszej responsywności
-      setTimeout(() => {
+      if (!willBeFast) {
+        setTimeout(() => {
+          setShowContent(true);
+        }, 25);
+      } else if (!showContent) {
         setShowContent(true);
-      }, 25); // Zmniejszone z 100ms do 25ms
+      }
       
     } catch (error) {
       console.error('Error fetching tasks:', error);
       showError('Błąd podczas pobierania zadań: ' + error.message);
     } finally {
       setMainTableLoading(false);
-      setLoading(false); // Zachowaj kompatybilność ze starym loading
+      setLoading(false);
     }
   };
 

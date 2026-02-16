@@ -19,6 +19,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { updateUserProfile } from '../../services/userService';
 
 /**
@@ -39,6 +40,7 @@ const UserProfileEditor = ({ open, onClose, selectedUser, onUserUpdated }) => {
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation('users');
   
   // Ładowanie danych użytkownika przy otwarciu dialogu
   useEffect(() => {
@@ -208,7 +210,7 @@ const UserProfileEditor = ({ open, onClose, selectedUser, onUserUpdated }) => {
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
-              label="Nazwa użytkownika"
+              label={t('username')}
               value={formData.displayName}
               onChange={handleInputChange('displayName')}
               error={!!errors.displayName}
@@ -233,7 +235,7 @@ const UserProfileEditor = ({ open, onClose, selectedUser, onUserUpdated }) => {
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="URL zdjęcia profilowego"
+              label={t('profilePhotoUrl')}
               value={formData.photoURL}
               onChange={handleInputChange('photoURL')}
               error={!!errors.photoURL}
@@ -282,7 +284,7 @@ const UserProfileEditor = ({ open, onClose, selectedUser, onUserUpdated }) => {
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Dział"
+              label={t('department')}
               value={formData.department}
               onChange={handleInputChange('department')}
               placeholder="np. Produkcja, Logistyka, Administracja"

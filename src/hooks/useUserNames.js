@@ -30,16 +30,12 @@ export const useUserNames = (initialUserIds = []) => {
     
     try {
       setLoading(true);
-      console.log('Pobieranie nazw użytkowników dla ID:', missingUserIds);
-      
       const names = await getUsersDisplayNames(missingUserIds);
       
       setUserNames(prev => ({ 
         ...prev, 
         ...names 
       }));
-      
-      console.log('Pobrano nazwy użytkowników:', names);
     } catch (error) {
       console.error('Błąd podczas pobierania nazw użytkowników:', error);
       

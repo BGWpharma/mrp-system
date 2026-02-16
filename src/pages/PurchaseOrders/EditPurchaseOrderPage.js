@@ -357,7 +357,7 @@ const EditPurchaseOrderPage = () => {
       {/* Okno dialogowe potwierdzenia usunięcia */}
       <ConfirmationDialog
         open={showDeleteConfirmation}
-        title="Potwierdzenie usunięcia"
+        title={t('common:common.confirmDeletion')}
         message="Czy na pewno chcesz usunąć to zamówienie? Ta operacja jest nieodwracalna."
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteConfirmation(false)}

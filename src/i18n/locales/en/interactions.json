@@ -137,6 +137,19 @@
       "createFirst": "Click \"New Interaction\" to create the first interaction."
     }
   },
+  "dashboard": {
+    "upcomingPurchaseInteractions": "Upcoming purchase interactions",
+    "salesOpportunities": "Sales opportunities",
+    "wonThisMonth": "Won this month",
+    "currentSalesOpportunities": "Current sales opportunities"
+  },
+  "interactionNotFound": "Interaction with the given ID was not found. The interaction may have been deleted.",
+  "backToInteractionsList": "Back to interactions list",
+  "opportunities": {
+    "searchOpportunities": "Search sales opportunities...",
+    "name": "Sales opportunity name",
+    "valueEUR": "Value (EUR)"
+  },
   "interactionDetails": {
     "dateTime": "Date and time",
     "status": "Status",

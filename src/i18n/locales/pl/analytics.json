@@ -348,6 +348,8 @@
         "title": "Weekly Sprint (Pon-Czw)",
         "subtitle": "Planowanie i analiza cotygodniowego sprintu produkcyjnego",
         "refresh": "Odśwież dane",
+        "dataWillUpdateSoon": "Dane zaktualizują się za chwilę...",
+        "noMixingDataInWeek": "Brak danych mieszań w wybranym tygodniu",
         "dataRefreshed": "Dane zostały odświeżone",
         "errors": {
             "fetchData": "Nie udało się pobrać danych",

@@ -95,8 +95,6 @@ export const getAllInventoryItems = async (
       ...doc.data()
     }));
     
-    console.log('🏭 getAllInventoryItems - pobrano z Firebase:', allItems.length, 'pozycji');
-    
     // Filtruj po terminie wyszukiwania (nazwa, opis, numer CAS)
     if (searchTerm && searchTerm.trim() !== '') {
       const searchTermLower = searchTerm.toLowerCase().trim();
@@ -206,8 +204,6 @@ export const getAllInventoryItems = async (
     
     // Całkowita liczba pozycji po filtrowaniu
     const totalCount = allItems.length;
-    
-    console.log('📈 getAllInventoryItems - wynik końcowy:', totalCount, 'pozycji', page && pageSize ? `(strona ${page}/${Math.ceil(totalCount / pageSize)})` : '(bez paginacji)');
     
     // Zastosuj paginację, jeśli podano parametry paginacji
     if (page !== null && pageSize !== null) {

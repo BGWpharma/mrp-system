@@ -348,6 +348,8 @@
         "title": "Weekly Sprint (Mon-Thu)",
         "subtitle": "Weekly production sprint planning and analysis",
         "refresh": "Refresh data",
+        "dataWillUpdateSoon": "Data will update shortly...",
+        "noMixingDataInWeek": "No mixing data in selected week",
         "dataRefreshed": "Data has been refreshed",
         "errors": {
             "fetchData": "Failed to fetch data",

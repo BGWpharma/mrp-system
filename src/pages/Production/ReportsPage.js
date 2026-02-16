@@ -46,6 +46,7 @@ import {
 } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
@@ -135,6 +136,7 @@ const SimpleBarChart = ({ data }) => {
 };
 
 const ReportsPage = () => {
+  const { t } = useTranslation('production');
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   
@@ -629,13 +631,13 @@ const ReportsPage = () => {
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={8}>
               <FormControl fullWidth>
-                <InputLabel>Filtruj według produktu</InputLabel>
+                <InputLabel>{t('reports.filterByProduct')}</InputLabel>
                 <Select
                   value={selectedProduct}
                   onChange={(e) => setSelectedProduct(e.target.value)}
-                  label="Filtruj według produktu"
+                  label={t('reports.filterByProduct')}
                 >
-                  <MenuItem value="all">Wszystkie produkty</MenuItem>
+                  <MenuItem value="all">{t('reports.allProducts')}</MenuItem>
                   {productsList.map(product => (
                     <MenuItem key={product} value={product}>{product}</MenuItem>
                   ))}
@@ -848,7 +850,7 @@ const ReportsPage = () => {
           <Grid item xs={12} md={3}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
-                label="Data początkowa"
+                label={t('common:common.startDate')}
                 value={startDate}
                 onChange={(newDate) => {
                   setStartDate(newDate);
@@ -862,7 +864,7 @@ const ReportsPage = () => {
           <Grid item xs={12} md={3}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
-                label="Data końcowa"
+                label={t('common:common.endDate')}
                 value={endDate}
                 onChange={(newDate) => {
                   setEndDate(newDate);
@@ -960,11 +962,11 @@ const ReportsPage = () => {
                 sx={{ fontSize: '1rem' }}
               />
               <Tab 
-                label="Ukończone zadania"
+                label={t('reports.completedTasksTab')}
                 sx={{ fontSize: '1rem' }}
               />
               <Tab 
-                label="Zużycie materiałów"
+                label={t('reports.materialsUsageTab')}
                 sx={{ fontSize: '1rem' }}
               />
             </Tabs>

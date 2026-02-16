@@ -20,8 +20,10 @@ import {
   VisibilityOff
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const Register = () => {
+  const { t } = useTranslation('auth');
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -51,27 +53,27 @@ const Register = () => {
     const newErrors = {};
     
     if (!formData.firstName.trim()) {
-      newErrors.firstName = 'Imię jest wymagane';
+      newErrors.firstName = t('registerPage.validation.firstNameRequired');
     }
     
     if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Nazwisko jest wymagane';
+      newErrors.lastName = t('registerPage.validation.lastNameRequired');
     }
     
     if (!formData.email.trim()) {
-      newErrors.email = 'Email jest wymagany';
+      newErrors.email = t('registerPage.validation.emailRequired');
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Nieprawidłowy format email';
+      newErrors.email = t('registerPage.validation.emailInvalid');
     }
     
     if (!formData.password) {
-      newErrors.password = 'Hasło jest wymagane';
+      newErrors.password = t('registerPage.validation.passwordRequired');
     } else if (formData.password.length < 6) {
-      newErrors.password = 'Hasło musi mieć co najmniej 6 znaków';
+      newErrors.password = t('registerPage.validation.passwordMinLength');
     }
     
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Hasła nie są zgodne';
+      newErrors.confirmPassword = t('registerPage.validation.passwordsDoNotMatch');
     }
     
     setErrors(newErrors);
@@ -96,9 +98,9 @@ const Register = () => {
       navigate('/');
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') {
-        setErrors(prev => ({ ...prev, email: 'Ten email jest już zarejestrowany' }));
+        setErrors(prev => ({ ...prev, email: t('registerPage.errors.emailInUse') }));
       } else {
-        setGeneralError('Wystąpił błąd podczas rejestracji. Spróbuj ponownie');
+        setGeneralError(t('registerPage.errors.general'));
       }
       console.error('Error during registration:', err);
     } finally {
@@ -112,7 +114,7 @@ const Register = () => {
       await loginWithGoogle();
       navigate('/');
     } catch (err) {
-      setGeneralError('Wystąpił błąd podczas rejestracji przez Google');
+      setGeneralError(t('registerPage.errors.googleError'));
       console.error('Error during Google signup:', err);
     } finally {
       setLoading(false);
@@ -134,10 +136,10 @@ const Register = () => {
         <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
           <Box sx={{ mb: 3, textAlign: 'center' }}>
             <Typography component="h1" variant="h5">
-              Rejestracja
+              {t('registerPage.title')}
             </Typography>
             <Typography variant="subtitle1" color="text.secondary">
-              Utwórz nowe konto w systemie MRP
+              {t('registerPage.subtitle')}
             </Typography>
           </Box>
 
@@ -155,7 +157,7 @@ const Register = () => {
                   required
                   fullWidth
                   id="firstName"
-                  label="Imię"
+                  label={t('registerPage.firstName')}
                   autoFocus
                   value={formData.firstName}
                   onChange={handleChange}
@@ -169,7 +171,7 @@ const Register = () => {
                   required
                   fullWidth
                   id="lastName"
-                  label="Nazwisko"
+                  label={t('registerPage.lastName')}
                   name="lastName"
                   value={formData.lastName}
                   onChange={handleChange}
@@ -183,7 +185,7 @@ const Register = () => {
                   required
                   fullWidth
                   id="email"
-                  label="Adres email"
+                  label={t('registerPage.emailAddress')}
                   name="email"
                   autoComplete="email"
                   value={formData.email}
@@ -198,7 +200,7 @@ const Register = () => {
                   required
                   fullWidth
                   name="password"
-                  label="Hasło"
+                  label={t('password')}
                   type={showPassword ? 'text' : 'password'}
                   id="password"
                   autoComplete="new-password"
@@ -227,7 +229,7 @@ const Register = () => {
                   required
                   fullWidth
                   name="confirmPassword"
-                  label="Potwierdź hasło"
+                  label={t('registerPage.confirmPassword')}
                   type={showPassword ? 'text' : 'password'}
                   id="confirmPassword"
                   value={formData.confirmPassword}
@@ -245,11 +247,11 @@ const Register = () => {
               sx={{ mt: 3, mb: 2 }}
               disabled={loading}
             >
-              {loading ? 'Rejestracja...' : 'Zarejestruj się'}
+              {loading ? t('registerPage.registering') : t('registerPage.registerButton')}
             </Button>
           </Box>
 
-          <Divider sx={{ my: 2 }}>lub</Divider>
+          <Divider sx={{ my: 2 }}>{t('registerPage.orDivider')}</Divider>
 
           <Button
             fullWidth
@@ -258,14 +260,14 @@ const Register = () => {
             onClick={handleGoogleSignup}
             disabled={loading}
           >
-            Zarejestruj się przez Google
+            {t('registerPage.googleSignup')}
           </Button>
 
           <Box sx={{ mt: 3, textAlign: 'center' }}>
             <Typography variant="body2">
-              Masz już konto?{' '}
+              {t('registerPage.hasAccount')}{' '}
               <Link to="/login" style={{ textDecoration: 'none' }}>
-                Zaloguj się
+                {t('registerPage.signIn')}
               </Link>
             </Typography>
           </Box>

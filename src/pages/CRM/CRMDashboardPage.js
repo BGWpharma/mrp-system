@@ -45,6 +45,7 @@ import {
 } from '../../services/crmService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { OPPORTUNITY_STAGES } from '../../utils/constants';
@@ -68,6 +69,7 @@ const CRMDashboardPage = () => {
   
   const { currentUser } = useAuth();
   const { showError } = useNotification();
+  const { t } = useTranslation('interactions');
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -261,7 +263,7 @@ const CRMDashboardPage = () => {
               menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
             }}
           >
-            Dodaj
+            {t('common:common.add')}
           </Button>
           <Box 
             id="new-menu" 
@@ -305,7 +307,7 @@ const CRMDashboardPage = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             icon={<CallMadeIcon />}
-            title="Nadchodzące interakcje zakupowe"
+            title={t('dashboard.upcomingPurchaseInteractions')}
             value={stats.upcomingInteractions}
             loading={statsLoading}
             color="info"
@@ -314,7 +316,7 @@ const CRMDashboardPage = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             icon={<MonetizationOnIcon />}
-            title="Szanse sprzedaży"
+            title={t('dashboard.salesOpportunities')}
             value={formatCurrency(stats.opportunitiesValue)}
             loading={statsLoading}
             color="success"
@@ -323,7 +325,7 @@ const CRMDashboardPage = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             icon={<EmojiEventsIcon />}
-            title="Wygrane w tym miesiącu"
+            title={t('dashboard.wonThisMonth')}
             value={stats.wonDealsThisMonth}
             loading={statsLoading}
             color="warning"
@@ -399,7 +401,7 @@ const CRMDashboardPage = () => {
         <Grid item xs={12} md={6}>
           <Card sx={{ height: '100%' }}>
             <CardHeader 
-              title="Aktualne szanse sprzedaży" 
+              title={t('dashboard.currentSalesOpportunities')} 
               action={
                 <Button 
                   component={Link} 

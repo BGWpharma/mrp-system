@@ -19,7 +19,14 @@
     "friShort": "Pt",
     "satShort": "So",
     "sunShort": "Nd",
-    "off": "Wolne"
+    "off": "Wolne",
+    "viewCalendar": "Widok kalendarza",
+    "viewList": "Widok listy",
+    "listShift": "zmiana",
+    "listShifts": "zmiany",
+    "listRequest": "wniosek",
+    "listRequests": "wnioski",
+    "listEmpty": "Brak zmian i wniosków w tym miesiącu"
   },
   "shifts": {
     "morning": "Ranna",
@@ -67,7 +74,6 @@
     "sickLeave": "Zwolnienie lekarskie",
     "dayOff": "Dzień wolny",
     "unpaidLeave": "Urlop bezpłatny",
-    "scheduleChange": "Zmiana grafiku",
     "other": "Inne"
   },
   "templates": {

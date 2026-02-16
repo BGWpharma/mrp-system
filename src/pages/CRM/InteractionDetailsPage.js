@@ -215,7 +215,7 @@ const InteractionDetailsPage = () => {
         <Box mt={4} mb={4} display="flex" alignItems="center">
           <BackButton 
             to={ROUTES.CRM_INTERACTIONS}
-            label="Powrót do listy"
+            label={t('common:common.backToList')}
             sx={{ mr: 2 }}
           />
           <Typography variant="h4" component="h1">
@@ -224,11 +224,11 @@ const InteractionDetailsPage = () => {
         </Box>
         <Paper sx={{ p: 3 }}>
           <Typography>
-            Nie znaleziono interakcji o podanym identyfikatorze. Interakcja mogła zostać usunięta.
+            {t('interactions:interactionNotFound')}
           </Typography>
           <BackButton 
             to={ROUTES.CRM_INTERACTIONS}
-            label="Wróć do listy interakcji"
+            label={t('interactions:backToInteractionsList')}
             variant="contained"
             sx={{ mt: 2 }}
           />

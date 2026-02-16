@@ -30,7 +30,7 @@ const geminiApiKey = defineSecret("GEMINI_API_KEY");
  * - totalVat: number
  * - totalGross: number
  * - exchangeRate?: number
- * - invoiceType: "purchase" | "expense"
+ * - invoiceType: "purchase" | "expense" | "sales"
  * - items: string[] (item names/descriptions)
  * - category?: string
  *
@@ -67,7 +67,7 @@ const suggestAccountsForPosting = onCall(
         if (!data.supplierName) {
           throw new HttpsError(
               "invalid-argument",
-              "Nazwa dostawcy jest wymagana",
+              "Nazwa dostawcy/klienta jest wymagana",
           );
         }
 
@@ -98,6 +98,7 @@ const suggestAccountsForPosting = onCall(
           invoiceType: data.invoiceType || "expense",
           items: data.items || [],
           category: data.category || null,
+          budgetItems: data.budgetItems || [],
         };
 
         const apiKey = geminiApiKey.value();

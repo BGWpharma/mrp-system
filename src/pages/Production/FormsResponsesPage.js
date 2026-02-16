@@ -39,6 +39,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Delete as DeleteIcon, Edit as EditIcon, Search as SearchIcon, FilterList as FilterListIcon, CheckCircle as CheckIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useNotification } from '../../hooks/useNotification';
 import { 
   getFormResponsesWithPagination, 
   deleteFormResponse, 
@@ -50,6 +51,7 @@ import {
 const FormsResponsesPage = () => {
   const theme = useTheme();
   const { t } = useTranslation();
+  const { showError } = useNotification();
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -392,12 +394,12 @@ const FormsResponsesPage = () => {
   // Funkcja obsługi eksportu z dialogu
   const handleConfirmExport = async () => {
     if (!exportDateRange.fromDate || !exportDateRange.toDate) {
-      alert('Proszę wybrać zakres dat');
+      showError(t('common:common.selectDateRange'));
       return;
     }
     
     if (new Date(exportDateRange.fromDate) > new Date(exportDateRange.toDate)) {
-      alert('Data początkowa nie może być późniejsza niż data końcowa');
+      showError(t('common:common.startDateCannotBeAfterEndDate'));
       return;
     }
     

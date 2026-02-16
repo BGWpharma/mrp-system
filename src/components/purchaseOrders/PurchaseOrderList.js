@@ -747,12 +747,12 @@ const PurchaseOrderList = () => {
           </FormControl>
           
           <FormControl variant="outlined" size="small" sx={{ minWidth: '200px' }}>
-            <InputLabel id="payment-status-filter-label">Status płatności</InputLabel>
+            <InputLabel id="payment-status-filter-label">{t('common:common.paymentStatus')}</InputLabel>
             <Select
               labelId="payment-status-filter-label"
               value={paymentStatusFilter}
               onChange={handlePaymentStatusFilterChange}
-              label="Status płatności"
+              label={t('common:common.paymentStatus')}
             >
               <MenuItem value="all">Wszystkie płatności</MenuItem>
               <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID}>
@@ -781,7 +781,7 @@ const PurchaseOrderList = () => {
             </IconButton>
           </Tooltip>
           
-          <Tooltip title="Odśwież dane (wyczyść cache)">
+          <Tooltip title={t('common:common.refreshDataClearCache')}>
             <IconButton 
               color="warning" 
               onClick={async () => {
@@ -859,7 +859,7 @@ const PurchaseOrderList = () => {
           </MenuItem>
           <MenuItem onClick={() => toggleColumnVisibility('statusAndPayment')}>
             <Checkbox checked={!!visibleColumns['statusAndPayment']} />
-            <ListItemText primary="Status / Płatność" />
+            <ListItemText primary={t('purchaseOrders.statusPayment')} />
           </MenuItem>
         </Menu>
       </Paper>
@@ -875,7 +875,7 @@ const PurchaseOrderList = () => {
                   {visibleColumns['orderDate'] && <SortableTableCell id="orderDate" label={t('purchaseOrders.table.orderDate')} sx={{ width: '130px', minWidth: '120px' }} />}
                   {visibleColumns['expectedDeliveryDate'] && <SortableTableCell id="expectedDeliveryDate" label="Oczekiwana dostawa" sx={{ width: '140px', minWidth: '130px' }} />}
                   {visibleColumns['value'] && <SortableTableCell id="value" label={t('purchaseOrders.table.totalValue')} />}
-                  {visibleColumns['statusAndPayment'] && <SortableTableCell id="status" label="Status / Płatność" />}
+                  {visibleColumns['statusAndPayment'] && <SortableTableCell id="status" label={t('purchaseOrders.statusPayment')} />}
                   <TableCell align="right">{t('purchaseOrders.table.actions')}</TableCell>
                 </TableRow>
               </TableHead>
@@ -1348,7 +1348,7 @@ const PurchaseOrderList = () => {
                               <Chip label="Bez zmian" color="default" size="small" />
                             )
                           ) : (
-                            <Chip label="Błąd" color="error" size="small" />
+                            <Chip label={t('common:common.error')} color="error" size="small" />
                           )}
                         </Box>
                       </Box>

@@ -55,8 +55,10 @@ import {
 } from '../../services/userService';
 import SidebarTabsManager from '../../components/admin/SidebarTabsManager';
 import UserProfileEditor from '../../components/admin/UserProfileEditor';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const UsersManagementPage = () => {
+  const { t } = useTranslation('users');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -429,7 +431,7 @@ const UsersManagementPage = () => {
                     <TableCell>
                       <IconButton 
                         onClick={() => handleOpenProfileEditor(user)}
-                        title="Edytuj dane użytkownika"
+                        title={t('editUserData')}
                         color="primary"
                         sx={{ mr: 0.5 }}
                       >
@@ -438,7 +440,7 @@ const UsersManagementPage = () => {
                       <IconButton 
                         onClick={() => handleOpenEditDialog(user)}
                         disabled={currentUser.uid === user.id} // Nie pozwalaj na edycję własnego konta
-                        title="Zmień rolę"
+                        title={t('changeRole')}
                         sx={{ mr: 0.5 }}
                       >
                         <EditIcon />
@@ -446,7 +448,7 @@ const UsersManagementPage = () => {
                       <IconButton 
                         onClick={() => handleOpenPermissionsDialog(user)}
                         disabled={user.role === 'administrator'} // Administratorzy mają wszystkie uprawnienia
-                        title="Zarządzaj uprawnieniami"
+                        title={t('managePermissions')}
                         color="warning"
                         sx={{ mr: 0.5 }}
                       >
@@ -455,7 +457,7 @@ const UsersManagementPage = () => {
                       {user.accountType !== 'kiosk' && (
                         <IconButton 
                           onClick={() => handleOpenSidebarTabsDialog(user)}
-                          title="Zarządzaj zakładkami sidebara"
+                          title={t('manageSidebarTabs')}
                           color="secondary"
                           sx={{ mr: 0.5 }}
                         >
@@ -463,7 +465,7 @@ const UsersManagementPage = () => {
                         </IconButton>
                       )}
                       {user.accountType === 'kiosk' && (
-                        <Tooltip title="Usuń pracownika kioskowego">
+                        <Tooltip title={t('deleteKioskEmployee')}>
                           <IconButton 
                             onClick={() => handleOpenDeleteDialog(user)}
                             color="error"
@@ -614,7 +616,7 @@ const UsersManagementPage = () => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Imię i nazwisko"
+                label={t('fullName')}
                 value={newKioskUser.displayName}
                 onChange={handleCreateInputChange('displayName')}
                 error={!!createErrors.displayName}
@@ -651,7 +653,7 @@ const UsersManagementPage = () => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Dział"
+                label={t('department')}
                 value={newKioskUser.department}
                 onChange={handleCreateInputChange('department')}
                 placeholder="np. Produkcja"

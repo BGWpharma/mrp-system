@@ -46,6 +46,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getContactById, getContactInteractions, deleteContact } from '../../services/crmService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { INTERACTION_TYPES } from '../../utils/constants';
@@ -60,6 +61,7 @@ const ContactDetailsPage = () => {
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation('customers');
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -421,7 +423,7 @@ const ContactDetailsPage = () => {
               >
                 <Tab label="Interakcje zakupowe" id="tab-0" />
                 <Tab label="Zadania" id="tab-1" />
-                <Tab label="Szanse sprzedaży" id="tab-2" />
+                <Tab label={t('contacts.salesOpportunities')} id="tab-2" />
               </Tabs>
             </Box>
             

@@ -1,5 +1,13 @@
 {
   "title": "Production",
+  "quality": {
+    "requirePhoto": "Require photo",
+    "frequency": "Frequency",
+    "frequencyPlaceholder": "e.g. Per batch, Daily, Weekly",
+    "minValue": "Min. value",
+    "maxValue": "Max. value",
+    "testInstructionsPlaceholder": "Detailed instructions on how to perform the test..."
+  },
   "taskList": {
     "title": "Production Tasks",
     "searchPlaceholder": "Search tasks...",
@@ -115,6 +123,10 @@
   "reports": {
     "startDate": "Start Date",
     "endDate": "End Date",
+    "filterByProduct": "Filter by product",
+    "allProducts": "All products",
+    "completedTasksTab": "Completed tasks",
+    "materialsUsageTab": "Materials usage",
     "taskCount": "Task Count",
     "completedTasks": "Completed Tasks",
     "tasksInProgress": "Tasks in Progress",
@@ -145,7 +157,54 @@
         "cost": "Cost",
         "user": "User",
         "includeInCosts": "Include in Costs"
-      }
+      },
+      "csvHeaders": {
+        "summary": {
+          "material": "Material",
+          "totalQuantity": "Total quantity",
+          "unit": "Unit",
+          "avgUnitPrice": "Average unit price (EUR)",
+          "totalCost": "Total cost (EUR)",
+          "batchCount": "Batch count",
+          "taskCount": "Task count"
+        },
+        "details": {
+          "consumptionDate": "Consumption date",
+          "task": "Task",
+          "mo": "MO",
+          "order": "Order (CO)",
+          "customer": "Customer",
+          "product": "Product",
+          "material": "Material",
+          "batch": "Batch",
+          "quantity": "Quantity",
+          "unit": "Unit",
+          "unitPrice": "Unit price (EUR)",
+          "totalCost": "Total cost (EUR)",
+          "user": "User",
+          "includeInCosts": "Include in costs"
+        }
+      },
+      "sumTotal": "TOTAL:",
+      "summaryLabel": "SUMMARY:",
+      "exportErrorSummary": "An error occurred while exporting summary to CSV",
+      "exportErrorDetails": "An error occurred while exporting to CSV",
+      "noConsumptionFound": "No material consumption found in the selected period and filters.",
+      "noSummaryData": "No consumption summary",
+      "noConsumptionData": "No material consumption data",
+      "instructionsTitle": "💡 To see data in the report:",
+      "instruction1": "Go to production task (MO) details",
+      "instruction2": "In the \"Materials and Costs\" tab, click \"Consume materials\"",
+      "instruction3": "Select actually consumed batches and quantities",
+      "instruction4": "Confirm consumption - data will appear in the report",
+      "howToConsumeTitle": "💡 How to perform material consumption:",
+      "howToInstruction1": "Go to production task → \"Materials and Costs\" tab",
+      "howToInstruction2": "In \"Reserved materials\" section, click \"Consume materials\"",
+      "howToInstruction3": "Select batches and enter actual consumed quantities",
+      "howToInstruction4": "Confirm consumption - data will automatically appear in the report",
+      "period": "Period:",
+      "noConsumptionInPeriod": "No material consumption data found in the selected period ({dateFrom} - {dateTo}).",
+      "restoreMaterialReservationInMO": "Restore material reservation in MO"
     }
   },
   "taskDetails": {
@@ -167,6 +226,7 @@
     "generalReport": "General Report",
     "moConsumption": "MO Consumption",
     "productionTime": "Production Time",
+    "progressReport": "Production Progress",
     "orderCO": "Order (CO)",
     "material": "Material",
     "tabs": {
@@ -690,6 +750,16 @@
       "chainedTooltip": "Chained to previous task"
     }
   },
+  "shiftForm": {
+    "fillDate": "Fill date",
+    "fillTime": "Fill time",
+    "productQuantityMade": "Product quantity made",
+    "numericValueOnly": "Please provide numeric value only!",
+    "typeProductNameOrFragment": "Type product name or fragment, e.g. 'mango', or 'NONE'",
+    "describeMaterialLoss": "Describe material losses if any (optional)",
+    "withinMONumericOnly": "Within the MO being produced. Please provide numeric value only!",
+    "describeBreakdown": "In case of breakdown, describe what happened. Leave empty if no breakdown."
+  },
   "timeline": {
     "title": "Production Timeline",
     "legend": "Legend:",
@@ -727,10 +797,15 @@
       "productName": "Product Name",
       "moNumber": "MO Number",
       "orderNumber": "Order Number",
+      "poNumber": "PO Number",
       "startDate": "Start Date From",
       "endDate": "Start Date To",
       "apply": "Apply Filters",
-      "clear": "Clear Filters"
+      "clear": "Clear Filters",
+      "typeProductName": "Type product name...",
+      "typeMoNumber": "Type manufacturing order number...",
+      "typeOrderNumber": "Type order number...",
+      "typePoNumber": "Type PO number..."
     },
     "edit": {
       "title": "Edit Task",

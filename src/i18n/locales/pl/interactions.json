@@ -137,6 +137,19 @@
       "createFirst": "Kliknij \"Nowa interakcja\", aby utworzyć pierwszą interakcję."
     }
   },
+  "dashboard": {
+    "upcomingPurchaseInteractions": "Nadchodzące interakcje zakupowe",
+    "salesOpportunities": "Szanse sprzedaży",
+    "wonThisMonth": "Wygrane w tym miesiącu",
+    "currentSalesOpportunities": "Aktualne szanse sprzedaży"
+  },
+  "interactionNotFound": "Nie znaleziono interakcji o podanym identyfikatorze. Interakcja mogła zostać usunięta.",
+  "backToInteractionsList": "Wróć do listy interakcji",
+  "opportunities": {
+    "searchOpportunities": "Szukaj szans sprzedaży...",
+    "name": "Nazwa szansy sprzedaży",
+    "valueEUR": "Wartość (EUR)"
+  },
   "interactionDetails": {
     "dateTime": "Data i czas",
     "status": "Status",

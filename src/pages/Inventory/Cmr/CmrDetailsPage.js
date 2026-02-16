@@ -71,6 +71,7 @@ import {
   updateCmrStatus, 
   CMR_STATUSES,
   CMR_PAYMENT_STATUSES,
+  getTransportTypeLabel,
   translatePaymentStatus,
   updateCmrPaymentStatus,
   migrateCmrToNewFormat,
@@ -1319,7 +1320,7 @@ const CmrDetailsPage = () => {
     if (newStatus === CMR_STATUSES.IN_TRANSIT) {
       // Sprawdź czy istnieją odpowiedzi z formularzy załadunku
       if (loadingFormResponses.length === 0) {
-        showError('Nie można rozpocząć transportu. Brak odpowiedzi z formularza załadunku dla tego CMR. Proszę najpierw wypełnić formularz załadunku towaru.');
+        showError(t('details.errors.cannotStartTransport'));
         return;
       }
       
@@ -2054,7 +2055,7 @@ const CmrDetailsPage = () => {
                     {t('details.basicInfo.transportType')}
                   </Typography>
                   <Typography variant="body1">
-                    {cmrData.transportType}
+                    {getTransportTypeLabel(cmrData.transportType) || '-'}
                   </Typography>
                 </Grid>
               </Grid>
@@ -3161,7 +3162,7 @@ const CmrDetailsPage = () => {
                                       }
                                     }}
                                     onClick={() => window.open(attachment.downloadURL, '_blank')}
-                                    title="Kliknij, aby otworzyć w nowej karcie"
+                                    title={t('common:common.clickToOpenInNewTab')}
                                   >
                                     {attachment.fileName}
                                   </Typography>
@@ -3182,7 +3183,7 @@ const CmrDetailsPage = () => {
                                       size="small"
                                       color="primary"
                                       onClick={() => window.open(attachment.downloadURL, '_blank')}
-                                      title="Otwórz w nowej karcie"
+                                      title={t('common:common.openInNewTab')}
                                     >
                                       <OpenInNewIcon fontSize="small" />
                                     </IconButton>
@@ -3200,7 +3201,7 @@ const CmrDetailsPage = () => {
                                       size="small"
                                       color="error"
                                       onClick={() => handleAttachmentDelete(attachment.id, attachment.fileName)}
-                                      title="Usuń załącznik"
+                                      title={t('common:common.removeAttachment')}
                                     >
                                       <DeleteIcon fontSize="small" />
                                     </IconButton>
@@ -3339,7 +3340,7 @@ const CmrDetailsPage = () => {
                                       }
                                     }}
                                     onClick={() => window.open(invoice.downloadURL, '_blank')}
-                                    title="Kliknij, aby otworzyć w nowej karcie"
+                                    title={t('common:common.clickToOpenInNewTab')}
                                   >
                                     {invoice.fileName}
                                   </Typography>
@@ -3360,7 +3361,7 @@ const CmrDetailsPage = () => {
                                       size="small"
                                       color="success"
                                       onClick={() => window.open(invoice.downloadURL, '_blank')}
-                                      title="Otwórz w nowej karcie"
+                                      title={t('common:common.openInNewTab')}
                                     >
                                       <OpenInNewIcon fontSize="small" />
                                     </IconButton>
@@ -3378,7 +3379,7 @@ const CmrDetailsPage = () => {
                                       size="small"
                                       color="error"
                                       onClick={() => handleInvoiceDelete(invoice.id, invoice.fileName)}
-                                      title="Usuń fakturę"
+                                      title={t('common:common.removeInvoice')}
                                     >
                                       <DeleteIcon fontSize="small" />
                                     </IconButton>
@@ -3517,7 +3518,7 @@ const CmrDetailsPage = () => {
                                       }
                                     }}
                                     onClick={() => window.open(attachment.downloadURL, '_blank')}
-                                    title="Kliknij, aby otworzyć w nowej karcie"
+                                    title={t('common:common.clickToOpenInNewTab')}
                                   >
                                     {attachment.fileName}
                                   </Typography>
@@ -3538,7 +3539,7 @@ const CmrDetailsPage = () => {
                                       size="small"
                                       color="info"
                                       onClick={() => window.open(attachment.downloadURL, '_blank')}
-                                      title="Otwórz w nowej karcie"
+                                      title={t('common:common.openInNewTab')}
                                     >
                                       <OpenInNewIcon fontSize="small" />
                                     </IconButton>
@@ -3556,7 +3557,7 @@ const CmrDetailsPage = () => {
                                       size="small"
                                       color="error"
                                       onClick={() => handleOtherAttachmentDelete(attachment.id, attachment.fileName)}
-                                      title="Usuń załącznik"
+                                      title={t('common:common.removeAttachment')}
                                     >
                                       <DeleteIcon fontSize="small" />
                                     </IconButton>
@@ -3621,7 +3622,7 @@ const CmrDetailsPage = () => {
             
             <Box className="print-grid-item">
               <Typography className="print-label">Typ transportu</Typography>
-              <Typography className="print-value">{cmrData.transportType || '-'}</Typography>
+              <Typography className="print-value">{getTransportTypeLabel(cmrData.transportType) || '-'}</Typography>
             </Box>
           </Box>
         </Box>
@@ -4104,11 +4105,11 @@ const CmrDetailsPage = () => {
             Wybierz nowy status płatności dokumentu CMR:
           </DialogContentText>
           <FormControl fullWidth>
-            <InputLabel>Status płatności</InputLabel>
+            <InputLabel>{t('common:common.paymentStatus')}</InputLabel>
             <Select
               value={newPaymentStatus}
               onChange={(e) => setNewPaymentStatus(e.target.value)}
-              label="Status płatności"
+              label={t('common:common.paymentStatus')}
             >
               <MenuItem value={CMR_PAYMENT_STATUSES.UNPAID}>
                 {translatePaymentStatus(CMR_PAYMENT_STATUSES.UNPAID)}

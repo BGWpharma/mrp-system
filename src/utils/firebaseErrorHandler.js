@@ -1,5 +1,6 @@
 // src/utils/firebaseErrorHandler.js
 import * as Sentry from '@sentry/react';
+import i18n from 'i18next';
 
 /**
  * Konfiguracja performance tracking
@@ -14,49 +15,44 @@ const PERFORMANCE_CONFIG = {
 };
 
 /**
- * Mapowanie kodów błędów Firebase na przyjazne komunikaty po polsku
+ * Mapowanie kodów błędów Firebase na klucze i18n (namespace: common)
  */
-const FIREBASE_ERROR_MESSAGES = {
-  // Auth errors
-  'auth/user-not-found': 'Nie znaleziono użytkownika',
-  'auth/wrong-password': 'Nieprawidłowe hasło',
-  'auth/email-already-in-use': 'Ten adres email jest już używany',
-  'auth/weak-password': 'Hasło jest za słabe',
-  'auth/invalid-email': 'Nieprawidłowy adres email',
-  'auth/user-disabled': 'Konto użytkownika zostało wyłączone',
-  'auth/operation-not-allowed': 'Operacja niedozwolona',
-  'auth/too-many-requests': 'Zbyt wiele prób. Spróbuj ponownie później',
-  
-  // Firestore errors
-  'permission-denied': 'Brak uprawnień do wykonania tej operacji',
-  'not-found': 'Nie znaleziono dokumentu',
-  'already-exists': 'Dokument już istnieje',
-  'resource-exhausted': 'Przekroczono limit zasobów',
-  'failed-precondition': 'Niespełnione warunki wstępne',
-  'aborted': 'Operacja została przerwana',
-  'out-of-range': 'Wartość poza zakresem',
-  'unimplemented': 'Operacja nie jest zaimplementowana',
-  'internal': 'Wewnętrzny błąd serwera',
-  'unavailable': 'Usługa niedostępna',
-  'data-loss': 'Utrata danych',
-  'unauthenticated': 'Wymagane uwierzytelnienie',
-  
-  // Storage errors
-  'storage/object-not-found': 'Nie znaleziono pliku',
-  'storage/bucket-not-found': 'Nie znaleziono bucketu',
-  'storage/project-not-found': 'Nie znaleziono projektu',
-  'storage/quota-exceeded': 'Przekroczono limit przestrzeni',
-  'storage/unauthenticated': 'Wymagane uwierzytelnienie',
-  'storage/unauthorized': 'Brak autoryzacji',
-  'storage/retry-limit-exceeded': 'Przekroczono limit prób',
-  'storage/invalid-checksum': 'Nieprawidłowa suma kontrolna',
-  'storage/canceled': 'Operacja anulowana',
-  'storage/invalid-event-name': 'Nieprawidłowa nazwa zdarzenia',
-  'storage/invalid-url': 'Nieprawidłowy URL',
-  'storage/invalid-argument': 'Nieprawidłowy argument',
-  'storage/no-default-bucket': 'Brak domyślnego bucketu',
-  'storage/cannot-slice-blob': 'Nie można podzielić blob',
-  'storage/server-file-wrong-size': 'Nieprawidłowy rozmiar pliku na serwerze'
+const FIREBASE_ERROR_KEY_MAP = {
+  'auth/user-not-found': 'firebaseErrors.authUserNotFound',
+  'auth/wrong-password': 'firebaseErrors.authWrongPassword',
+  'auth/email-already-in-use': 'firebaseErrors.authEmailInUse',
+  'auth/weak-password': 'firebaseErrors.authWeakPassword',
+  'auth/invalid-email': 'firebaseErrors.authInvalidEmail',
+  'auth/user-disabled': 'firebaseErrors.authUserDisabled',
+  'auth/operation-not-allowed': 'firebaseErrors.authOperationNotAllowed',
+  'auth/too-many-requests': 'firebaseErrors.authTooManyRequests',
+  'permission-denied': 'firebaseErrors.permissionDenied',
+  'not-found': 'firebaseErrors.notFound',
+  'already-exists': 'firebaseErrors.alreadyExists',
+  'resource-exhausted': 'firebaseErrors.resourceExhausted',
+  'failed-precondition': 'firebaseErrors.failedPrecondition',
+  'aborted': 'firebaseErrors.aborted',
+  'out-of-range': 'firebaseErrors.outOfRange',
+  'unimplemented': 'firebaseErrors.unimplemented',
+  'internal': 'firebaseErrors.internal',
+  'unavailable': 'firebaseErrors.unavailable',
+  'data-loss': 'firebaseErrors.dataLoss',
+  'unauthenticated': 'firebaseErrors.unauthenticated',
+  'storage/object-not-found': 'firebaseErrors.storageObjectNotFound',
+  'storage/bucket-not-found': 'firebaseErrors.storageBucketNotFound',
+  'storage/project-not-found': 'firebaseErrors.storageProjectNotFound',
+  'storage/quota-exceeded': 'firebaseErrors.storageQuotaExceeded',
+  'storage/unauthenticated': 'firebaseErrors.storageUnauthenticated',
+  'storage/unauthorized': 'firebaseErrors.storageUnauthorized',
+  'storage/retry-limit-exceeded': 'firebaseErrors.storageRetryLimitExceeded',
+  'storage/invalid-checksum': 'firebaseErrors.storageInvalidChecksum',
+  'storage/canceled': 'firebaseErrors.storageCanceled',
+  'storage/invalid-event-name': 'firebaseErrors.storageInvalidEventName',
+  'storage/invalid-url': 'firebaseErrors.storageInvalidUrl',
+  'storage/invalid-argument': 'firebaseErrors.storageInvalidArgument',
+  'storage/no-default-bucket': 'firebaseErrors.storageNoDefaultBucket',
+  'storage/cannot-slice-blob': 'firebaseErrors.storageCannotSliceBlob',
+  'storage/server-file-wrong-size': 'firebaseErrors.storageServerFileWrongSize'
 };
 
 /**
@@ -65,10 +61,16 @@ const FIREBASE_ERROR_MESSAGES = {
  * @returns {string} - Przyjazny komunikat
  */
 export const getFirebaseErrorMessage = (error) => {
-  if (!error) return 'Nieznany błąd';
+  if (!error) return i18n.t('common:firebaseErrors.unknownError');
   
   const errorCode = error.code || '';
-  return FIREBASE_ERROR_MESSAGES[errorCode] || error.message || 'Wystąpił błąd Firebase';
+  const translationKey = FIREBASE_ERROR_KEY_MAP[errorCode];
+  
+  if (translationKey) {
+    return i18n.t(`common:${translationKey}`);
+  }
+  
+  return error.message || i18n.t('common:firebaseErrors.firebaseError');
 };
 
 /**

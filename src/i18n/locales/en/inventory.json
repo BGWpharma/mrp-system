@@ -20,7 +20,8 @@
       "expiryDates": "Expiry Dates",
       "suppliers": "Suppliers",
       "stocktaking": "Stocktaking",
-      "reservations": "Reservations"
+      "reservations": "Reservations",
+      "procurementForecasts": "Procurement Forecasts"
     },
     "table": {
       "sku": "SKU",
@@ -117,7 +118,69 @@
       "reservationDate": "Reservation Date",
       "noFilterResults": "No reservations found matching the filter",
       "noReservations": "No reservations for production tasks",
-      "noMoNumber": "No MO Number"
+      "noMoNumber": "No MO Number",
+      "noReservationsToClean": "No reservations found to clean."
+    },
+    "procurementForecasts": {
+      "title": "Procurement Forecasts",
+      "description": "Saved snapshots of material demand forecasts linked to purchase orders.",
+      "noForecasts": "No saved procurement forecasts",
+      "noForecastsHint": "Go to Production → Demand Forecast and save a forecast to CRM.",
+      "number": "Number",
+      "name": "Name",
+      "period": "Forecast Period",
+      "materialsCount": "Materials",
+      "shortageCount": "Shortages",
+      "shortageValue": "Shortage Value",
+      "createdAt": "Date Saved",
+      "createdBy": "Created By",
+      "status": "Status",
+      "actions": "Actions",
+      "active": "Active",
+      "archived": "Archived",
+      "archive": "Archive",
+      "unarchive": "Restore",
+      "delete": "Delete",
+      "viewDetails": "Details",
+      "confirmDelete": "Are you sure you want to delete this forecast? This operation is irreversible.",
+      "deleteSuccess": "Forecast has been deleted",
+      "archiveSuccess": "Forecast has been archived",
+      "unarchiveSuccess": "Forecast has been restored",
+      "filterAll": "All",
+      "filterActive": "Active",
+      "filterArchived": "Archived",
+      "details": {
+        "title": "Procurement Forecast Details",
+        "backToList": "Back to list",
+        "forecastPeriod": "Forecast Period",
+        "savedAt": "Saved at",
+        "totalMaterials": "Total materials",
+        "materialsWithShortage": "With shortage",
+        "totalShortageValue": "Shortage value",
+        "material": "Material",
+        "category": "Category",
+        "required": "Required",
+        "available": "Available",
+        "balance": "Balance",
+        "futureDeliveries": "Future Deliveries",
+        "balanceWithDeliveries": "Balance with Deliveries",
+        "supplier": "Supplier",
+        "cost": "Cost",
+        "notes": "Notes",
+        "editNotes": "Edit notes",
+        "saveNotes": "Save",
+        "cancelEdit": "Cancel",
+        "notesUpdated": "Notes have been updated",
+        "poDetails": "PO Details",
+        "poNumber": "PO No.",
+        "poStatus": "Status",
+        "poQuantity": "Quantity",
+        "poDeliveryDate": "Delivery Date",
+        "noDeliveries": "None",
+        "showAll": "Show all",
+        "showShortageOnly": "Shortages only",
+        "search": "Search material..."
+      }
     }
   },
   "itemDetails": {
@@ -243,6 +306,9 @@
     "deleteCertificate": "Delete certificate",
     "addCertificate": "Add certificate",
     "printBatchLabel": "Print batch label",
+    "batchDetails": "Batch details",
+    "transferSource": "Transfer source",
+    "selectTransferSource": "Select transfer source (free quantity or specific MO reservation)",
     "status": {
       "depleted": "Depleted",
       "current": "Current",
@@ -386,6 +452,10 @@
     "invalidDate": "Invalid date"
   },
   "itemForm": {
+    "editItem": "Edit inventory item",
+    "addNewItem": "Add new inventory item",
+    "allCustomers": "All customers",
+    "availableForAllCustomers": "Item available for all customers",
     "basicData": "Basic Data",
     "warehouseParameters": "Warehouse Parameters",
     "supplierPrices": "Supplier Prices",
@@ -422,5 +492,6 @@
       "confirm": "Yes, update recipes",
       "decline": "No, only save the item"
     }
-  }
+  },
+  "noChangesToImport": "No changes found to import."
 }

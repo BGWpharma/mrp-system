@@ -197,6 +197,15 @@
     "statusUpdateFailed": "Failed to update status",
     "productNotLinked": "This product is not linked to an inventory item"
   },
+  "batchNotFoundInDb": "Batch not found in database.",
+  "loadingOrderDetails": "Loading order details...",
+  "orderNotFound": "Order not found",
+  "noPricesToUpdate": "No prices to update found or prices are already up to date",
+  "statusUpdatedNoPrices": "Order status has been updated. No supplier prices found to update.",
+  "invoiceDescriptionPlaceholder": "Invoice description, e.g. Main invoice, Transport invoice etc.",
+  "statusPayment": "Status / Payment",
+  "searchItemOrLeaveEmpty": "Search item (or leave empty for all)",
+  "startTypingItemName": "Start typing item name...",
   "details": {
     "orderNumber": "Order {{number}}",
     "orderTitle": "Order {{number}}",

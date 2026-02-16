@@ -722,7 +722,7 @@ const WeeklySprintTab = ({ isMobileView }) => {
                 <DownloadIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Odśwież dane">
+            <Tooltip title={t('common:common.refreshData')}>
               <IconButton 
                 onClick={handleRefresh} 
                 color="primary"
@@ -737,7 +737,7 @@ const WeeklySprintTab = ({ isMobileView }) => {
           <Grid item xs={12} md={2.4}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
-                label="Data początkowa"
+                label={t('common:common.startDate')}
                 value={displayStartDate}
                 onChange={setDisplayStartDate}
                 slotProps={{ 
@@ -747,7 +747,7 @@ const WeeklySprintTab = ({ isMobileView }) => {
                     helperText: isDebouncing ? 'Aktualizacja danych...' : '',
                     InputProps: {
                       endAdornment: isDebouncing && (
-                        <Tooltip title="Dane zaktualizują się za chwilę...">
+                        <Tooltip title={t('weeklySprint.dataWillUpdateSoon')}>
                           <CircularProgress size={20} sx={{ mr: 1 }} />
                         </Tooltip>
                       )
@@ -760,7 +760,7 @@ const WeeklySprintTab = ({ isMobileView }) => {
           <Grid item xs={12} md={2.4}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
-                label="Data końcowa"
+                label={t('common:common.endDate')}
                 value={displayEndDate}
                 onChange={setDisplayEndDate}
                 slotProps={{ 
@@ -770,7 +770,7 @@ const WeeklySprintTab = ({ isMobileView }) => {
                     helperText: isDebouncing ? 'Aktualizacja danych...' : '',
                     InputProps: {
                       endAdornment: isDebouncing && (
-                        <Tooltip title="Dane zaktualizują się za chwilę...">
+                        <Tooltip title={t('weeklySprint.dataWillUpdateSoon')}>
                           <CircularProgress size={20} sx={{ mr: 1 }} />
                         </Tooltip>
                       )
@@ -1195,7 +1195,7 @@ const WeeklySprintTab = ({ isMobileView }) => {
           }}>
             <CalendarIcon sx={{ fontSize: 64, color: 'primary.main', opacity: 0.3, mb: 2 }} />
             <Typography variant="h6" color="text.secondary" gutterBottom>
-              Brak danych mieszań w wybranym tygodniu
+              {t('weeklySprint.noMixingDataInWeek')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Zmień tydzień lub sprawdź czy zadania mają uzupełniony plan mieszań

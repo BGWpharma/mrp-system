@@ -245,6 +245,12 @@ export const CAMPAIGN_STATUSES = {
   CANCELLED: 'Anulowana'
 };
 
+// Statusy prognoz zakupowych
+export const PROCUREMENT_FORECAST_STATUSES = {
+  ACTIVE: 'active',
+  ARCHIVED: 'archived'
+};
+
 // Domyślne wartości dla formularzy CRM
 export const DEFAULT_CRM_VALUES = {
   // Kontakt

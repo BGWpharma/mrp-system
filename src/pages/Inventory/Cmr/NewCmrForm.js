@@ -54,6 +54,7 @@ import { getCustomerById } from '../../../services/customerService';
 import { getCompanyData } from '../../../services/companyService';
 import BatchSelector from '../../../components/cmr/BatchSelector';
 import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDialog';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 /**
  * Nowy komponent formularza CMR oparty na oficjalnym dokumencie.
@@ -64,6 +65,7 @@ import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDi
  * @returns {JSX.Element} Formularz CMR
  */
 const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
+  const { t } = useTranslation('cmr');
   const emptyItem = {
     marks: '',               // Pole 6 - Znaki i numery
     numberOfPackages: '',    // Pole 7 - Ilość sztuk
@@ -1114,7 +1116,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     error={!!formErrors.recipientAddress}
                     helperText={formErrors.recipientAddress || "Pełny adres odbiorcy (ulica, kod pocztowy, miasto, kraj)"}
                     size="small"
-                    placeholder="np. ul. Przykładowa 123, 00-000 Warszawa, Polska"
+                    placeholder={t('form.addressPlaceholder')}
                   />
                 </Grid>
               </Grid>
@@ -1126,7 +1128,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
         <Grid item xs={12}>
           <Card>
             <CardHeader 
-              title="Miejsca załadunku i rozładunku" 
+              title={t('form.loadingUnloadingPlaces')} 
               titleTypographyProps={{ variant: 'h6' }}
             />
             <Divider />
@@ -1189,7 +1191,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     Miejsce i data załadunku
                   </Typography>
                   <TextField
-                    label="Adres załadunku"
+                    label={t('form.loadingAddress')}
                     name="loadingPlace"
                     value={formData.loadingPlace}
                     onChange={handleChange}
@@ -1201,7 +1203,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                   />
                   <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                     <DatePicker
-                      label="Data załadunku"
+                      label={t('form.loadingDate')}
                       value={formData.loadingDate}
                       onChange={(newDate) => handleDateChange('loadingDate', newDate)}
                       renderInput={(params) => <TextField 
@@ -1233,10 +1235,10 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                 {/* Pole 5 - Dokumenty załączone */}
                 <Grid item xs={12} md={6}>
                   <Typography variant="subtitle2" gutterBottom>
-                    Załączone dokumenty
+                    {t('form.attachedDocuments')}
                   </Typography>
                   <TextField
-                    label="Załączone dokumenty"
+                    label={t('form.attachedDocuments')}
                     name="attachedDocuments"
                     value={formData.attachedDocuments}
                     onChange={handleChange}
@@ -1389,7 +1391,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                             <IconButton
                               size="small"
                               onClick={() => handleOpenWeightCalculator(index)}
-                              title="Oblicz wagę na podstawie danych magazynowych"
+                              title={t('form.calculateWeightFromInventory')}
                               sx={{ 
                                 color: 'primary.main',
                                 '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? 'primary.dark' : 'primary.light' },
@@ -1446,7 +1448,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                                 sx={{ fontStyle: 'italic', fontSize: '9px' }}
                               >
                                 {formErrors.items && formErrors.items[index]?.linkedBatches 
-                                  ? 'Wymagane!' 
+                                  ? t('common:common.required') 
                                   : 'Brak partii'
                                 }
                               </Typography>
@@ -1477,7 +1479,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
         <Grid item xs={12}>
           <Card>
             <CardHeader 
-              title="Opłaty i ustalenia szczególne" 
+              title={t('form.feesAndSpecialArrangements')} 
               titleTypographyProps={{ variant: 'h6' }}
             />
             <Divider />
@@ -1538,7 +1540,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
         <Dialog open={isOrderDialogOpen} onClose={handleCloseOrderDialog} maxWidth="md" fullWidth>
           <DialogTitle>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h6">Wybierz zamówienie klienta (CO)</Typography>
+              <Typography variant="h6">{t('form.selectCustomerOrder')}</Typography>
             </Box>
           </DialogTitle>
           <DialogContent>
@@ -1644,12 +1646,12 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     renderInput={(params) => (
                       <TextField
                         {...params}
-                        label="Wybierz zamówienie"
+                        label={t('form.selectOrder')}
                         variant="outlined"
                         helperText={
                           availableOrders.length === 0 
                             ? "Brak zamówień. Użyj wyszukiwarki powyżej, aby znaleźć zamówienie." 
-                            : "Wybierz zamówienie z listy"
+                            : t('form.selectOrderPlaceholder')
                         }
                       />
                     )}
@@ -1948,14 +1950,14 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
         {/* Dialog podglądu dokumentu */}
         <Dialog open={isPreviewOpen} onClose={handleClosePreview} maxWidth="lg" fullWidth>
           <DialogTitle>
-            <Typography variant="h6">Podgląd dokumentu CMR</Typography>
+            <Typography variant="h6">{t('form.cmrPreview')}</Typography>
           </DialogTitle>
           <DialogContent>
             <Box sx={{ mt: 2, textAlign: 'center' }}>
               <iframe
                 src={`/assets/cmr-template.svg?${new Date().getTime()}`}
                 style={{ width: '100%', height: '80vh', border: 'none' }}
-                title="Podgląd CMR"
+                title={t('form.cmrPreview')}
               />
             </Box>
           </DialogContent>

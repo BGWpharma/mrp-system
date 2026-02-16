@@ -43,7 +43,6 @@ export const useTaskCosts = (task, materials, materialQuantities, includeInCosts
       timestamp: null,
       dependenciesHash: null
     };
-    console.log('🗑️ [CACHE] Wymuszono odświeżenie cache kosztów');
   }, []);
   
   // ✅ Helper: Obliczanie średniej ważonej ceny jednostkowej z rezerwacji PO
@@ -121,12 +120,8 @@ export const useTaskCosts = (task, materials, materialQuantities, includeInCosts
       costsCache.current.dependenciesHash === currentHash &&
       (now - costsCache.current.timestamp) < 2000
     ) {
-      const age = now - costsCache.current.timestamp;
-      console.log(`✅ [CACHE HIT] Używam danych z cache (wiek: ${age}ms)`);
       return costsCache.current.data;
     }
-    
-    console.log('🔄 [CACHE MISS] Obliczam koszty od nowa...');
     
     try {
       let totalMaterialCost = 0;
@@ -189,8 +184,6 @@ export const useTaskCosts = (task, materials, materialQuantities, includeInCosts
         timestamp: now,
         dependenciesHash: currentHash
       };
-      
-      console.log('💾 [CACHE] Zapisano nowe obliczenia w cache');
       
       return result;
       

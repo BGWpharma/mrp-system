@@ -36,6 +36,7 @@ import {
 } from '../../services/crmService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { OPPORTUNITY_STAGES, DEFAULT_CRM_VALUES } from '../../utils/constants';
 
 const OpportunityFormPage = () => {
@@ -60,6 +61,7 @@ const OpportunityFormPage = () => {
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation('interactions');
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -244,7 +246,7 @@ const OpportunityFormPage = () => {
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <TextField
-                label="Nazwa szansy sprzedaży"
+                label={t('opportunities.name')}
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
@@ -307,7 +309,7 @@ const OpportunityFormPage = () => {
             
             <Grid item xs={12} md={6}>
               <TextField
-                label="Wartość (EUR)"
+                label={t('opportunities.valueEUR')}
                 name="amount"
                 type="number"
                 value={formData.amount}

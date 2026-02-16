@@ -473,7 +473,7 @@ const ItemDetailsPage = () => {
       if (result.count > 0) {
         showSuccess(`Usunięto ${result.count} rezerwacji z usuniętych zadań produkcyjnych.`);
       } else {
-        showSuccess('Nie znaleziono rezerwacji do wyczyszczenia.');
+        showSuccess(t('inventory.states.reservationsTab.noReservationsToClean'));
       }
       
       // Odśwież dane po aktualizacji
@@ -499,7 +499,7 @@ const ItemDetailsPage = () => {
       if (result.count > 0) {
         showSuccess(`Usunięto wszystkie ${result.count} rezerwacji dla produktu.`);
       } else {
-        showSuccess('Nie znaleziono rezerwacji do wyczyszczenia.');
+        showSuccess(t('inventory.states.reservationsTab.noReservationsToClean'));
       }
       
       // Odśwież dane po aktualizacji

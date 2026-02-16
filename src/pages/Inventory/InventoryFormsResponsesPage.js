@@ -526,12 +526,12 @@ const InventoryFormsResponsesPage = () => {
   // Funkcja obsługi eksportu z dialogu
   const handleConfirmExport = async () => {
     if (!exportDateRange.fromDate || !exportDateRange.toDate) {
-      alert('Proszę wybrać zakres dat');
+      alert(t('common:common.selectDateRange'));
       return;
     }
     
     if (new Date(exportDateRange.fromDate) > new Date(exportDateRange.toDate)) {
-      alert('Data początkowa nie może być późniejsza niż data końcowa');
+      alert(t('common:common.startDateCannotBeAfterEndDate'));
       return;
     }
     

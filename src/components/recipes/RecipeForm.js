@@ -1981,7 +1981,7 @@ const RecipeForm = ({ recipeId }) => {
                     </Box>
                   ),
                   endAdornment: canConvertUnit('szt.') && (
-                    <Tooltip title="Przełącz jednostkę miary">
+                    <Tooltip title={t('recipes.ingredients.toggleMeasurementUnit')}>
                       <IconButton 
                         size="small" 
                         color="primary" 

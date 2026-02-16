@@ -81,8 +81,10 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatDateTime } from '../../utils/formatters';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import SaveAltIcon from '@mui/icons-material/SaveAlt';
 import { toast } from 'react-hot-toast';
 import ExcelJS from 'exceljs';
+import { createProcurementForecast } from '../../services/procurementForecastService';
 
 const ForecastPage = () => {
   const { t } = useTranslation('production');
@@ -113,6 +115,12 @@ const ForecastPage = () => {
   // State dla przyszłych dostaw nieużywanych materiałów
   const [unusedMaterialsDeliveries, setUnusedMaterialsDeliveries] = useState({});
   const [loadingUnusedDeliveries, setLoadingUnusedDeliveries] = useState(false);
+  
+  // State dla zapisu prognozy do CRM
+  const [saveToCrmDialogOpen, setSaveToCrmDialogOpen] = useState(false);
+  const [saveToCrmName, setSaveToCrmName] = useState('');
+  const [saveToCrmNotes, setSaveToCrmNotes] = useState('');
+  const [savingToCrm, setSavingToCrm] = useState(false);
   
   // State dla sortowania nieużywanych materiałów
   const [unusedSortField, setUnusedSortField] = useState('name');
@@ -909,6 +917,36 @@ const ForecastPage = () => {
     }
   };
   
+  // Zapis prognozy do CRM
+  const handleOpenSaveToCrm = () => {
+    setSaveToCrmName('');
+    setSaveToCrmNotes('');
+    setSaveToCrmDialogOpen(true);
+  };
+  
+  const handleSaveToCrm = async () => {
+    try {
+      setSavingToCrm(true);
+      
+      await createProcurementForecast(
+        forecastData,
+        { startDate, endDate },
+        currentUser?.uid,
+        currentUser?.displayName || currentUser?.email || '',
+        saveToCrmName,
+        saveToCrmNotes
+      );
+      
+      showSuccess('Prognoza została zapisana do CRM');
+      setSaveToCrmDialogOpen(false);
+    } catch (error) {
+      console.error('Błąd podczas zapisu prognozy do CRM:', error);
+      showError('Nie udało się zapisać prognozy: ' + error.message);
+    } finally {
+      setSavingToCrm(false);
+    }
+  };
+  
   // Obsługa zmiany zakresu czasu
   const handleTimeRangeChange = (e) => {
     const range = e.target.value;
@@ -1432,6 +1470,18 @@ const ForecastPage = () => {
                 variant="dot" 
                 sx={{ ml: 1 }}
               />
+            </Button>
+          </Tooltip>
+          <Tooltip title="Zapisz snapshot prognozy do zakładki Prognozy zakupowe">
+            <Button 
+              variant="contained"
+              startIcon={<SaveAltIcon />}
+              onClick={handleOpenSaveToCrm}
+              disabled={forecastData.length === 0 || loading || calculatingForecast}
+              color="success"
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
+              Zapisz do CRM
             </Button>
           </Tooltip>
         </Box>
@@ -2834,6 +2884,65 @@ const ForecastPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDetailsDialog}>{t('forecast.close')}</Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog zapisu prognozy do CRM */}
+      <Dialog 
+        open={saveToCrmDialogOpen} 
+        onClose={() => !savingToCrm && setSaveToCrmDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Zapisz prognozę do CRM</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Zapisz aktualną prognozę zapotrzebowania jako snapshot. Będzie dostępna w zakładce Stany → Prognozy zakupowe.
+          </Typography>
+          <TextField
+            autoFocus
+            label="Nazwa prognozy"
+            fullWidth
+            variant="outlined"
+            value={saveToCrmName}
+            onChange={(e) => setSaveToCrmName(e.target.value)}
+            placeholder={`Prognoza ${format(startDate, 'dd.MM')} - ${format(endDate, 'dd.MM.yyyy')}`}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            label="Notatki (opcjonalne)"
+            fullWidth
+            variant="outlined"
+            multiline
+            rows={3}
+            value={saveToCrmNotes}
+            onChange={(e) => setSaveToCrmNotes(e.target.value)}
+            placeholder="Dodatkowe informacje do prognozy..."
+          />
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Materiałów: <strong>{forecastData.length}</strong> | 
+              Z niedoborem: <strong style={{ color: '#d32f2f' }}>{forecastData.filter(i => i.balanceWithFutureDeliveries < 0).length}</strong> | 
+              Okres: <strong>{format(startDate, 'dd.MM.yyyy')} - {format(endDate, 'dd.MM.yyyy')}</strong>
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setSaveToCrmDialogOpen(false)} 
+            disabled={savingToCrm}
+          >
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleSaveToCrm} 
+            variant="contained" 
+            color="success"
+            disabled={savingToCrm}
+            startIcon={savingToCrm ? <CircularProgress size={20} /> : <SaveAltIcon />}
+          >
+            {savingToCrm ? 'Zapisywanie...' : 'Zapisz'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Container>

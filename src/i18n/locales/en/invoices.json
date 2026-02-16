@@ -1,6 +1,11 @@
 {
   "pageTitle": "Sales",
   "title": "Invoices",
+  "settings": {
+    "title": "Settings and configuration",
+    "companySettings": "Company settings",
+    "companySettingsDescription": "Company data configuration for invoices"
+  },
   "tabs": {
     "invoices": "Invoices",
     "materialAdvances": "Material Advances",
@@ -132,6 +137,14 @@
       "deselectAll": "Deselect All",
       "manageClients": "Manage Clients"
     },
+    "addAtLeastOneItem": "Add at least one item to the invoice",
+    "proformaNotFound": "Proforma {{number}} not found",
+    "searchPurchaseOrderForReinvoice": "🔄 Search Purchase Order (PO) for reinvoice",
+    "searchOrder": "Search order...",
+    "searchCustomer": "Search customer",
+    "noCustomersMessage": "No customers. Add customers in the customer management module.",
+    "adjustmentPlaceholder": "e.g. Adjustment of costs with actual production cost",
+    "addSelectedItems": "Add selected items ({{count}})",
     "notifications": {
       "correctionItemsLoaded": "Correction items loaded"
     },
@@ -168,7 +181,8 @@
       "applyFilters": "Apply Filters",
       "resetFilters": "Reset",
       "client": "Client",
-      "availableFrom": "available from"
+      "availableFrom": "available from",
+      "customerOrder": "Customer order"
     }
   },
   "company": {
@@ -252,6 +266,7 @@
     }
   },
   "details": {
+    "invoiceNotFound": "Invoice not found",
     "title": "Invoice Details",
     "basicInfo": "Basic Information",
     "invoiceNumber": "Invoice Number",

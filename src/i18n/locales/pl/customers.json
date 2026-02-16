@@ -1,4 +1,9 @@
 {
+  "contacts": {
+    "firstName": "Imię",
+    "mobilePhone": "Telefon komórkowy",
+    "salesOpportunities": "Szanse sprzedaży"
+  },
   "title": "Klienci",
   "newCustomer": "Nowy klient",
   "editCustomer": "Edytuj klienta",

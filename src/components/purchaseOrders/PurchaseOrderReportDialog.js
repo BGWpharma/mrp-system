@@ -22,7 +22,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage } = useTranslation('purchaseOrders');
   const { showSuccess, showError } = useNotification();
   
   const [loading, setLoading] = useState(false);
@@ -149,8 +149,8 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Wyszukaj pozycję (lub zostaw puste dla wszystkich)"
-                    placeholder="Zacznij pisać nazwę pozycji..."
+                    label={t('searchItemOrLeaveEmpty')}
+                    placeholder={t('startTypingItemName')}
                     InputProps={{
                       ...params.InputProps,
                       endAdornment: (

@@ -1,26 +1,33 @@
 ---
-description: Zabrania Cursorowi wykonywania firebase deploy --only functions
+description: Zasady deploymentu Cloud Functions przez Firebase
 alwaysApply: true
 ---
 
-# ZABRONIONO: firebase deploy funkcji
+# Deployment Cloud Functions
 
-## ZASADA
-NIGDY nie uruchamiaj komend:
-- `firebase deploy --only functions`
-- `firebase deploy --only function`
-- `firebase deploy` (gdy celem jest deployment funkcji)
+## ZABRONIONE
+NIGDY nie uruchamiaj:
+- `firebase deploy --only functions` (deployuje WSZYSTKIE funkcje)
+- `firebase deploy` (bez precyzyjnego targetu)
 
-## POWÓD
-Te komendy nadpisują funkcje Cloud w projekcie Firebase. Jeśli projekt jest źle wskazany lub użytkownik nie zdaje sobie sprawy ze skutków, deployment może nadpisać funkcje z innej aplikacji/projektu, co grozi utratą danych lub awarią produkcji.
+## PRAWIDŁOWY FORMAT
+Zawsze deployuj **konkretną funkcję** z grupy `bgw-mrp`:
+```
+firebase deploy --only functions:bgw-mrp:<nazwaFunkcji>
+```
 
-## CO ZAMIAST TEGO
-1. **Nie uruchamiaj** tych komend ani nie proponuj ich automatycznego wykonania
-2. **Pokaż użytkownikowi** gotowe komendy do skopiowania i wykonania ręcznie w terminalu
-3. Użytkownik sam decyduje, kiedy i gdzie wykona deployment
+Przykłady:
+- `firebase deploy --only functions:bgw-mrp:retryInvoiceOcr`
+- `firebase deploy --only functions:bgw-mrp:onInvoiceAttachmentUploaded`
 
-## DOPUSZCZALNE
-- Deploy hosting: `firebase deploy --only hosting`
-- Inne komendy Firebase (np. emulator, firebase use)
-- Czytanie konfiguracji Firebase, analiza kodu funkcji
-- Proponowanie zmian w kodzie funkcji (bez deployu)
+## ZASADY
+1. **Zawsze podaj konkretną nazwę funkcji** — nigdy nie deployuj całej grupy
+2. Deploy konkretnych funkcji przez `functions:bgw-mrp:<nazwa>` **MOŻNA wykonywać** bezpośrednio
+3. **Zawsze używaj `--force`** — bez tego Firebase może pominąć aktualizację zależności
+4. **Deployuj każdą funkcję osobno** — zbiorczy deploy (a,b,c) może pominąć aktualizacje
+
+## DOPUSZCZALNE BEZ OGRANICZEŃ
+- `firebase deploy --only hosting`
+- `firebase deploy --only storage`
+- Inne komendy Firebase (emulator, firebase use, itp.)
+- Analiza i edycja kodu funkcji (bez deployu)

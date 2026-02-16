@@ -104,6 +104,7 @@ import {
 import ExpiryDatesPage from '../../pages/Inventory/ExpiryDatesPage';
 import SuppliersPage from '../../pages/SuppliersPage';
 import StocktakingPage from '../../pages/Inventory/StocktakingPage';
+import ProcurementForecastsPage from '../../pages/Inventory/ProcurementForecastsPage';
 
 // Definicje stałych
 const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
@@ -983,7 +984,7 @@ const InventoryList = () => {
       if (result.count > 0) {
         showSuccess(`Usunięto ${result.count} rezerwacji z usuniętych zadań produkcyjnych.`);
       } else {
-        showSuccess('Nie znaleziono rezerwacji do wyczyszczenia.');
+        showSuccess(t('inventory:states.reservationsTab.noReservationsToClean'));
       }
       
       // Odśwież dane po aktualizacji
@@ -1906,7 +1907,7 @@ const InventoryList = () => {
       setImportWarnings(warnings);
       
       if (preview.filter(p => p.status === 'update').length === 0) {
-        setImportError('Nie znaleziono żadnych zmian do zaimportowania.');
+        setImportError(t('inventory:noChangesToImport'));
       }
       
     } catch (error) {
@@ -2273,6 +2274,7 @@ const InventoryList = () => {
         <Tab label={t('inventory.states.tabs.suppliers')} />
         <Tab label={t('inventory.states.tabs.stocktaking')} />
         <Tab label={t('inventory.states.tabs.reservations')} />
+        <Tab label={t('inventory.states.tabs.procurementForecasts')} />
       </Tabs>
 
       {/* Zawartość pierwszej zakładki - Stany */}
@@ -3245,6 +3247,13 @@ const InventoryList = () => {
             </Table>
           </TableContainer>
         </>
+      )}
+
+      {/* Zakładka Prognozy zakupowe */}
+      {currentTab === 6 && (
+        <Box sx={{ mt: -1 }}>
+          <ProcurementForecastsPage embedded={true} />
+        </Box>
       )}
 
       {/* Dialog z rezerwacjami */}

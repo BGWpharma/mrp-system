@@ -39,6 +39,7 @@ import {
 import { createTest, updateTest, getTestById } from '../../services/qualityService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const DEFAULT_PARAMETER = { 
   name: '', 
@@ -66,6 +67,7 @@ const TestForm = ({ testId }) => {
   const [saving, setSaving] = useState(false);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation('production');
   const navigate = useNavigate();
   
   const [testData, setTestData] = useState({
@@ -333,7 +335,7 @@ const TestForm = ({ testId }) => {
                     color="primary"
                   />
                 }
-                label="Wymagaj zdjęcia"
+                label={t('quality.requirePhoto')}
               />
             </Box>
           </Grid>
@@ -385,12 +387,12 @@ const TestForm = ({ testId }) => {
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
-              label="Częstotliwość"
+              label={t('quality.frequency')}
               name="frequency"
               value={testData.frequency || ''}
               onChange={handleChange}
               fullWidth
-              placeholder="np. Co partię, Codziennie, Co tydzień"
+              placeholder={t('quality.frequencyPlaceholder')}
             />
           </Grid>
         </Grid>
@@ -463,7 +465,7 @@ const TestForm = ({ testId }) => {
                     <Grid item xs={12} sm={4}>
                       <TextField
                         type="number"
-                        label="Min. wartość"
+                        label={t('quality.minValue')}
                         value={param.minValue || ''}
                         onChange={(e) => handleParameterChange(index, 'minValue', e.target.value)}
                         fullWidth
@@ -473,7 +475,7 @@ const TestForm = ({ testId }) => {
                     <Grid item xs={12} sm={4}>
                       <TextField
                         type="number"
-                        label="Maks. wartość"
+                        label={t('quality.maxValue')}
                         value={param.maxValue || ''}
                         onChange={(e) => handleParameterChange(index, 'maxValue', e.target.value)}
                         fullWidth
@@ -601,7 +603,7 @@ const TestForm = ({ testId }) => {
           fullWidth
           multiline
           rows={4}
-          placeholder="Szczegółowe instrukcje jak przeprowadzić test..."
+          placeholder={t('quality.testInstructionsPlaceholder')}
         />
       </Paper>
     </Box>

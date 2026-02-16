@@ -37,6 +37,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { getAllOpportunities, getContactById, deleteOpportunity } from '../../services/crmService';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { OPPORTUNITY_STAGES } from '../../utils/constants';
@@ -53,6 +54,7 @@ const OpportunitiesPage = () => {
   const [opportunityToDelete, setOpportunityToDelete] = useState(null);
   
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation('interactions');
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -219,7 +221,7 @@ const OpportunitiesPage = () => {
         <Box p={2} display="flex" justifyContent="space-between" alignItems="center">
           <TextField
             variant="outlined"
-            placeholder="Szukaj szans sprzedaży..."
+            placeholder={t('opportunities.searchOpportunities')}
             size="small"
             value={searchTerm}
             onChange={handleSearchChange}

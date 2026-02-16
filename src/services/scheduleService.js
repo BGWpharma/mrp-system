@@ -13,7 +13,6 @@ export const REQUEST_TYPES = {
   SICK_LEAVE: 'sick_leave',       // Zwolnienie lekarskie
   DAY_OFF: 'day_off',             // Dzień wolny
   UNPAID_LEAVE: 'unpaid_leave',   // Urlop bezpłatny
-  SCHEDULE_CHANGE: 'schedule_change', // Zmiana grafiku
   OTHER: 'other'                  // Inne
 };
 
@@ -25,7 +24,6 @@ export const REQUEST_TYPE_LABELS = {
   [REQUEST_TYPES.SICK_LEAVE]: 'Zwolnienie lekarskie',
   [REQUEST_TYPES.DAY_OFF]: 'Dzień wolny',
   [REQUEST_TYPES.UNPAID_LEAVE]: 'Urlop bezpłatny',
-  [REQUEST_TYPES.SCHEDULE_CHANGE]: 'Zmiana grafiku',
   [REQUEST_TYPES.OTHER]: 'Inne'
 };
 

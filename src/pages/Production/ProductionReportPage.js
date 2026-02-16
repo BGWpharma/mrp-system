@@ -254,7 +254,7 @@ const ProductionReportPage = () => {
             sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
           />
           <Tab 
-            label="Postęp Produkcji"
+            label={t('production.productionReport.progressReport')}
             icon={<ShowChartIcon />} 
             iconPosition="start"
             sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
@@ -305,6 +305,7 @@ const ProductionReportPage = () => {
 // Komponent zakładki konsumpcji MO
 const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, onDateChange }) => {
   const { t } = useTranslation();
+  const { showError } = useNotification();
   const [consumptionData, setConsumptionData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filteredConsumption, setFilteredConsumption] = useState([]);
@@ -749,13 +750,13 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
     try {
       // Przygotuj nagłówki CSV dla podsumowania
       const headers = [
-        'Materiał',
-        'Całkowita ilość',
-        'Jednostka',
-        'Średnia cena jednostkowa (EUR)',
-        'Całkowity koszt (EUR)',
-        'Liczba partii',
-        'Liczba zadań'
+        t('production.reports.consumption.csvHeaders.summary.material'),
+        t('production.reports.consumption.csvHeaders.summary.totalQuantity'),
+        t('production.reports.consumption.csvHeaders.summary.unit'),
+        t('production.reports.consumption.csvHeaders.summary.avgUnitPrice'),
+        t('production.reports.consumption.csvHeaders.summary.totalCost'),
+        t('production.reports.consumption.csvHeaders.summary.batchCount'),
+        t('production.reports.consumption.csvHeaders.summary.taskCount')
       ];
 
       // Przygotuj dane CSV dla podsumowania
@@ -775,7 +776,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
       const uniqueTasks = new Set(consumptionData.flatMap(material => material.taskCount)).size;
       
       csvData.push([]);
-      csvData.push(['SUMA:', '', '', '', totalCost.toFixed(4), totalBatches.toString(), uniqueTasks.toString()]);
+      csvData.push([t('production.reports.consumption.sumTotal'), '', '', '', totalCost.toFixed(4), totalBatches.toString(), uniqueTasks.toString()]);
 
       // Połącz nagłówki z danymi
       const fullData = [headers, ...csvData];
@@ -813,7 +814,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
       console.log(`[EKSPORT CSV] Wyeksportowano podsumowanie ${consumptionData.length} materiałów do pliku ${fileName}`);
     } catch (error) {
       console.error('[EKSPORT CSV] Błąd podczas eksportu podsumowania:', error);
-      alert('Wystąpił błąd podczas eksportu podsumowania do CSV');
+      showError(t('production.reports.consumption.exportErrorSummary'));
     }
   };
 
@@ -822,20 +823,20 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
     try {
       // Przygotuj nagłówki CSV
       const headers = [
-        'Data konsumpcji',
-        'Zadanie',
-        'MO',
-        'Zamówienie (CO)',
-        'Klient',
-        'Produkt',
-        'Materiał',
-        'Partia',
-        'Ilość',
-        'Jednostka',
-        'Cena jednostkowa (EUR)',
-        'Koszt całkowity (EUR)',
-        'Użytkownik',
-        'Wliczane do kosztów'
+        t('production.reports.consumption.csvHeaders.details.consumptionDate'),
+        t('production.reports.consumption.csvHeaders.details.task'),
+        t('production.reports.consumption.csvHeaders.details.mo'),
+        t('production.reports.consumption.csvHeaders.details.order'),
+        t('production.reports.consumption.csvHeaders.details.customer'),
+        t('production.reports.consumption.csvHeaders.details.product'),
+        t('production.reports.consumption.csvHeaders.details.material'),
+        t('production.reports.consumption.csvHeaders.details.batch'),
+        t('production.reports.consumption.csvHeaders.details.quantity'),
+        t('production.reports.consumption.csvHeaders.details.unit'),
+        t('production.reports.consumption.csvHeaders.details.unitPrice'),
+        t('production.reports.consumption.csvHeaders.details.totalCost'),
+        t('production.reports.consumption.csvHeaders.details.user'),
+        t('production.reports.consumption.csvHeaders.details.includeInCosts')
       ];
 
       // Przygotuj dane CSV
@@ -868,7 +869,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
       // Dodaj podsumowanie na końcu
       const totalCost = filteredConsumption.reduce((sum, item) => sum + item.totalCost, 0);
       csvData.push([]);
-      csvData.push(['PODSUMOWANIE:', '', '', '', '', '', '', '', '', '', '', totalCost.toFixed(4), '', '']);
+      csvData.push([t('production.reports.consumption.summaryLabel'), '', '', '', '', '', '', '', '', '', '', totalCost.toFixed(4), '', '']);
 
       // Połącz nagłówki z danymi
       const fullData = [headers, ...csvData];
@@ -907,7 +908,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
       console.log(`[EKSPORT CSV] Wyeksportowano ${filteredConsumption.length} pozycji konsumpcji do pliku ${fileName}`);
     } catch (error) {
       console.error('[EKSPORT CSV] Błąd podczas eksportu:', error);
-      alert('Wystąpił błąd podczas eksportu do CSV');
+      showError(t('production.reports.consumption.exportErrorDetails'));
     }
   };
 
@@ -1009,37 +1010,37 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
               size={isMobile ? "small" : "medium"}
               sx={{ ml: 2 }}
             >
-              Eksportuj CSV
+              {t('common:common.exportCsv')}
             </Button>
           )}
         </Box>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Okres: {format(startDate, 'dd.MM.yyyy')} - {format(endDate, 'dd.MM.yyyy')}
+          {t('production.reports.consumption.period')} {format(startDate, 'dd.MM.yyyy')} - {format(endDate, 'dd.MM.yyyy')}
         </Typography>
         
         {consumptionData.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography variant="h6" color="text.secondary" gutterBottom>
-              Brak podsumowania konsumpcji
+              {t('production.reports.consumption.noSummaryData')}
             </Typography>
             <Typography color="text.secondary" paragraph>
-              Nie znaleziono żadnej konsumpcji materiałów w wybranym okresie i filtrach.
+              {t('production.reports.consumption.noConsumptionFound')}
             </Typography>
             <Typography variant="body2" color="primary" sx={{ fontWeight: 'medium' }}>
-              💡 Aby dane pojawiły się w raporcie:
+              {t('production.reports.consumption.instructionsTitle')}
             </Typography>
             <Box component="ul" sx={{ textAlign: 'left', display: 'inline-block', mt: 1, pl: 2 }}>
               <Typography component="li" variant="body2" color="text.secondary">
-                Przejdź do szczegółów zadania produkcyjnego (MO)
+                {t('production.reports.consumption.instruction1')}
               </Typography>
               <Typography component="li" variant="body2" color="text.secondary">
-                W zakładce "Materiały i koszty" kliknij "Konsumuj materiały"
+                {t('production.reports.consumption.instruction2')}
               </Typography>
               <Typography component="li" variant="body2" color="text.secondary">
-                Wybierz rzeczywiście zużyte partie i ilości materiałów
+                {t('production.reports.consumption.instruction3')}
               </Typography>
               <Typography component="li" variant="body2" color="text.secondary">
-                Potwierdź konsumpcję - dane pojawią się w raporcie
+                {t('production.reports.consumption.instruction4')}
               </Typography>
             </Box>
           </Box>
@@ -1092,7 +1093,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
                   </TableRow>
                 ))}
                 <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}>
-                  <TableCell>SUMA:</TableCell>
+                  <TableCell>{t('production.reports.consumption.sumTotal')}</TableCell>
                   <TableCell align="right">-</TableCell>
                   <TableCell>-</TableCell>
                   <TableCell align="right">-</TableCell>
@@ -1126,7 +1127,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
               size={isMobile ? "small" : "medium"}
               sx={{ ml: 2 }}
             >
-              Eksportuj CSV
+              {t('common:common.exportCsv')}
             </Button>
           )}
         </Box>
@@ -1134,26 +1135,26 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
         {filteredConsumption.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography variant="h6" color="text.secondary" gutterBottom>
-              Brak danych konsumpcji materiałów
+              {t('production.reports.consumption.noConsumptionData')}
             </Typography>
             <Typography color="text.secondary" sx={{ mb: 2 }}>
-              W wybranym okresie ({format(startDate, 'dd.MM.yyyy')} - {format(endDate, 'dd.MM.yyyy')}) nie znaleziono żadnych danych konsumpcji materiałów.
+              {t('production.reports.consumption.noConsumptionInPeriod', { dateFrom: format(startDate, 'dd.MM.yyyy'), dateTo: format(endDate, 'dd.MM.yyyy') })}
             </Typography>
             <Typography variant="body2" color="primary" sx={{ fontWeight: 'medium', mb: 1 }}>
-              💡 Jak wykonać konsumpcję materiałów:
+              {t('production.reports.consumption.howToConsumeTitle')}
             </Typography>
             <Box component="ol" sx={{ textAlign: 'left', display: 'inline-block', mt: 1, pl: 2 }}>
               <Typography component="li" variant="body2" color="text.secondary">
-                Przejdź do zadania produkcyjnego → zakładka "Materiały i koszty"
+                {t('production.reports.consumption.howToInstruction1')}
               </Typography>
               <Typography component="li" variant="body2" color="text.secondary">
-                W sekcji "Zarezerwowane materiały" kliknij "Konsumuj materiały"
+                {t('production.reports.consumption.howToInstruction2')}
               </Typography>
               <Typography component="li" variant="body2" color="text.secondary">
-                Wybierz partie i wprowadź rzeczywiste ilości zużytych materiałów
+                {t('production.reports.consumption.howToInstruction3')}
               </Typography>
               <Typography component="li" variant="body2" color="text.secondary">
-                Potwierdź konsumpcję - dane automatycznie pojawią się w raporcie
+                {t('production.reports.consumption.howToInstruction4')}
               </Typography>
             </Box>
           </Box>

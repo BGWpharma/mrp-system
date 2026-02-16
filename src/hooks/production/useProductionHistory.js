@@ -32,8 +32,6 @@ export const useProductionHistory = (taskId) => {
     
     try {
       setLoading(true);
-      console.log('⚡ [LAZY-LOAD] Ładowanie historii produkcji dla zadania:', taskId);
-      
       const history = await getProductionHistory(taskId);
       setProductionHistory(history || []);
       
@@ -42,8 +40,6 @@ export const useProductionHistory = (taskId) => {
       if (userIds.length > 0) {
         await fetchUserNames(userIds);
       }
-      
-      console.log('✅ [LAZY-LOAD] Historia produkcji załadowana:', history?.length || 0, 'wpisów');
       
     } catch (error) {
       console.error('Błąd podczas pobierania historii produkcji:', error);
@@ -75,7 +71,6 @@ export const useProductionHistory = (taskId) => {
     }
     
     try {
-      console.log(`Wzbogacanie historii produkcji danymi z maszyny ${selectedMachineId}`);
       const { getProductionDataForHistory } = await import('../../services/machineService');
       const enriched = await getProductionDataForHistory(selectedMachineId, productionHistory);
       setEnrichedHistory(enriched);
@@ -93,7 +88,6 @@ export const useProductionHistory = (taskId) => {
     }
     
     try {
-      console.log('Dodawanie wpisu historii produkcji:', historyData);
       await addProductionSession(taskId, historyData);
       
       // Odśwież historię
@@ -117,7 +111,6 @@ export const useProductionHistory = (taskId) => {
     }
     
     try {
-      console.log('Aktualizacja wpisu historii:', sessionId, updates);
       await updateProductionSession(taskId, sessionId, updates);
       
       // Odśwież historię
@@ -141,7 +134,6 @@ export const useProductionHistory = (taskId) => {
     }
     
     try {
-      console.log('Usuwanie wpisu historii:', sessionId);
       await deleteProductionSession(taskId, sessionId);
       
       // Odśwież historię

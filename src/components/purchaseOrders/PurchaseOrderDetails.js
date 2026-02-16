@@ -423,7 +423,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
       setLoadingBatches(false);
       
       if (error.message?.includes('nie istnieje')) {
-        showError('Nie znaleziono partii w bazie danych.');
+        showError(t('purchaseOrders.batchNotFoundInDb'));
       } else {
         navigate(`/inventory/batch/${batchId}`);
       }
@@ -749,11 +749,11 @@ const PurchaseOrderDetails = ({ orderId }) => {
   };
   
   if (loading) {
-    return <Typography>Ładowanie szczegółów zamówienia...</Typography>;
+    return <Typography>{t('purchaseOrders.loadingOrderDetails')}</Typography>;
   }
   
   if (!purchaseOrder) {
-    return <Typography>Nie znaleziono zamówienia</Typography>;
+    return <Typography>{t('purchaseOrders.orderNotFound')}</Typography>;
   }
   
   const handleEditClick = () => {
@@ -1066,7 +1066,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
         if (result.updated > 0) {
           showSuccess(`Zaktualizowano ${result.updated} cen dostawców na podstawie tego zamówienia i ustawiono jako domyślne`);
         } else {
-          showSuccess('Nie znaleziono cen do aktualizacji lub ceny są już aktualne');
+          showSuccess(t('purchaseOrders.noPricesToUpdate'));
         }
       } else {
         showError(result.message || 'Nie udało się zaktualizować cen dostawców');
@@ -1094,7 +1094,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           if (result.success && result.updated > 0) {
             showSuccess(`Status zamówienia został zaktualizowany. Dodatkowo zaktualizowano ${result.updated} cen dostawców i ustawiono jako domyślne.`);
           } else {
-            showSuccess('Status zamówienia został zaktualizowany. Nie znaleziono cen dostawców do aktualizacji.');
+            showSuccess(t('purchaseOrders.statusUpdatedNoPrices'));
           }
         } catch (pricesError) {
           console.error('Błąd podczas aktualizacji cen dostawców:', pricesError);
@@ -1249,7 +1249,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
   
   const handleDownloadPDF = async (hidePricing = false) => {
     if (!purchaseOrder) {
-      showError('Brak danych zamówienia do wygenerowania PDF');
+      showError(t('purchaseOrders.details.noPdfData'));
       return;
     }
     
@@ -1313,7 +1313,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
       const updatedOrder = await getPurchaseOrderById(orderId);
       setPurchaseOrder(updatedOrder);
       
-      showSuccess('Status płatności został zaktualizowany');
+      showSuccess(t('purchaseOrders.paymentStatusUpdated'));
     } catch (error) {
       console.error('Błąd podczas aktualizacji statusu płatności:', error);
       showError('Nie udało się zaktualizować statusu płatności');
@@ -2372,7 +2372,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       <TableCell>Termin płatności</TableCell>
                       <TableCell align="right">Kwota</TableCell>
                       <TableCell>Status</TableCell>
-                      <TableCell>Status płatności</TableCell>
+                      <TableCell>{t('common:common.paymentStatus')}</TableCell>
                       <TableCell align="center">Akcje</TableCell>
                     </TableRow>
                   </TableHead>
@@ -3116,7 +3116,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                             </Typography>
                                             {batch.noExpiryDate ? (
                                               <Chip 
-                                                label="Bez daty ważności" 
+                                                label={t('common:common.noExpiryDate')} 
                                                 size="small" 
                                                 color="default"
                                                 sx={{ fontSize: '0.6rem', height: 16 }}
@@ -3140,7 +3140,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                         </Typography>
                                         {item.noExpiryDate ? (
                                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                                            Bez daty ważności
+                                            {t('common:common.noExpiryDate')}
                                           </Typography>
                                         ) : item.expiryDate && (
                                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
@@ -3239,7 +3239,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           </Paper>
         </>
       ) : (
-        <Typography>Nie znaleziono zamówienia</Typography>
+        <Typography>{t('purchaseOrders.orderNotFound')}</Typography>
       )}
 
       {/* Dialog usuwania */}
@@ -3303,11 +3303,11 @@ const PurchaseOrderDetails = ({ orderId }) => {
             Wybierz nowy status płatności zamówienia:
           </DialogContentText>
           <FormControl fullWidth>
-            <InputLabel>Status płatności</InputLabel>
+            <InputLabel>{t('common:common.paymentStatus')}</InputLabel>
             <Select
               value={newPaymentStatus}
               onChange={(e) => setNewPaymentStatus(e.target.value)}
-              label="Status płatności"
+              label={t('common:common.paymentStatus')}
             >
               <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID}>
                 {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID)}
@@ -3448,7 +3448,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                             updated[index].description = e.target.value;
                             setTempInvoiceLinks(updated);
                           }}
-                          placeholder="Opis faktury, np. Faktura główna, Faktura transportowa itp."
+                          placeholder={t('purchaseOrders.invoiceDescriptionPlaceholder')}
                         />
                       </TableCell>
                       <TableCell>

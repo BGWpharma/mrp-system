@@ -1096,7 +1096,7 @@ const StocktakingDetailsPage = () => {
                     startIcon={<FilterIcon />}
                     onClick={() => setShowOnlyIncomplete(!showOnlyIncomplete)}
                   >
-                    Pozycje do uzupełnienia
+                    {t('stocktaking.toComplete')}
                   </Button>
                   <FormControl size="small" sx={{ minWidth: 200 }}>
                     <InputLabel>Status akceptacji</InputLabel>
@@ -1331,7 +1331,7 @@ const StocktakingDetailsPage = () => {
                         {item.name}
                         {needsQuantity && (
                           <Chip 
-                            label="Wymaga uzupełnienia ilości" 
+                            label={t('stocktaking.requiresQuantityCompletion')} 
                             color="warning" 
                             size="small" 
                             sx={{ ml: 1 }}
@@ -1350,7 +1350,7 @@ const StocktakingDetailsPage = () => {
                       <TableCell align="right">{item.systemQuantity} {item.unit}</TableCell>
                       <TableCell align="right">
                         {needsQuantity ? (
-                          <Chip label="Do uzupełnienia" color="warning" size="small" />
+                          <Chip label={t('stocktaking.toComplete')} color="warning" size="small" />
                         ) : (
                           `${item.countedQuantity} ${item.unit}`
                         )}
@@ -1406,7 +1406,7 @@ const StocktakingDetailsPage = () => {
                               </span>
                             </Tooltip>
                           ) : (
-                            <Tooltip title="Cofnij akceptację">
+                            <Tooltip title={t('stocktaking.undoAcceptance')}>
                               <IconButton
                                 size="small"
                                 color="warning"
@@ -1420,7 +1420,7 @@ const StocktakingDetailsPage = () => {
                             <EditIcon />
                           </IconButton>
                           {needsQuantity && (
-                            <Tooltip title="Pozycja wymaga uzupełnienia ilości">
+                            <Tooltip title={t('stocktaking.itemRequiresQuantity')}>
                               <IconButton color="warning" size="small">
                                 <WarningIcon />
                               </IconButton>
@@ -1459,13 +1459,13 @@ const StocktakingDetailsPage = () => {
             
             {/* Krok 1: Wybór kategorii */}
             <FormControl fullWidth margin="normal">
-              <InputLabel id="category-select-label">Wybierz kategorię *</InputLabel>
+              <InputLabel id="category-select-label">{t('stocktaking.selectCategory')}</InputLabel>
               <Select
                 labelId="category-select-label"
                 value={selectedCategory}
                 onChange={(e) => handleCategorySelect(e.target.value)}
                 required
-                label="Wybierz kategorię *"
+                label={t('stocktaking.selectCategory')}
               >
                 <MenuItem value="">
                   <em>Wybierz kategorię</em>
@@ -1573,7 +1573,7 @@ const StocktakingDetailsPage = () => {
                             <strong>LOT:</strong> {batch.lotNumber || batch.batchNumber || 'Brak numeru'}
                             {isAlreadyAdded && (
                               <Chip 
-                                label="Już dodana" 
+                                label={t('stocktaking.alreadyAdded')} 
                                 color="default" 
                                 size="small" 
                                 sx={{ ml: 1 }}
@@ -1650,7 +1650,7 @@ const StocktakingDetailsPage = () => {
             
             {/* Pole notatek */}
             <TextField
-              label="Notatki (będą dodane do wszystkich wybranych pozycji)"
+              label={t('stocktaking.notesForAllSelectedItems')}
               fullWidth
               multiline
               rows={2}

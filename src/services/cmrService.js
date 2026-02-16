@@ -1,3 +1,4 @@
+import i18n from 'i18next';
 import { db, storage } from './firebase/config';
 import { 
   collection, 
@@ -46,22 +47,36 @@ export const CMR_PAYMENT_STATUSES = {
   PAID: 'paid'
 };
 
-// Funkcja do tłumaczenia statusów płatności na język polski
+// Funkcja do tłumaczenia statusów płatności (używa i18n)
 export const translatePaymentStatus = (status) => {
   switch (status) {
-    case 'unpaid': return 'Nie opłacone';
-    case 'paid': return 'Opłacone';
+    case 'unpaid': return i18n.t('cmr:paymentStatuses.unpaid');
+    case 'paid': return i18n.t('cmr:paymentStatuses.paid');
     default: return status;
   }
 };
 
-// Typy transportu
+// Typy transportu (wartości w PL – używane w DB; do wyświetlania użyj getTransportTypeLabel)
 export const TRANSPORT_TYPES = {
   ROAD: 'Drogowy',
   RAIL: 'Kolejowy',
   SEA: 'Morski',
   AIR: 'Lotniczy',
   MULTIMODAL: 'Multimodalny'
+};
+
+// Mapowanie wartości transportu na klucze i18n
+const TRANSPORT_TYPE_I18N_KEYS = {
+  'Drogowy': 'road',
+  'Kolejowy': 'rail',
+  'Morski': 'sea',
+  'Lotniczy': 'air',
+  'Multimodalny': 'multimodal'
+};
+
+export const getTransportTypeLabel = (transportType) => {
+  const key = TRANSPORT_TYPE_I18N_KEYS[transportType];
+  return key ? i18n.t(`cmr:transportTypes.${key}`) : (transportType || '');
 };
 
 // Pobranie wszystkich dokumentów CMR

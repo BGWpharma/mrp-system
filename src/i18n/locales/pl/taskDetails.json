@@ -329,6 +329,9 @@
         "piecesCountLabel": "Liczba sztuk w mieszaniu",
         "piecesCountLabelHelper": "Opcjonalnie: Ile sztuk produktu ma powstać z tego mieszania",
         "editMixingInfo": "Zmiana nazwy lub liczby sztuk zaktualizuje nagłówek mieszania. Suma składników zostanie automatycznie przeliczona.",
+        "totalRequired": "Wymagane łącznie: {{quantity}} {{unit}}",
+        "selectReservation": "Wybierz rezerwację",
+        "quantityToLink": "Ilość do powiązania",
         "errors": {
             "addMixingFailed": "Nie udało się dodać mieszania",
             "removeMixingFailed": "Nie udało się usunąć mieszania",
@@ -421,7 +424,15 @@
         "material": "Materiał",
         "delivered": "Dostarczone",
         "reserved": "Zarezerwowane",
-        "poNumber": "Numer PO"
+        "poNumber": "Numer PO",
+        "preview": "Podgląd",
+        "convertToStandardReservation": "Przekształć na standardową rezerwację",
+        "debug": "Debuguj - sprawdź partie magazynowe",
+        "deleteReservation": "Usuń rezerwację",
+        "selectMaterial": "Wybierz materiał",
+        "requiredQuantity": "Wymagane: {{quantity}} {{unit}}",
+        "quantityToConvert": "Ilość do przekształcenia",
+        "convert": "Przekształć"
     },
     "changeHistory": {
         "title": "Historia zmian",
@@ -528,5 +539,23 @@
         "by": "przez",
         "user": "Użytkownik",
         "tooltipComments": "Komentarze"
-    }
+    },
+    "consumption": {
+        "previousConfirmationCanceled": "Poprzednie potwierdzenie zużycia zostało anulowane z powodu zmiany ilości. Proszę ponownie potwierdzić zużycie materiałów.",
+        "reservationNotFoundForDeletion": "Nie znaleziono rezerwacji do usunięcia",
+        "showDepletedBatches": "Pokaż wyczerpane partie",
+        "fullyConsumed": "W pełni skonsumowany",
+        "partialReservation": "Częściowa rezerwacja",
+        "inventoryBatchNotFound": "Nie znaleziono partii magazynowej",
+        "confirmMaterialDeletion": "Potwierdź usunięcie materiału",
+        "manualBatchSelection": "Ręczna (wybór partii)",
+        "restoreReservationAfterDeletion": "Przywróć rezerwację materiału po usunięciu konsumpcji",
+        "quantityToAdd": "Ilość do dodania",
+        "confirmConsumptionDeletion": "Potwierdź usunięcie konsumpcji"
+    },
+    "errors": {
+        "recipeNotFound": "Nie znaleziono receptury",
+        "noTaskDataForReport": "Brak danych zadania do wygenerowania raportu"
+    },
+    "mainTabs": "Główne zakładki szczegółów zadania"
 }

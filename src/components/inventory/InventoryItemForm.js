@@ -189,7 +189,7 @@ const InventoryItemForm = ({ itemId }) => {
   };
 
   if (loading) {
-    return <div>Ładowanie...</div>;
+    return <div>{t('common:common.loading')}</div>;
   }
 
   return (
@@ -216,7 +216,7 @@ const InventoryItemForm = ({ itemId }) => {
           }}
         />
         <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
-          {itemId ? 'Edytuj pozycję magazynową' : 'Dodaj nową pozycję magazynową'}
+          {itemId ? t('inventory.itemForm.editItem') : t('inventory.itemForm.addNewItem')}
         </Typography>
         <Button 
           type="submit"
@@ -343,10 +343,10 @@ const InventoryItemForm = ({ itemId }) => {
                       color="primary"
                     />
                   }
-                  label="Wszyscy klienci"
+                  label={t('inventory.itemForm.allCustomers')}
                 />
                 {itemData.allCustomers && (
-                  <Chip label="Pozycja dostępna dla wszystkich klientów" color="primary" size="small" variant="outlined" />
+                  <Chip label={t('inventory.itemForm.availableForAllCustomers')} color="primary" size="small" variant="outlined" />
                 )}
               </Box>
               {!itemData.allCustomers && (
@@ -374,7 +374,7 @@ const InventoryItemForm = ({ itemId }) => {
                   noOptionsText="Brak klientów"
                   clearText="Wyczyść"
                   openText="Otwórz"
-                  closeText="Zamknij"
+                  closeText={t('common:common.close')}
                 />
               )}
             </Grid>
@@ -579,7 +579,7 @@ const InventoryItemForm = ({ itemId }) => {
                 noOptionsText="Brak dostępnych kartonów"
                 clearText="Wyczyść"
                 openText="Otwórz"
-                closeText="Zamknij"
+                closeText={t('common:common.close')}
               />
             </Grid>
           </Grid>

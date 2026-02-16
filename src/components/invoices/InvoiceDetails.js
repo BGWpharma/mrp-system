@@ -302,7 +302,7 @@ const InvoiceDetails = () => {
   if (!invoice) {
     return (
       <Box sx={{ p: 3 }}>
-        <Typography variant="h5">Nie znaleziono faktury</Typography>
+        <Typography variant="h5">{t('invoices.details.invoiceNotFound')}</Typography>
         <Button 
           variant="contained" 
           startIcon={<ArrowBackIcon />}
@@ -342,7 +342,7 @@ const InvoiceDetails = () => {
             startIcon={<DeleteIcon />}
             onClick={handleDeleteClick}
           >
-            Usuń
+            {t('common:common.delete')}
           </Button>
           <Button
             variant="outlined"

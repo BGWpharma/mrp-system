@@ -459,7 +459,6 @@ const TaskDetailsPage = () => {
       timestamp: null,
       dependenciesHash: null
     };
-    console.log('🗑️ [CACHE] Wymuszono odświeżenie cache kosztów');
   }, []);
   
   // ✅ POPRAWKA: productionHistory, editingHistoryItem, editedHistoryItem, availableMachines,
@@ -638,8 +637,6 @@ const TaskDetailsPage = () => {
     if (loadedTabs.productionPlan || !task?.id) return;
     
     try {
-      console.log('⚡ [LAZY-LOAD] Ładowanie danych planu produkcji...');
-      
       // Historia produkcji
       const history = await getProductionHistory(task.id);
       setProductionHistory(history || []);
@@ -656,7 +653,6 @@ const TaskDetailsPage = () => {
       }
       
       setLoadedTabs(prev => ({ ...prev, productionPlan: true }));
-      console.log('✅ [LAZY-LOAD] Dane planu produkcji załadowane');
     } catch (error) {
       console.error('Błąd ładowania planu produkcji:', error.message);
     }
@@ -666,15 +662,11 @@ const TaskDetailsPage = () => {
     if (loadedTabs.forms || !task?.moNumber) return;
     
     try {
-      console.log('⚡ [LAZY-LOAD] Ładowanie danych formularzy...');
-      
       // Ładowanie danych formularzy
       const responses = await fetchFormResponsesOptimized(task.moNumber);
       setFormResponses(responses);
       
       setLoadedTabs(prev => ({ ...prev, forms: true }));
-      console.log('✅ [LAZY-LOAD] Dane formularzy załadowane');
-      // Formularze załadowane
     } catch (error) {
       console.error('❌ Error loading Forms data:', error);
       setFormResponses({ completedMO: [], productionControl: [], productionShift: [] });
@@ -685,8 +677,6 @@ const TaskDetailsPage = () => {
     if (loadedTabs.endProductReport) return;
     
     try {
-      console.log('⚡ [LAZY-LOAD] Ładowanie danych raportu gotowego produktu...');
-      
       const loadPromises = [];
       
       // Dane firmy (jeśli nie zostały załadowane)
@@ -779,7 +769,6 @@ const TaskDetailsPage = () => {
       await Promise.all(loadPromises);
       
       setLoadedTabs(prev => ({ ...prev, endProductReport: true }));
-      console.log('✅ [LAZY-LOAD] Dane raportu gotowego produktu załadowane');
     } catch (error) {
       console.error('❌ Error loading End Product Report data:', error);
     }
@@ -811,19 +800,16 @@ const TaskDetailsPage = () => {
     switch (tabIndex) {
       case 2: // Produkcja i Plan
         if (!loadedTabs.productionPlan && task?.id) {
-          console.log('⚡ [PREFETCH] Prefetch danych planu produkcji...');
           loadProductionPlanData();
         }
         break;
       case 3: // Formularze
         if (!loadedTabs.forms && task?.moNumber) {
-          console.log('⚡ [PREFETCH] Prefetch danych formularzy...');
           loadFormsData();
         }
         break;
       case 4: // Raport gotowego produktu
         if (!loadedTabs.endProductReport && task?.id) {
-          console.log('⚡ [PREFETCH] Prefetch danych raportu produktu...');
           loadEndProductReportData();
         }
         break;
@@ -842,7 +828,6 @@ const TaskDetailsPage = () => {
     // 🔒 POPRAWKA: Flaga mounted aby uniknąć setState po odmontowaniu komponentu
     let isMounted = true;
     
-    console.log('🔥 [REAL-TIME] Inicjalizacja real-time listenera dla zadania:', id);
     setLoading(true);
     
     // 📡 Real-time listener dla dokumentu zadania produkcyjnego
@@ -862,7 +847,6 @@ const TaskDetailsPage = () => {
         debounceTimerRef.current = setTimeout(async () => {
           // 🔒 Sprawdź czy komponent jest nadal zamontowany
           if (!isMounted) {
-            console.log('📡 [REAL-TIME] Komponent odmontowany, pomijam aktualizację');
             return;
           }
           
@@ -882,17 +866,10 @@ const TaskDetailsPage = () => {
           // Używamy < zamiast <= aby nie blokować aktualizacji gdy timestamp jest równy
           // (może się zdarzyć przy szybkich aktualizacjach z Cloud Functions)
           if (lastUpdateTimestamp && updateTimestamp < lastUpdateTimestamp) {
-            console.log('📡 [REAL-TIME] Pominięto starszy snapshot');
             return;
           }
           
           lastUpdateTimestamp = updateTimestamp;
-          
-          console.log('📡 [REAL-TIME] Otrzymano aktualizację zadania:', {
-            moNumber: taskData.moNumber,
-            status: taskData.status,
-            timestamp: new Date(updateTimestamp).toISOString()
-          });
           
           // Przetwórz i zaktualizuj dane
           await processTaskUpdate(taskData);
@@ -922,7 +899,6 @@ const TaskDetailsPage = () => {
         debounceTimerRef.current = null; // Wyczyść referencję
       }
       unsubscribe();
-      console.log('🔌 [REAL-TIME] Odłączono listener dla zadania:', id);
     };
   }, [id, navigate, showError]); // 🔒 POPRAWKA: Dodano showError do dependencies
 
@@ -946,7 +922,6 @@ const TaskDetailsPage = () => {
     if (productionHistory && productionHistory.length > 0) {
       const userIds = productionHistory.map(session => session.userId).filter(Boolean);
       if (userIds.length > 0) {
-        console.log('useEffect: Pobieranie nazw użytkowników z historii produkcji:', userIds);
         fetchUserNames(userIds);
       }
     }
@@ -1109,33 +1084,28 @@ const TaskDetailsPage = () => {
       // ⚡ OPTYMALIZACJA: Shallow comparison zamiast JSON.stringify (10-100x szybsze)
       const materialsChanged = areMaterialsChanged(taskData.materials, previousTask?.materials);
       if (materialsChanged || !previousTask) {
-        console.log('📊 [REAL-TIME] Wykryto zmianę materiałów, odświeżam...');
         promises.push(processMaterialsUpdate(taskData));
       }
       
       // ⚡ OPTYMALIZACJA: Shallow comparison dla consumedMaterials
       const consumedChanged = areConsumedMaterialsChanged(taskData.consumedMaterials, previousTask?.consumedMaterials);
       if (consumedChanged || !previousTask) {
-        console.log('📊 [REAL-TIME] Wykryto zmianę konsumpcji, odświeżam...');
         // 🔒 POPRAWKA: Wzbogacaj dane bezpośrednio - modyfikuje taskData in-place
         taskData = await processConsumedMaterialsUpdate(taskData);
       }
       
       // Sprawdź czy numer MO się zmienił
       if (taskData.moNumber && taskData.moNumber !== previousTask?.moNumber) {
-        console.log('📊 [REAL-TIME] Wykryto zmianę numeru MO, odświeżam formularze...');
         promises.push(fetchFormResponsesOptimized(taskData.moNumber));
       }
       
       // Sprawdź czy materiały zadania się zmieniły - pobierz awaitujące zamówienia
       if (taskData.id && (materialsChanged || !previousTask)) {
-        console.log('📊 [REAL-TIME] Odświeżam awaitujące zamówienia...');
         promises.push(fetchAwaitingOrdersForMaterials(taskData));
       }
       
       // Odśwież rezerwacje PO przy zmianie materiałów lub przy pierwszym ładowaniu
       if (taskData.id && (materialsChanged || !previousTask)) {
-        console.log('📊 [REAL-TIME] Odświeżam rezerwacje PO...');
         promises.push(fetchPOReservations());
       }
       
@@ -1143,7 +1113,6 @@ const TaskDetailsPage = () => {
       // (Historia jest teraz lazy-loaded - pobierana dopiero gdy użytkownik przejdzie do zakładki)
       // NIE pobieraj przy pierwszym ładowaniu (!previousTask) - oszczędza ~500ms na starcie
       if (taskData.id && loadedTabs.productionPlan && previousTask && (materialsChanged || consumedChanged)) {
-        console.log('📊 [REAL-TIME] Odświeżam historię produkcji (zakładka aktywna)...');
         promises.push(fetchProductionHistory(taskData.id));
       }
       
@@ -1158,9 +1127,6 @@ const TaskDetailsPage = () => {
           errors.map((e, idx) => ({ index: idx, error: e.reason }))
         );
       }
-      
-      const successes = results.filter(r => r.status === 'fulfilled').length;
-      console.log(`✅ [REAL-TIME] Zakończono przetwarzanie aktualizacji: ${successes}/${results.length} sukces`);
       
       // ⚡ Invaliduj cache kosztów jeśli materiały lub konsumpcja się zmieniły
       if (materialsChanged || consumedChanged) {
@@ -1509,7 +1475,6 @@ const TaskDetailsPage = () => {
           
           // Pobierz podstawowe nazwy użytkowników (bez historii produkcji - załadowane później)
           if (basicUserIds.size > 0) {
-            console.log('⚡ [PROGRESSIVE] Pobieranie podstawowych nazw użytkowników:', [...basicUserIds]);
             await fetchUserNames([...basicUserIds]);
           }
         } catch (error) {
@@ -1548,8 +1513,6 @@ const TaskDetailsPage = () => {
   // ✅ NOWA FUNKCJA: Selektywne odświeżanie tylko rezerwacji i konsumpcji
   const refreshTaskReservations = async () => {
     try {
-      console.log('🔄 Selektywne odświeżanie rezerwacji i konsumpcji...');
-      
       // Pobierz tylko podstawowe dane zadania (bez cache, bezpośrednio z serwera)
       const taskRef = doc(db, 'productionTasks', id);
       const taskSnapshot = await getDoc(taskRef);
@@ -1573,12 +1536,6 @@ const TaskDetailsPage = () => {
         // Zachowaj inne pola bez zmian
         updatedBy: freshTaskData.updatedBy
       }));
-      
-      console.log('✅ Selektywne odświeżenie zakończone:', {
-        materialBatchesKeys: Object.keys(freshTaskData.materialBatches || {}),
-        consumedMaterialsCount: (freshTaskData.consumedMaterials || []).length,
-        materialsReserved: freshTaskData.materialsReserved
-      });
       
     } catch (error) {
       console.error('❌ Błąd podczas selektywnego odświeżania:', error);
@@ -1810,21 +1767,6 @@ const TaskDetailsPage = () => {
     const tolerance = 0.001;
     const hasFullCoverage = (totalCoverage + tolerance) >= formattedRequiredQuantity;
     
-    // Debug logging dla problemów z pokryciem
-    if (Math.abs(totalCoverage - formattedRequiredQuantity) < 0.1 && !hasFullCoverage) {
-      console.log(`[DEBUG COVERAGE] Materiał ${materialId}:`, {
-        originalRequiredQuantity: requiredQuantity,
-        formattedRequiredQuantity,
-        originalTotalCoverage: formattedConsumedQuantity + formattedStandardReservationsTotal,
-        formattedTotalCoverage: totalCoverage,
-        consumedQuantity: formattedConsumedQuantity,
-        standardReservationsTotal: formattedStandardReservationsTotal,
-        difference: totalCoverage - formattedRequiredQuantity,
-        hasFullCoverage,
-        tolerance
-      });
-    }
-    
     return {
       requiredQuantity: formattedRequiredQuantity,
       consumedQuantity: formattedConsumedQuantity,
@@ -1916,7 +1858,6 @@ const TaskDetailsPage = () => {
       // Pobierz nazwy użytkowników z historii produkcji
       const userIds = history?.map(session => session.userId).filter(Boolean) || [];
       if (userIds.length > 0) {
-        console.log('Pobieranie nazw użytkowników z historii produkcji:', userIds);
         await fetchUserNames(userIds);
       }
     } catch (error) {
@@ -1943,8 +1884,6 @@ const TaskDetailsPage = () => {
   useEffect(() => {
     if (!task?.id) return;
 
-    console.log('🔄 [INGREDIENT LINKS] Ustawianie listenera dla zadania:', task.id);
-    
     const ingredientLinksQuery = query(
       collection(db, 'ingredientReservationLinks'),
       where('taskId', '==', task.id)
@@ -1953,8 +1892,6 @@ const TaskDetailsPage = () => {
     const unsubscribeIngredientLinks = onSnapshot(
       ingredientLinksQuery,
       (snapshot) => {
-        console.log('📡 [INGREDIENT LINKS] Otrzymano aktualizację powiązań składników');
-        
         const links = {};
         snapshot.docs.forEach(doc => {
           const data = doc.data();
@@ -1986,7 +1923,6 @@ const TaskDetailsPage = () => {
         });
         
         setIngredientReservationLinks(links);
-        console.log('✅ [INGREDIENT LINKS] Zaktualizowano powiązania składników:', Object.keys(links).length, 'składników');
       },
       (error) => {
         console.error('❌ [INGREDIENT LINKS] Błąd listenera powiązań składników:', error);
@@ -1995,7 +1931,6 @@ const TaskDetailsPage = () => {
 
     // Cleanup funkcja
     return () => {
-      console.log('🧹 [INGREDIENT LINKS] Czyszczenie listenera dla zadania:', task.id);
       unsubscribeIngredientLinks();
     };
   }, [task?.id]);
@@ -2012,7 +1947,6 @@ const TaskDetailsPage = () => {
   // Pobieranie alergenów z receptury przy załadowaniu zadania
   useEffect(() => {
     if (task?.recipe?.allergens && task.recipe.allergens.length > 0) {
-      console.log('Pobieranie alergenów z receptury:', task.recipe.allergens);
       setSelectedAllergens(task.recipe.allergens);
     } else if (task?.recipeId && !task?.recipe?.allergens) {
       // Jeśli zadanie ma recipeId ale nie ma załadowanych danych receptury, pobierz je
@@ -2021,7 +1955,6 @@ const TaskDetailsPage = () => {
           const { getRecipeById } = await import('../../services/recipeService');
           const recipe = await getRecipeById(task.recipeId);
           if (recipe?.allergens && recipe.allergens.length > 0) {
-            console.log('Pobrano alergeny z receptury:', recipe.allergens);
             setSelectedAllergens(recipe.allergens);
           }
         } catch (error) {
@@ -2069,8 +2002,6 @@ const TaskDetailsPage = () => {
     
     const updateCostsAndSync = async () => {
       try {
-        console.log('🔍 [COSTS] Rozpoczynam zunifikowaną aktualizację kosztów (podsumowanie + synchronizacja)');
-        
         // 1. Oblicz koszty (TYLKO RAZ dzięki cache!)
         const costs = await calculateAllCosts();
         if (!isActive) return;
@@ -2088,20 +2019,11 @@ const TaskDetailsPage = () => {
         const costChanged = maxChange > COST_TOLERANCE;
         
         if (costChanged) {
-          console.log(`🚨 [COST-SYNC] Wykryto różnicę kosztów - max zmiana: ${maxChange.toFixed(4)}€ > ${COST_TOLERANCE}€`);
-          console.log('📊 [COST-SYNC] Szczegóły różnic:', {
-            totalMaterialCost: `UI: ${costs.totalMaterialCost}€ vs DB: ${dbCosts.totalMaterialCost}€ (Δ${differences.totalMaterialCost.toFixed(4)}€)`,
-            unitMaterialCost: `UI: ${costs.unitMaterialCost}€ vs DB: ${dbCosts.unitMaterialCost}€ (Δ${differences.unitMaterialCost.toFixed(4)}€)`,
-            totalFullProductionCost: `UI: ${costs.totalFullProductionCost}€ vs DB: ${dbCosts.totalFullProductionCost}€ (Δ${differences.totalFullProductionCost.toFixed(4)}€)`,
-            unitFullProductionCost: `UI: ${costs.unitFullProductionCost}€ vs DB: ${dbCosts.unitFullProductionCost}€ (Δ${differences.unitFullProductionCost.toFixed(4)}€)`
-          });
-          
           // Synchronizuj z bazą danych (z kolejnym debounce)
           setTimeout(async () => {
             if (!isActive) return;
             
             try {
-              console.log('🔄 [COST-SYNC] Rozpoczynam synchronizację kosztów z bazą danych');
               const { updateTaskCostsAutomatically, getTaskById } = await import('../../services/productionService');
               const result = await updateTaskCostsAutomatically(
                 task.id, 
@@ -2112,16 +2034,11 @@ const TaskDetailsPage = () => {
               if (result.success && isActive) {
                 const updatedTask = await getTaskById(task.id);
                 setTask(updatedTask);
-                console.log('✅ [COST-SYNC] Pomyślnie zsynchronizowano koszty z bazą danych');
-              } else {
-                console.warn('⚠️ [COST-SYNC] Synchronizacja nie powiodła się:', result);
               }
             } catch (error) {
               console.error('❌ [COST-SYNC] Błąd podczas synchronizacji kosztów:', error);
             }
           }, 2000);
-        } else {
-          console.log(`✅ [COST-SYNC] Koszty są zsynchronizowane (max różnica: ${maxChange.toFixed(4)}€ ≤ ${COST_TOLERANCE}€)`);
         }
       } catch (error) {
         console.error('❌ [COSTS] Błąd podczas aktualizacji kosztów:', error);
@@ -2159,17 +2076,14 @@ const TaskDetailsPage = () => {
         
         // Obsługa TASK_COSTS_UPDATED - konkretne zadanie zostało zaktualizowane
         if (type === 'TASK_COSTS_UPDATED' && taskId === task.id) {
-          console.log(`[BROADCAST] Otrzymano powiadomienie o aktualizacji kosztów zadania ${task.id}:`, event.data.costs);
-          
           // Odśwież dane zadania po krótkiej przerwie
           setTimeout(async () => {
             try {
               const { getTaskById } = await import('../../services/productionService');
               const updatedTask = await getTaskById(task.id);
               setTask(updatedTask);
-              console.log('🔄 Odświeżono dane zadania po otrzymaniu powiadomienia o aktualizacji kosztów');
             } catch (error) {
-              console.warn('⚠️ Nie udało się odświeżyć danych zadania po powiadomieniu:', error);
+              console.error('Nie udało się odświeżyć danych zadania po powiadomieniu:', error);
             }
           }, 500);
         }
@@ -2202,17 +2116,14 @@ const TaskDetailsPage = () => {
           const affectedBatch = batchIds.find(batchId => taskBatchIds.has(batchId));
           
           if (affectedBatch) {
-            console.log(`[BROADCAST] Wykryto aktualizację partii ${affectedBatch} używanej przez zadanie ${task.id}`);
-            
             // Odśwież dane zadania po dłuższej przerwie (Cloud Function potrzebuje czas na przetworzenie)
             setTimeout(async () => {
               try {
                 const { getTaskById } = await import('../../services/productionService');
                 const updatedTask = await getTaskById(task.id);
                 setTask(updatedTask);
-                console.log('🔄 Odświeżono dane zadania po aktualizacji partii');
               } catch (error) {
-                console.warn('⚠️ Nie udało się odświeżyć danych zadania po aktualizacji partii:', error);
+                console.error('Nie udało się odświeżyć danych zadania po aktualizacji partii:', error);
               }
             }, 2000); // Dłuższy timeout - Cloud Function potrzebuje czas
           }
@@ -2220,8 +2131,6 @@ const TaskDetailsPage = () => {
       };
 
       channel.addEventListener('message', handleCostUpdate);
-      console.log(`[BROADCAST] Nasłuchiwanie powiadomień o kosztach dla zadania ${task.id}`);
-      
     } catch (error) {
       console.warn('Nie można utworzyć BroadcastChannel dla kosztów zadań:', error);
     }
@@ -2229,7 +2138,6 @@ const TaskDetailsPage = () => {
     return () => {
       if (channel) {
         channel.close();
-        console.log(`[BROADCAST] Zamknięto nasłuchiwanie powiadomień o kosztach dla zadania ${task.id}`);
       }
     };
   }, [task?.id, task?.materialBatches, task?.consumedMaterials]);
@@ -2287,7 +2195,6 @@ const TaskDetailsPage = () => {
     }
 
     try {
-      console.log(`Wzbogacanie historii produkcji danymi z maszyny ${selectedMachineId}`);
       const enrichedHistory = await getProductionDataForHistory(selectedMachineId, productionHistory);
       setEnrichedProductionHistory(enrichedHistory);
     } catch (error) {
@@ -2406,7 +2313,7 @@ const TaskDetailsPage = () => {
       // Jeśli zużycie było wcześniej potwierdzone, wyświetl dodatkowe powiadomienie
       if (result.message && result.message.includes('Poprzednie potwierdzenie zużycia zostało anulowane')) {
         setTimeout(() => {
-          showInfo('Poprzednie potwierdzenie zużycia zostało anulowane z powodu zmiany ilości. Proszę ponownie potwierdzić zużycie materiałów.');
+          showInfo(t('consumption.previousConfirmationCanceled'));
         }, 1000);
       }
       
@@ -2484,7 +2391,6 @@ const TaskDetailsPage = () => {
     if (unreadCommentsCount > 0 && currentUser?.uid) {
       try {
         await markTaskCommentsAsRead(id, currentUser.uid);
-        console.log(`[TASK-COMMENT] Oznaczono ${unreadCommentsCount} komentarzy jako przeczytane`);
       } catch (error) {
         console.error('Błąd podczas oznaczania komentarzy jako przeczytane:', error);
         // Nie pokazujemy błędu użytkownikowi - to operacja w tle
@@ -2615,13 +2521,11 @@ const TaskDetailsPage = () => {
       
       if (!inventoryProductId && task.recipeId) {
         try {
-          console.log(`Sprawdzanie pozycji magazynowej dla receptury ${task.recipeId}`);
           const { getInventoryItemByRecipeId } = await import('../../services/inventory');
           const recipeInventoryItem = await getInventoryItemByRecipeId(task.recipeId);
           
           if (recipeInventoryItem) {
             inventoryProductId = recipeInventoryItem.id;
-            console.log(`Znaleziono pozycję magazynową z receptury: ${recipeInventoryItem.name} (ID: ${inventoryProductId})`);
             
             // Zaktualizuj zadanie z pozycją magazynową z receptury
             const { updateTask } = await import('../../services/productionService');
@@ -2707,8 +2611,6 @@ const TaskDetailsPage = () => {
           notes += ` (CO: ${task.orderNumber})`;
         }
         sourceInfo.append('notes', notes);
-        
-        console.log('Przekazuję parametry do formularza przyjęcia:', Object.fromEntries(sourceInfo));
         
         navigate(`/inventory/${inventoryProductId}/receive?${sourceInfo.toString()}`);
       } else {
@@ -3144,8 +3046,6 @@ const TaskDetailsPage = () => {
     try {
       setDeletingReservation(true);
       
-      console.log('handleDeleteSingleReservation wywołane z:', { materialId, batchId, batchNumber, taskId: task.id });
-      
       // Importuj potrzebne funkcje
       const { deleteReservation } = await import('../../services/inventory');
       const { collection, query, where, getDocs } = await import('firebase/firestore');
@@ -3169,7 +3069,6 @@ const TaskDetailsPage = () => {
       
       // Jeśli nie znaleziono, spróbuj po taskId
       if (reservationSnapshot.empty) {
-        console.log('Nie znaleziono po referenceId, próbuję po taskId...');
         reservationQuery = query(
           transactionsRef,
           where('type', '==', 'booking'),
@@ -3183,8 +3082,6 @@ const TaskDetailsPage = () => {
       }
       
       if (reservationSnapshot.empty) {
-        console.log('Brak rezerwacji w bazie danych, próbuję usunąć bezpośrednio z task.materialBatches...');
-        
         // Jeśli nie ma w bazie, usuń bezpośrednio z struktury zadania
         if (task.materialBatches && task.materialBatches[materialId]) {
           const updatedMaterialBatches = { ...task.materialBatches };
@@ -3218,14 +3115,13 @@ const TaskDetailsPage = () => {
           showSuccess(`Usunięto rezerwację partii ${batchNumber} (bezpośrednia aktualizacja zadania)`);
           return;
         } else {
-          showError('Nie znaleziono rezerwacji do usunięcia');
+          showError(t('consumption.reservationNotFoundForDeletion'));
           return;
         }
       }
       
       // Jeśli znaleziono rezerwację w bazie danych
       const reservationDoc = reservationSnapshot.docs[0];
-      console.log('Znaleziono rezerwację:', reservationDoc.id, reservationDoc.data());
       
       // Usuń rezerwację
       await deleteReservation(reservationDoc.id, currentUser.uid);
@@ -3349,7 +3245,6 @@ const TaskDetailsPage = () => {
           try {
             // Importuj funkcję do czyszczenia rezerwacji dla zadania
             const { cleanupTaskReservations } = await import('../../services/inventory');
-            console.log(`Usuwanie istniejących rezerwacji dla materiału ${materialId} w zadaniu ${id}`);
             await cleanupTaskReservations(id, [materialId]);
           } catch (error) {
             console.error(`Błąd podczas anulowania istniejących rezerwacji dla ${materialId}:`, error);
@@ -3397,8 +3292,6 @@ const TaskDetailsPage = () => {
           // (bo w przeciwnym razie bookInventoryForTask sam obsłuży aktualizację/usunięcie)
           if (!hasZeroQuantityBatches) {
             await cancelExistingReservations(materialId);
-          } else {
-            console.log(`Pomijam anulowanie rezerwacji dla materiału ${materialId} - zawiera partie do usunięcia (quantity=0)`);
           }
           
           // Oblicz wymaganą ilość do rezerwacji uwzględniając skonsumowane materiały
@@ -3406,7 +3299,6 @@ const TaskDetailsPage = () => {
           
           // POPRAWKA: Blokuj rezerwację tylko gdy konsumpcja została potwierdzona i nie ma pozostałej ilości
           if (task.materialConsumptionConfirmed && requiredQuantity <= 0) {
-            console.log(`Materiał ${material.name} został już w pełni skonsumowany i potwierdzony, pomijam rezerwację`);
             continue;
           }
             
@@ -3415,7 +3307,6 @@ const TaskDetailsPage = () => {
             // Nie pomijamy partii z quantity = 0, bo może to oznaczać usunięcie rezerwacji
             
             // Utwórz/zaktualizuj/usuń rezerwację dla konkretnej partii
-            console.log('🔄 [TASK] Wywołanie bookInventoryForTask:', { materialId, quantity: batch.quantity, taskId: id, batchId: batch.batchId });
             const result = await bookInventoryForTask(
               materialId,
               batch.quantity,
@@ -3424,7 +3315,6 @@ const TaskDetailsPage = () => {
               'manual', // Metoda ręczna
               batch.batchId // ID konkretnej partii
             );
-            console.log('✅ [TASK] Rezultat bookInventoryForTask:', result);
           }
         }
         
@@ -3449,7 +3339,6 @@ const TaskDetailsPage = () => {
           
           // POPRAWKA: Blokuj automatyczną rezerwację tylko gdy konsumpcja została potwierdzona
           if (task.materialConsumptionConfirmed && requiredQuantity <= 0) {
-            console.log(`Materiał ${material.name} został już w pełni skonsumowany i potwierdzony, pomijam automatyczną rezerwację`);
             continue;
           }
           
@@ -3474,14 +3363,11 @@ const TaskDetailsPage = () => {
       }
       
       // Odśwież dane zadania
-      console.log("Pobieranie zaktualizowanych danych zadania po rezerwacji");
       const updatedTask = await getTaskById(id);
-      console.log("Zaktualizowane dane zadania:", updatedTask);
       setTask(updatedTask);
       
       // Odśwież rezerwacje PO (mogły być utworzone automatycznie)
       await fetchPOReservations();
-      console.log("Zaktualizowano rezerwacje PO po rezerwacji materiałów");
       
     } catch (error) {
       console.error('Błąd podczas rezerwacji materiałów:', error);
@@ -3516,7 +3402,7 @@ const TaskDetailsPage = () => {
                   size="small"
                 />
               }
-              label="Pokaż wyczerpane partie"
+              label={t('consumption.showDepletedBatches')}
               sx={{ fontSize: '0.875rem' }}
             />
             <Button
@@ -3619,7 +3505,7 @@ const TaskDetailsPage = () => {
                     />
                     {requiredQuantity <= 0 && task.materialConsumptionConfirmed && (
                       <Chip
-                        label="W pełni skonsumowany"
+                        label={t('consumption.fullyConsumed')}
                         color="success"
                         size="small"
                         sx={mr1}
@@ -3627,7 +3513,7 @@ const TaskDetailsPage = () => {
                     )}
                     {totalSelectedQuantity > 0 && totalSelectedQuantity < requiredQuantity && requiredQuantity > 0 && (
                       <Chip
-                        label="Częściowa rezerwacja"
+                        label={t('consumption.partialReservation')}
                         color="warning"
                         size="small"
                         sx={mr1}
@@ -4160,8 +4046,6 @@ const TaskDetailsPage = () => {
         item.category === 'Opakowania zbiorcze'
       );
       
-      console.log('Pobrane opakowania:', packagingItems);
-      
       // Pobierz partie dla każdego opakowania
       const packagingWithBatches = await Promise.all(
         packagingItems.map(async (item) => {
@@ -4341,14 +4225,6 @@ const TaskDetailsPage = () => {
               const consumeQuantity = Number(item.batchQuantity) || 0;
               const newQuantity = Math.max(0, currentQuantity - consumeQuantity);
               
-              console.log('Konsumpcja opakowania:', {
-                itemName: item.name,
-                batchId: item.selectedBatch.id,
-                currentQuantity,
-                consumeQuantity,
-                newQuantity
-              });
-              
               // Aktualizuj ilość w partii
               await updateBatch(item.selectedBatch.id, {
                 quantity: newQuantity
@@ -4430,8 +4306,6 @@ const TaskDetailsPage = () => {
       const rawMaterialsItems = allItems.filter(item => 
         item.category === targetCategory
       );
-      
-      console.log(`Pobrane materiały z kategorii "${targetCategory}":`, rawMaterialsItems);
       
       setRawMaterialsItems(rawMaterialsItems.map(item => ({
         ...item,
@@ -4890,7 +4764,6 @@ const TaskDetailsPage = () => {
             if (Math.abs(material.unitPrice - averagePrice) > 0.001) {
             material.unitPrice = averagePrice;
               hasChanges = true;
-            console.log(`🔄 [ZAREZERWOWANE] Zaktualizowano cenę dla ${material.name}: ${averagePrice.toFixed(2)} €`);
             }
           }
         }
@@ -4937,8 +4810,6 @@ const TaskDetailsPage = () => {
           const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
           const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
           
-          console.log(`Zaktualizowano ceny materiałów - obliczony koszt: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit}) | Pełny koszt: ${totalFullProductionCost.toFixed(2)} € (${unitFullProductionCost.toFixed(2)} €/${task.unit}) - tylko aktualizacja interfejsu`);
-          
           // USUNIĘTO: Automatyczne zapisywanie do bazy danych
           // Użytkownik może ręcznie zaktualizować koszty przyciskiem "Aktualizuj ręcznie"
         }
@@ -4956,20 +4827,6 @@ const TaskDetailsPage = () => {
     }
     
     try {
-      console.log('🔄 [PRICE-UPDATE] Rozpoczynam aktualizację cen konsumpcji z aktualnych partii...');
-      
-      // 🔴 DIAGNOSTYKA: Pokaż wszystkie konsumpcje
-      console.log('🔴 [PRICE-UPDATE-DEBUG] Wszystkie konsumpcje w zadaniu:', 
-        task.consumedMaterials.map((c, idx) => ({
-          idx,
-          batchId: c.batchId,
-          materialId: c.materialId,
-          materialName: c.materialName,
-          quantity: c.quantity,
-          unitPrice: c.unitPrice
-        }))
-      );
-      
       const { getInventoryBatch } = await import('../../services/inventory');
       let hasChanges = false;
       let updateCount = 0;
@@ -4992,15 +4849,6 @@ const TaskDetailsPage = () => {
             const currentPrice = consumed.unitPrice || 0;
             const newPrice = parseFloat(batchData.unitPrice) || 0;
             
-            // 🔍 DEBUG: Szczegóły porównania cen
-            console.log(`🔍 [PRICE-UPDATE] Partia ${consumed.batchId}:`, {
-              material: consumed.materialName || consumed.materialId,
-              currentPriceInConsumption: currentPrice,
-              actualPriceInBatch: newPrice,
-              difference: Math.abs(currentPrice - newPrice),
-              willUpdate: Math.abs(currentPrice - newPrice) > 0.001
-            });
-            
             // Sprawdź czy cena się zmieniła przed aktualizacją (tolerancja 0.0001 = 4 miejsca po przecinku)
             if (Math.abs(currentPrice - newPrice) > 0.0001) {
               updatedConsumedMaterials[i] = {
@@ -5022,8 +4870,6 @@ const TaskDetailsPage = () => {
                 newPrice: newPrice,
                 quantity: consumed.quantity || 0
               });
-              
-              console.log(`💰 [PRICE-UPDATE] ${materialName} (${batchNumber}): ${currentPrice.toFixed(6)}€ → ${newPrice.toFixed(6)}€`);
             }
           } else {
             // 🔴 DIAGNOSTYKA: Szczegółowe info o brakującej partii - WSZYSTKO W JEDNYM LOGU
@@ -5052,7 +4898,6 @@ const TaskDetailsPage = () => {
         
         // Pokaż szczegółowy raport aktualizacji
         const successMessage = `Zaktualizowano ceny ${updateCount} konsumpcji. ${errorCount > 0 ? `Błędów: ${errorCount}` : ''}`;
-        console.log(`✅ [PRICE-UPDATE] ${successMessage}`);
         console.table(updateDetails);
         
         showSuccess(successMessage);
@@ -5060,7 +4905,6 @@ const TaskDetailsPage = () => {
         // Automatyczna aktualizacja kosztów zostanie wywołana przez useEffect z dependency na task.consumedMaterials
       } else {
         const message = `Sprawdzono ${task.consumedMaterials.length} konsumpcji - wszystkie ceny są aktualne. ${errorCount > 0 ? `Błędów: ${errorCount}` : ''}`;
-        console.log(`ℹ️ [PRICE-UPDATE] ${message}`);
         showSuccess(message);
       }
     } catch (error) {
@@ -5112,14 +4956,6 @@ const TaskDetailsPage = () => {
     try {
       if (!taskData || !taskData.id) return;
       
-      console.log(`Szukam zamówień klientów powiązanych z zadaniem ${taskData.moNumber}...`);
-      console.log('Dane zadania przekazane do aktualizacji:', { 
-        id: taskData.id, 
-        moNumber: taskData.moNumber,
-        totalMaterialCost,
-        totalFullProductionCost 
-      });
-      
       // Importuj funkcje do zarządzania zamówieniami
       const { getAllOrders, updateOrder } = await import('../../services/orderService');
       const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
@@ -5136,8 +4972,6 @@ const TaskDetailsPage = () => {
         console.log('Nie znaleziono zamówień powiązanych z tym zadaniem');
         return;
       }
-      
-      console.log(`Znaleziono ${relatedOrders.length} zamówień do zaktualizowania`);
       
       // Dla każdego powiązanego zamówienia, zaktualizuj koszty produkcji
       for (const order of relatedOrders) {
@@ -5161,8 +4995,6 @@ const TaskDetailsPage = () => {
               fullProductionUnitCost: calculatedFullProductionUnitCost
             };
             orderUpdated = true;
-            
-            console.log(`Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt produkcji=${totalMaterialCost}€, pełny koszt=${totalFullProductionCost}€, pełny koszt/szt=${calculatedFullProductionUnitCost.toFixed(2)}€ (lista cenowa: ${item.fromPriceList ? 'tak' : 'nie'})`);
           }
         }
         
@@ -5247,8 +5079,6 @@ const TaskDetailsPage = () => {
     if (!task || !materials.length) return;
     
     try {
-      console.log('Ręczna aktualizacja kosztów materiałów z poziomu szczegółów zadania');
-      
       // Użyj globalnej funkcji aktualizacji z productionService
       const { updateTaskCostsAutomatically } = await import('../../services/productionService');
       const result = await updateTaskCostsAutomatically(task.id, currentUser?.uid || 'system', 'Ręczna aktualizacja z poziomu szczegółów zadania');
@@ -5261,7 +5091,6 @@ const TaskDetailsPage = () => {
         const updatedTask = await getTaskById(id);
         setTask(updatedTask);
         showSuccess('Koszty materiałów i powiązanych zamówień zostały zaktualizowane');
-        console.log('✅ Ręczna aktualizacja kosztów zakończona pomyślnie:', result);
       } else {
         console.warn('⚠️ Aktualizacja kosztów nie była potrzebna:', result.message);
         showInfo('Koszty materiałów są już aktualne');
@@ -5296,7 +5125,6 @@ const TaskDetailsPage = () => {
         Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.001;
 
       if (!costChanged) {
-        console.log('[AUTO] Koszty materiałów nie zmieniły się znacząco, pomijam automatyczną aktualizację');
         return false;
       }
       
@@ -5327,8 +5155,6 @@ const TaskDetailsPage = () => {
           reason: reason
         })
       });
-      
-      console.log(`[AUTO] Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit}) | Pełny koszt: ${totalFullProductionCost.toFixed(2)} € (${unitFullProductionCost.toFixed(2)} €/${task.unit})`);
       
       // Automatycznie aktualizuj związane zamówienia klientów
       await updateRelatedCustomerOrders(task, totalMaterialCost, totalFullProductionCost, unitMaterialCost, unitFullProductionCost);
@@ -5407,11 +5233,8 @@ const TaskDetailsPage = () => {
       if (costsCache.current.data && 
           costsCache.current.dependenciesHash === dependenciesHash &&
           (now - costsCache.current.timestamp) < CACHE_TTL_MS) {
-        console.log('💾 [UI-COSTS] Używam cache kosztów (wiek:', Math.round((now - costsCache.current.timestamp) / 1000), 's)');
         return costsCache.current.data;
       }
-      
-      console.log('[UI-COSTS] Cache nieaktualny lub brak - obliczam koszty...');
       
       // Import funkcji matematycznych dla precyzyjnych obliczeń
       const { fixFloatingPointPrecision, preciseMultiply, preciseAdd, preciseSubtract, preciseDivide } = await import('../../utils/mathUtils');
@@ -5522,8 +5345,6 @@ const TaskDetailsPage = () => {
             ? consumed.includeInCosts 
             : (includeInCosts[material.id] !== false);
 
-          console.log(`🔍 [UI-COSTS] Materiał ${material.name} - includeInCosts: ${shouldIncludeInCosts}`);
-
           if (shouldIncludeInCosts) {
             totalMaterialCost = preciseAdd(totalMaterialCost, cost);
           }
@@ -5542,8 +5363,6 @@ const TaskDetailsPage = () => {
       // Najpierw pobierz rezerwacje PO i zgrupuj je według materiału
       const poReservationsByMaterial = {};
       if (task?.poReservationIds && task.poReservationIds.length > 0) {
-        console.log(`[UI-COSTS] Przetwarzam ${task.poReservationIds.length} rezerwacji PO`);
-        
         const { getPOReservationsForTask } = await import('../../services/poReservationService');
         const poReservations = await getPOReservationsForTask(task.id);
         
@@ -5560,8 +5379,6 @@ const TaskDetailsPage = () => {
           }
           poReservationsByMaterial[materialId].push(poRes);
         }
-        
-        console.log(`[UI-COSTS] Znaleziono ${activePoReservations.length} aktywnych rezerwacji PO dla ${Object.keys(poReservationsByMaterial).length} materiałów`);
       }
 
       if (materials.length > 0) {
@@ -5626,7 +5443,6 @@ const TaskDetailsPage = () => {
           try {
             const { calculateEstimatedPricesForMultipleMaterials } = await import('../../services/inventory');
             dynamicEstimatedPrices = await calculateEstimatedPricesForMultipleMaterials(materialIdsWithoutReservationsOrEstimates);
-            console.log(`[UI-COSTS] Pobrano dynamiczne szacunkowe ceny dla ${Object.keys(dynamicEstimatedPrices).length} materiałów bez rezerwacji`);
           } catch (error) {
             console.warn('[UI-COSTS] Błąd podczas pobierania dynamicznych szacunkowych cen:', error);
           }
@@ -5663,7 +5479,6 @@ const TaskDetailsPage = () => {
             
             if (hasConsumption) {
               // Materiał ma konsumpcje - nie liczymy szacunkowych kosztów dla pozostałej ilości
-              console.log(`[UI-COSTS] Materiał ${material.name}: ma konsumpcje (${consumedQuantity}), pomijam szacunek dla pozostałej ilości (${remainingQuantity})`);
               return;
             }
             
@@ -5678,18 +5493,15 @@ const TaskDetailsPage = () => {
                 unitPrice = fixFloatingPointPrecision(estimatedData.unitPrice);
                 priceCalculationMethod = 'batch-weighted-average-estimated';
                 batchCount = estimatedData.batchCount || 0;
-                console.log(`[UI-COSTS-ESTIMATE] Materiał ${material.name}: szacunkowa cena ${unitPrice.toFixed(4)}€ (z ${batchCount} partii)`);
               } else if (estimatedData && estimatedData.averagePrice > 0) {
                 // Dynamicznie pobrane dane mają averagePrice zamiast unitPrice
                 unitPrice = fixFloatingPointPrecision(estimatedData.averagePrice);
                 priceCalculationMethod = 'batch-weighted-average-estimated';
                 batchCount = estimatedData.batchCount || 0;
-                console.log(`[UI-COSTS-ESTIMATE] Materiał ${material.name}: dynamiczna szacunkowa cena ${unitPrice.toFixed(4)}€ (z ${batchCount} partii)`);
               } else {
                 // Brak partii = cena 0 (nie używamy fallbacku na material.unitPrice)
                 unitPrice = 0;
                 priceCalculationMethod = 'no-batches';
-                console.log(`[UI-COSTS-ESTIMATE] Materiał ${material.name}: brak partii, cena=0€`);
               }
               
               const materialCost = preciseMultiply(remainingQuantity, unitPrice);
@@ -5712,8 +5524,6 @@ const TaskDetailsPage = () => {
                 totalMaterialCost = preciseAdd(totalMaterialCost, materialCost);
               }
               totalFullProductionCost = preciseAdd(totalFullProductionCost, materialCost);
-              
-              console.log(`[UI-COSTS-ESTIMATE] Materiał ${material.name}: ilość=${remainingQuantity}, koszt=${materialCost.toFixed(4)}€ (SZACUNEK)`);
             }
             return;
           }
@@ -5741,7 +5551,6 @@ const TaskDetailsPage = () => {
                   const weightedPrice = preciseMultiply(batchPrice, batchQuantity);
                   weightedPriceSum = preciseAdd(weightedPriceSum, weightedPrice);
                   totalReservedQuantity = preciseAdd(totalReservedQuantity, batchQuantity);
-                  console.log(`[UI-COSTS] Partia ${batch.batchId}: ilość=${batchQuantity}, cena=${batchPrice}€`);
                 }
               });
             }
@@ -5758,7 +5567,6 @@ const TaskDetailsPage = () => {
                   const weightedPrice = preciseMultiply(unitPrice, availableQuantity);
                   weightedPriceSum = preciseAdd(weightedPriceSum, weightedPrice);
                   totalReservedQuantity = preciseAdd(totalReservedQuantity, availableQuantity);
-                  console.log(`[UI-COSTS] Rezerwacja PO ${poRes.poNumber}: ilość=${availableQuantity}, cena=${unitPrice}€`);
                   
                   // Zapisz szczegóły rezerwacji PO dla wyświetlenia
                   if (!poReservationsCostDetails[materialId]) {
@@ -5786,13 +5594,11 @@ const TaskDetailsPage = () => {
               unitPrice = preciseDivide(weightedPriceSum, totalReservedQuantity);
               materialCost = preciseMultiply(remainingQuantity, unitPrice);
               priceCalculationMethod = 'weighted-average';
-              console.log(`[UI-COSTS] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, średnia ważona cena=${unitPrice.toFixed(4)}€, koszt=${materialCost.toFixed(4)}€`);
             } else {
               // Fallback na cenę z materiału
               unitPrice = fixFloatingPointPrecision(parseFloat(material.unitPrice) || 0);
               materialCost = preciseMultiply(remainingQuantity, unitPrice);
               priceCalculationMethod = 'material-fallback';
-              console.log(`[UI-COSTS] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, cena fallback=${unitPrice}€, koszt=${materialCost.toFixed(4)}€`);
             }
             
             reservedCostDetails[materialId] = {
@@ -5824,9 +5630,6 @@ const TaskDetailsPage = () => {
       let processingCostPerUnit = 0;
       if (task?.processingCostPerUnit !== undefined && task?.processingCostPerUnit !== null) {
         processingCostPerUnit = fixFloatingPointPrecision(parseFloat(task.processingCostPerUnit) || 0);
-        console.log(`[UI-COSTS] Koszt procesowy zapisany w MO: ${processingCostPerUnit.toFixed(4)}€/szt`);
-      } else {
-        console.log(`[UI-COSTS] MO nie ma przypisanego kosztu procesowego - pomijam (stare MO miały koszty ręczne)`);
       }
 
       // Użyj rzeczywistej wyprodukowanej ilości zamiast planowanej
@@ -5840,8 +5643,6 @@ const TaskDetailsPage = () => {
       // Dodaj koszt procesowy do obu rodzajów kosztów
       totalMaterialCost = preciseAdd(totalMaterialCost, totalProcessingCost);
       totalFullProductionCost = preciseAdd(totalFullProductionCost, totalProcessingCost);
-
-      console.log(`[UI-COSTS] Koszt procesowy: ${processingCostPerUnit.toFixed(4)}€/szt × ${completedQuantity} wyprodukowanych = ${totalProcessingCost.toFixed(4)}€`);
 
       // ===== 4. DODATKOWE KOSZTY (przeliczone na EUR kursem NBP z dnia przed datą faktury) =====
       let totalAdditionalCostsInEUR = 0;
@@ -5859,7 +5660,6 @@ const TaskDetailsPage = () => {
         }
         totalMaterialCost = preciseAdd(totalMaterialCost, totalAdditionalCostsInEUR);
         totalFullProductionCost = preciseAdd(totalFullProductionCost, totalAdditionalCostsInEUR);
-        console.log(`[UI-COSTS] Dodatkowe koszty: ${totalAdditionalCostsInEUR.toFixed(4)} € (wliczone do Łączny koszt materiałów i Pełny koszt produkcji)`);
       }
 
       // ===== 5. OBLICZ KOSZTY NA JEDNOSTKĘ =====
@@ -5894,16 +5694,6 @@ const TaskDetailsPage = () => {
         totalAdditionalCosts: fixFloatingPointPrecision(totalAdditionalCostsInEUR)
       };
 
-      console.log('✅ [UI-COSTS] Zakończono zunifikowane obliczanie kosztów w UI:', {
-        totalMaterialCost: finalResults.totalMaterialCost,
-        unitMaterialCost: finalResults.unitMaterialCost,
-        totalFullProductionCost: finalResults.totalFullProductionCost,
-        unitFullProductionCost: finalResults.unitFullProductionCost,
-        consumedCost: finalResults.consumed.totalCost,
-        reservedCost: finalResults.reserved.totalCost,
-        poReservationsCost: finalResults.poReservations.totalCost
-      });
-
       // ⚡ OPTYMALIZACJA: Zapisz wynik do cache
       costsCache.current = {
         data: finalResults,
@@ -5933,8 +5723,6 @@ const TaskDetailsPage = () => {
   // NAPRAWIONA funkcja porównania kosztów - przyjmuje uiCosts jako parametr aby uniknąć pętli
   const compareCostsWithDatabase = async (providedUiCosts = null) => {
     try {
-      console.log('🔍 [COST-COMPARE] Porównuję koszty UI vs baza danych');
-      
       // Jeśli nie podano kosztów UI, oblicz je (ale tylko raz!)
       const uiCosts = providedUiCosts || await calculateAllCosts();
       
@@ -5956,19 +5744,6 @@ const TaskDetailsPage = () => {
         unitFullProductionCost: Math.abs(uiCosts.unitFullProductionCost - dbCosts.unitFullProductionCost)
       };
       
-      console.log('📊 [COST-COMPARE] Porównanie kosztów (UI vs świeże dane z bazy):', {
-        ui: uiCosts,
-        freshDatabase: dbCosts,
-        currentTaskObject: {
-          totalMaterialCost: task?.totalMaterialCost || 0,
-          unitMaterialCost: task?.unitMaterialCost || 0,
-          totalFullProductionCost: task?.totalFullProductionCost || 0,
-          unitFullProductionCost: task?.unitFullProductionCost || 0
-        },
-        differences,
-        maxDifference: Math.max(...Object.values(differences))
-      });
-      
       return { uiCosts, dbCosts, differences };
     } catch (error) {
       console.error('❌ [COST-COMPARE] Błąd podczas porównywania kosztów:', error);
@@ -5979,8 +5754,6 @@ const TaskDetailsPage = () => {
   // JEDNORAZOWA funkcja synchronizacji kosztów (bez pętli)
   const syncCostsOnce = async () => {
     try {
-      console.log('🔄 [SYNC-ONCE] Rozpoczynam jednorazową synchronizację kosztów');
-      
       // 1. Oblicz koszty UI
       const uiCosts = await calculateAllCosts();
       
@@ -5993,8 +5766,6 @@ const TaskDetailsPage = () => {
       const COST_TOLERANCE = 0.005;
       
       if (maxDifference > COST_TOLERANCE) {
-        console.log(`🚨 [SYNC-ONCE] Wykryto różnicę ${maxDifference.toFixed(4)}€ > ${COST_TOLERANCE}€ - synchronizuję`);
-        
         // 3. Synchronizuj z bazą danych
         const { updateTaskCostsAutomatically } = await import('../../services/productionService');
         const result = await updateTaskCostsAutomatically(
@@ -6008,12 +5779,9 @@ const TaskDetailsPage = () => {
           const { getTaskById } = await import('../../services/productionService');
           const updatedTask = await getTaskById(task.id);
           setTask(updatedTask);
-          console.log('✅ [SYNC-ONCE] Synchronizacja zakończona pomyślnie');
         } else {
           console.warn('⚠️ [SYNC-ONCE] Synchronizacja nie powiodła się:', result);
         }
-      } else {
-        console.log(`✅ [SYNC-ONCE] Koszty zsynchronizowane (różnica: ${maxDifference.toFixed(4)}€ ≤ ${COST_TOLERANCE}€)`);
       }
     } catch (error) {
       console.error('❌ [SYNC-ONCE] Błąd podczas synchronizacji:', error);
@@ -6271,8 +6039,6 @@ const TaskDetailsPage = () => {
       if (!taskData || !taskData.materials) return;
       setAwaitingOrdersLoading(true);
       
-      console.log(`⚡ [AWAITING-ORDERS] Pobieranie zamówień dla ${taskData.materials.length} materiałów (równolegle)...`);
-      
       // Import funkcji raz, zamiast w każdej iteracji pętli
       const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventory');
       
@@ -6306,7 +6072,6 @@ const TaskDetailsPage = () => {
         }
       });
       
-      console.log(`✅ [AWAITING-ORDERS] Pobrano ${totalOrders} zamówień dla ${Object.keys(ordersData).length} materiałów`);
       setAwaitingOrders(ordersData);
     } catch (error) {
       console.error('Błąd podczas pobierania oczekiwanych zamówień dla materiałów:', error);
@@ -6706,9 +6471,6 @@ const TaskDetailsPage = () => {
     setDebugResults([]);
     const results = [];
     
-    console.log('🔬 [DEBUG] Rozpoczynam sprawdzanie spójności partii w zadaniu...');
-    console.log('🔬 [DEBUG] Task ID:', task?.id, 'MO:', task?.moNumber);
-    
     try {
       // 1. Sprawdź zarezerwowane partie (materialBatches)
       if (task.materialBatches && Object.keys(task.materialBatches).length > 0) {
@@ -6731,10 +6493,6 @@ const TaskDetailsPage = () => {
                   'W zadaniu': { batchId: batch.batchId, lotNumber: batch.batchNumber, quantity: batch.quantity },
                   'W bazie': { lotNumber: dbData.lotNumber, quantity: dbData.quantity, warehouseId: dbData.warehouseId }
                 }
-              });
-              console.log(`   ✅ Partia ${batch.batchId} istnieje:`, {
-                'W zadaniu': { batchId: batch.batchId, lotNumber: batch.batchNumber, quantity: batch.quantity },
-                'W bazie': { lotNumber: dbData.lotNumber, quantity: dbData.quantity, warehouseId: dbData.warehouseId }
               });
             } else {
               // 🚨 Partia nie istnieje - szukaj po LOT
@@ -7623,7 +7381,7 @@ const TaskDetailsPage = () => {
           const currentBatch = await getInventoryBatch(selectedConsumption.batchId);
           
           if (!currentBatch) {
-            showError('Nie znaleziono partii magazynowej');
+            showError(t('consumption.inventoryBatchNotFound'));
             return;
           }
 
@@ -8944,7 +8702,7 @@ const TaskDetailsPage = () => {
       const currentRecipe = await getRecipeById(recipeId);
       
       if (!currentRecipe) {
-        throw new Error('Nie znaleziono receptury');
+        throw new Error(t('errors.recipeNotFound'));
       }
       
       // Sprawdź czy alergeny się zmieniły
@@ -8976,7 +8734,7 @@ const TaskDetailsPage = () => {
   // Funkcja do generowania raportu PDF
   const handleGenerateEndProductReport = async () => {
     if (!task) {
-      showError('Brak danych zadania do wygenerowania raportu');
+      showError(t('errors.noTaskDataForReport'));
       return;
     }
 
@@ -9357,7 +9115,7 @@ const TaskDetailsPage = () => {
 
           {/* Główne zakładki */}
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-            <Tabs value={mainTab} onChange={handleMainTabChange} aria-label="Główne zakładki szczegółów zadania" variant="scrollable" scrollButtons="auto">
+            <Tabs value={mainTab} onChange={handleMainTabChange} aria-label={t('mainTabs')} variant="scrollable" scrollButtons="auto">
               <Tab 
                 label={t('tabs.basicData')} 
                 icon={<InfoIcon />} 
@@ -9582,7 +9340,7 @@ const TaskDetailsPage = () => {
             open={deleteHistoryDialogOpen}
             onClose={() => setDeleteHistoryDialogOpen(false)}
             onConfirm={handleConfirmDeleteHistoryItem}
-            title="Potwierdź usunięcie"
+            title={t('common:common.confirmDeletion')}
             message="Czy na pewno chcesz usunąć wybrany wpis z historii produkcji? Ta operacja jest nieodwracalna."
             confirmText="Usuń wpis"
             loading={loading}
@@ -9592,7 +9350,7 @@ const TaskDetailsPage = () => {
             open={deleteDialog}
             onClose={() => setDeleteDialog(false)}
             onConfirm={handleDelete}
-            title="Potwierdź usunięcie"
+            title={t('common:common.confirmDeletion')}
             message={`Czy na pewno chcesz usunąć to zadanie produkcyjne (MO: ${task?.moNumber})? Ta operacja jest nieodwracalna.`}
             confirmText="Usuń zadanie"
             loading={loading}
@@ -9656,7 +9414,7 @@ const TaskDetailsPage = () => {
                         <TableCell>Kategoria</TableCell>
                         <TableCell>Dostępne partie</TableCell>
                         <TableCell>Wybrana partia</TableCell>
-                        <TableCell>Ilość do dodania</TableCell>
+                        <TableCell>{t('consumption.quantityToAdd')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -9686,11 +9444,11 @@ const TaskDetailsPage = () => {
                             </TableCell>
                             <TableCell>
                               <FormControl fullWidth size="small" disabled={!item.selected}>
-                                <InputLabel>Wybierz partię</InputLabel>
+                                <InputLabel>{t('common:common.selectBatch')}</InputLabel>
                                 <Select
                                   value={item.selectedBatch?.id || ''}
                                   onChange={(e) => handlePackagingBatchSelection(item.id, e.target.value)}
-                                  label="Wybierz partię"
+                                  label={t('common:common.selectBatch')}
                                 >
                                   {item.batches && item.batches.map((batch) => (
                                     <MenuItem key={batch.id} value={batch.id}>
@@ -9815,7 +9573,7 @@ const TaskDetailsPage = () => {
                         <TableCell padding="checkbox">Wybierz</TableCell>
                         <TableCell>Nazwa</TableCell>
                         <TableCell>Dostępna ilość</TableCell>
-                        <TableCell>Ilość do dodania</TableCell>
+                        <TableCell>{t('consumption.quantityToAdd')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -9863,7 +9621,7 @@ const TaskDetailsPage = () => {
                                     borderColor: item.selected && item.quantity > item.availableQuantity ? 'warning.main' : undefined
                                   }
                                 }}
-                                placeholder="Ilość do dodania"
+                                placeholder={t('consumption.quantityToAdd')}
                                 color={item.selected && item.quantity > item.availableQuantity ? 'warning' : 'primary'}
                               />
                             </TableCell>
@@ -9901,7 +9659,7 @@ const TaskDetailsPage = () => {
             open={deleteMaterialDialogOpen}
             onClose={() => setDeleteMaterialDialogOpen(false)}
             onConfirm={handleConfirmDeleteMaterial}
-            title="Potwierdź usunięcie materiału"
+            title={t('consumption.confirmMaterialDeletion')}
             message={`Czy na pewno chcesz usunąć materiał "${materialToDelete?.name}" z zadania produkcyjnego? Ta operacja jest nieodwracalna.`}
             confirmText="Usuń materiał"
             loading={loading}
@@ -10071,7 +9829,7 @@ const TaskDetailsPage = () => {
                   <FormControlLabel 
                     value="manual" 
                     control={<Radio />} 
-                    label="Ręczna (wybór partii)" 
+                    label={t('consumption.manualBatchSelection')} 
                   />
                 </RadioGroup>
               </FormControl>
@@ -10135,7 +9893,7 @@ const TaskDetailsPage = () => {
                 Wprowadź nową ilość konsumpcji dla wybranej partii:
               </DialogContentText>
               <TextField
-                label="Nowa ilość"
+                label={t('common:common.newQuantity')}
                 type="number"
                 value={editedQuantity}
                 onChange={(e) => setEditedQuantity(e.target.value)}
@@ -10168,7 +9926,7 @@ const TaskDetailsPage = () => {
             maxWidth="md"
             fullWidth
           >
-            <DialogTitle>Potwierdź usunięcie konsumpcji</DialogTitle>
+            <DialogTitle>{t('consumption.confirmConsumptionDeletion')}</DialogTitle>
             <DialogContent>
               <DialogContentText>
                 Czy na pewno chcesz usunąć wybraną konsumpcję? Ta operacja jest nieodwracalna.
@@ -10181,7 +9939,7 @@ const TaskDetailsPage = () => {
                     color="primary"
                   />
                 }
-                label="Przywróć rezerwację materiału po usunięciu konsumpcji"
+                label={t('consumption.restoreReservationAfterDeletion')}
                 sx={{ mt: 2, display: 'block' }}
               />
             </DialogContent>

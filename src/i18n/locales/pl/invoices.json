@@ -1,6 +1,11 @@
 {
   "pageTitle": "Sprzedaż",
   "title": "Faktury",
+  "settings": {
+    "title": "Ustawienia i konfiguracja",
+    "companySettings": "Ustawienia firmy",
+    "companySettingsDescription": "Konfiguracja danych firmy do faktur"
+  },
   "tabs": {
     "invoices": "Faktury",
     "materialAdvances": "Zaliczki materiałowe",
@@ -132,6 +137,14 @@
       "deselectAll": "Odznacz wszystkie",
       "manageClients": "Zarządzaj klientami"
     },
+    "addAtLeastOneItem": "Dodaj przynajmniej jedną pozycję do faktury",
+    "proformaNotFound": "Nie znaleziono proformy {{number}}",
+    "searchPurchaseOrderForReinvoice": "🔄 Wyszukaj Zamówienie Zakupowe (PO) dla refaktury",
+    "searchOrder": "Wyszukaj zamówienie...",
+    "searchCustomer": "Wyszukaj klienta",
+    "noCustomersMessage": "Brak klientów. Dodaj klientów w module zarządzania klientami.",
+    "adjustmentPlaceholder": "Np. Wyrównanie kosztów z rzeczywistym kosztem produkcji",
+    "addSelectedItems": "Dodaj wybrane pozycje ({{count}})",
     "notifications": {
       "correctionItemsLoaded": "Załadowano pozycje do korekty"
     },
@@ -168,7 +181,8 @@
       "applyFilters": "Zastosuj filtry",
       "resetFilters": "Resetuj",
       "client": "Klient",
-      "availableFrom": "dostępne z"
+      "availableFrom": "dostępne z",
+      "customerOrder": "Zamówienie klienta"
     }
   },
   "company": {
@@ -252,6 +266,7 @@
     }
   },
   "details": {
+    "invoiceNotFound": "Nie znaleziono faktury",
     "title": "Szczegóły faktury",
     "basicInfo": "Dane podstawowe",
     "invoiceNumber": "Numer faktury",

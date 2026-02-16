@@ -20,7 +20,8 @@
       "expiryDates": "Daty ważności",
       "suppliers": "Dostawcy",
       "stocktaking": "Inwentaryzacja",
-      "reservations": "Rezerwacje"
+      "reservations": "Rezerwacje",
+      "procurementForecasts": "Prognozy zakupowe"
     },
     "table": {
       "sku": "SKU",
@@ -117,7 +118,69 @@
       "reservationDate": "Data rezerwacji",
       "noFilterResults": "Nie znaleziono rezerwacji pasujących do filtra",
       "noReservations": "Brak rezerwacji dla zadań produkcyjnych",
-      "noMoNumber": "Bez numeru MO"
+      "noMoNumber": "Bez numeru MO",
+      "noReservationsToClean": "Nie znaleziono rezerwacji do wyczyszczenia."
+    },
+    "procurementForecasts": {
+      "title": "Prognozy zakupowe",
+      "description": "Zapisane snapshoty prognoz zapotrzebowania materiałowego z powiązaniem do zamówień zakupowych.",
+      "noForecasts": "Brak zapisanych prognoz zakupowych",
+      "noForecastsHint": "Przejdź do Produkcja → Prognoza zapotrzebowania i zapisz prognozę do CRM.",
+      "number": "Numer",
+      "name": "Nazwa",
+      "period": "Okres prognozy",
+      "materialsCount": "Materiały",
+      "shortageCount": "Niedobory",
+      "shortageValue": "Wartość niedoborów",
+      "createdAt": "Data zapisu",
+      "createdBy": "Utworzył",
+      "status": "Status",
+      "actions": "Akcje",
+      "active": "Aktywna",
+      "archived": "Zarchiwizowana",
+      "archive": "Archiwizuj",
+      "unarchive": "Przywróć",
+      "delete": "Usuń",
+      "viewDetails": "Szczegóły",
+      "confirmDelete": "Czy na pewno chcesz usunąć tę prognozę? Ta operacja jest nieodwracalna.",
+      "deleteSuccess": "Prognoza została usunięta",
+      "archiveSuccess": "Prognoza została zarchiwizowana",
+      "unarchiveSuccess": "Prognoza została przywrócona",
+      "filterAll": "Wszystkie",
+      "filterActive": "Aktywne",
+      "filterArchived": "Zarchiwizowane",
+      "details": {
+        "title": "Szczegóły prognozy zakupowej",
+        "backToList": "Powrót do listy",
+        "forecastPeriod": "Okres prognozy",
+        "savedAt": "Zapisano",
+        "totalMaterials": "Wszystkich materiałów",
+        "materialsWithShortage": "Z niedoborem",
+        "totalShortageValue": "Wartość niedoborów",
+        "material": "Materiał",
+        "category": "Kategoria",
+        "required": "Wymagane",
+        "available": "Na stanie",
+        "balance": "Bilans",
+        "futureDeliveries": "Przyszłe dostawy",
+        "balanceWithDeliveries": "Bilans z dostawami",
+        "supplier": "Dostawca",
+        "cost": "Koszt",
+        "notes": "Notatki",
+        "editNotes": "Edytuj notatki",
+        "saveNotes": "Zapisz",
+        "cancelEdit": "Anuluj",
+        "notesUpdated": "Notatki zostały zaktualizowane",
+        "poDetails": "Szczegóły PO",
+        "poNumber": "Nr PO",
+        "poStatus": "Status",
+        "poQuantity": "Ilość",
+        "poDeliveryDate": "Data dostawy",
+        "noDeliveries": "Brak",
+        "showAll": "Pokaż wszystkie",
+        "showShortageOnly": "Tylko niedobory",
+        "search": "Szukaj materiału..."
+      }
     }
   },
   "itemDetails": {
@@ -243,6 +306,9 @@
     "deleteCertificate": "Usuń certyfikat",
     "addCertificate": "Dodaj certyfikat",
     "printBatchLabel": "Drukuj etykietę partii",
+    "batchDetails": "Szczegóły partii",
+    "transferSource": "Źródło transferu",
+    "selectTransferSource": "Wybierz źródło transferu (część wolną lub konkretną rezerwację MO)",
     "status": {
       "depleted": "Wyczerpana",
       "current": "Aktualna",
@@ -387,6 +453,10 @@
     "invalidDate": "Nieprawidłowa data"
   },
   "itemForm": {
+    "editItem": "Edytuj pozycję magazynową",
+    "addNewItem": "Dodaj nową pozycję magazynową",
+    "allCustomers": "Wszyscy klienci",
+    "availableForAllCustomers": "Pozycja dostępna dla wszystkich klientów",
     "basicData": "Dane podstawowe",
     "warehouseParameters": "Parametry magazynowe",
     "supplierPrices": "Ceny dostawców",
@@ -423,5 +493,6 @@
       "confirm": "Tak, zaktualizuj receptury",
       "decline": "Nie, tylko zapisz pozycję"
     }
-  }
+  },
+  "noChangesToImport": "Nie znaleziono żadnych zmian do zaimportowania."
 }

@@ -790,7 +790,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
                     )}
                   </TableCell>
                   <TableCell align="right">
-                    <Tooltip title="Podgląd">
+                    <Tooltip title={t('poReservations.preview')}>
                       <IconButton size="small" onClick={() => handleOpenViewDialog(reservation)}>
                         <ViewIcon />
                       </IconButton>
@@ -798,7 +798,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
                     
                     {reservation.status === 'delivered' && 
                      reservation.deliveredQuantity > reservation.convertedQuantity && (
-                      <Tooltip title="Przekształć na standardową rezerwację">
+                      <Tooltip title={t('poReservations.convertToStandardReservation')}>
                         <IconButton size="small" onClick={() => handleOpenConvertDialog(reservation)}>
                           <ConvertIcon />
                         </IconButton>
@@ -807,7 +807,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
                     
                     {reservation.status === 'delivered' && 
                      (!reservation.linkedBatches || reservation.linkedBatches.length === 0) && (
-                      <Tooltip title="Debuguj - sprawdź partie magazynowe">
+                      <Tooltip title={t('poReservations.debug')}>
                         <IconButton 
                           size="small" 
                           color="warning"
@@ -819,7 +819,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
                     )}
                     
                     {(reservation.status === 'pending' || reservation.status === 'delivered') && (
-                      <Tooltip title="Usuń rezerwację">
+                      <Tooltip title={t('poReservations.deleteReservation')}>
                         <IconButton 
                           size="small" 
                           color="error"
@@ -849,14 +849,14 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
                 options={materials}
                 getOptionLabel={(option) => option.name || ''}
                 renderInput={(params) => (
-                  <TextField {...params} label="Wybierz materiał" fullWidth />
+                  <TextField {...params} label={t('poReservations.selectMaterial')} fullWidth />
                 )}
                 renderOption={(props, option) => (
                   <li {...props}>
                     <Box>
                       <Typography variant="body1">{option.name}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Wymagane: {option.quantity} {option.unit}
+                        {t('poReservations.requiredQuantity', { quantity: option.quantity, unit: option.unit })}
                       </Typography>
                     </Box>
                   </li>
@@ -924,7 +924,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
                               </Typography>
                               
                               <TextField
-                                label="Ilość"
+                                label={t('common:common.quantity')}
                                 type="number"
                                 value={reservationQuantity}
                                 onChange={(e) => setReservationQuantity(e.target.value)}
@@ -963,7 +963,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Anuluj</Button>
+          <Button onClick={handleCloseDialog}>{t('common:common.cancel')}</Button>
           <Button 
             onClick={handleAddReservation} 
             variant="contained"
@@ -976,7 +976,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
       
       {/* Dialog konwersji */}
       <Dialog open={dialogOpen && dialogType === 'convert'} maxWidth="sm" fullWidth>
-        <DialogTitle>Przekształć na standardową rezerwację</DialogTitle>
+        <DialogTitle>{t('poReservations.convertToStandardReservation')}</DialogTitle>
         <DialogContent>
           {selectedReservation && (
             <Grid container spacing={3} sx={{ mt: 1 }}>
@@ -1022,7 +1022,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
               
               <Grid item xs={12}>
                 <TextField
-                  label="Ilość do przekształcenia"
+                  label={t('poReservations.quantityToConvert')}
                   type="number"
                   value={conversionQuantity}
                   onChange={(e) => setConversionQuantity(e.target.value)}
@@ -1045,13 +1045,13 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Anuluj</Button>
+          <Button onClick={handleCloseDialog}>{t('common:common.cancel')}</Button>
           <Button 
             onClick={handleConvertReservation} 
             variant="contained"
             disabled={!selectedBatch || !conversionQuantity}
           >
-            Przekształć
+            {t('poReservations.convert')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1133,7 +1133,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Zamknij</Button>
+          <Button onClick={handleCloseDialog}>{t('common:common.close')}</Button>
         </DialogActions>
       </Dialog>
     </Box>

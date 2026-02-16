@@ -939,12 +939,12 @@ const InvoicesList = () => {
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Zamówienie klienta</InputLabel>
+                    <InputLabel>{t('invoices.form.filters.customerOrder')}</InputLabel>
                     <Select
                       name="orderId"
                       value={listState.filters.orderId}
                       onChange={handleFilterChange}
-                      label="Zamówienie klienta"
+                      label={t('invoices.form.filters.customerOrder')}
                       disabled={ordersLoading}
                     >
                       <MenuItem value="">Wszystkie zamówienia</MenuItem>

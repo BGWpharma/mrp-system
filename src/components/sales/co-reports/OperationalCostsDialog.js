@@ -317,7 +317,7 @@ const OperationalCostsDialog = ({
                 color="success"
               />
             }
-            label="Zapłacone"
+            label={t('common:common.paid')}
           />
         </Grid>
         
@@ -325,7 +325,7 @@ const OperationalCostsDialog = ({
           <Grid item xs={12} sm={6}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
-                label="Data zapłaty"
+                label={t('common:common.paymentDate')}
                 value={formData.paidDate}
                 onChange={(date) => handleFormChange('paidDate', date)}
                 slotProps={{ 
@@ -414,7 +414,7 @@ const OperationalCostsDialog = ({
                           {cost.isPaid ? (
                             <Chip
                               icon={<CheckCircleIcon sx={{ fontSize: 14 }} />}
-                              label="Zapłacone"
+                              label={t('common:common.paid')}
                               size="small"
                               color="success"
                               sx={{ fontSize: '0.7rem', height: 20 }}
@@ -422,7 +422,7 @@ const OperationalCostsDialog = ({
                           ) : (
                             <Chip
                               icon={<ScheduleIcon sx={{ fontSize: 14 }} />}
-                              label="Do zapłaty"
+                              label={t('common:common.toPay')}
                               size="small"
                               color="warning"
                               sx={{ fontSize: '0.7rem', height: 20 }}

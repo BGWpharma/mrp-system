@@ -611,7 +611,7 @@ const BatchesPage = () => {
     }
     
     if (!selectedTransferSource) {
-      errors.transferSource = 'Wybierz źródło transferu (część wolną lub konkretną rezerwację MO)';
+      errors.transferSource = t('inventory.batches.selectTransferSource');
     }
     
     // Pobierz sourceWarehouseId z partii - musi być zdefiniowany
@@ -1511,7 +1511,7 @@ const BatchesPage = () => {
                         )}
                         <TableCell>
                           <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 0.5 : 1 }}>
-                            <Tooltip title="Szczegóły partii">
+                            <Tooltip title={t('inventory.batches.batchDetails')}>
                               <IconButton
                                 size="small"
                                 onClick={() => handleOpenDetailsDialog(batch)}
@@ -1747,11 +1747,11 @@ const BatchesPage = () => {
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
                     <FormControl fullWidth error={!!transferErrors.transferSource}>
-                      <InputLabel>Źródło transferu</InputLabel>
+                      <InputLabel>{t('inventory.batches.transferSource')}</InputLabel>
                       <Select
                         value={selectedTransferSource}
                         onChange={(e) => handleTransferSourceChange(e.target.value)}
-                        label="Źródło transferu"
+                        label={t('inventory.batches.transferSource')}
                       >
                         {/* Opcja dla części wolnej */}
                         {(() => {

@@ -65,6 +65,8 @@
       "productPhoto2Helper": "Product photo with visible LOT - EXP number",
       "productPhoto3Label": "Product photo - 3",
       "productPhoto3Helper": "Photo of packaged product in carton with visible label",
+      "selectSensorPlease": "Please select a sensor",
+      "provideDateTimePlease": "Please provide date and time of reading",
       "sensorDialog": {
         "successTitle": "Sensor data fetched successfully",
         "errorTitle": "Error fetching data",

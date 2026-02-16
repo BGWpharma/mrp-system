@@ -65,6 +65,8 @@
       "productPhoto2Helper": "Zdjęcie produktu z widocznym nr. LOT - EXP",
       "productPhoto3Label": "Zdjęcie produktu - 3",
       "productPhoto3Helper": "Zdjęcie zapakowanego produktu w karton z widoczną etykietą",
+      "selectSensorPlease": "Proszę wybrać czujnik",
+      "provideDateTimePlease": "Proszę podać datę i godzinę odczytu",
       "sensorDialog": {
         "successTitle": "Dane z czujnika pobrane pomyślnie",
         "errorTitle": "Błąd pobierania danych",

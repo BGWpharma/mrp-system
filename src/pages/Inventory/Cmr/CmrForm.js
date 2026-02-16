@@ -47,6 +47,7 @@ import {
   CMR_STATUSES, 
   CMR_PAYMENT_STATUSES, 
   TRANSPORT_TYPES,
+  getTransportTypeLabel,
   translatePaymentStatus 
 } from '../../../services/cmrService';
 import { getOrderById, getAllOrders, searchOrdersByNumber } from '../../../services/orderService';
@@ -58,6 +59,7 @@ import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDi
 import { calculatePalletWeights, calculateBoxWeights, calculateCmrItemWeight, getInventoryDataFromBatches } from '../../../utils/cmrWeightCalculator';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useAuth } from '../../../hooks/useAuth';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 /**
  * Komponent wyświetlający podsumowanie wagi i palet dla pojedynczej pozycji CMR
@@ -400,6 +402,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   const muiTheme = useMuiTheme();
   const { mode } = useTheme();
   const { currentUser } = useAuth();
+  const { t } = useTranslation('cmr');
   const emptyItem = {
     description: '',
     quantity: '',
@@ -2007,7 +2010,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
           <DialogContent>
             <Box sx={{ mb: 2 }}>
               <TextField
-                label="Szukaj po numerze zamówienia"
+                label={t('form.searchByOrderNumber')}
                 value={orderSearchQuery}
                 onChange={(e) => setOrderSearchQuery(e.target.value)}
                 fullWidth
@@ -2306,12 +2309,12 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     
                     <Grid item xs={12} sm={6}>
                       <FormControl fullWidth margin="normal">
-                        <InputLabel>Status płatności</InputLabel>
+                        <InputLabel>{t('common:common.paymentStatus')}</InputLabel>
                         <Select
                           name="paymentStatus"
                           value={formData.paymentStatus}
                           onChange={handleChange}
-                          label="Status płatności"
+                          label={t('common:common.paymentStatus')}
                         >
                           <MenuItem value={CMR_PAYMENT_STATUSES.UNPAID}>
                             {translatePaymentStatus(CMR_PAYMENT_STATUSES.UNPAID)}
@@ -2369,7 +2372,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                           label="Typ transportu"
                         >
                           {Object.entries(TRANSPORT_TYPES).map(([key, value]) => (
-                            <MenuItem key={key} value={value}>{value}</MenuItem>
+                            <MenuItem key={key} value={value}>{getTransportTypeLabel(value)}</MenuItem>
                           ))}
                         </Select>
                       </FormControl>
@@ -2536,7 +2539,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     rows={4}
                     error={formErrors.recipientAddress}
                     helperText={formErrors.recipientAddress || "Pełny adres odbiorcy (ulica, kod pocztowy, miasto, kraj)"}
-                    placeholder="np. ul. Przykładowa 123, 00-000 Warszawa, Polska"
+                    placeholder={t('form.addressPlaceholder')}
                   />
                     </Grid>
                   </Grid>
@@ -2548,7 +2551,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
             <Grid item xs={12}>
               <Card>
                 <CardHeader 
-                  title="Dane przewoźnika" 
+                  title={t('form.carrierData')} 
                   titleTypographyProps={{ variant: 'h6' }}
                 />
                 <Divider />
@@ -2633,7 +2636,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                         renderInput={(params) => (
                           <TextField
                             {...params}
-                            label="Wybierz przewoźnika"
+                            label={t('form.selectCarrier')}
                             margin="normal"
                             error={!!formErrors.carrier}
                             helperText={formErrors.carrier}
@@ -2654,7 +2657,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     
                     <Grid item xs={12}>
                       <TextField
-                        label="Adres przewoźnika"
+                        label={t('form.carrierAddress')}
                         name="carrierAddress"
                         value={formData.carrierAddress}
                         onChange={handleChange}
@@ -2667,7 +2670,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     
                     <Grid item xs={12} sm={4}>
                       <TextField
-                        label="Kod pocztowy przewoźnika"
+                        label={t('form.carrierPostalCode')}
                         name="carrierPostalCode"
                         value={formData.carrierPostalCode}
                         onChange={handleChange}
@@ -2678,7 +2681,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     
                     <Grid item xs={12} sm={4}>
                       <TextField
-                        label="Miasto przewoźnika"
+                        label={t('form.carrierCity')}
                         name="carrierCity"
                         value={formData.carrierCity}
                         onChange={handleChange}
@@ -2689,7 +2692,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     
                     <Grid item xs={12} sm={4}>
                       <TextField
-                        label="Kraj przewoźnika"
+                        label={t('form.carrierCountry')}
                         name="carrierCountry"
                         value={formData.carrierCountry}
                         onChange={handleChange}
@@ -2706,7 +2709,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
         <Grid item xs={12}>
           <Card>
             <CardHeader 
-              title="Miejsce załadunku i rozładunku" 
+              title={t('form.loadingUnloadingPlaces')} 
               titleTypographyProps={{ variant: 'h6' }}
             />
             <Divider />
@@ -2714,7 +2717,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <TextField
-                    label="Miejsce załadunku"
+                    label={t('form.loadingAddress')}
                     name="loadingPlace"
                     value={formData.loadingPlace}
                     onChange={handleChange}
@@ -2727,7 +2730,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     
                     <Grid item xs={12} sm={6}>
                     <DatePicker
-                      label="Data załadunku"
+                      label={t('form.loadingDate')}
                       value={formData.loadingDate}
                       onChange={(date) => handleDateChange('loadingDate', date)}
                       slots={{
@@ -2771,7 +2774,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <TextField
-                    label="Załączone dokumenty"
+                    label={t('form.attachedDocuments')}
                     name="attachedDocuments"
                     value={formData.attachedDocuments}
                     onChange={handleChange}
@@ -2803,7 +2806,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
         <Grid item xs={12}>
           <Card>
             <CardHeader 
-              title="Informacje o pojeździe" 
+              title={t('form.vehicleInfo')} 
               titleTypographyProps={{ variant: 'h6' }}
             />
             <Divider />
@@ -2921,7 +2924,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     
                     <Grid item xs={12} sm={6} md={3}>
                       <TextField
-                        label="Ilość"
+                        label={t('common:common.quantity')}
                         value={item.quantity}
                         onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                         fullWidth
@@ -2955,7 +2958,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                               <IconButton
                                 size="small"
                                 onClick={() => handleOpenWeightCalculator(index)}
-                                title="Oblicz wagę na podstawie danych magazynowych"
+                                title={t('form.calculateWeightFromInventory')}
                                 sx={{ 
                                   color: 'primary.main',
                                   '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? 'primary.dark' : 'primary.light' }
@@ -2971,7 +2974,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     
                     <Grid item xs={12} sm={6} md={2}>
                       <TextField
-                        label="Ilość palet"
+                        label={t('form.palletCount')}
                         value={item.palletsCount || 0}
                         disabled
                         fullWidth
@@ -2990,7 +2993,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     
                     <Grid item xs={12} sm={6} md={2}>
                       <TextField
-                        label="Objętość (m³)"
+                        label={t('form.volumeM3')}
                         value={item.volume}
                         onChange={(e) => handleItemChange(index, 'volume', e.target.value)}
                         fullWidth
@@ -3032,7 +3035,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                                     startIcon={<RefreshIcon />}
                                     onClick={() => handleRefreshInventoryData(index)}
                                     color="secondary"
-                                    title="Odśwież parametry magazynowe"
+                                    title={t('form.refreshInventoryParams')}
                                   >
                                     Odśwież
                                   </Button>
@@ -3095,7 +3098,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
           <Grid item xs={12}>
             <Card>
               <CardHeader 
-                title="Podsumowanie ogólne" 
+                title={t('form.generalSummary')} 
                 titleTypographyProps={{ variant: 'h6' }}
               />
               <Divider />
@@ -3223,7 +3226,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
         <Grid item xs={12}>
           <Card>
             <CardHeader 
-              title="Opłaty i ustalenia szczególne" 
+              title={t('form.feesAndSpecialArrangements')} 
               titleTypographyProps={{ variant: 'h6' }}
             />
             <Divider />
@@ -3231,7 +3234,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6} md={3}>
                   <TextField
-                    label="Przewoźne"
+                    label={t('form.carriageFee')}
                     name="freight"
                     value={formData.freight}
                     onChange={handleChange}
@@ -3275,12 +3278,12 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                 
                 <Grid item xs={12}>
                   <FormControl fullWidth margin="normal">
-                    <InputLabel>Płatność</InputLabel>
+                    <InputLabel>{t('form.payment')}</InputLabel>
                     <Select
                       name="paymentMethod"
                       value={formData.paymentMethod}
                       onChange={handleChange}
-                      label="Płatność"
+                      label={t('form.payment')}
                     >
                       <MenuItem value="sender">Płaci nadawca</MenuItem>
                       <MenuItem value="recipient">Płaci odbiorca</MenuItem>
@@ -3291,7 +3294,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                 
                 <Grid item xs={12}>
                   <TextField
-                    label="Ustalenia szczególne"
+                    label={t('form.specialArrangements')}
                     name="specialAgreements"
                     value={formData.specialAgreements || ''}
                     onChange={handleChange}
@@ -3304,7 +3307,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                 
                 <Grid item xs={12}>
                   <TextField
-                    label="Zastrzeżenia i uwagi przewoźnika"
+                    label={t('form.carrierReservations')}
                     name="reservations"
                     value={formData.reservations || ''}
                     onChange={handleChange}
@@ -3536,7 +3539,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12}>
                 <TextField
-                  label="Nazwa przewoźnika *"
+                  label={t('form.carrierName')}
                   name="name"
                   value={newCarrierData.name}
                   onChange={handleNewCarrierChange}

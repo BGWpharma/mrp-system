@@ -104,6 +104,43 @@
     "unpaid": "Unpaid",
     "paid": "Paid"
   },
+  "transportTypes": {
+    "road": "Road",
+    "rail": "Rail",
+    "sea": "Sea",
+    "air": "Air",
+    "multimodal": "Multimodal"
+  },
+  "form": {
+    "addressPlaceholder": "e.g. Sample St 123, 00-000 Warsaw, Poland",
+    "loadingUnloadingPlaces": "Loading and unloading places",
+    "loadingAddress": "Loading address",
+    "loadingDate": "Loading date",
+    "attachedDocuments": "Attached documents",
+    "calculateWeightFromInventory": "Calculate weight from inventory data",
+    "feesAndSpecialArrangements": "Fees and special arrangements",
+    "selectOrder": "Select order",
+    "selectCustomerOrder": "Select customer order (CO)",
+    "selectOrderPlaceholder": "Select order from list",
+    "cmrPreview": "CMR Preview",
+    "searchByOrderNumber": "Search by order number",
+    "carrierData": "Carrier data",
+    "selectCarrier": "Select carrier",
+    "carrierAddress": "Carrier address",
+    "carrierPostalCode": "Carrier postal code",
+    "carrierCity": "Carrier city",
+    "carrierCountry": "Carrier country",
+    "vehicleInfo": "Vehicle information",
+    "palletCount": "Pallet count",
+    "volumeM3": "Volume (m³)",
+    "refreshInventoryParams": "Refresh inventory parameters",
+    "generalSummary": "General summary",
+    "carriageFee": "Carriage fee",
+    "payment": "Payment",
+    "specialArrangements": "Special arrangements",
+    "carrierReservations": "Carrier reservations and notes",
+    "carrierName": "Carrier name *"
+  },
   "details": {
     "title": "CMR Document Details",
     "backToList": "Back to List",
@@ -298,7 +335,8 @@
       "updatingStatus": "Error updating status",
       "loadingWeights": "Error calculating weights",
       "uploadingAttachment": "Error uploading attachment",
-      "deletingAttachment": "Error deleting attachment"
+      "deletingAttachment": "Error deleting attachment",
+      "cannotStartTransport": "Cannot start transport. No loading form response for this CMR. Please complete the cargo loading form first."
     },
     "success": {
       "statusUpdated": "Status has been updated",

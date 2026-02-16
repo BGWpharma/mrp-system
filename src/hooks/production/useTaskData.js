@@ -28,7 +28,6 @@ export const useTaskData = (taskId, navigate) => {
     }
     
     isMountedRef.current = true;
-    console.log('🔥 [REAL-TIME] Inicjalizacja real-time listenera dla zadania:', taskId);
     setLoading(true);
     
     const taskRef = doc(db, 'productionTasks', taskId);
@@ -44,7 +43,6 @@ export const useTaskData = (taskId, navigate) => {
         
         debounceTimerRef.current = setTimeout(async () => {
           if (!isMountedRef.current) {
-            console.log('📡 [REAL-TIME] Komponent odmontowany, pomijam aktualizację');
             return;
           }
           
@@ -62,17 +60,10 @@ export const useTaskData = (taskId, navigate) => {
           
           // Smart update - porównaj timestamp
           if (lastUpdateTimestamp.current && updateTimestamp <= lastUpdateTimestamp.current) {
-            console.log('📡 [REAL-TIME] Pominięto starszy/duplikat snapshot');
             return;
           }
           
           lastUpdateTimestamp.current = updateTimestamp;
-          
-          console.log('📡 [REAL-TIME] Otrzymano aktualizację zadania:', {
-            moNumber: taskData.moNumber,
-            status: taskData.status,
-            timestamp: new Date(updateTimestamp).toISOString()
-          });
           
           if (isMountedRef.current) {
             setTask(taskData);
@@ -103,7 +94,6 @@ export const useTaskData = (taskId, navigate) => {
       }
       
       unsubscribe();
-      console.log('🔌 [REAL-TIME] Odłączono listener dla zadania:', taskId);
     };
   }, [taskId, navigate, showError, loading]);
   
@@ -112,7 +102,6 @@ export const useTaskData = (taskId, navigate) => {
     if (!taskId) return;
     
     try {
-      console.log('🔄 Ręczne odświeżanie danych zadania...');
       const freshTask = await getTaskById(taskId);
       setTask(freshTask);
       setError(null);

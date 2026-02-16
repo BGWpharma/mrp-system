@@ -50,6 +50,7 @@ import {
 } from '../../services/productionOrderSyncService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
@@ -58,6 +59,7 @@ import { db } from '../../services/firebase/config';
 const ConsumptionPage = () => {
   const { taskId } = useParams();
   const navigate = useNavigate();
+  const { t } = useTranslation('production');
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   
@@ -1353,7 +1355,7 @@ const ConsumptionPage = () => {
           <TextField
             autoFocus
             margin="dense"
-            label="Ilość"
+            label={t('common:common.quantity')}
             type="number"
             fullWidth
             variant="outlined"
@@ -1400,7 +1402,7 @@ const ConsumptionPage = () => {
                   color="primary"
                 />
               }
-              label="Przywróć rezerwację materiału w MO"
+              label={t('reports.consumption.restoreMaterialReservationInMO')}
             />
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 4 }}>
               Zaznacz, aby przywrócić rezerwację materiału dla tego zadania po usunięciu konsumpcji

@@ -335,7 +335,7 @@ const StocktakingPage = () => {
                           onClick={() => handleCorrectStocktaking(stocktaking)}
                           color="warning"
                           size="small"
-                          title="Otwórz do korekty"
+                          title={t('stocktaking.openForCorrection')}
                         >
                           <CorrectionIcon />
                         </IconButton>
@@ -343,7 +343,7 @@ const StocktakingPage = () => {
                           onClick={() => handleForceDeleteStocktaking(stocktaking)}
                           color="error"
                           size="small"
-                          title="Usuń bez cofania korekt"
+                          title={t('stocktaking.deleteWithoutUndoingCorrections')}
                         >
                           <DeleteIcon />
                         </IconButton>

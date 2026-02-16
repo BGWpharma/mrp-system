@@ -1790,7 +1790,7 @@ const EnhancedMixingPlan = ({
                   <Alert severity="info" sx={{ mb: 2 }}>
                     <AlertTitle>Informacje o powiązaniach</AlertTitle>
                     <Typography variant="body2">
-                      Wymagana łącznie: <strong>{requiredQuantity} {existingLinks[0]?.batchSnapshot?.unit || 'szt.'}</strong>
+                      {t('mixingPlan.totalRequired', { quantity: requiredQuantity, unit: existingLinks[0]?.batchSnapshot?.unit || 'szt.' })}
                     </Typography>
                     <Typography variant="body2">
                       Już powiązano: <strong>{alreadyLinkedQuantity} {existingLinks[0]?.batchSnapshot?.unit || 'szt.'}</strong> ({existingLinks.length} rezerwacji)
@@ -1858,7 +1858,7 @@ const EnhancedMixingPlan = ({
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Wybierz rezerwację"
+                    label={t('mixingPlan.selectReservation')}
                     variant="outlined"
                     fullWidth
                   />
@@ -1913,7 +1913,7 @@ const EnhancedMixingPlan = ({
               {selectedReservation && (
                 <Box sx={{ mt: 2 }}>
                   <TextField
-                    label="Ilość do powiązania"
+                    label={t('mixingPlan.quantityToLink')}
                     type="number"
                     value={linkQuantity}
                     onChange={(e) => setLinkQuantity(e.target.value)}
@@ -1941,7 +1941,7 @@ const EnhancedMixingPlan = ({
                           return (
                             <>
                               <Typography variant="caption" color="text.secondary">
-                                Wymagane łącznie: {requiredQuantity} {selectedReservation.unit || 'szt.'} | 
+                                {t('mixingPlan.totalRequired', { quantity: requiredQuantity, unit: selectedReservation.unit || 'szt.' })} | 
                                 Już powiązano: {alreadyLinkedQuantity} {selectedReservation.unit || 'szt.'} | 
                                 Pozostało: {remainingToLink} {selectedReservation.unit || 'szt.'} | 
                                 Dostępne w tej rezerwacji: {maxAvailableQuantity} {selectedReservation.unit || 'szt.'}
@@ -2029,7 +2029,7 @@ const EnhancedMixingPlan = ({
           <TextField
             autoFocus
             margin="dense"
-            label="Nowa ilość"
+            label={t('common:common.newQuantity')}
             type="number"
             fullWidth
             variant="outlined"

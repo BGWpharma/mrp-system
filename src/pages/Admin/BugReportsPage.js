@@ -54,6 +54,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { AdminRoute } from '../../components/common/AdminRoute';
 import {
   getBugReports,
@@ -67,6 +68,7 @@ import {
  * Strona zarządzania zgłoszeniami błędów dla administratorów
  */
 const BugReportsPage = () => {
+  const { t } = useTranslation('common');
   const { currentUser } = useAuth();
   const { showSuccess, showError, showWarning } = useNotification();
   
@@ -266,7 +268,7 @@ const BugReportsPage = () => {
       case 'w trakcie':
         return <Chip label="W trakcie" color="warning" size="small" />;
       case 'rozwiązany':
-        return <Chip label="Rozwiązany" color="success" size="small" />;
+        return <Chip label={t('common.resolved')} color="success" size="small" />;
       case 'odrzucony':
         return <Chip label="Odrzucony" color="error" size="small" />;
       default:
@@ -347,7 +349,7 @@ const BugReportsPage = () => {
           <Tab value="wszystkie" label="Wszystkie" />
           <Tab value="nowy" label="Nowe" />
           <Tab value="w trakcie" label="W trakcie" />
-          <Tab value="rozwiązany" label="Rozwiązane" />
+          <Tab value="rozwiązany" label={t('common.resolvedPlural')} />
           <Tab value="odrzucony" label="Odrzucone" />
           <Tab 
             value="ai_feedback" 

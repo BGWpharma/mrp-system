@@ -770,12 +770,12 @@ const ProductionControlForm = ({
 
   const handleLoadSensorData = async () => {
     if (!selectedSensor) {
-      showSensorInfoDialog('Błąd', 'Proszę wybrać czujnik', true);
+      showSensorInfoDialog(t('common:common.error'), t('productionForms.productionControl.selectSensorPlease'), true);
       return;
     }
 
     if (!formData.readingDate || !formData.readingTime) {
-      showSensorInfoDialog('Błąd', 'Proszę podać datę i godzinę odczytu', true);
+      showSensorInfoDialog(t('common:common.error'), t('productionForms.productionControl.provideDateTimePlease'), true);
       return;
     }
 

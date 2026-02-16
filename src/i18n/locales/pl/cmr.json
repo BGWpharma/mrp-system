@@ -104,6 +104,43 @@
     "unpaid": "Nieopłacone",
     "paid": "Opłacone"
   },
+  "transportTypes": {
+    "road": "Drogowy",
+    "rail": "Kolejowy",
+    "sea": "Morski",
+    "air": "Lotniczy",
+    "multimodal": "Multimodalny"
+  },
+  "form": {
+    "addressPlaceholder": "np. ul. Przykładowa 123, 00-000 Warszawa, Polska",
+    "loadingUnloadingPlaces": "Miejsca załadunku i rozładunku",
+    "loadingAddress": "Adres załadunku",
+    "loadingDate": "Data załadunku",
+    "attachedDocuments": "Załączone dokumenty",
+    "calculateWeightFromInventory": "Oblicz wagę na podstawie danych magazynowych",
+    "feesAndSpecialArrangements": "Opłaty i ustalenia szczególne",
+    "selectOrder": "Wybierz zamówienie",
+    "selectCustomerOrder": "Wybierz zamówienie klienta (CO)",
+    "selectOrderPlaceholder": "Wybierz zamówienie z listy",
+    "cmrPreview": "Podgląd CMR",
+    "searchByOrderNumber": "Szukaj po numerze zamówienia",
+    "carrierData": "Dane przewoźnika",
+    "selectCarrier": "Wybierz przewoźnika",
+    "carrierAddress": "Adres przewoźnika",
+    "carrierPostalCode": "Kod pocztowy przewoźnika",
+    "carrierCity": "Miasto przewoźnika",
+    "carrierCountry": "Kraj przewoźnika",
+    "vehicleInfo": "Informacje o pojeździe",
+    "palletCount": "Ilość palet",
+    "volumeM3": "Objętość (m³)",
+    "refreshInventoryParams": "Odśwież parametry magazynowe",
+    "generalSummary": "Podsumowanie ogólne",
+    "carriageFee": "Przewoźne",
+    "payment": "Płatność",
+    "specialArrangements": "Ustalenia szczególne",
+    "carrierReservations": "Zastrzeżenia i uwagi przewoźnika",
+    "carrierName": "Nazwa przewoźnika *"
+  },
   "details": {
     "title": "Szczegóły dokumentu CMR",
     "backToList": "Powrót do listy",
@@ -298,7 +335,8 @@
       "updatingStatus": "Błąd podczas aktualizacji statusu",
       "loadingWeights": "Błąd podczas obliczania wag",
       "uploadingAttachment": "Błąd podczas przesyłania załącznika",
-      "deletingAttachment": "Błąd podczas usuwania załącznika"
+      "deletingAttachment": "Błąd podczas usuwania załącznika",
+      "cannotStartTransport": "Nie można rozpocząć transportu. Brak odpowiedzi z formularza załadunku dla tego CMR. Proszę najpierw wypełnić formularz załadunku towaru."
     },
     "success": {
       "statusUpdated": "Status został zaktualizowany",

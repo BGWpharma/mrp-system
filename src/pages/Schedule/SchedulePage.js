@@ -6,7 +6,7 @@ import {
   Chip, IconButton, Tabs, Tab, Fade, CircularProgress,
   InputAdornment, MenuItem, Select, FormControl, InputLabel, Grid,
   Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Stack,
-  useMediaQuery, useTheme
+  useMediaQuery, useTheme, ToggleButtonGroup, ToggleButton, Divider, Avatar
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -25,10 +25,13 @@ import CloseIcon from '@mui/icons-material/Close';
 import BeachAccessIcon from '@mui/icons-material/BeachAccess';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import EventBusyIcon from '@mui/icons-material/EventBusy';
-import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import MoneyOffIcon from '@mui/icons-material/MoneyOff';
 import EditCalendarIcon from '@mui/icons-material/EditCalendar';
+import ViewListIcon from '@mui/icons-material/ViewList';
+import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import PersonIcon from '@mui/icons-material/Person';
 import SendIcon from '@mui/icons-material/Send';
 import SaveIcon from '@mui/icons-material/Save';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -54,7 +57,6 @@ const TYPE_ICONS = {
   [REQUEST_TYPES.SICK_LEAVE]: <LocalHospitalIcon fontSize="small" />,
   [REQUEST_TYPES.DAY_OFF]: <EventBusyIcon fontSize="small" />,
   [REQUEST_TYPES.UNPAID_LEAVE]: <MoneyOffIcon fontSize="small" />,
-  [REQUEST_TYPES.SCHEDULE_CHANGE]: <SwapHorizIcon fontSize="small" />,
   [REQUEST_TYPES.OTHER]: <MoreHorizIcon fontSize="small" />,
 };
 
@@ -63,7 +65,6 @@ const TYPE_COLORS = {
   [REQUEST_TYPES.SICK_LEAVE]: '#f44336',
   [REQUEST_TYPES.DAY_OFF]: '#ff9800',
   [REQUEST_TYPES.UNPAID_LEAVE]: '#9e9e9e',
-  [REQUEST_TYPES.SCHEDULE_CHANGE]: '#2196f3',
   [REQUEST_TYPES.OTHER]: '#795548',
 };
 
@@ -74,6 +75,7 @@ const SchedulePage = () => {
   const [activeTab, setActiveTab] = useState(0);
 
   // ---- Grafik (kalendarz miesięczny) ----
+  const [viewMode, setViewMode] = useState('calendar'); // 'calendar' | 'list'
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [monthShifts, setMonthShifts] = useState([]);
   const [monthRequests, setMonthRequests] = useState([]);
@@ -427,35 +429,34 @@ const SchedulePage = () => {
           {activeTab === 0 && (
             <Fade in>
               <Box>
-                {/* Nawigacja */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2, gap: 2 }}>
+                {/* Nawigacja + przełącznik widoku */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
                   <IconButton onClick={handlePrevMonth} size="large"><ArrowBackIcon /></IconButton>
                   <Typography variant="h5" fontWeight="bold" sx={{ minWidth: 260, textAlign: 'center', textTransform: 'capitalize' }}>
                     {format(currentMonth, 'LLLL yyyy', { locale: pl })}
                   </Typography>
                   <IconButton onClick={handleNextMonth} size="large"><ArrowForwardIcon /></IconButton>
-                </Box>
 
-                {/* Legenda zmian */}
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1, justifyContent: 'center' }}>
-                  {Object.entries(SHIFT_PRESETS).filter(([k]) => k !== SHIFT_TYPES.OFF).map(([key, val]) => (
-                    <Chip key={key} label={val.label} size="small" sx={{ backgroundColor: val.color, color: '#fff', fontWeight: 600 }} />
-                  ))}
-                  <Chip label={t('calendar.off')} size="small" variant="outlined" sx={{ borderColor: '#9e9e9e' }} />
-                </Box>
-                {/* Legenda wniosków */}
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2, justifyContent: 'center' }}>
-                  {Object.entries(REQUEST_TYPE_LABELS).map(([key, label]) => (
-                    <Chip
-                      key={key} icon={TYPE_ICONS[key]} label={label} size="small" variant="outlined"
-                      sx={{ borderColor: TYPE_COLORS[key], '& .MuiChip-icon': { color: TYPE_COLORS[key] } }}
-                    />
-                  ))}
+                  <ToggleButtonGroup
+                    value={viewMode}
+                    exclusive
+                    onChange={(_, v) => { if (v) setViewMode(v); }}
+                    size="small"
+                    sx={{ ml: { xs: 0, md: 2 } }}
+                  >
+                    <ToggleButton value="calendar" aria-label={t('calendar.viewCalendar')}>
+                      <Tooltip title={t('calendar.viewCalendar')}><CalendarViewMonthIcon /></Tooltip>
+                    </ToggleButton>
+                    <ToggleButton value="list" aria-label={t('calendar.viewList')}>
+                      <Tooltip title={t('calendar.viewList')}><ViewListIcon /></Tooltip>
+                    </ToggleButton>
+                  </ToggleButtonGroup>
                 </Box>
 
                 {calendarLoading ? (
                   <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
-                ) : (
+                ) : viewMode === 'calendar' ? (
+                  /* ───── Widok kalendarza (dotychczasowy) ───── */
                   <TableContainer sx={{ overflowX: 'auto' }}>
                     <Table sx={{ tableLayout: 'fixed', minWidth: 700 }}>
                       <TableHead>
@@ -491,7 +492,6 @@ const SchedulePage = () => {
                                       color={today ? 'inherit' : wknd ? 'text.secondary' : 'text.primary'} sx={{ mb: 0.5 }}>
                                       {format(day, 'd')}
                                     </Typography>
-                                    {/* Zmiany */}
                                     {shifts.map((s, i) => (
                                       <Box key={`s${i}`} sx={{
                                         backgroundColor: s.color || '#4caf50', color: '#fff',
@@ -505,7 +505,6 @@ const SchedulePage = () => {
                                         </Typography>
                                       </Box>
                                     ))}
-                                    {/* Wnioski */}
                                     {reqs.map((r, i) => (
                                       <Box key={`r${i}`} sx={{
                                         backgroundColor: TYPE_COLORS[r.type] || '#999', color: '#fff',
@@ -527,6 +526,174 @@ const SchedulePage = () => {
                       </TableBody>
                     </Table>
                   </TableContainer>
+                ) : (
+                  /* ───── Widok listy ───── */
+                  <Box>
+                    {(() => {
+                      const days = eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) });
+                      return days.map((day) => {
+                        const shifts = getShiftsForDay(day);
+                        const reqs = getRequestsForDay(day);
+                        const today = isSameDay(day, new Date());
+                        const wknd = isWeekend(day);
+                        const hasEntries = shifts.length > 0 || reqs.length > 0;
+
+                        if (!hasEntries) return null;
+
+                        return (
+                          <Paper
+                            key={day.toISOString()}
+                            variant="outlined"
+                            sx={{
+                              mb: 1.5,
+                              borderRadius: 2,
+                              overflow: 'hidden',
+                              borderLeft: today ? '4px solid' : '1px solid',
+                              borderLeftColor: today ? 'primary.main' : 'divider',
+                            }}
+                          >
+                            {/* Nagłówek dnia */}
+                            <Box sx={{
+                              display: 'flex', alignItems: 'center', gap: 1.5,
+                              px: 2, py: 1.25,
+                              backgroundColor: today ? 'primary.main' : wknd ? 'action.selected' : 'action.hover',
+                              color: today ? 'primary.contrastText' : 'text.primary',
+                            }}>
+                              <Avatar sx={{
+                                width: 40, height: 40,
+                                backgroundColor: today ? 'rgba(255,255,255,0.2)' : 'action.selected',
+                                color: today ? 'primary.contrastText' : 'text.primary',
+                                fontWeight: 'bold', fontSize: '1rem',
+                              }}>
+                                {format(day, 'd')}
+                              </Avatar>
+                              <Box>
+                                <Typography variant="subtitle1" fontWeight="bold" sx={{ lineHeight: 1.2, textTransform: 'capitalize' }}>
+                                  {format(day, 'EEEE', { locale: pl })}
+                                </Typography>
+                                <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                                  {format(day, 'd MMMM yyyy', { locale: pl })}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ ml: 'auto', display: 'flex', gap: 0.5 }}>
+                                {shifts.length > 0 && (
+                                  <Chip
+                                    size="small"
+                                    label={`${shifts.length} ${shifts.length === 1 ? t('calendar.listShift') : t('calendar.listShifts')}`}
+                                    sx={{
+                                      backgroundColor: today ? 'rgba(255,255,255,0.2)' : 'primary.main',
+                                      color: today ? 'primary.contrastText' : '#fff',
+                                      fontWeight: 600, fontSize: '0.75rem',
+                                    }}
+                                  />
+                                )}
+                                {reqs.length > 0 && (
+                                  <Chip
+                                    size="small"
+                                    label={`${reqs.length} ${reqs.length === 1 ? t('calendar.listRequest') : t('calendar.listRequests')}`}
+                                    sx={{
+                                      backgroundColor: today ? 'rgba(255,255,255,0.2)' : 'warning.main',
+                                      color: today ? 'primary.contrastText' : '#fff',
+                                      fontWeight: 600, fontSize: '0.75rem',
+                                    }}
+                                  />
+                                )}
+                              </Box>
+                            </Box>
+
+                            {/* Zmiany */}
+                            {shifts.length > 0 && (
+                              <Box sx={{ px: 2, py: 1 }}>
+                                {shifts.map((s, i) => (
+                                  <Box key={`s${i}`} sx={{
+                                    display: 'flex', alignItems: 'center', gap: 1.5,
+                                    py: 0.75,
+                                    borderBottom: i < shifts.length - 1 || reqs.length > 0 ? '1px solid' : 'none',
+                                    borderColor: 'divider',
+                                  }}>
+                                    <Box sx={{
+                                      width: 6, height: 6, borderRadius: '50%',
+                                      backgroundColor: s.color || '#4caf50', flexShrink: 0,
+                                    }} />
+                                    <PersonIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                    <Typography variant="body2" fontWeight={600} sx={{ minWidth: 120 }}>
+                                      {s.employeeName || '—'}
+                                    </Typography>
+                                    <AccessTimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                    <Chip
+                                      size="small"
+                                      label={s.startTime && s.endTime ? `${s.startTime} – ${s.endTime}` : t('calendar.off')}
+                                      sx={{
+                                        backgroundColor: s.color || '#4caf50',
+                                        color: '#fff',
+                                        fontWeight: 600,
+                                        fontSize: '0.8rem',
+                                        height: 26,
+                                      }}
+                                    />
+                                  </Box>
+                                ))}
+                              </Box>
+                            )}
+
+                            {/* Wnioski */}
+                            {reqs.length > 0 && (
+                              <Box sx={{ px: 2, py: 1, backgroundColor: 'action.hover' }}>
+                                {reqs.map((r, i) => (
+                                  <Box key={`r${i}`} sx={{
+                                    display: 'flex', alignItems: 'center', gap: 1.5,
+                                    py: 0.75,
+                                    borderBottom: i < reqs.length - 1 ? '1px solid' : 'none',
+                                    borderColor: 'divider',
+                                  }}>
+                                    <Box sx={{
+                                      width: 6, height: 6, borderRadius: '50%',
+                                      backgroundColor: TYPE_COLORS[r.type] || '#999', flexShrink: 0,
+                                    }} />
+                                    {React.cloneElement(
+                                      TYPE_ICONS[r.type] || <MoreHorizIcon fontSize="small" />,
+                                      { sx: { fontSize: 18, color: TYPE_COLORS[r.type] || '#999' } }
+                                    )}
+                                    <Typography variant="body2" fontWeight={600} sx={{ minWidth: 120 }}>
+                                      {r.employeeName || '?'}
+                                    </Typography>
+                                    <Chip
+                                      size="small"
+                                      label={REQUEST_TYPE_LABELS[r.type] || r.type}
+                                      sx={{
+                                        backgroundColor: TYPE_COLORS[r.type] || '#999',
+                                        color: '#fff',
+                                        fontWeight: 600,
+                                        fontSize: '0.75rem',
+                                        height: 26,
+                                      }}
+                                    />
+                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', whiteSpace: 'nowrap' }}>
+                                      {fmtDate(r.startDate)} – {fmtDate(r.endDate)}
+                                    </Typography>
+                                  </Box>
+                                ))}
+                              </Box>
+                            )}
+                          </Paper>
+                        );
+                      });
+                    })()}
+
+                    {/* Informacja gdy brak wpisów */}
+                    {(() => {
+                      const days = eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) });
+                      const hasAny = days.some(day => getShiftsForDay(day).length > 0 || getRequestsForDay(day).length > 0);
+                      if (!hasAny) {
+                        return (
+                          <Alert severity="info" sx={{ borderRadius: 2, mt: 2 }}>
+                            {t('calendar.listEmpty')}
+                          </Alert>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </Box>
                 )}
               </Box>
             </Fade>

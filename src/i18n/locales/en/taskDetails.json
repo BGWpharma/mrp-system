@@ -322,6 +322,9 @@
         "noTaskMaterials": "No materials in production task. Enter ingredient name manually.",
         "removeMixing": "Remove",
         "confirmRemoveMixing": "Are you sure you want to remove mixing #{{number}}?",
+        "totalRequired": "Total required: {{quantity}} {{unit}}",
+        "selectReservation": "Select reservation",
+        "quantityToLink": "Quantity to link",
         "errors": {
             "addMixingFailed": "Failed to add mixing",
             "removeMixingFailed": "Failed to remove mixing",
@@ -413,7 +416,15 @@
         "material": "Material",
         "delivered": "Delivered",
         "reserved": "Reserved",
-        "poNumber": "PO Number"
+        "poNumber": "PO Number",
+        "preview": "Preview",
+        "convertToStandardReservation": "Convert to standard reservation",
+        "debug": "Debug - check warehouse batches",
+        "deleteReservation": "Delete reservation",
+        "selectMaterial": "Select material",
+        "requiredQuantity": "Required: {{quantity}} {{unit}}",
+        "quantityToConvert": "Quantity to convert",
+        "convert": "Convert"
     },
     "changeHistory": {
         "title": "Change History",
@@ -520,5 +531,23 @@
         "by": "by",
         "user": "User",
         "tooltipComments": "Comments"
-    }
+    },
+    "consumption": {
+        "previousConfirmationCanceled": "Previous consumption confirmation was cancelled due to quantity change. Please confirm material consumption again.",
+        "reservationNotFoundForDeletion": "Reservation not found for deletion",
+        "showDepletedBatches": "Show depleted batches",
+        "fullyConsumed": "Fully consumed",
+        "partialReservation": "Partial reservation",
+        "inventoryBatchNotFound": "Inventory batch not found",
+        "confirmMaterialDeletion": "Confirm material deletion",
+        "manualBatchSelection": "Manual (batch selection)",
+        "restoreReservationAfterDeletion": "Restore material reservation after consumption deletion",
+        "quantityToAdd": "Quantity to add",
+        "confirmConsumptionDeletion": "Confirm consumption deletion"
+    },
+    "errors": {
+        "recipeNotFound": "Recipe not found",
+        "noTaskDataForReport": "No task data to generate report"
+    },
+    "mainTabs": "Main task details tabs"
 }

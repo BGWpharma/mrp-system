@@ -3783,7 +3783,7 @@ const ProductionTimeline = React.memo(({
                 <TextField
                   fullWidth
                   label={t('production.timeline.advancedFilters.productName')}
-                  placeholder="Wpisz nazwę produktu..."
+                  placeholder={t('timeline.advancedFilters.typeProductName')}
                   value={advancedFilters.productName}
                   onChange={(e) => handleAdvancedFilterChange('productName', e.target.value)}
                   variant="outlined"
@@ -3795,7 +3795,7 @@ const ProductionTimeline = React.memo(({
                 <TextField
                   fullWidth
                   label={t('production.timeline.advancedFilters.moNumber')}
-                  placeholder="Wpisz numer zlecenia produkcyjnego..."
+                  placeholder={t('timeline.advancedFilters.typeMoNumber')}
                   value={advancedFilters.moNumber}
                   onChange={(e) => handleAdvancedFilterChange('moNumber', e.target.value)}
                   variant="outlined"
@@ -3807,7 +3807,7 @@ const ProductionTimeline = React.memo(({
                 <TextField
                   fullWidth
                   label={t('production.timeline.advancedFilters.orderNumber')}
-                  placeholder="Wpisz numer zamówienia..."
+                  placeholder={t('timeline.advancedFilters.typeOrderNumber')}
                   value={advancedFilters.orderNumber}
                   onChange={(e) => handleAdvancedFilterChange('orderNumber', e.target.value)}
                   variant="outlined"
@@ -3819,7 +3819,7 @@ const ProductionTimeline = React.memo(({
                 <TextField
                   fullWidth
                   label={t('production.timeline.advancedFilters.poNumber')}
-                  placeholder="Wpisz numer PO..."
+                  placeholder={t('timeline.advancedFilters.typePoNumber')}
                   value={advancedFilters.poNumber}
                   onChange={(e) => handleAdvancedFilterChange('poNumber', e.target.value)}
                   variant="outlined"

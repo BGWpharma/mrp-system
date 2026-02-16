@@ -174,6 +174,15 @@
     "statusUpdateFailed": "Nie udało się zaktualizować statusu",
     "productNotLinked": "Ten produkt nie jest powiązany z pozycją magazynową"
   },
+  "batchNotFoundInDb": "Nie znaleziono partii w bazie danych.",
+  "loadingOrderDetails": "Ładowanie szczegółów zamówienia...",
+  "orderNotFound": "Nie znaleziono zamówienia",
+  "noPricesToUpdate": "Nie znaleziono cen do aktualizacji lub ceny są już aktualne",
+  "statusUpdatedNoPrices": "Status zamówienia został zaktualizowany. Nie znaleziono cen dostawców do aktualizacji.",
+  "invoiceDescriptionPlaceholder": "Opis faktury, np. Faktura główna, Faktura transportowa itp.",
+  "statusPayment": "Status / Płatność",
+  "searchItemOrLeaveEmpty": "Wyszukaj pozycję (lub zostaw puste dla wszystkich)",
+  "startTypingItemName": "Zacznij pisać nazwę pozycji...",
   "details": {
     "orderNumber": "Zamówienie {{number}}",
     "orderTitle": "Zamówienie {{number}}",

@@ -1688,7 +1688,7 @@ const RecipeList = () => {
       
       if (preview.filter(p => p.status === 'update').length === 0) {
         console.warn('⚠️ Nie znaleziono żadnych zmian do zastosowania!');
-        setImportError('Nie znaleziono żadnych zmian do zastosowania');
+        setImportError(t('recipes.list.noChangesToApply'));
       }
       
       // Jeśli są błędy krytyczne, ustaw błąd importu
@@ -2582,7 +2582,7 @@ const RecipeList = () => {
                 <strong>Format pliku CSV:</strong>
               </Typography>
               <Typography variant="body2" component="div">
-                • <strong>Wymagane kolumny:</strong> SKU, description, Client, Workstation, cost/piece, time/piece<br/>
+                <span dangerouslySetInnerHTML={{ __html: t('recipes.list.importRequiredColumns') }} /><br/>
                 • <strong>Składniki odżywcze:</strong> Micro/macro code, Micro/macro elements listing, Micro/macro amount, Micro/macro type (rozdzielone średnikami ";")<br/>
                   <em>Przykład kodów: "E300; P; C"</em><br/>
                   <em>Przykład nazw: "Witamina C; Białko; Węglowodany"</em><br/>

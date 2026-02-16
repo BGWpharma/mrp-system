@@ -52,6 +52,7 @@ import {
   let productionTasksCache = null;
   let productionTasksCacheTimestamp = null;
   const TASKS_CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minut
+  let fetchInProgressPromise = null; // Deduplikacja równoległych fetchów
 
   // Cache dla wzbogacania zadań o numery PO
   const enrichmentCache = new Map(); // taskId -> poNumbers[]
@@ -350,23 +351,29 @@ import {
       let allTasks;
 
       if (isCacheValid) {
-        // Usuń ewentualne duplikaty z cache przed użyciem
         removeDuplicatesFromCache();
         allTasks = [...productionTasksCache];
+      } else if (fetchInProgressPromise && !forceRefresh) {
+        allTasks = [...(await fetchInProgressPromise)];
       } else {
-        // Pobierz wszystkie zadania produkcyjne
-        const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
-        const q = query(tasksRef);
-        const allTasksSnapshot = await getDocs(q);
+        fetchInProgressPromise = (async () => {
+          const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+          const q = query(tasksRef);
+          const allTasksSnapshot = await getDocs(q);
+          const tasks = allTasksSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          productionTasksCache = [...tasks];
+          productionTasksCacheTimestamp = Date.now();
+          return tasks;
+        })();
         
-        allTasks = allTasksSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        // Zaktualizuj cache
-        productionTasksCache = [...allTasks];
-        productionTasksCacheTimestamp = now;
+        try {
+          allTasks = [...(await fetchInProgressPromise)];
+        } finally {
+          fetchInProgressPromise = null;
+        }
       }
 
       // KROK 2: Filtrowanie po terminie wyszukiwania
@@ -394,13 +401,11 @@ import {
         });
         
         allTasks = [...moNumberMatches, ...otherMatches];
-        console.log('🔍 Po wyszukiwaniu:', allTasks.length, 'zadań');
       }
 
       // KROK 3: Filtrowanie po statusie
       if (statusFilter && statusFilter.trim() !== '') {
         allTasks = allTasks.filter(task => task.status === statusFilter);
-        console.log('📊 Po filtrowaniu statusu:', allTasks.length, 'zadań');
       }
 
       // KROK 4: Sortowanie
@@ -458,7 +463,8 @@ import {
         totalCount: totalItems,
         page: safePage,
         pageSize: itemsPerPage,
-        totalPages: totalPages
+        totalPages: totalPages,
+        fromCache: isCacheValid
       };
       
     } catch (error) {
@@ -553,11 +559,8 @@ import {
         ...productionTasksCache[existingTaskIndex],
         ...newTask
       };
-      console.log('🔄 Zaktualizowano istniejące zadanie w cache:', newTask.id);
     } else {
-      // Dodaj nowe zadanie
       productionTasksCache.push(newTask);
-      console.log('➕ Dodano nowe zadanie do cache:', newTask.id);
     }
     
     return true;

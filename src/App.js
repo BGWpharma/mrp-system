@@ -17,6 +17,7 @@ import Notifications from './components/common/Notifications';
 import { rtdb } from './services/firebase/config';
 import { ref, onValue } from 'firebase/database';
 import { Box, CircularProgress, Typography, Button } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 // Inicjujemy przechwytywanie logów konsoli
 import './services/logsCaptureService';
@@ -200,21 +201,110 @@ const SchedulePage = lazy(() => import('./pages/Schedule/SchedulePage'));
 // KOMPONENT ŁADOWANIA DLA SUSPENSE
 // ============================================================================
 
-const PageLoading = () => (
-  <Box sx={{ 
-    display: 'flex', 
-    flexDirection: 'column',
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    minHeight: '50vh',
-    gap: 2
-  }}>
-    <CircularProgress size={40} thickness={4} />
-    <Typography variant="body2" color="text.secondary">
-      Ładowanie...
-    </Typography>
-  </Box>
-);
+const PageLoading = () => {
+  const { t } = useTranslation('common');
+  return (
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column',
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      minHeight: '50vh',
+      gap: 2
+    }}>
+      <CircularProgress size={40} thickness={4} />
+      <Typography variant="body2" color="text.secondary">
+        {t('common.loading')}
+      </Typography>
+    </Box>
+  );
+};
+
+// ============================================================================
+// ERROR BOUNDARY FALLBACK - wrapper używający useTranslation
+// ============================================================================
+
+const ErrorFallback = ({ error, componentStack, resetError, eventId }) => {
+  const { t } = useTranslation('common');
+  return (
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column',
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      minHeight: '100vh',
+      padding: 3,
+      textAlign: 'center',
+      gap: 2,
+      backgroundColor: 'background.default'
+    }}>
+      <Typography variant="h4" color="error" gutterBottom>
+        {t('errorBoundary.title')}
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 2, maxWidth: 600 }}>
+        {t('errorBoundary.description')}
+      </Typography>
+      {process.env.NODE_ENV === 'development' && error && (
+        <Box sx={{ 
+          backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+          padding: 2, 
+          borderRadius: 1,
+          maxWidth: 800,
+          width: '100%',
+          textAlign: 'left',
+          overflow: 'auto',
+          mb: 2,
+          border: (theme) => `1px solid ${theme.palette.divider}`
+        }}>
+          <Typography 
+            variant="caption" 
+            component="pre" 
+            sx={{ 
+              whiteSpace: 'pre-wrap',
+              color: 'text.primary'
+            }}
+          >
+            {error.toString()}
+          </Typography>
+        </Box>
+      )}
+      
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <Button 
+          variant="contained"
+          onClick={resetError}
+        >
+          {t('errorBoundary.tryAgain')}
+        </Button>
+        
+        {eventId && (
+          <Button 
+            variant="outlined"
+            color="secondary"
+            onClick={() => {
+              Sentry.showReportDialog({ 
+                eventId,
+                title: t('errorBoundary.sentry.title'),
+                subtitle: t('errorBoundary.sentry.subtitle'),
+                subtitle2: t('errorBoundary.sentry.subtitle2'),
+                labelName: t('errorBoundary.sentry.labelName'),
+                labelEmail: t('errorBoundary.sentry.labelEmail'),
+                labelComments: t('errorBoundary.sentry.labelComments'),
+                labelClose: t('errorBoundary.sentry.labelClose'),
+                labelSubmit: t('errorBoundary.sentry.labelSubmit'),
+                errorGeneric: t('errorBoundary.sentry.errorGeneric'),
+                errorFormEntry: t('errorBoundary.sentry.errorFormEntry'),
+                successMessage: t('errorBoundary.sentry.successMessage'),
+              });
+            }}
+          >
+            {t('errorBoundary.reportProblem')}
+          </Button>
+        )}
+      </Box>
+    </Box>
+  );
+};
 
 // ============================================================================
 // INICJALIZACJA MONITOROWANIA POŁĄCZENIA
@@ -261,86 +351,7 @@ initializeConnectionMonitoring();
 function App() {
   return (
     <Sentry.ErrorBoundary 
-      fallback={({ error, componentStack, resetError, eventId }) => (
-        <Box sx={{ 
-          display: 'flex', 
-          flexDirection: 'column',
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          minHeight: '100vh',
-          padding: 3,
-          textAlign: 'center',
-          gap: 2,
-          backgroundColor: 'background.default'
-        }}>
-          <Typography variant="h4" color="error" gutterBottom>
-            Ups! Coś poszło nie tak
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, maxWidth: 600 }}>
-            Przepraszamy za niedogodności. Błąd został automatycznie zgłoszony do naszego zespołu.
-          </Typography>
-          {process.env.NODE_ENV === 'development' && error && (
-            <Box sx={{ 
-              backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
-              padding: 2, 
-              borderRadius: 1,
-              maxWidth: 800,
-              width: '100%',
-              textAlign: 'left',
-              overflow: 'auto',
-              mb: 2,
-              border: (theme) => `1px solid ${theme.palette.divider}`
-            }}>
-              <Typography 
-                variant="caption" 
-                component="pre" 
-                sx={{ 
-                  whiteSpace: 'pre-wrap',
-                  color: 'text.primary'
-                }}
-              >
-                {error.toString()}
-              </Typography>
-            </Box>
-          )}
-          
-          {/* Przyciski akcji */}
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
-            <Button 
-              variant="contained"
-              onClick={resetError}
-            >
-              Spróbuj ponownie
-            </Button>
-            
-            {/* User Feedback Widget - pozwala użytkownikowi zgłosić problem */}
-            {eventId && (
-              <Button 
-                variant="outlined"
-                color="secondary"
-                onClick={() => {
-                  Sentry.showReportDialog({ 
-                    eventId,
-                    title: 'Zgłoś problem',
-                    subtitle: 'Nasz zespół został powiadomiony o tym błędzie',
-                    subtitle2: 'Jeśli chcesz pomóc, opisz co robiłeś przed wystąpieniem błędu:',
-                    labelName: 'Twoje imię',
-                    labelEmail: 'Email (opcjonalnie)',
-                    labelComments: 'Co się wydarzyło?',
-                    labelClose: 'Zamknij',
-                    labelSubmit: 'Wyślij raport',
-                    errorGeneric: 'Wystąpił błąd podczas wysyłania raportu. Spróbuj ponownie później.',
-                    errorFormEntry: 'Niektóre pola są wymagane. Proszę wypełnić je przed wysłaniem.',
-                    successMessage: 'Dziękujemy za zgłoszenie! Twój feedback pomoże nam naprawić problem.',
-                  });
-                }}
-              >
-                Zgłoś szczegóły problemu
-              </Button>
-            )}
-          </Box>
-        </Box>
-      )}
+      fallback={(props) => <ErrorFallback {...props} />}
       showDialog={false}
     >
       <Router>

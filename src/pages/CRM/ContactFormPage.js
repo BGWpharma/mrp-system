@@ -23,6 +23,7 @@ import {
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { createContact, getContactById, updateContact } from '../../services/crmService';
 import { CRM_CONTACT_TYPES, DEFAULT_CRM_VALUES } from '../../utils/constants';
 
@@ -36,6 +37,7 @@ const ContactFormPage = () => {
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation('customers');
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -214,7 +216,7 @@ const ContactFormPage = () => {
             <TextField
               fullWidth
               name="firstName"
-              label="Imię"
+              label={t('contacts.firstName')}
               value={formData.firstName || ''}
               onChange={handleChange}
               error={!!errors.firstName}
@@ -292,7 +294,7 @@ const ContactFormPage = () => {
             <TextField
               fullWidth
               name="mobile"
-              label="Telefon komórkowy"
+              label={t('contacts.mobilePhone')}
               value={formData.mobile || ''}
               onChange={handleChange}
             />

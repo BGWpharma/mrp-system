@@ -3,7 +3,7 @@
  * Suggests appropriate chart-of-accounts entries for invoice posting.
  *
  * Strategy:
- * 1. Filter ~1700 accounts down to ~80-150 relevant ones
+ * 1. Filter accounts down to the most relevant ones for the invoice
  * 2. Build a concise prompt with invoice data + filtered accounts
  * 3. Call Gemini for structured JSON response
  * 4. Return suggested journal lines
@@ -24,7 +24,7 @@ const GEMINI_MODELS = [
 ];
 
 // ============================================================================
-// ACCOUNT FILTERING - Reduce ~1700 accounts to ~80-150 relevant ones
+// ACCOUNT FILTERING - Select the most relevant accounts for the invoice
 // ============================================================================
 
 /**
@@ -55,13 +55,13 @@ const fuzzyScore = (target, query) => {
 
 /**
  * Filter accounts relevant to an invoice.
- * Reduces ~1700 accounts to ~80-150 most relevant.
+ * Selects the most relevant accounts from the chart of accounts.
  *
  * @param {Array} allAccounts - All accounts from Firestore
  * @param {Object} invoiceData - Invoice data
- * @param {string} invoiceData.supplierName - Supplier name
+ * @param {string} invoiceData.supplierName - Supplier/customer name
  * @param {string} invoiceData.currency - Invoice currency
- * @param {string} invoiceData.invoiceType - "purchase" or "expense"
+ * @param {string} invoiceData.invoiceType - "purchase", "expense", or "sales"
  * @param {Array<string>} invoiceData.items - Item names/descriptions
  * @return {Array} Filtered accounts
  */
@@ -99,13 +99,9 @@ const filterRelevantAccounts = (allAccounts, invoiceData) => {
       )
       .forEach(add);
 
-  // ---- 2. Receivable accounts 201-* (for refaktury / credit notes) ----
+  // ---- 2. Receivable accounts 201-* (for sales / refaktury / credit notes) ----
   allAccounts
-      .filter((a) =>
-        a.accountNumber === "201" ||
-      a.accountNumber === "201-2" ||
-      a.accountNumber === "201-2-1",
-      )
+      .filter((a) => a.accountNumber.startsWith("201"))
       .forEach(add);
 
   // ---- 3. Cost accounts: 4xx ----
@@ -164,11 +160,10 @@ const filterRelevantAccounts = (allAccounts, invoiceData) => {
       )
       .forEach(add);
 
-  // ---- 8. Revenue accounts: 7xx (for credit notes / refaktury) ----
+  // ---- 8. Revenue accounts: 7xx (for sales / credit notes / refaktury) ----
   allAccounts
       .filter((a) =>
-        a.accountNumber === "701" ||
-      a.accountNumber === "702" ||
+        a.accountNumber.startsWith("70") ||
       a.accountNumber.startsWith("731") ||
       a.accountNumber.startsWith("741"),
       )
@@ -198,7 +193,39 @@ const filterRelevantAccounts = (allAccounts, invoiceData) => {
       )
       .forEach(add);
 
-  // ---- 12. Fixed asset accounts: 011-*, 083-* (for asset purchases) ----
+  // ---- 12. Sales-specific accounts ----
+  if (invoiceType === "sales") {
+    // Customer/receivable sub-accounts 201-*
+    const customerAccounts = allAccounts
+        .filter((a) => a.accountNumber.startsWith("201-"))
+        .map((a) => ({...a, _score: fuzzyScore(a.accountName, supplierName)}))
+        .sort((a, b) => b._score - a._score);
+
+    const customerMatches = customerAccounts.filter((a) => a._score > 30);
+    if (customerMatches.length > 0) {
+      customerMatches.slice(0, 10).forEach(add);
+    } else {
+      customerAccounts.slice(0, 15).forEach(add);
+    }
+
+    // Output VAT: 221-2-* (VAT należny)
+    allAccounts
+        .filter((a) =>
+          a.accountNumber.startsWith("221-2") ||
+        a.accountNumber === "221",
+        )
+        .forEach(add);
+
+    // Advance payments received: 840-*, 845-*
+    allAccounts
+        .filter((a) =>
+          a.accountNumber.startsWith("840") ||
+        a.accountNumber.startsWith("845"),
+        )
+        .forEach(add);
+  }
+
+  // ---- 13. Fixed asset accounts: 011-*, 083-* (for asset purchases) ----
   const itemsText = items.join(" ").toLowerCase();
   const isAssetRelated = [
     "maszyn", "urządzen", "kompresor", "wózek", "samochod",
@@ -307,11 +334,17 @@ ZASADY KSIĘGOWANIA:
    - WN: odpowiednie konto kosztowe 4xx
    - WN: konto VAT naliczony 221-1
    - MA: konto dostawcy 202-2-1-XXX
-4. Jeśli faktura walutowa (EUR/USD) - wybierz konto dostawcy z odpowiednią walutą jeśli istnieje
-5. Kwoty podawaj w PLN (po przeliczeniu kursem jeśli podany)
-6. Używaj WYŁĄCZNIE kont z podanej listy - nigdy nie wymyślaj numerów kont
+4. Faktura sprzedażowa (przychody ze sprzedaży):
+   - WN: konto odbiorcy 201-XXX (dopasuj po nazwie klienta; jeśli faktura walutowa np. EUR, szukaj 201-XXX z walutą EUR)
+   - MA: konto przychodów 701 (Przychody ze sprzedaży) lub odpowiednie 70x
+   - MA: konto VAT należny 221-2-XXX (jeśli jest VAT; dla eksportu/WDT/0% pomijaj linię VAT)
+   - Kwota WN na koncie odbiorcy = brutto PLN
+   - Suma MA (przychody netto + VAT) = brutto PLN
+5. Jeśli faktura walutowa (EUR/USD) - wybierz konto odbiorcy/dostawcy z odpowiednią walutą jeśli istnieje (np. 201-EUR, 202-EUR)
+6. Kwoty podawaj w PLN (po przeliczeniu kursem jeśli podany)
+7. Używaj WYŁĄCZNIE kont z podanej listy - nigdy nie wymyślaj numerów kont
 
-DOPASOWANIE KONTA KOSZTOWEGO do treści faktury:
+DOPASOWANIE KONTA KOSZTOWEGO do treści faktury (dotyczy zakupów/kosztów):
 - Transport, spedycja, fracht → 428 (TRANSPORT) lub 424/425/426
 - Energia, prąd, gaz → 419 (Energia)
 - Czynsz, najem, media → 422 (Czynsz+media)
@@ -327,6 +360,14 @@ DOPASOWANIE KONTA KOSZTOWEGO do treści faktury:
 - Pozostałe usługi → 429 (Inne usługi obce)
 - Opłaty bankowe → 461-3 (Opłaty bankowe)
 - Maszyny/urządzenia (środek trwały) → 304-3 lub 083 (ŚT w budowie)
+
+DOPASOWANIE DO BUDŻETU:
+Jeśli otrzymasz listę pozycji budżetowych, dopasuj fakturę do JEDNEJ najbardziej pasującej pozycji.
+Dopasowuj na podstawie:
+- Nazwy pozycji faktury vs nazwa pozycji budżetowej (np. "Energia elektryczna" → "Prąd z klim./ogrzew.")
+- Nazwy dostawcy (np. dostawca energii → pozycja "Prąd", dostawca olejów → "Oleje, materiały techniczne")
+- Kategorii wydatku (np. IT → "IT i oprogramowanie", marketing → "Marketing i reprezentacja")
+Jeśli nie możesz dopasować, ustaw suggestedBudgetItemId na null.
 
 Zwróć TYLKO prawidłowy JSON w podanym formacie.`;
 
@@ -351,20 +392,24 @@ const buildUserPrompt = (invoiceData, filteredAccounts, history) => {
     items,
     invoiceType,
     category,
+    budgetItems = [],
   } = invoiceData;
 
   const typLabel = invoiceType === "purchase" ?
     "Faktura zakupowa (materiały/towary)" :
-    "Faktura kosztowa (usługi/koszty)";
+    invoiceType === "sales" ?
+      "Faktura sprzedażowa (przychody ze sprzedaży)" :
+      "Faktura kosztowa (usługi/koszty)";
   const taxIdPart = supplierTaxId ?
     ` (NIP: ${supplierTaxId})` : "";
   const ratePart = exchangeRate && exchangeRate !== 1 ?
     `, kurs: ${exchangeRate}` : "";
+  const entityLabel = invoiceType === "sales" ? "Klient" : "Dostawca";
 
   let prompt = `FAKTURA DO ZAKSIĘGOWANIA:
 - Typ: ${typLabel}
 - Numer: ${invoiceNumber || "brak"}
-- Dostawca: ${supplierName}${taxIdPart}
+- ${entityLabel}: ${supplierName}${taxIdPart}
 - Waluta: ${currency || "PLN"}${ratePart}
 - Netto: ${totalNet.toFixed(2)} PLN
 - VAT: ${totalVat.toFixed(2)} PLN
@@ -398,6 +443,14 @@ ${filteredAccounts.map((a) => {
     }
   }
 
+  // Add budget items if available
+  if (budgetItems && budgetItems.length > 0) {
+    prompt += `\n\nPOZYCJE BUDŻETOWE (dopasuj fakturę do JEDNEJ pozycji):`;
+    for (const bi of budgetItems) {
+      prompt += `\n- ${bi.id} | ${bi.sectionName} > ${bi.name}`;
+    }
+  }
+
   prompt += `\n\nZwróć JSON:
 \`\`\`json
 {
@@ -409,7 +462,9 @@ ${filteredAccounts.map((a) => {
       "description": "opis linii"
     }
   ],
-  "reasoning": "krótkie wyjaśnienie dlaczego te konta"
+  "reasoning": "krótkie wyjaśnienie dlaczego te konta"${budgetItems && budgetItems.length > 0 ? `,
+  "suggestedBudgetItemId": "id pozycji budżetowej lub null",
+  "budgetReasoning": "dlaczego ta pozycja budżetowa"` : ""}
 }
 \`\`\``;
 
@@ -568,15 +623,19 @@ const suggestAccountsForInvoice = async (apiKey, invoiceData) => {
     throw new Error("Plan kont jest pusty - najpierw zaimportuj konta");
   }
 
-  // 2. Filter relevant accounts
-  const filteredAccounts = filterRelevantAccounts(allAccounts, invoiceData);
+  // 2. Filter relevant accounts (or use all if chart is small)
+  const SMALL_CHART_THRESHOLD = 200;
+  const accountsForPrompt = allAccounts.length <= SMALL_CHART_THRESHOLD ?
+    allAccounts :
+    filterRelevantAccounts(allAccounts, invoiceData);
+  logger.info(`[AccountSuggestion] Using ${accountsForPrompt.length}/${allAccounts.length} accounts (threshold: ${SMALL_CHART_THRESHOLD})`);
 
-  // 3. Get posting history for this supplier
+  // 3. Get posting history for this supplier/customer
   const history = await getPostingHistory(db, invoiceData.supplierName, 3);
   logger.info(`[AccountSuggestion] Found ${history.length} historical postings`);
 
   // 4. Build prompt
-  const userPrompt = buildUserPrompt(invoiceData, filteredAccounts, history);
+  const userPrompt = buildUserPrompt(invoiceData, accountsForPrompt, history);
   logger.info(`[AccountSuggestion] Prompt length: ~${userPrompt.length} chars`);
 
   // 5. Call Gemini
@@ -607,14 +666,28 @@ const suggestAccountsForInvoice = async (apiKey, invoiceData) => {
   const totalCredit = validatedLines.reduce((s, l) => s + l.creditAmount, 0);
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
 
+  // Validate budget suggestion if present
+  let suggestedBudgetItemId = suggestion.suggestedBudgetItemId || null;
+  if (suggestedBudgetItemId && invoiceData.budgetItems) {
+    const validBudgetItem = invoiceData.budgetItems.find(
+        (bi) => bi.id === suggestedBudgetItemId,
+    );
+    if (!validBudgetItem) {
+      logger.warn(`[AccountSuggestion] AI suggested invalid budget item: ${suggestedBudgetItemId}`);
+      suggestedBudgetItemId = null;
+    }
+  }
+
   return {
     lines: validatedLines,
     reasoning: suggestion.reasoning || "",
     isBalanced,
     totalDebit,
     totalCredit,
-    accountsConsidered: filteredAccounts.length,
+    accountsConsidered: accountsForPrompt.length,
     historyUsed: history.length,
+    suggestedBudgetItemId,
+    budgetReasoning: suggestion.budgetReasoning || null,
   };
 };
 
