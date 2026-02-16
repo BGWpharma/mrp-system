@@ -316,9 +316,10 @@ const TaskForm = ({ taskId }) => {
       if (!dataLoaded.inventoryProducts) {
         promises.push(fetchInventoryProducts());
       }
-      if (!dataLoaded.purchaseOrders) {
-        promises.push(fetchPurchaseOrders());
-      }
+      // ⚡ OPTYMALIZACJA: purchaseOrders są pobierane lazy (przy otwarciu dropdown)
+      // if (!dataLoaded.purchaseOrders) {
+      //   promises.push(fetchPurchaseOrders());
+      // }
       if (!dataLoaded.customerOrders) {
         promises.push(fetchCustomerOrders());
       }
@@ -550,6 +551,17 @@ const TaskForm = ({ taskId }) => {
               
               if (recipeData) {
                 setRecipe(recipeData);
+                
+                // Sprawdź czy receptura zadania istnieje w liście receptur (dla dropdown)
+                // Jeśli nie ma (np. jest nieaktywna), dodaj ją do listy aby uniknąć MUI warning
+                setRecipes(prevRecipes => {
+                  const recipeExists = prevRecipes.some(r => r.id === task.recipeId);
+                  if (!recipeExists) {
+                    console.log('Dodaję recepturę zadania do listy (receptura nie jest w aktywnych):', recipeData.name);
+                    return [...prevRecipes, recipeData];
+                  }
+                  return prevRecipes;
+                });
                 
                 // Pobierz dostępne wersje receptury dla edycji wersji
                 try {

@@ -636,30 +636,62 @@ const TaskDetailsPage = () => {
   const loadProductionPlanData = useCallback(async () => {
     if (loadedTabs.productionPlan || !task?.id) return;
     
+    const startTime = performance.now();
+    console.log('🔵 [TaskDetails] loadProductionPlanData START (Lazy)', {
+      taskId: task?.id
+    });
+    
     try {
       // Historia produkcji
+      const historyStart = performance.now();
       const history = await getProductionHistory(task.id);
+      console.log('✅ [TaskDetails] Historia produkcji pobrana', {
+        duration: `${(performance.now() - historyStart).toFixed(2)}ms`,
+        historyCount: history?.length || 0
+      });
+      
       setProductionHistory(history || []);
       
       // Pobierz nazwy użytkowników z historii produkcji
       const userIds = [...new Set(history?.map(s => s.userId).filter(Boolean))];
       if (userIds.length > 0) {
+        const usersStart = performance.now();
         await fetchUserNames(userIds);
+        console.log('✅ [TaskDetails] Nazwy użytkowników pobrane', {
+          duration: `${(performance.now() - usersStart).toFixed(2)}ms`,
+          usersCount: userIds.length
+        });
       }
       
       // Dostępne maszyny (jeśli nie zostały załadowane)
       if (availableMachines.length === 0) {
+        const machinesStart = performance.now();
         await fetchAvailableMachines();
+        console.log('✅ [TaskDetails] Dostępne maszyny pobrane', {
+          duration: `${(performance.now() - machinesStart).toFixed(2)}ms`
+        });
       }
       
       setLoadedTabs(prev => ({ ...prev, productionPlan: true }));
+      
+      console.log('✅ [TaskDetails] loadProductionPlanData COMPLETED', {
+        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`
+      });
     } catch (error) {
-      console.error('Błąd ładowania planu produkcji:', error.message);
+      console.error('❌ [TaskDetails] loadProductionPlanData błąd', {
+        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        error: error.message
+      });
     }
   }, [loadedTabs.productionPlan, task?.id, availableMachines.length, fetchUserNames]);
 
   const loadFormsData = useCallback(async () => {
     if (loadedTabs.forms || !task?.moNumber) return;
+    
+    const startTime = performance.now();
+    console.log('🔵 [TaskDetails] loadFormsData START (Lazy)', {
+      moNumber: task?.moNumber
+    });
     
     try {
       // Ładowanie danych formularzy
@@ -667,8 +699,18 @@ const TaskDetailsPage = () => {
       setFormResponses(responses);
       
       setLoadedTabs(prev => ({ ...prev, forms: true }));
+      
+      console.log('✅ [TaskDetails] loadFormsData COMPLETED', {
+        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        completedMO: responses.completedMO?.length || 0,
+        productionControl: responses.productionControl?.length || 0,
+        productionShift: responses.productionShift?.length || 0
+      });
     } catch (error) {
-      console.error('❌ Error loading Forms data:', error);
+      console.error('❌ [TaskDetails] loadFormsData błąd', {
+        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        error
+      });
       setFormResponses({ completedMO: [], productionControl: [], productionShift: [] });
     }
   }, [loadedTabs.forms, task?.moNumber]);
@@ -819,11 +861,26 @@ const TaskDetailsPage = () => {
   // ⚡ OPTYMALIZACJA: useRef dla debounceTimer aby uniknąć race condition w cleanup
   const debounceTimerRef = useRef(null);
 
+  // ⚡ OPTYMALIZACJA: Cache dla danych równoległych operacji (rezerwacje, formularze, zamówienia)
+  const parallelDataCache = useRef({
+    poReservations: { data: null, timestamp: 0 },
+    formResponses: { data: null, timestamp: 0, moNumber: null },
+    awaitingOrders: { data: null, timestamp: 0, materialsHash: null }
+  });
+  const CACHE_TTL = 30000; // 30 sekund
+
   // ✅ ETAP 3 OPTYMALIZACJI: Real-time listener zamiast ręcznego odświeżania
   // Automatyczna synchronizacja danych zadania w czasie rzeczywistym
   // Eliminuje potrzebę wywołania fetchTask() po każdej operacji (rezerwacja, konsumpcja, itp.)
   useEffect(() => {
     if (!id) return;
+    
+    console.log('🔵 [TaskDetails] Real-time listener START', {
+      taskId: id,
+      timestamp: new Date().toISOString()
+    });
+    
+    const listenerStartTime = performance.now();
     
     // 🔒 POPRAWKA: Flaga mounted aby uniknąć setState po odmontowaniu komponentu
     let isMounted = true;
@@ -834,24 +891,38 @@ const TaskDetailsPage = () => {
     const taskRef = doc(db, 'productionTasks', id);
     
     let lastUpdateTimestamp = null;
+    let snapshotCount = 0;
     
     const unsubscribe = onSnapshot(
       taskRef,
       { includeMetadataChanges: false }, // Ignoruj zmiany tylko w metadanych
       async (docSnapshot) => {
+        const snapshotStartTime = performance.now();
+        snapshotCount++;
+        
+        console.log('📡 [TaskDetails] onSnapshot triggered', {
+          snapshotNumber: snapshotCount,
+          exists: docSnapshot.exists(),
+          sinceLast: lastUpdateTimestamp ? `${Date.now() - lastUpdateTimestamp}ms` : 'first',
+          timestamp: new Date().toISOString()
+        });
+        
         // ⚡ OPTYMALIZACJA: Debouncing z useRef - thread-safe cleanup
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current);
         }
         
         debounceTimerRef.current = setTimeout(async () => {
+          const processStartTime = performance.now();
+          
           // 🔒 Sprawdź czy komponent jest nadal zamontowany
           if (!isMounted) {
+            console.log('⚠️ [TaskDetails] Component unmounted, skipping update');
             return;
           }
           
           if (!docSnapshot.exists()) {
-            console.error('❌ Zadanie nie istnieje');
+            console.error('❌ [TaskDetails] Zadanie nie istnieje');
             if (isMounted) {
               showError('Zadanie nie istnieje');
               navigate('/production');
@@ -866,13 +937,29 @@ const TaskDetailsPage = () => {
           // Używamy < zamiast <= aby nie blokować aktualizacji gdy timestamp jest równy
           // (może się zdarzyć przy szybkich aktualizacjach z Cloud Functions)
           if (lastUpdateTimestamp && updateTimestamp < lastUpdateTimestamp) {
+            console.log('⏭️ [TaskDetails] Skipping duplicate update', {
+              lastTimestamp: lastUpdateTimestamp,
+              newTimestamp: updateTimestamp
+            });
             return;
           }
           
           lastUpdateTimestamp = updateTimestamp;
           
+          console.log('🔄 [TaskDetails] Processing task update', {
+            taskId: taskData.id,
+            hasMaterials: taskData.materials?.length || 0,
+            hasConsumedMaterials: taskData.consumedMaterials?.length || 0,
+            snapshotDelay: `${(processStartTime - snapshotStartTime).toFixed(2)}ms`
+          });
+          
           // Przetwórz i zaktualizuj dane
           await processTaskUpdate(taskData);
+          
+          console.log('✅ [TaskDetails] onSnapshot processed', {
+            totalDuration: `${(performance.now() - snapshotStartTime).toFixed(2)}ms`,
+            processingTime: `${(performance.now() - processStartTime).toFixed(2)}ms`
+          });
           
           // 🔒 Sprawdź czy komponent nadal jest zamontowany przed setState
           if (isMounted && loading) {
@@ -881,7 +968,10 @@ const TaskDetailsPage = () => {
         }, 300); // Debounce 300ms
       },
       (error) => {
-        console.error('❌ [REAL-TIME] Błąd listenera zadania:', error);
+        console.error('❌ [TaskDetails] Real-time listener error', {
+          error,
+          duration: `${(performance.now() - listenerStartTime).toFixed(2)}ms`
+        });
         // 🔒 Sprawdź czy komponent nadal jest zamontowany przed setState
         if (isMounted) {
           showError('Błąd synchronizacji danych zadania');
@@ -892,6 +982,11 @@ const TaskDetailsPage = () => {
     
     // ⚡ OPTYMALIZACJA: Thread-safe cleanup z useRef
     return () => {
+      console.log('🔵 [TaskDetails] Real-time listener CLEANUP', {
+        totalDuration: `${(performance.now() - listenerStartTime).toFixed(2)}ms`,
+        totalSnapshots: snapshotCount
+      });
+      
       isMounted = false; // 🔒 Oznacz komponent jako odmontowany
       
       if (debounceTimerRef.current) {
@@ -944,11 +1039,33 @@ const TaskDetailsPage = () => {
   // ❌ useEffect(() => { if (task?.consumedMaterials && task.consumedMaterials.length > 0) fetchConsumedBatchPrices(); }, [task?.consumedMaterials]);
 
   // ✅ ZOPTYMALIZOWANA funkcja pobierania odpowiedzi formularzy (Promise.all)
-  const fetchFormResponsesOptimized = async (moNumber) => {
-    if (!moNumber) return { completedMO: [], productionControl: [], productionShift: [] };
+  const fetchFormResponsesOptimized = async (moNumber, forceRefresh = false) => {
+    const startTime = performance.now();
+    console.log('🔵 [TaskDetails] fetchFormResponsesOptimized START', {
+      moNumber,
+      forceRefresh
+    });
+    
+    if (!moNumber) {
+      console.log('⏭️ [TaskDetails] fetchFormResponsesOptimized: brak MO number');
+      return { completedMO: [], productionControl: [], productionShift: [] };
+    }
     
     try {
+      // ⚡ OPTYMALIZACJA: Sprawdź cache
+      const now = Date.now();
+      const cached = parallelDataCache.current.formResponses;
+      
+      if (!forceRefresh && cached.data && cached.moNumber === moNumber && (now - cached.timestamp) < CACHE_TTL) {
+        console.log('✅ [TaskDetails] Cache hit: formResponses', {
+          age: `${((now - cached.timestamp) / 1000).toFixed(1)}s`,
+          duration: `${(performance.now() - startTime).toFixed(2)}ms`
+        });
+        return cached.data;
+      }
+      
       // ✅ OPTYMALIZACJA: Równoległe pobieranie z limitami i sortowaniem
+      const queriesStartTime = performance.now();
       const [completedMOSnapshot, controlSnapshot, shiftSnapshot] = await Promise.all([
         getDocs(query(
           collection(db, 'Forms/SkonczoneMO/Odpowiedzi'), 
@@ -969,7 +1086,15 @@ const TaskDetailsPage = () => {
           limit(50) // Limit ostatnich 50 odpowiedzi
         ))
       ]);
+      
+      console.log('✅ [TaskDetails] Formularze pobrane z Firestore', {
+        duration: `${(performance.now() - queriesStartTime).toFixed(2)}ms`,
+        completedMO: completedMOSnapshot.size,
+        control: controlSnapshot.size,
+        shift: shiftSnapshot.size
+      });
 
+      const mappingStartTime = performance.now();
       const completedMOData = completedMOSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -994,17 +1119,38 @@ const TaskDetailsPage = () => {
         formType: 'productionShift'
       }));
 
-
+      console.log('✅ [TaskDetails] Formularze zmapowane', {
+        duration: `${(performance.now() - mappingStartTime).toFixed(2)}ms`
+      });
       
       // ✅ OPTYMALIZACJA: Sortowanie już wykonane w zapytaniu Firebase
       // Nie trzeba dodatkowo sortować po stronie klienta
-      return {
+      
+      const result = {
         completedMO: completedMOData,
         productionControl: controlData,
         productionShift: shiftData
       };
+      
+      // Zapisz w cache
+      parallelDataCache.current.formResponses = {
+        data: result,
+        timestamp: now,
+        moNumber
+      };
+      
+      console.log('✅ [TaskDetails] fetchFormResponsesOptimized COMPLETED', {
+        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        totalForms: completedMOData.length + controlData.length + shiftData.length,
+        cached: false
+      });
+      
+      return result;
     } catch (error) {
-      console.error('Błąd podczas pobierania odpowiedzi formularzy:', error);
+      console.error('❌ [TaskDetails] fetchFormResponsesOptimized błąd', {
+        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        error
+      });
       throw error;
     }
   };
@@ -1075,6 +1221,14 @@ const TaskDetailsPage = () => {
   // ✅ ETAP 3: Funkcja przetwarzania aktualizacji zadania (używana przez real-time listener)
   // ⚡ OPTYMALIZACJA: useCallback zapobiega recreating funkcji przy każdym renderze
   const processTaskUpdate = useCallback(async (taskData) => {
+    const startTime = performance.now();
+    console.log('🔵 [TaskDetails] processTaskUpdate START', {
+      taskId: taskData?.id,
+      hasMaterials: taskData?.materials?.length || 0,
+      hasConsumedMaterials: taskData?.consumedMaterials?.length || 0,
+      status: taskData?.status
+    });
+    
     try {
       const previousTask = taskRef.current;
       
@@ -1082,13 +1236,22 @@ const TaskDetailsPage = () => {
       const promises = [];
       
       // ⚡ OPTYMALIZACJA: Shallow comparison zamiast JSON.stringify (10-100x szybsze)
+      const comparisonStartTime = performance.now();
       const materialsChanged = areMaterialsChanged(taskData.materials, previousTask?.materials);
+      const consumedChanged = areConsumedMaterialsChanged(taskData.consumedMaterials, previousTask?.consumedMaterials);
+      
+      console.log('📊 [TaskDetails] Porównanie zmian', {
+        materialsChanged,
+        consumedChanged,
+        isFirstLoad: !previousTask,
+        comparisonTime: `${(performance.now() - comparisonStartTime).toFixed(2)}ms`
+      });
+      
       if (materialsChanged || !previousTask) {
         promises.push(processMaterialsUpdate(taskData));
       }
       
       // ⚡ OPTYMALIZACJA: Shallow comparison dla consumedMaterials
-      const consumedChanged = areConsumedMaterialsChanged(taskData.consumedMaterials, previousTask?.consumedMaterials);
       if (consumedChanged || !previousTask) {
         // 🔒 POPRAWKA: Wzbogacaj dane bezpośrednio - modyfikuje taskData in-place
         taskData = await processConsumedMaterialsUpdate(taskData);
@@ -1096,16 +1259,19 @@ const TaskDetailsPage = () => {
       
       // Sprawdź czy numer MO się zmienił
       if (taskData.moNumber && taskData.moNumber !== previousTask?.moNumber) {
+        console.log('📋 [TaskDetails] Ładowanie formularzy dla MO:', taskData.moNumber);
         promises.push(fetchFormResponsesOptimized(taskData.moNumber));
       }
       
       // Sprawdź czy materiały zadania się zmieniły - pobierz awaitujące zamówienia
       if (taskData.id && (materialsChanged || !previousTask)) {
+        console.log('📦 [TaskDetails] Ładowanie awaitujących zamówień');
         promises.push(fetchAwaitingOrdersForMaterials(taskData));
       }
       
       // Odśwież rezerwacje PO przy zmianie materiałów lub przy pierwszym ładowaniu
       if (taskData.id && (materialsChanged || !previousTask)) {
+        console.log('🔗 [TaskDetails] Odświeżanie rezerwacji PO');
         promises.push(fetchPOReservations());
       }
       
@@ -1113,12 +1279,27 @@ const TaskDetailsPage = () => {
       // (Historia jest teraz lazy-loaded - pobierana dopiero gdy użytkownik przejdzie do zakładki)
       // NIE pobieraj przy pierwszym ładowaniu (!previousTask) - oszczędza ~500ms na starcie
       if (taskData.id && loadedTabs.productionPlan && previousTask && (materialsChanged || consumedChanged)) {
+        console.log('📜 [TaskDetails] Odświeżanie historii produkcji (zakładka załadowana)');
         promises.push(fetchProductionHistory(taskData.id));
+      } else if (taskData.id && !loadedTabs.productionPlan && (materialsChanged || consumedChanged)) {
+        console.log('⏭️ [TaskDetails] Pomijanie historii produkcji (zakładka nie załadowana - lazy loading)');
       }
+      
+      console.log('🔄 [TaskDetails] Wykonywanie równoległych operacji', {
+        operationsCount: promises.length
+      });
+      
+      const parallelStartTime = performance.now();
       
       // 🔒 POPRAWKA: Użyj Promise.allSettled zamiast Promise.all
       // Dzięki temu jeśli jedna operacja się nie powiedzie, pozostałe i tak się wykonają
       const results = await Promise.allSettled(promises);
+      
+      console.log('✅ [TaskDetails] Równoległe operacje zakończone', {
+        duration: `${(performance.now() - parallelStartTime).toFixed(2)}ms`,
+        successful: results.filter(r => r.status === 'fulfilled').length,
+        failed: results.filter(r => r.status === 'rejected').length
+      });
       
       // Sprawdź i zaloguj błędy
       const errors = results.filter(r => r.status === 'rejected');
@@ -1161,11 +1342,22 @@ const TaskDetailsPage = () => {
       
       // Tylko aktualizuj task jeśli rzeczywiście się zmienił (po wzbogaceniu danych)
       if (hasActualChanges) {
+        console.log('🔄 [TaskDetails] Aktualizacja state zadania');
         setTask(taskData);
+      } else {
+        console.log('⏭️ [TaskDetails] Brak zmian w zadaniu - pomijanie aktualizacji state');
       }
       
+      console.log('✅ [TaskDetails] processTaskUpdate COMPLETED', {
+        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        hadChanges: hasActualChanges
+      });
+      
     } catch (error) {
-      console.error('❌ [REAL-TIME] Błąd podczas przetwarzania aktualizacji:', error);
+      console.error('❌ [TaskDetails] processTaskUpdate błąd', {
+        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        error
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1175,7 +1367,15 @@ const TaskDetailsPage = () => {
   
   // ✅ Pomocnicza funkcja: Przetwórz aktualizację materiałów
   const processMaterialsUpdate = async (taskData) => {
+    const startTime = performance.now();
+    console.log('🔵 [TaskDetails] processMaterialsUpdate START', {
+      materialsCount: taskData.materials?.length || 0
+    });
+    
     if (!taskData.materials || taskData.materials.length === 0) {
+      console.log('✅ [TaskDetails] processMaterialsUpdate: brak materiałów', {
+        duration: `${(performance.now() - startTime).toFixed(2)}ms`
+      });
       setMaterials([]);
       setMaterialQuantities({});
       setIncludeInCosts({});
@@ -1187,13 +1387,20 @@ const TaskDetailsPage = () => {
       .map(material => material.inventoryItemId)
       .filter(Boolean);
     
+    console.log('📦 [TaskDetails] Grupowe pobieranie pozycji magazynowych', {
+      itemsCount: inventoryItemIds.length
+    });
+    
     let inventoryItemsMap = new Map();
     
     if (inventoryItemIds.length > 0) {
       const batchSize = 10;
+      const batchCount = Math.ceil(inventoryItemIds.length / batchSize);
+      const fetchStartTime = performance.now();
       
       for (let i = 0; i < inventoryItemIds.length; i += batchSize) {
         const batch = inventoryItemIds.slice(i, i + batchSize);
+        const batchNumber = Math.floor(i / batchSize) + 1;
         
         try {
           const itemsQuery = query(
@@ -1208,10 +1415,20 @@ const TaskDetailsPage = () => {
               ...doc.data()
             });
           });
+          
+          console.log(`✅ [TaskDetails] Batch ${batchNumber}/${batchCount} pobrany`, {
+            batchSize: batch.length,
+            fetched: itemsSnapshot.size
+          });
         } catch (error) {
-          console.error(`Błąd podczas pobierania pozycji magazynowych:`, error);
+          console.error(`❌ [TaskDetails] Błąd batch ${batchNumber}/${batchCount}:`, error);
         }
       }
+      
+      console.log('✅ [TaskDetails] Wszystkie batche pobrane', {
+        duration: `${(performance.now() - fetchStartTime).toFixed(2)}ms`,
+        totalItems: inventoryItemsMap.size
+      });
     }
     
     // Przygotuj listę materiałów
@@ -1248,25 +1465,51 @@ const TaskDetailsPage = () => {
     
     setMaterialQuantities(quantities);
     setIncludeInCosts(costsInclude);
+    
+    console.log('✅ [TaskDetails] processMaterialsUpdate COMPLETED', {
+      duration: `${(performance.now() - startTime).toFixed(2)}ms`,
+      materialsProcessed: materialsList.length
+    });
   };
   
   // ✅ Pomocnicza funkcja: Przetwórz aktualizację skonsumowanych materiałów
   // 🔒 POPRAWKA: Nie wywołuje setTask - taskData zostanie ustawiony w processTaskUpdate
   const processConsumedMaterialsUpdate = async (taskData) => {
+    const startTime = performance.now();
+    console.log('🔵 [TaskDetails] processConsumedMaterialsUpdate START', {
+      consumedCount: taskData.consumedMaterials?.length || 0
+    });
+    
     if (!taskData.consumedMaterials || taskData.consumedMaterials.length === 0) {
+      console.log('✅ [TaskDetails] processConsumedMaterialsUpdate: brak konsumpcji', {
+        duration: `${(performance.now() - startTime).toFixed(2)}ms`
+      });
       return taskData; // Zwróć niezmienione taskData
     }
     
     try {
+      const enrichStartTime = performance.now();
       const enrichedConsumedMaterials = await enrichConsumedMaterialsData(taskData.consumedMaterials);
+      
+      console.log('✅ [TaskDetails] enrichConsumedMaterialsData zakończone', {
+        duration: `${(performance.now() - enrichStartTime).toFixed(2)}ms`,
+        enrichedCount: enrichedConsumedMaterials.length
+      });
       
       // 🔒 POPRAWKA: Zaktualizuj taskData bezpośrednio zamiast wywołania setTask
       // Dzięki temu unikamy race condition z setTask w processTaskUpdate
       taskData.consumedMaterials = enrichedConsumedMaterials;
       
+      console.log('✅ [TaskDetails] processConsumedMaterialsUpdate COMPLETED', {
+        duration: `${(performance.now() - startTime).toFixed(2)}ms`
+      });
+      
       return taskData;
     } catch (error) {
-      console.error('Błąd podczas przetwarzania aktualizacji konsumpcji:', error);
+      console.error('❌ [TaskDetails] processConsumedMaterialsUpdate błąd', {
+        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        error
+      });
       return taskData;
     }
   };
@@ -1274,15 +1517,32 @@ const TaskDetailsPage = () => {
   // ✅ ETAP 2 OPTYMALIZACJI: Połączona funkcja ładowania wszystkich danych zadania
   // ⚠️ PRZESTARZAŁE - używane tylko jako fallback, real-time listener zastępuje to
   const fetchAllTaskData = async () => {
+    const startTime = performance.now();
+    console.log('🔵 [TaskDetails] fetchAllTaskData START (FALLBACK)', {
+      taskId: id,
+      timestamp: new Date().toISOString()
+    });
+    
     try {
       setLoading(true);
       
       // KROK 1: Pobierz podstawowe dane zadania (musi być pierwsze)
+      const step1Start = performance.now();
       const fetchedTask = await getTaskById(id);
+      console.log('✅ [TaskDetails] KROK 1: getTaskById', {
+        duration: `${(performance.now() - step1Start).toFixed(2)}ms`,
+        taskId: fetchedTask.id
+      });
+      
       setTask(fetchedTask);
       
       // KROK 2: Przetwórz materiały z grupowym pobieraniem pozycji magazynowych (z Etapu 1)
+      const step2Start = performance.now();
       if (fetchedTask?.materials?.length > 0) {
+        console.log('🔵 [TaskDetails] KROK 2: Przetwarzanie materiałów', {
+          materialsCount: fetchedTask.materials.length
+        });
+        
         // ✅ OPTYMALIZACJA ETAP 1: Grupowe pobieranie pozycji magazynowych zamiast N+1 zapytań
         
         // Zbierz wszystkie ID pozycji magazynowych z materiałów
@@ -1364,25 +1624,40 @@ const TaskDetailsPage = () => {
         });
         
         setIncludeInCosts(costsInclude);
+        
+        console.log('✅ [TaskDetails] KROK 2: Materiały przetworzone', {
+          duration: `${(performance.now() - step2Start).toFixed(2)}ms`,
+          materialsCount: fetchedTask.materials.length
+        });
       }
       
       // KROK 2.5: ✅ Wzbogać dane skonsumowanych materiałów o informacje z partii magazynowych
       if (fetchedTask?.consumedMaterials?.length > 0) {
+        const step25Start = performance.now();
+        console.log('🔵 [TaskDetails] KROK 2.5: Wzbogacanie consumed materials', {
+          consumedCount: fetchedTask.consumedMaterials.length
+        });
+        
         try {
-
           const enrichedConsumedMaterials = await enrichConsumedMaterialsData(fetchedTask.consumedMaterials);
           fetchedTask.consumedMaterials = enrichedConsumedMaterials;
           setTask(prevTask => ({
             ...prevTask,
             consumedMaterials: enrichedConsumedMaterials
           }));
-
+          
+          console.log('✅ [TaskDetails] KROK 2.5: Consumed materials wzbogacone', {
+            duration: `${(performance.now() - step25Start).toFixed(2)}ms`
+          });
         } catch (error) {
           console.warn('⚠️ Nie udało się wzbogacić danych skonsumowanych materiałów:', error);
         }
       }
       
       // KROK 3: ✅ OPTYMALIZACJA ETAP 3: Ładowanie tylko podstawowych danych (Selective Data Loading)
+      const step3Start = performance.now();
+      console.log('🔵 [TaskDetails] KROK 3: Równoległe ładowanie dodatkowych danych');
+      
       const dataLoadingPromises = [];
       
       // Rezerwacje PO - zawsze potrzebne dla zakładki materiałów
@@ -1424,9 +1699,16 @@ const TaskDetailsPage = () => {
       
       // Wykonaj wszystkie zapytania równolegle
       if (dataLoadingPromises.length > 0) {
+        console.log('🔄 [TaskDetails] Wykonywanie równoległych zapytań', {
+          promisesCount: dataLoadingPromises.length
+        });
+        
         const results = await Promise.all(dataLoadingPromises);
         
-
+        console.log('✅ [TaskDetails] KROK 3: Równoległe ładowanie zakończone', {
+          duration: `${(performance.now() - step3Start).toFixed(2)}ms`,
+          resultsCount: results.length
+        });
         
         // Przetwórz wyniki i ustaw stany (tylko podstawowe dane)
         results.forEach(result => {
@@ -1448,6 +1730,8 @@ const TaskDetailsPage = () => {
               break;
           }
         });
+      } else {
+        console.log('⏭️ [TaskDetails] KROK 3: Brak dodatkowych danych do załadowania');
       }
       
       // ⚡ OPTYMALIZACJA: KROK 4 - Pobierz tylko podstawowe nazwy użytkowników (bez historii produkcji)
@@ -1495,8 +1779,15 @@ const TaskDetailsPage = () => {
           console.error('Błąd podczas ładowania ważnych danych:', error);
         }
       }, 100);
+      
+      console.log('✅ [TaskDetails] fetchAllTaskData COMPLETED', {
+        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`
+      });
     } catch (error) {
-      console.error('Błąd podczas pobierania zadania:', error);
+      console.error('❌ [TaskDetails] fetchAllTaskData błąd', {
+        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        error
+      });
       showError('Nie udało się pobrać danych zadania: ' + error.message);
       navigate('/production');
     } finally {
@@ -1546,14 +1837,59 @@ const TaskDetailsPage = () => {
   };
 
   // Funkcja do pobierania rezerwacji PO
-  const fetchPOReservations = async () => {
+  const fetchPOReservations = async (forceRefresh = false) => {
+    const startTime = performance.now();
+    console.log('🔵 [TaskDetails] fetchPOReservations START', {
+      taskId: id,
+      forceRefresh
+    });
+    
     try {
+      // ⚡ OPTYMALIZACJA: Sprawdź cache
+      const now = Date.now();
+      const cached = parallelDataCache.current.poReservations;
+      
+      if (!forceRefresh && cached.data && (now - cached.timestamp) < CACHE_TTL) {
+        console.log('✅ [TaskDetails] Cache hit: poReservations', {
+          age: `${((now - cached.timestamp) / 1000).toFixed(1)}s`,
+          duration: `${(performance.now() - startTime).toFixed(2)}ms`
+        });
+        setPOReservations(cached.data);
+        setPoRefreshTrigger(prev => prev + 1);
+        return;
+      }
+      
+      const importStartTime = performance.now();
       const { getPOReservationsForTask } = await import('../../services/poReservationService');
+      console.log('✅ [TaskDetails] poReservationService zaimportowany', {
+        duration: `${(performance.now() - importStartTime).toFixed(2)}ms`
+      });
+      
+      const fetchStartTime = performance.now();
       const reservations = await getPOReservationsForTask(id);
+      console.log('✅ [TaskDetails] Rezerwacje PO pobrane z serwera', {
+        duration: `${(performance.now() - fetchStartTime).toFixed(2)}ms`,
+        count: reservations?.length || 0
+      });
+      
+      // Zapisz w cache
+      parallelDataCache.current.poReservations = {
+        data: reservations,
+        timestamp: now
+      };
+      
       setPOReservations(reservations);
       setPoRefreshTrigger(prev => prev + 1); // Zwiększ trigger aby wymusić odświeżenie POReservationManager
+      
+      console.log('✅ [TaskDetails] fetchPOReservations COMPLETED', {
+        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        cached: false
+      });
     } catch (error) {
-      console.error('Błąd podczas pobierania rezerwacji PO:', error);
+      console.error('❌ [TaskDetails] fetchPOReservations błąd', {
+        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        error
+      });
       // Nie pokazujemy błędu użytkownikowi - to nie jest krytyczne
     }
   };
@@ -1997,13 +2333,29 @@ const TaskDetailsPage = () => {
   useEffect(() => {
     if (!task?.id || !materials.length) return;
     
+    console.log('🔵 [TaskDetails] Obliczanie kosztów triggered', {
+      taskId: task?.id,
+      materialsCount: materials.length,
+      costDependenciesHash: JSON.stringify(taskCostDependencies).substring(0, 100)
+    });
+    
     let isActive = true;
     let debounceTimeout = null;
     
     const updateCostsAndSync = async () => {
+      const startTime = performance.now();
+      console.log('🔵 [TaskDetails] updateCostsAndSync START');
+      
       try {
         // 1. Oblicz koszty (TYLKO RAZ dzięki cache!)
+        const costsStart = performance.now();
         const costs = await calculateAllCosts();
+        console.log('✅ [TaskDetails] calculateAllCosts zakończone', {
+          duration: `${(performance.now() - costsStart).toFixed(2)}ms`,
+          totalMaterialCost: costs.totalMaterialCost?.toFixed(2),
+          cached: costs._fromCache || false
+        });
+        
         if (!isActive) return;
         
         // 2. Aktualizuj podsumowanie w UI (poprzedni useEffect)
@@ -2039,18 +2391,32 @@ const TaskDetailsPage = () => {
               console.error('❌ [COST-SYNC] Błąd podczas synchronizacji kosztów:', error);
             }
           }, 2000);
+        } else {
+          console.log('⏭️ [TaskDetails] Koszty bez zmian - pomijanie synchronizacji', {
+            maxChange
+          });
         }
+        
+        console.log('✅ [TaskDetails] updateCostsAndSync COMPLETED', {
+          totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`,
+          costChanged
+        });
       } catch (error) {
-        console.error('❌ [COSTS] Błąd podczas aktualizacji kosztów:', error);
+        console.error('❌ [TaskDetails] updateCostsAndSync błąd', {
+          duration: `${(performance.now() - startTime).toFixed(2)}ms`,
+          error
+        });
       }
     };
     
     // ⚡ Debounce - uruchom dopiero po 1200ms bez zmian (zwiększone z 500ms dla stabilności)
+    console.log('⏱️ [TaskDetails] Debouncing obliczania kosztów (1200ms)');
     debounceTimeout = setTimeout(() => {
       if (isActive) updateCostsAndSync();
     }, 1200);
     
     return () => {
+      console.log('🔵 [TaskDetails] Cleanup obliczania kosztów');
       isActive = false;
       if (debounceTimeout) clearTimeout(debounceTimeout);
     };
@@ -2202,11 +2568,6 @@ const TaskDetailsPage = () => {
       setEnrichedProductionHistory(productionHistory || []);
     }
   };
-
-  // Pobieranie magazynów przy montowaniu komponentu
-  useEffect(() => {
-    fetchWarehouses();
-  }, []);
 
   // Synchronizacja ilości wyprodukowanej z ilością końcową w formularzu magazynu dla dialogu historii
   useEffect(() => {
@@ -6034,15 +6395,44 @@ const TaskDetailsPage = () => {
   // 🔒 POPRAWKA: Funkcja do pobierania oczekiwanych zamówień dla materiałów
   // Przyjmuje taskData jako parametr zamiast używać task z closure aby uniknąć stałych danych
   // ⚡ OPTYMALIZACJA: Równoległe pobieranie zamiast sekwencyjnej pętli (10x szybciej!)
-  const fetchAwaitingOrdersForMaterials = async (taskData = task) => {
+  const fetchAwaitingOrdersForMaterials = async (taskData = task, forceRefresh = false) => {
+    const startTime = performance.now();
+    console.log('🔵 [TaskDetails] fetchAwaitingOrdersForMaterials START', {
+      materialsCount: taskData?.materials?.length || 0,
+      forceRefresh
+    });
+    
     try {
-      if (!taskData || !taskData.materials) return;
+      if (!taskData || !taskData.materials) {
+        console.log('⏭️ [TaskDetails] fetchAwaitingOrdersForMaterials: brak materiałów');
+        return;
+      }
       setAwaitingOrdersLoading(true);
       
+      // ⚡ OPTYMALIZACJA: Sprawdź cache
+      const now = Date.now();
+      const cached = parallelDataCache.current.awaitingOrders;
+      const materialsHash = taskData.materials.map(m => m.inventoryItemId || m.id).sort().join(',');
+      
+      if (!forceRefresh && cached.data && cached.materialsHash === materialsHash && (now - cached.timestamp) < CACHE_TTL) {
+        console.log('✅ [TaskDetails] Cache hit: awaitingOrders', {
+          age: `${((now - cached.timestamp) / 1000).toFixed(1)}s`,
+          duration: `${(performance.now() - startTime).toFixed(2)}ms`
+        });
+        setAwaitingOrders(cached.data);
+        setAwaitingOrdersLoading(false);
+        return;
+      }
+      
       // Import funkcji raz, zamiast w każdej iteracji pętli
+      const importStartTime = performance.now();
       const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventory');
+      console.log('✅ [TaskDetails] inventory service zaimportowany', {
+        duration: `${(performance.now() - importStartTime).toFixed(2)}ms`
+      });
       
       // ⚡ OPTYMALIZACJA: Utwórz tablicę promise dla równoległego wykonania
+      const promisesStartTime = performance.now();
       const promises = taskData.materials.map(async (material) => {
         const materialId = material.inventoryItemId || material.id;
         if (!materialId) return { materialId: null, orders: [] };
@@ -6054,13 +6444,22 @@ const TaskDetailsPage = () => {
             orders: materialOrders.length > 0 ? materialOrders : [] 
           };
         } catch (error) {
-          console.error(`Błąd podczas pobierania oczekiwanych zamówień dla materiału ${materialId}:`, error);
+          console.error(`❌ [TaskDetails] Błąd pobierania zamówień dla materiału ${materialId}:`, error);
           return { materialId, orders: [] };
         }
       });
       
+      console.log('🔄 [TaskDetails] Równoległe pobieranie zamówień dla materiałów', {
+        promisesCount: promises.length
+      });
+      
       // Poczekaj na wszystkie zapytania równolegle (zamiast sekwencyjnie)
       const results = await Promise.all(promises);
+      
+      console.log('✅ [TaskDetails] Wszystkie zamówienia pobrane', {
+        duration: `${(performance.now() - promisesStartTime).toFixed(2)}ms`,
+        materialsProcessed: results.length
+      });
       
       // Przekształć wyniki w obiekt
       const ordersData = {};
@@ -6072,9 +6471,25 @@ const TaskDetailsPage = () => {
         }
       });
       
+      // Zapisz w cache
+      parallelDataCache.current.awaitingOrders = {
+        data: ordersData,
+        timestamp: now,
+        materialsHash
+      };
+      
       setAwaitingOrders(ordersData);
+      
+      console.log('✅ [TaskDetails] fetchAwaitingOrdersForMaterials COMPLETED', {
+        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        totalOrders,
+        cached: false
+      });
     } catch (error) {
-      console.error('Błąd podczas pobierania oczekiwanych zamówień dla materiałów:', error);
+      console.error('❌ [TaskDetails] fetchAwaitingOrdersForMaterials błąd', {
+        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
+        error
+      });
       showError('Nie udało się pobrać informacji o oczekiwanych zamówieniach');
     } finally {
       setAwaitingOrdersLoading(false);

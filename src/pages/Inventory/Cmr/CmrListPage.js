@@ -40,6 +40,7 @@ import { format } from 'date-fns';
 import pl from 'date-fns/locale/pl';
 import enUS from 'date-fns/locale/en-US';
 import { useAuth } from '../../../hooks/useAuth';
+import { useServiceData } from '../../../hooks/useServiceData';
 import { useNotification } from '../../../hooks/useNotification';
 import { useCmrListState } from '../../../contexts/CmrListStateContext';
 import { useDebounce } from '../../../hooks/useDebounce';
@@ -56,7 +57,7 @@ import {
   updateCmrDocumentInCache,
   removeCmrDocumentFromCache
 } from '../../../services/cmrService';
-import { getAllCustomers } from '../../../services/customerService';
+import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../../services/customerService';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { useTheme as useThemeContext } from '../../../contexts/ThemeContext';
 
@@ -208,8 +209,7 @@ const CmrListPage = () => {
   
   // Stan dla dialogu migracji CMR
 
-  const [customers, setCustomers] = useState([]);
-  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const { data: customers, loading: loadingCustomers } = useServiceData(CUSTOMERS_CACHE_KEY, getAllCustomers, { ttl: 10 * 60 * 1000 });
   
   // Bieżący słownik tłumaczeń na podstawie wybranego języka
   const t = translations[reportFilters.language] || translations.pl;
@@ -322,21 +322,6 @@ const CmrListPage = () => {
       showError('Błąd podczas odświeżania danych: ' + error.message);
     }
   };
-  
-  const fetchCustomers = async () => {
-    try {
-      setLoadingCustomers(true);
-      const data = await getAllCustomers();
-      setCustomers(data);
-    } catch (error) {
-      console.error('Błąd podczas pobierania klientów:', error);
-      showError('Nie udało się pobrać listy klientów');
-    } finally {
-      setLoadingCustomers(false);
-    }
-  };
-
-
   
   const handleCreateCmr = () => {
     navigate('/inventory/cmr/new');
@@ -688,11 +673,6 @@ const CmrListPage = () => {
   useEffect(() => {
     fetchCmrDocumentsOptimized();
   }, [page, pageSize, debouncedSearchTerm, statusFilter, debouncedItemFilter]);
-
-  // Efekt do pobierania klientów przy pierwszym renderze
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
 
   // Efekt do czyszczenia cache przy odmontowaniu komponentu
   useEffect(() => {

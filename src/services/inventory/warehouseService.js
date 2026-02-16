@@ -21,6 +21,10 @@ import {
   ValidationError 
 } from './utils/validators.js';
 import { FirebaseQueryBuilder } from './config/firebaseQueries.js';
+import { ServiceCacheManager } from '../cache/serviceCacheManager';
+
+export const WAREHOUSES_CACHE_KEY = 'warehouses:all';
+const WAREHOUSES_CACHE_TTL = 10 * 60 * 1000; // 10 minut — magazyny zmieniają się rzadko
 
 /**
  * Usługa zarządzania magazynami
@@ -42,13 +46,22 @@ import { FirebaseQueryBuilder } from './config/firebaseQueries.js';
  */
 export const getAllWarehouses = async (orderByField = 'name', orderDirection = 'asc') => {
   try {
-    const q = FirebaseQueryBuilder.buildWarehousesQuery(orderByField, orderDirection);
-    const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const cacheKey = orderByField === 'name' && orderDirection === 'asc' 
+      ? WAREHOUSES_CACHE_KEY 
+      : `warehouses:${orderByField}:${orderDirection}`;
+
+    return await ServiceCacheManager.getOrFetch(
+      cacheKey,
+      async () => {
+        const q = FirebaseQueryBuilder.buildWarehousesQuery(orderByField, orderDirection);
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      },
+      WAREHOUSES_CACHE_TTL
+    );
   } catch (error) {
     console.error('Błąd podczas pobierania magazynów:', error);
     throw new Error(`Nie udało się pobrać listy magazynów: ${error.message}`);
@@ -122,6 +135,8 @@ export const createWarehouse = async (warehouseData, userId) => {
     const collectionRef = FirebaseQueryBuilder.getCollectionRef(COLLECTIONS.WAREHOUSES);
     const docRef = await addDoc(collectionRef, warehouseWithMeta);
     
+    ServiceCacheManager.invalidate(WAREHOUSES_CACHE_KEY);
+
     return {
       id: docRef.id,
       ...warehouseWithMeta
@@ -174,6 +189,8 @@ export const updateWarehouse = async (warehouseId, warehouseData, userId) => {
     
     await updateDoc(warehouseRef, updates);
     
+    ServiceCacheManager.invalidate(WAREHOUSES_CACHE_KEY);
+
     return {
       id: validatedId,
       ...existingWarehouse,
@@ -217,6 +234,8 @@ export const deleteWarehouse = async (warehouseId) => {
     const warehouseRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.WAREHOUSES, validatedId);
     await deleteDoc(warehouseRef);
     
+    ServiceCacheManager.invalidate(WAREHOUSES_CACHE_KEY);
+
     return true;
   } catch (error) {
     if (error instanceof ValidationError) {

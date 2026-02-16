@@ -184,6 +184,7 @@
   "empty": {
     "title": "No customers found",
     "description": "No customers in the system. Customers will appear here once added.",
+    "noCustomers": "No customers to display",
     "noEmail": "No email",
     "noPhone": "No phone",
     "noAddress": "No address",

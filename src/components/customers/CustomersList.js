@@ -37,8 +37,10 @@ import {
 import { 
   getAllCustomers, 
   deleteCustomer, 
-  searchCustomers 
+  searchCustomers,
+  CUSTOMERS_CACHE_KEY
 } from '../../services/customerService';
+import { useServiceData } from '../../hooks/useServiceData';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -46,9 +48,12 @@ import CustomerForm from './CustomerForm';
 
 const CustomersList = () => {
   const { t } = useTranslation();
-  const [customers, setCustomers] = useState([]);
+  const { data: customers, loading: customersLoading, refresh: refreshCustomers } = useServiceData(
+    CUSTOMERS_CACHE_KEY,
+    getAllCustomers,
+    { ttl: 10 * 60 * 1000 }
+  );
   const [filteredCustomers, setFilteredCustomers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -62,22 +67,10 @@ const CustomersList = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchCustomers();
-  }, []);
-
-  const fetchCustomers = async () => {
-    setLoading(true);
-    try {
-      const fetchedCustomers = await getAllCustomers();
-      setCustomers(fetchedCustomers);
-      setFilteredCustomers(fetchedCustomers);
-    } catch (error) {
-      showError('Błąd podczas pobierania listy klientów: ' + error.message);
-      console.error('Error fetching customers:', error);
-    } finally {
-      setLoading(false);
+    if (!searchTerm.trim()) {
+      setFilteredCustomers(customers || []);
     }
-  };
+  }, [customers, searchTerm]);
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
@@ -141,7 +134,7 @@ const CustomersList = () => {
     try {
       await deleteCustomer(customerToDelete.id);
       showSuccess('Klient został usunięty');
-      fetchCustomers();
+      refreshCustomers();
     } catch (error) {
       showError('Błąd podczas usuwania klienta: ' + error.message);
       console.error('Error deleting customer:', error);
@@ -162,7 +155,7 @@ const CustomersList = () => {
   };
 
   const handleFormSubmit = () => {
-    fetchCustomers();
+    refreshCustomers();
     setFormDialogOpen(false);
     setEditingCustomer(null);
   };
@@ -218,7 +211,7 @@ const CustomersList = () => {
       </Paper>
 
       <Paper>
-        {loading ? (
+        {customersLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
             <CircularProgress />
           </Box>

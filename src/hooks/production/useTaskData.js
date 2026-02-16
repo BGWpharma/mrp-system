@@ -19,6 +19,7 @@ export const useTaskData = (taskId, navigate) => {
   const lastUpdateTimestamp = useRef(null);
   const debounceTimerRef = useRef(null);
   const isMountedRef = useRef(true);
+  const initialLoadDone = useRef(false);
   
   // ✅ Real-time listener dla dokumentu zadania
   useEffect(() => {
@@ -28,6 +29,7 @@ export const useTaskData = (taskId, navigate) => {
     }
     
     isMountedRef.current = true;
+    initialLoadDone.current = false;
     setLoading(true);
     
     const taskRef = doc(db, 'productionTasks', taskId);
@@ -69,7 +71,8 @@ export const useTaskData = (taskId, navigate) => {
             setTask(taskData);
             setError(null);
             
-            if (loading) {
+            if (!initialLoadDone.current) {
+              initialLoadDone.current = true;
               setLoading(false);
             }
           }
@@ -95,7 +98,7 @@ export const useTaskData = (taskId, navigate) => {
       
       unsubscribe();
     };
-  }, [taskId, navigate, showError, loading]);
+  }, [taskId, navigate, showError]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Funkcja do wymuszenia odświeżenia danych
   const refreshTask = useCallback(async () => {

@@ -1968,6 +1968,12 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
     // Wyczyść cache dotyczące tego zamówienia
     searchCache.invalidateForOrder(purchaseOrderId);
 
+    // Aktualizuj cache zamówień zakupu
+    updatePurchaseOrderInCache(purchaseOrderId, {
+      items: updatedItems,
+      status: newStatus
+    });
+
     // Zwróć zaktualizowane dane
     return {
       id: purchaseOrderId,
@@ -2081,11 +2087,16 @@ export const updatePurchaseOrderItems = async (purchaseOrderId, updatedItems, us
       throw new Error(`Nie można pobrać zaktualizowanego zamówienia o ID ${purchaseOrderId}`);
     }
     
-    return {
+    const updatedData = {
       id: purchaseOrderId,
       ...updatedDocSnap.data(),
       updatedAt: new Date().toISOString()
     };
+
+    // Aktualizuj cache zamówień zakupu
+    updatePurchaseOrderInCache(purchaseOrderId, updatedData);
+
+    return updatedData;
   } catch (error) {
     console.error('Błąd podczas aktualizacji pozycji zamówienia zakupowego:', error);
     throw error;
@@ -3484,6 +3495,9 @@ export const updatePurchaseOrderAttachments = async (purchaseOrderId, attachment
     if (searchCache.invalidateForOrder) {
       searchCache.invalidateForOrder(purchaseOrderId);
     }
+
+    // Aktualizuj cache zamówień zakupu
+    updatePurchaseOrderInCache(purchaseOrderId, updateFields);
 
     return { 
       success: true, 

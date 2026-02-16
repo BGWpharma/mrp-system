@@ -85,7 +85,8 @@ import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { useInventoryListState } from '../../contexts/InventoryListStateContext';
 import { INVENTORY_CATEGORIES } from '../../utils/constants';
 import { useTranslation } from '../../hooks/useTranslation';
-import { getAllCustomers } from '../../services/customerService';
+import { useServiceData } from '../../hooks/useServiceData';
+import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/customerService';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
   flexCenter, 
@@ -173,7 +174,7 @@ const InventoryList = () => {
   const [selectedExportCategories, setSelectedExportCategories] = useState([]);
   
   // Stany dla klientów przypisanych do pozycji
-  const [customers, setCustomers] = useState([]);
+  const { data: customers } = useServiceData(CUSTOMERS_CACHE_KEY, getAllCustomers, { ttl: 10 * 60 * 1000 });
   const [customerFilter, setCustomerFilter] = useState('');
   
   // Zamiast lokalnego stanu, użyjmy kontekstu preferencji kolumn
@@ -227,10 +228,9 @@ const InventoryList = () => {
     return map;
   }, [customers]);
 
-  // Dodaj nowy useEffect do pobrania lokalizacji i klientów
+  // Dodaj nowy useEffect do pobrania lokalizacji
   useEffect(() => {
     fetchWarehouses();
-    getAllCustomers().then(setCustomers).catch(err => console.warn('Błąd pobierania klientów:', err));
   }, []);
 
   // Przeniesiona funkcja fetchWarehouses

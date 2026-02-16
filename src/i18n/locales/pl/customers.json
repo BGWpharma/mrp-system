@@ -194,6 +194,7 @@
   "empty": {
     "title": "Nie znaleziono klientów",
     "description": "Brak klientów w systemie. Klienci pojawią się tutaj po dodaniu.",
+    "noCustomers": "Brak klientów do wyświetlenia",
     "noEmail": "Brak emaila",
     "noPhone": "Brak telefonu",
     "noAddress": "Brak adresu",

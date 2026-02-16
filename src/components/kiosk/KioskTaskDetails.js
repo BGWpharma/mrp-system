@@ -80,8 +80,8 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
   useEffect(() => {
     if (!taskId) return;
 
-    let unsubscribeTask = null;
-    let unsubscribeLinks = null;
+    let cancelled = false;
+    const unsubscribers = [];
 
     const setupRealtimeListeners = async () => {
       try {
@@ -90,64 +90,66 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
 
         // 1. Real-time listener dla zadania produkcyjnego
         const taskRef = doc(db, 'productionTasks', taskId);
-        unsubscribeTask = onSnapshot(taskRef, (docSnapshot) => {
+        const unsubTask = onSnapshot(taskRef, (docSnapshot) => {
+          if (cancelled) return;
           if (docSnapshot.exists()) {
             setIsUpdating(true);
             const taskData = { id: docSnapshot.id, ...docSnapshot.data() };
             setTask(taskData);
             setLastUpdate(new Date());
             
-            setTimeout(() => setIsUpdating(false), 500);
-            console.log('🔄 Zadanie zaktualizowane w czasie rzeczywistym:', taskData.name);
+            setTimeout(() => { if (!cancelled) setIsUpdating(false); }, 500);
           } else {
             setError('Zadanie nie zostało znalezione');
           }
         }, (error) => {
+          if (cancelled) return;
           console.error('Błąd listenera zadania:', error);
           setError('Błąd podczas nasłuchiwania zmian zadania');
           showError('Błąd synchronizacji w czasie rzeczywistym');
         });
+        unsubscribers.push(unsubTask);
+
+        if (cancelled) return;
 
         // 2. Pobranie początkowych powiązań rezerwacji
         const links = await getIngredientReservationLinks(taskId);
+        if (cancelled) return;
         setIngredientLinks(links);
 
         // 3. Real-time listener dla powiązań rezerwacji
         const linksRef = collection(db, 'ingredientReservationLinks');
         const linksQuery = query(linksRef, where('taskId', '==', taskId));
         
-        unsubscribeLinks = onSnapshot(linksQuery, async (snapshot) => {
+        const unsubLinks = onSnapshot(linksQuery, async (snapshot) => {
+          if (cancelled) return;
           try {
             const updatedLinks = await getIngredientReservationLinks(taskId);
+            if (cancelled) return;
             setIngredientLinks(updatedLinks);
             setIsUpdating(true);
-            setTimeout(() => setIsUpdating(false), 500);
-            console.log('🔄 Powiązania rezerwacji zaktualizowane w czasie rzeczywistym');
+            setTimeout(() => { if (!cancelled) setIsUpdating(false); }, 500);
           } catch (error) {
             console.error('Błąd podczas aktualizacji powiązań:', error);
           }
         });
+        unsubscribers.push(unsubLinks);
 
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas konfiguracji real-time listenerów:', error);
         setError('Nie udało się skonfigurować synchronizacji w czasie rzeczywistym');
         showError('Błąd podczas konfiguracji synchronizacji');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     setupRealtimeListeners();
 
     return () => {
-      if (unsubscribeTask) {
-        unsubscribeTask();
-        console.log('🛑 Odłączono listener zadania');
-      }
-      if (unsubscribeLinks) {
-        unsubscribeLinks();
-        console.log('🛑 Odłączono listener powiązań');
-      }
+      cancelled = true;
+      unsubscribers.forEach(unsub => unsub());
     };
   }, [taskId, showError]);
 

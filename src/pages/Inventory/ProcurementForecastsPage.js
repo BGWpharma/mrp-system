@@ -279,12 +279,6 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                 <TableCell align="center" sx={{ fontWeight: 'bold' }}>
                   {t('states.procurementForecasts.details.balanceWithDeliveries')}
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>
-                  {t('states.procurementForecasts.details.supplier')}
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  {t('states.procurementForecasts.details.cost')}
-                </TableCell>
                 <TableCell sx={{ fontWeight: 'bold', minWidth: 140 }}>
                   {t('states.procurementForecasts.details.notes')}
                 </TableCell>
@@ -368,16 +362,6 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                       </TableCell>
                       <TableCell align="center">
                         {getBalanceChip(material.balanceWithFutureDeliveries)}
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" noWrap>
-                          {material.supplierName || '-'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography variant="body2">
-                          {formatCurrency(material.cost)}
-                        </Typography>
                       </TableCell>
                       <TableCell>
                         {isEditing ? (
@@ -493,10 +477,7 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                   {t('states.procurementForecasts.period')}
                 </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                  {t('states.procurementForecasts.materialsCount')}
-                </TableCell>
-                <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                  {t('states.procurementForecasts.shortageCount')}
+                  {t('states.procurementForecasts.materialsCount')} / {t('states.procurementForecasts.shortageCount')}
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                   {t('states.procurementForecasts.shortageValue')}
@@ -536,18 +517,21 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                         {formatDateDisplay(forecast.forecastPeriod?.startDate)} - {formatDateDisplay(forecast.forecastPeriod?.endDate)}
                       </Typography>
                     </TableCell>
-                    <TableCell align="center">{forecast.totalMaterials}</TableCell>
                     <TableCell align="center">
-                      {forecast.materialsWithShortage > 0 ? (
-                        <Chip
-                          size="small"
-                          color="error"
-                          icon={<WarningIcon />}
-                          label={forecast.materialsWithShortage}
-                        />
-                      ) : (
-                        <Chip size="small" color="success" icon={<CheckCircleIcon />} label="0" />
-                      )}
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                        <Typography variant="body2">{forecast.totalMaterials}</Typography>
+                        <Typography variant="body2" color="text.disabled">/</Typography>
+                        {forecast.materialsWithShortage > 0 ? (
+                          <Chip
+                            size="small"
+                            color="error"
+                            icon={<WarningIcon />}
+                            label={forecast.materialsWithShortage}
+                          />
+                        ) : (
+                          <Chip size="small" color="success" icon={<CheckCircleIcon />} label="0" />
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell align="right">
                       <Typography
@@ -596,7 +580,7 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell colSpan={10} sx={{ py: 0, px: 2 }}>
+                    <TableCell colSpan={8} sx={{ py: 0, px: 2 }}>
                       <Collapse in={expandedId === forecast.id} timeout="auto" unmountOnExit>
                         <Box sx={{ py: 2 }}>
                           <Divider sx={{ mb: 2 }} />

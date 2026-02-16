@@ -2149,27 +2149,29 @@ const TaskList = () => {
             
             {/* Przycisk odświeżania - tylko na desktop jako IconButton */}
             {!isMobile && (
-              <Tooltip title="Odśwież listę zadań">
-                <IconButton 
-                  onClick={handleManualRefresh}
-                  disabled={mainTableLoading}
-                  color="primary"
-                  size="medium"
-                  sx={{ 
-                    border: '1px solid',
-                    borderColor: 'primary.main',
-                    '&:hover': {
-                      backgroundColor: 'primary.main',
-                      color: 'primary.contrastText'
-                    },
-                    '&:disabled': {
-                      borderColor: 'action.disabled',
-                      color: 'action.disabled'
-                    }
-                  }}
-                >
-                  {mainTableLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
-                </IconButton>
+              <Tooltip title={mainTableLoading ? "Ładowanie..." : "Odśwież listę zadań"}>
+                <span>
+                  <IconButton 
+                    onClick={handleManualRefresh}
+                    disabled={mainTableLoading}
+                    color="primary"
+                    size="medium"
+                    sx={{ 
+                      border: '1px solid',
+                      borderColor: 'primary.main',
+                      '&:hover': {
+                        backgroundColor: 'primary.main',
+                        color: 'primary.contrastText'
+                      },
+                      '&:disabled': {
+                        borderColor: 'action.disabled',
+                        color: 'action.disabled'
+                      }
+                    }}
+                  >
+                    {mainTableLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
+                  </IconButton>
+                </span>
               </Tooltip>
             )}
             

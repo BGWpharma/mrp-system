@@ -1,14 +1,23 @@
 import { useState, useEffect } from 'react';
 import { getAllCustomers } from '../services/customerService';
 
+/**
+ * @deprecated Użyj useServiceData z CUSTOMERS_CACHE_KEY zamiast tego hooka.
+ * Ten hook jest zachowany dla kompatybilności wstecznej.
+ * 
+ * Zastępstwo:
+ *   import { useServiceData } from './useServiceData';
+ *   import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../services/customerService';
+ *   const { data: customers, loading, error, refresh } = useServiceData(CUSTOMERS_CACHE_KEY, getAllCustomers);
+ */
+
 // Klucz, pod którym dane klientów będą przechowywane w localStorage
 const CACHE_KEY = 'app_customers_cache';
 // Czas ważności cache w milisekundach (24 godziny)
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 /**
- * Hook do buforowania i pobierania danych klientów z localStorage
- * @returns {Object} { customers, loading, error, refreshCustomers }
+ * @deprecated Użyj useServiceData z CUSTOMERS_CACHE_KEY zamiast tego hooka.
  */
 export const useCustomersCache = () => {
   const [customers, setCustomers] = useState([]);

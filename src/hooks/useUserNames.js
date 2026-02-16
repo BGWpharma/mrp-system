@@ -6,21 +6,25 @@ import { getUsersDisplayNames } from '../services/userService';
  * Hook do zarządzania nazwami użytkowników
  * Automatycznie pobiera nazwy użytkowników na podstawie listy ID
  * Cachuje wyniki aby uniknąć wielokrotnych zapytań
+ * 
+ * OPTYMALIZACJA: userNamesRef zamiast userNames w deps useCallback
+ * — stabilna referencja fetchUserNames, brak nieskończonych pętli
  */
 export const useUserNames = (initialUserIds = []) => {
   const [userNames, setUserNames] = useState({});
   const [loading, setLoading] = useState(false);
-  const loadingRef = useRef(new Set()); // Track loading IDs to prevent duplicates
+  const loadingRef = useRef(new Set());
+  const userNamesRef = useRef({});
 
-  // Funkcja do pobierania nazw użytkowników
+  // Stabilna referencja — nie zależy od userNames state
   const fetchUserNames = useCallback(async (userIds) => {
     if (!userIds || userIds.length === 0) return;
     
     const uniqueUserIds = [...new Set(userIds.filter(id => id && typeof id === 'string'))];
     
-    // Filtruj tylko te ID które nie są już załadowane i nie są w trakcie ładowania
+    // Sprawdź ref zamiast state — unika re-kreacji callbacka
     const missingUserIds = uniqueUserIds.filter(id => 
-      !userNames[id] && !loadingRef.current.has(id)
+      !userNamesRef.current[id] && !loadingRef.current.has(id)
     );
     
     if (missingUserIds.length === 0) return;
@@ -32,10 +36,9 @@ export const useUserNames = (initialUserIds = []) => {
       setLoading(true);
       const names = await getUsersDisplayNames(missingUserIds);
       
-      setUserNames(prev => ({ 
-        ...prev, 
-        ...names 
-      }));
+      // Aktualizuj ref I state
+      userNamesRef.current = { ...userNamesRef.current, ...names };
+      setUserNames(prev => ({ ...prev, ...names }));
     } catch (error) {
       console.error('Błąd podczas pobierania nazw użytkowników:', error);
       
@@ -47,16 +50,14 @@ export const useUserNames = (initialUserIds = []) => {
           id;
       });
       
-      setUserNames(prev => ({ 
-        ...prev, 
-        ...fallbackNames 
-      }));
+      userNamesRef.current = { ...userNamesRef.current, ...fallbackNames };
+      setUserNames(prev => ({ ...prev, ...fallbackNames }));
     } finally {
       setLoading(false);
       // Usuń z listy ładowanych
       missingUserIds.forEach(id => loadingRef.current.delete(id));
     }
-  }, [userNames]);
+  }, []); // Pusta tablica deps — stabilna referencja
 
   // Automatyczne pobieranie przy zmianie listy ID
   useEffect(() => {
@@ -69,9 +70,9 @@ export const useUserNames = (initialUserIds = []) => {
   const getUserName = useCallback((userId) => {
     if (!userId) return 'System';
     
-    // Jeśli mamy już nazwę użytkownika w cache, użyj jej
-    if (userNames[userId]) {
-      return userNames[userId];
+    // Sprawdź ref (zawsze aktualne dane)
+    if (userNamesRef.current[userId]) {
+      return userNamesRef.current[userId];
     }
     
     // Jeśli ID jest w trakcie ładowania, pokaż skróconą wersję
@@ -91,10 +92,11 @@ export const useUserNames = (initialUserIds = []) => {
     }
     
     return userId;
-  }, [userNames, fetchUserNames]);
+  }, [fetchUserNames]);
 
   // Funkcja do ręcznego dodania nazwy użytkownika (przydatne gdy mamy już dane)
   const setUserName = useCallback((userId, userName) => {
+    userNamesRef.current[userId] = userName;
     setUserNames(prev => ({
       ...prev,
       [userId]: userName
@@ -103,6 +105,7 @@ export const useUserNames = (initialUserIds = []) => {
 
   // Funkcja do wyczyśnienia cache
   const clearUserNames = useCallback(() => {
+    userNamesRef.current = {};
     setUserNames({});
     loadingRef.current.clear();
   }, []);

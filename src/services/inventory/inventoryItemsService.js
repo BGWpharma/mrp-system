@@ -841,6 +841,136 @@ export const searchInventoryItems = async (searchCriteria, limit = 50) => {
  * @param {string} inventoryItemId - ID produktu magazynowego
  * @returns {Promise<Array>} - Lista oczekiwanych zamówień
  */
+/**
+ * ⚡ OPTYMALIZACJA: Pobiera wszystkie aktywne zamówienia zakupowe i zwraca je zindeksowane po inventoryItemId
+ * Używane do grupowego pobierania oczekujących zamówień dla wielu materiałów naraz (10x szybciej!)
+ * @returns {Promise<Object>} Mapa { inventoryItemId: [purchaseOrders] }
+ */
+export const getAllAwaitingOrdersIndexed = async () => {
+  try {
+    const startTime = performance.now();
+    console.log('🔵 [Inventory] getAllAwaitingOrdersIndexed START');
+    
+    // Pobierz wszystkie aktywne zamówienia zakupowe
+    const purchaseOrdersRef = collection(db, 'purchaseOrders');
+    const q = query(
+      purchaseOrdersRef,
+      where('status', 'not-in', ['completed', 'cancelled'])
+    );
+    
+    const fetchStart = performance.now();
+    const querySnapshot = await getDocs(q);
+    console.log('✅ [Inventory] Aktywne PO pobrane', {
+      duration: `${(performance.now() - fetchStart).toFixed(2)}ms`,
+      count: querySnapshot.size
+    });
+    
+    // ⚡ OPTYMALIZACJA: Zbierz unikalne ID dostawców
+    const uniqueSupplierIds = new Set();
+    const posWithItems = [];
+    
+    querySnapshot.docs.forEach(docRef => {
+      const poData = docRef.data();
+      if (poData.items && Array.isArray(poData.items)) {
+        posWithItems.push({ docRef, poData });
+        if (poData.supplierId) {
+          uniqueSupplierIds.add(poData.supplierId);
+        }
+      }
+    });
+    
+    // ⚡ OPTYMALIZACJA: Pobierz wszystkich dostawców równolegle
+    const supplierStart = performance.now();
+    const supplierNamesMap = {};
+    if (uniqueSupplierIds.size > 0) {
+      const supplierPromises = Array.from(uniqueSupplierIds).map(async (supplierId) => {
+        try {
+          const supplierDoc = await getDoc(doc(db, 'suppliers', supplierId));
+          return {
+            supplierId,
+            name: supplierDoc.exists() ? supplierDoc.data().name : null
+          };
+        } catch (error) {
+          console.warn(`Nie można pobrać dostawcy ${supplierId}:`, error);
+          return { supplierId, name: null };
+        }
+      });
+      
+      const supplierResults = await Promise.all(supplierPromises);
+      supplierResults.forEach(({ supplierId, name }) => {
+        supplierNamesMap[supplierId] = name;
+      });
+    }
+    console.log('✅ [Inventory] Dostawcy pobrani', {
+      duration: `${(performance.now() - supplierStart).toFixed(2)}ms`,
+      count: uniqueSupplierIds.size
+    });
+    
+    // Indeksuj zamówienia po inventoryItemId
+    const indexStart = performance.now();
+    const ordersIndex = {};
+    
+    posWithItems.forEach(({ docRef, poData }) => {
+      poData.items.forEach(item => {
+        const inventoryItemId = item.inventoryItemId;
+        if (!inventoryItemId) return;
+        
+        const quantityOrdered = parseFloat(item.quantity) || 0;
+        const quantityReceived = parseFloat(item.received) || 0;
+        const quantityRemaining = Math.max(0, quantityOrdered - quantityReceived);
+        
+        // Tylko jeśli jest coś do dostarczenia
+        if (quantityRemaining <= 0) return;
+        
+        const orderItem = {
+          ...item,
+          quantityOrdered,
+          quantityReceived,
+          quantityRemaining,
+          expectedDeliveryDate: convertTimestampToDate(item.plannedDeliveryDate || poData.expectedDeliveryDate),
+          poNumber: poData.number || 'Brak numeru'
+        };
+        
+        // Utwórz/pobierz wpis dla tego inventoryItemId
+        if (!ordersIndex[inventoryItemId]) {
+          ordersIndex[inventoryItemId] = [];
+        }
+        
+        // Sprawdź czy PO już istnieje dla tego materiału
+        let existingPO = ordersIndex[inventoryItemId].find(po => po.id === docRef.id);
+        
+        if (existingPO) {
+          // Dodaj item do istniejącego PO
+          existingPO.items.push(orderItem);
+        } else {
+          // Utwórz nowy wpis PO
+          ordersIndex[inventoryItemId].push({
+            id: docRef.id,
+            number: poData.number,
+            status: poData.status,
+            expectedDeliveryDate: convertTimestampToDate(poData.expectedDeliveryDate),
+            orderDate: convertTimestampToDate(poData.orderDate),
+            supplierId: poData.supplierId,
+            supplierName: poData.supplierId ? supplierNamesMap[poData.supplierId] : null,
+            items: [orderItem]
+          });
+        }
+      });
+    });
+    
+    console.log('✅ [Inventory] getAllAwaitingOrdersIndexed COMPLETED', {
+      totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`,
+      itemsIndexed: Object.keys(ordersIndex).length,
+      totalOrders: posWithItems.length
+    });
+    
+    return ordersIndex;
+  } catch (error) {
+    console.error('❌ [Inventory] getAllAwaitingOrdersIndexed błąd:', error);
+    return {};
+  }
+};
+
 export const getAwaitingOrdersForInventoryItem = async (inventoryItemId) => {
   try {
     const validatedItemId = validateId(inventoryItemId, 'inventoryItemId');

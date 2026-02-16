@@ -127,7 +127,7 @@ const BackgroundEffects = () => {
           }} />
         </div>
 
-        <style jsx>{`
+        <style>{`
           @keyframes lightPulse {
             0%, 100% { 
               opacity: 0.01;
@@ -221,7 +221,7 @@ const BackgroundEffects = () => {
         }} />
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes darkPulse {
           0%, 100% { 
             opacity: 0.05;

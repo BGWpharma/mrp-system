@@ -636,9 +636,9 @@ const EnhancedMixingPlan = ({
   useEffect(() => {
     if (!task?.id) return;
 
-    // 🔒 POPRAWKA: Zapisz taskId jako zmienną lokalną aby uniknąć używania stale referencji do task
     const taskId = task.id;
-    let unsubscribeLinks = null;
+    let cancelled = false;
+    const unsubscribers = [];
 
     const setupRealtimeListeners = async () => {
       try {
@@ -646,70 +646,68 @@ const EnhancedMixingPlan = ({
         const linksRef = collection(db, 'ingredientReservationLinks');
         const linksQuery = query(linksRef, where('taskId', '==', taskId));
         
-        unsubscribeLinks = onSnapshot(linksQuery, async (snapshot) => {
+        const unsubLinks = onSnapshot(linksQuery, async (snapshot) => {
+          if (cancelled) return;
           try {
             setIsLinksUpdating(true);
             
-            // Odśwież ZARÓWNO powiązania JAK I standardowe rezerwacje aby zaktualizować dostępne ilości
             const [updatedLinks, updatedStandardRes, updatedVirtualRes] = await Promise.all([
               getIngredientReservationLinks(taskId),
-              getStandardReservationsForTask(taskId), // Ponowne pobranie z uwzględnieniem nowych powiązań
+              getStandardReservationsForTask(taskId),
               getVirtualReservationsFromSnapshots(taskId)
             ]);
             
+            if (cancelled) return;
+            
             setIngredientLinks(updatedLinks);
             
-            // Połącz rezerwacje z odświeżonymi dostępnymi ilościami
             const allReservations = [...updatedStandardRes, ...updatedVirtualRes];
             setStandardReservations(allReservations);
             
-            // 🔒 POPRAWKA: Animacja aktualizacji z cleanup timera
             if (updateTimerRef.current) {
               clearTimeout(updateTimerRef.current);
             }
-            updateTimerRef.current = setTimeout(() => setIsLinksUpdating(false), 800);
+            updateTimerRef.current = setTimeout(() => {
+              if (!cancelled) setIsLinksUpdating(false);
+            }, 800);
             
-            // ✅ POPRAWKA: Nie wyświetlaj powiadomienia przy pierwszej inicjalizacji listenera
-            // Wyświetl tylko gdy rzeczywiście zmieniono powiązania (nie przy pierwszym załadowaniu)
             if (linksListenerInitialized.current) {
               console.log('🔄 Real-time aktualizacja powiązań wykryta');
-              // Nie wyświetlamy powiadomienia - użytkownik już widzi success po swojej akcji
-              // showInfo('Powiązania i dostępne ilości zostały zaktualizowane automatycznie');
             } else {
               linksListenerInitialized.current = true;
               console.log('🔷 Inicjalizacja listenera powiązań');
             }
           } catch (error) {
-            console.error('Błąd podczas aktualizacji powiązań:', error);
-            setIsLinksUpdating(false);
+            if (!cancelled) {
+              console.error('Błąd podczas aktualizacji powiązań:', error);
+              setIsLinksUpdating(false);
+            }
           }
         });
+        unsubscribers.push(unsubLinks);
 
-        // 3. Pobierz dane początkowe
+        if (cancelled) return;
+
+        // Pobierz dane początkowe
         await loadData();
         
       } catch (error) {
-        console.error('Błąd podczas konfiguracji real-time listenerów:', error);
+        if (!cancelled) {
+          console.error('Błąd podczas konfiguracji real-time listenerów:', error);
+        }
       }
     };
 
     setupRealtimeListeners();
 
-    // Cleanup function
     return () => {
-      if (unsubscribeLinks) {
-        unsubscribeLinks();
-        console.log('🔌 Odłączono listener powiązań rezerwacji');
-      }
-      // 🔒 POPRAWKA: Wyczyść timer aby uniknąć memory leak
+      cancelled = true;
+      unsubscribers.forEach(unsub => unsub());
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current);
         updateTimerRef.current = null;
       }
-      // Wyczyść debounced funkcję
       handleLinkIngredient.cancel();
-      
-      // Zresetuj stan inicjalizacji listenera przy odmontowaniu
       linksListenerInitialized.current = false;
     };
   }, [task?.id, showInfo]);

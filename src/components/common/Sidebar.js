@@ -616,15 +616,17 @@ const Sidebar = ({ onToggle }) => {
                     <ListItemText 
                       primary={item.text} 
                       primaryTypographyProps={{ 
-                        fontSize: '0.875rem',
-                        fontWeight: isMenuActive(item.path) ? 'bold' : 'normal',
-                        color: isMenuActive(item.path) 
-                          ? '#ffffff' // zawsze biały dla selected w obu motywach - gradient tła zapewnia kontrast
-                          : 'inherit',
-                        wordBreak: 'break-word',
-                        overflowWrap: 'break-word',
-                        lineHeight: 1.3,
-                        whiteSpace: 'normal'
+                        sx: {
+                          fontSize: '0.875rem',
+                          fontWeight: isMenuActive(item.path) ? 'bold' : 'normal',
+                          color: isMenuActive(item.path) 
+                            ? '#ffffff' // zawsze biały dla selected w obu motywach - gradient tła zapewnia kontrast
+                            : 'inherit',
+                          wordBreak: 'break-word',
+                          overflowWrap: 'break-word',
+                          lineHeight: 1.3,
+                          whiteSpace: 'normal'
+                        }
                       }}
                       sx={{
                         pr: 1,
@@ -722,17 +724,19 @@ const Sidebar = ({ onToggle }) => {
                         <ListItemText 
                           primary={subItem.text} 
                           primaryTypographyProps={{ 
-                            fontSize: '0.875rem',
-                            fontWeight: subItem.path && location.pathname === subItem.path ? 'bold' : 'normal',
-                            color: subItem.path && location.pathname === subItem.path
-                              ? (mode === 'dark' ? '#ffffff' : '#1e293b') // biały dla dark mode, ciemny dla light mode
-                              : 'inherit',
-                            // Dodane style dla lepszego łamania tekstu
-                            wordBreak: 'break-word',
-                            overflowWrap: 'break-word',
-                            hyphens: 'auto',
-                            lineHeight: 1.3,
-                            whiteSpace: 'normal'
+                            sx: {
+                              fontSize: '0.875rem',
+                              fontWeight: subItem.path && location.pathname === subItem.path ? 'bold' : 'normal',
+                              color: subItem.path && location.pathname === subItem.path
+                                ? (mode === 'dark' ? '#ffffff' : '#1e293b') // biały dla dark mode, ciemny dla light mode
+                                : 'inherit',
+                              // Dodane style dla lepszego łamania tekstu
+                              wordBreak: 'break-word',
+                              overflowWrap: 'break-word',
+                              hyphens: 'auto',
+                              lineHeight: 1.3,
+                              whiteSpace: 'normal'
+                            }
                           }}
                           sx={{
                             pr: 4, // Padding prawy, żeby tekst nie stykał się z krawędzią
@@ -771,17 +775,19 @@ const Sidebar = ({ onToggle }) => {
                 <ListItemText 
                   primary={item.text} 
                   primaryTypographyProps={{ 
-                    fontSize: '0.875rem',
-                    fontWeight: item.path === '/' 
-                      ? location.pathname === '/' ? 'bold' : 'normal'
-                      : isActive(item.path) ? 'bold' : 'normal',
-                    color: (item.path === '/' ? location.pathname === '/' : isActive(item.path))
-                      ? '#ffffff' // biały tekst dla selected items - działa dla obu motywów dzięki gradientowi tła
-                      : 'inherit',
-                    wordBreak: 'break-word',
-                    overflowWrap: 'break-word',
-                    lineHeight: 1.3,
-                    whiteSpace: 'normal'
+                    sx: {
+                      fontSize: '0.875rem',
+                      fontWeight: item.path === '/' 
+                        ? location.pathname === '/' ? 'bold' : 'normal'
+                        : isActive(item.path) ? 'bold' : 'normal',
+                      color: (item.path === '/' ? location.pathname === '/' : isActive(item.path))
+                        ? '#ffffff' // biały tekst dla selected items - działa dla obu motywów dzięki gradientowi tła
+                        : 'inherit',
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word',
+                      lineHeight: 1.3,
+                      whiteSpace: 'normal'
+                    }
                   }}
                   sx={{
                     pr: 2,
@@ -834,13 +840,15 @@ const Sidebar = ({ onToggle }) => {
             <ListItemText 
               primary={t('faq')} 
               primaryTypographyProps={{ 
-                fontSize: '0.875rem',
-                fontWeight: 'medium',
-                color: 'info.main',
-                wordBreak: 'break-word',
-                overflowWrap: 'break-word',
-                lineHeight: 1.3,
-                whiteSpace: 'normal'
+                sx: {
+                  fontSize: '0.875rem',
+                  fontWeight: 'medium',
+                  color: 'info.main',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
+                  lineHeight: 1.3,
+                  whiteSpace: 'normal'
+                }
               }}
               sx={{
                 pr: 2,
@@ -876,13 +884,15 @@ const Sidebar = ({ onToggle }) => {
             <ListItemText 
               primary={t('reportBug')} 
               primaryTypographyProps={{ 
-                fontSize: '0.875rem',
-                fontWeight: 'medium',
-                color: 'error.main',
-                wordBreak: 'break-word',
-                overflowWrap: 'break-word',
-                lineHeight: 1.3,
-                whiteSpace: 'normal'
+                sx: {
+                  fontSize: '0.875rem',
+                  fontWeight: 'medium',
+                  color: 'error.main',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
+                  lineHeight: 1.3,
+                  whiteSpace: 'normal'
+                }
               }}
               sx={{
                 pr: 2,

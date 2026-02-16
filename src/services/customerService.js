@@ -13,29 +13,38 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from './firebase/config';
+import { ServiceCacheManager } from './cache/serviceCacheManager';
 
 const CUSTOMERS_COLLECTION = 'customers';
+export const CUSTOMERS_CACHE_KEY = 'customers:all';
+const CUSTOMERS_CACHE_TTL = 10 * 60 * 1000; // 10 minut
 
 /**
- * Pobiera wszystkich klientów
+ * Wewnętrzna funkcja pobierająca klientów z Firestore (bez cache)
+ */
+const fetchCustomersFromFirestore = async () => {
+  const customersQuery = query(
+    collection(db, CUSTOMERS_COLLECTION), 
+    orderBy('name', 'asc')
+  );
+  const querySnapshot = await getDocs(customersQuery);
+  
+  return querySnapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+};
+
+/**
+ * Pobiera wszystkich klientów (z cache — deduplikacja zapytań)
  */
 export const getAllCustomers = async () => {
   try {
-    const customersQuery = query(
-      collection(db, CUSTOMERS_COLLECTION), 
-      orderBy('name', 'asc')
+    return await ServiceCacheManager.getOrFetch(
+      CUSTOMERS_CACHE_KEY,
+      fetchCustomersFromFirestore,
+      CUSTOMERS_CACHE_TTL
     );
-    const querySnapshot = await getDocs(customersQuery);
-    
-    const customers = [];
-    querySnapshot.forEach((doc) => {
-      customers.push({
-        id: doc.id,
-        ...doc.data()
-      });
-    });
-    
-    return customers;
   } catch (error) {
     console.error('Błąd podczas pobierania klientów:', error);
     throw error;
@@ -79,6 +88,7 @@ export const createCustomer = async (customerData, userId) => {
     };
     
     const docRef = await addDoc(collection(db, CUSTOMERS_COLLECTION), newCustomer);
+    ServiceCacheManager.invalidate(CUSTOMERS_CACHE_KEY);
     return docRef.id;
   } catch (error) {
     console.error('Błąd podczas tworzenia klienta:', error);
@@ -101,6 +111,7 @@ export const updateCustomer = async (customerId, customerData, userId) => {
     };
     
     await updateDoc(doc(db, CUSTOMERS_COLLECTION, customerId), updatedCustomer);
+    ServiceCacheManager.invalidate(CUSTOMERS_CACHE_KEY);
     return true;
   } catch (error) {
     console.error('Błąd podczas aktualizacji klienta:', error);
@@ -114,6 +125,7 @@ export const updateCustomer = async (customerId, customerData, userId) => {
 export const deleteCustomer = async (customerId) => {
   try {
     await deleteDoc(doc(db, CUSTOMERS_COLLECTION, customerId));
+    ServiceCacheManager.invalidate(CUSTOMERS_CACHE_KEY);
     return true;
   } catch (error) {
     console.error('Błąd podczas usuwania klienta:', error);

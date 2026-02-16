@@ -62,7 +62,8 @@ import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagina
 import { getInventoryItemsByRecipeIds, getAllInventoryItems } from '../../services/inventory';
 import { exportRecipesToCSV, exportRecipesWithSuppliers } from '../../services/recipeExportService';
 import { getNutritionalComponents } from '../../services/nutritionalComponentsService';
-import { useCustomersCache } from '../../hooks/useCustomersCache';
+import { useServiceData } from '../../hooks/useServiceData';
+import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/customerService';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../hooks/useAuth';
@@ -98,8 +99,12 @@ const RecipeList = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   
-  // Użyj nowego hooka do buforowania danych klientów
-  const { customers, loading: loadingCustomers, error: customersError, refreshCustomers } = useCustomersCache();
+  // Cache klientów z deduplikacją zapytań
+  const { data: customers, loading: loadingCustomers, error: customersError, refresh: refreshCustomers } = useServiceData(
+    CUSTOMERS_CACHE_KEY,
+    getAllCustomers,
+    { ttl: 10 * 60 * 1000 }
+  );
   
   // Użyj kontekstu stanu listy receptur
   const { state: listState, actions: listActions } = useRecipeListState();

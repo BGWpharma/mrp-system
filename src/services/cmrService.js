@@ -335,14 +335,18 @@ export const createCmrDocument = async (cmrData, userId) => {
     // Ilości są aktualizowane TYLKO przy zmianie statusu na "W transporcie"
     console.log('📝 CMR utworzony - ilości wysłane będą zaktualizowane po zmianie statusu na "W transporcie"');
 
-    return {
+    const result = {
       id: cmrRef.id,
       ...cleanedCmrData,
-      // Konwertuj daty z powrotem na obiekty Date dla wyświetlenia w formularzu
       issueDate: cleanedCmrData.issueDate && cleanedCmrData.issueDate.toDate ? cleanedCmrData.issueDate.toDate() : cleanedCmrData.issueDate,
       deliveryDate: cleanedCmrData.deliveryDate && cleanedCmrData.deliveryDate.toDate ? cleanedCmrData.deliveryDate.toDate() : cleanedCmrData.deliveryDate,
       loadingDate: cleanedCmrData.loadingDate && cleanedCmrData.loadingDate.toDate ? cleanedCmrData.loadingDate.toDate() : cleanedCmrData.loadingDate
     };
+
+    // Dodaj nowy dokument do cache
+    addCmrDocumentToCache(result);
+
+    return result;
   } catch (error) {
     console.error('Błąd podczas tworzenia dokumentu CMR:', error);
     throw error;
@@ -532,13 +536,18 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
 
     console.log('📝 CMR zaktualizowany pomyślnie');
 
-    return {
+    const result = {
       id: cmrId,
       ...cleanedUpdateData,
       issueDate: convertedIssueDate,
       deliveryDate: convertedDeliveryDate,
       loadingDate: convertedLoadingDate
     };
+
+    // Aktualizuj dokument w cache
+    updateCmrDocumentInCache(cmrId, result);
+
+    return result;
   } catch (error) {
     console.error('Błąd podczas aktualizacji dokumentu CMR:', error);
     throw error;

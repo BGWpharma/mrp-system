@@ -61,7 +61,7 @@ import {
   updateInvoicesExchangeRates
 } from '../../services/invoiceService';
 import { preciseCompare, preciseSubtract } from '../../utils/mathUtils';
-import { getAllCustomers } from '../../services/customerService';
+import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/customerService';
 import { getAllOrders } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -74,6 +74,7 @@ import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import plLocale from 'date-fns/locale/pl';
 import { format } from 'date-fns';
+import { useServiceData } from '../../hooks/useServiceData';
 import { useInvoiceListState } from '../../contexts/InvoiceListStateContext';
 import InvoiceExpandedDetails from './InvoiceExpandedDetails';
 
@@ -86,8 +87,7 @@ const InvoicesList = () => {
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState(null);
-  const [customers, setCustomers] = useState([]);
-  const [customersLoading, setCustomersLoading] = useState(false);
+  const { data: customers, loading: customersLoading } = useServiceData(CUSTOMERS_CACHE_KEY, getAllCustomers, { ttl: 10 * 60 * 1000 });
   const [proformaAmounts, setProformaAmounts] = useState({});
 
   const [orders, setOrders] = useState([]);
@@ -119,7 +119,6 @@ const InvoicesList = () => {
 
   useEffect(() => {
     fetchInvoices();
-    fetchCustomers();
     fetchOrders();
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -404,18 +403,6 @@ const InvoicesList = () => {
     );
     
     setProformaAmounts(amounts);
-  };
-
-  const fetchCustomers = async () => {
-    setCustomersLoading(true);
-    try {
-      const fetchedCustomers = await getAllCustomers();
-      setCustomers(fetchedCustomers);
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-    } finally {
-      setCustomersLoading(false);
-    }
   };
 
   const fetchOrders = async () => {
