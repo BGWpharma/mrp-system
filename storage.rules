@@ -17,6 +17,15 @@ service firebase.storage {
              'customerId' in request.auth.token;
     }
 
+   // === REGUŁY DLA SYSTEMU KSIĘGOWEGO (BGW Accounting) ===
+    
+    // Faktury zakupowe (Purchase Invoices) - z OCR Cloud Functions i ręczny upload
+    match /purchase-invoices/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+      allow delete: if isAdmin();
+		}
+
     // === WSZYSTKIE OBECNE REGUŁY (bez zmian) ===
     
     // Reguła dla katalogu z raportami błędów - pozwala autoryzowanym użytkownikom na przesyłanie i pobieranie
@@ -144,6 +153,14 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
     
+    // Reguła dla faktur kosztowych przesyłanych przez email (App Engine Mail)
+    // Struktura: /email-invoices/{timestamp}_{fileName}
+    match /email-invoices/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+      allow delete: if isAdmin();
+    }
+
     // Reguła dla certyfikatów produktów dostawców - pozwala autoryzowanym użytkownikom na przesyłanie i pobieranie
     // Struktura: /SupplierCertificates/{supplierId}/{productId}/{fileName}
     match /SupplierCertificates/{supplierId}/{productId}/{fileName} {
@@ -153,7 +170,7 @@ service firebase.storage {
                     && request.resource.contentType == 'application/pdf';
       allow delete: if request.auth != null;
     }
-
+    
     // Domyślna reguła - blokuje dostęp bez szczegółowych uprawnień
     match /{allPaths=**} {
       allow read, write: if false;

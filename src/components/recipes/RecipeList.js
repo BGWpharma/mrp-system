@@ -100,7 +100,7 @@ const RecipeList = () => {
   const { currentUser } = useAuth();
   
   // Cache klientów z deduplikacją zapytań
-  const { data: customers, loading: loadingCustomers, error: customersError, refresh: refreshCustomers } = useServiceData(
+  const { data: customers, loading: loadingCustomers, refresh: refreshCustomers } = useServiceData(
     CUSTOMERS_CACHE_KEY,
     getAllCustomers,
     { ttl: 10 * 60 * 1000 }

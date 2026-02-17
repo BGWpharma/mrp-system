@@ -70,7 +70,7 @@ import { getRecipeById } from '../../services/recipeService';
 import { exportToCSV, formatDateForExport, formatCurrencyForExport } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useTranslation } from '../../hooks/useTranslation';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { useOrderListState } from '../../contexts/OrderListStateContext';
 
@@ -191,38 +191,33 @@ const OrdersList = () => {
       try {
         console.log('🔥 [FIREBASE_LISTENER] Uruchamiam Firebase listener dla zamówień');
         
-        // Real-time listener dla wszystkich zamówień
-        const ordersRef = collection(db, 'orders');
+        // Lekki change-detector — nasłuchuj tylko ostatnio zmodyfikowanego zamówienia
+        // zamiast całej kolekcji (redukcja reads ~100x)
+        let isInitialSnapshot = true;
+        const changeDetectorQuery = query(
+          collection(db, 'orders'),
+          orderBy('updatedAt', 'desc'),
+          limit(1)
+        );
         
-        unsubscribe = onSnapshot(ordersRef, (snapshot) => {
-          const changesCount = snapshot.docChanges().length;
-          console.log(`📡 [FIREBASE_LISTENER] Real-time aktualizacja zamówień: ${changesCount} zmian`);
+        unsubscribe = onSnapshot(changeDetectorQuery, (snapshot) => {
+          // Pomiń initial snapshot
+          if (isInitialSnapshot) {
+            isInitialSnapshot = false;
+            return;
+          }
           
-          if (changesCount > 0) {
-            let hasRelevantChanges = false;
+          if (snapshot.docChanges().length > 0 && !snapshot.metadata.hasPendingWrites) {
+            console.log('🔄 [FIREBASE_LISTENER] Wykryto zmianę — planowanie odświeżenia listy');
             
-            snapshot.docChanges().forEach((change) => {
-              const order = { id: change.doc.id, ...change.doc.data() };
-              
-              if (change.type === 'modified') {
-                console.log(`🔄 [FIREBASE_LISTENER] Zmodyfikowano zamówienie: ${order.number || order.id}`);
-                hasRelevantChanges = true;
-              }
-            });
-            
-            if (hasRelevantChanges) {
-              console.log('🔄 [FIREBASE_LISTENER] Planowanie odświeżenia listy zamówień...');
-              
-              // Debounce aby uniknąć zbyt częstych aktualizacji
-              if (updateTimeout) {
-                clearTimeout(updateTimeout);
-              }
-              
-              updateTimeout = setTimeout(() => {
-                console.log('📋 [FIREBASE_LISTENER] Odświeżanie listy zamówień z filtrami');
-                fetchOrders();
-              }, 1000); // 1s debounce dla aktualizacji między użytkownikami
+            if (updateTimeout) {
+              clearTimeout(updateTimeout);
             }
+            
+            updateTimeout = setTimeout(() => {
+              console.log('📋 [FIREBASE_LISTENER] Odświeżanie listy zamówień z filtrami');
+              fetchOrders();
+            }, 1000);
           }
         }, (error) => {
           console.error('❌ [FIREBASE_LISTENER] Błąd Firebase listener:', error);

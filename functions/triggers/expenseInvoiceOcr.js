@@ -101,15 +101,20 @@ const getSignedUrl = async (bucket, filePath) => {
 const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) => {
   // Get exchange rate if currency is not PLN
   let exchangeRateData = null;
-  const totalGross = ocrData.summary?.grossTotal || 0;
+  const totalGross = ocrData.summary?.totalGross || 0;
 
   if (ocrData.currency && ocrData.currency !== "PLN") {
     try {
-      logger.info(`[Expense OCR] Fetching exchange rate for ${ocrData.currency}`);
-      const invoiceDate = ocrData.invoiceDate ? new Date(ocrData.invoiceDate) : new Date();
-      // Polish tax law (Art. 31a VAT): use NBP rate from day BEFORE invoice date
-      const rateDateForNBP = new Date(invoiceDate);
+      // Art. 31a VAT: use NBP rate from day BEFORE tax obligation date
+      // Tax obligation = serviceDate (if set), else invoiceDate
+      const taxObligationDate = ocrData.serviceDate ?
+        new Date(ocrData.serviceDate) :
+        (ocrData.invoiceDate ? new Date(ocrData.invoiceDate) : new Date());
+      const rateDateForNBP = new Date(taxObligationDate);
       rateDateForNBP.setDate(rateDateForNBP.getDate() - 1);
+      logger.info(`[Expense OCR] Fetching exchange rate for ${ocrData.currency}, ` +
+        `taxObligationDate: ${taxObligationDate.toISOString().slice(0, 10)}, ` +
+        `rateDate: ${rateDateForNBP.toISOString().slice(0, 10)}`);
       exchangeRateData = await convertToPLN(totalGross, ocrData.currency, rateDateForNBP);
       logger.info(`[Expense OCR] Rate: ${exchangeRateData.rate}, Total in PLN: ${exchangeRateData.amountInPLN.toFixed(2)}`);
     } catch (error) {
@@ -176,6 +181,10 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
     "invoiceDate": ocrData.invoiceDate ?
       admin.firestore.Timestamp.fromDate(
           new Date(ocrData.invoiceDate)) :
+      null,
+    "serviceDate": ocrData.serviceDate ?
+      admin.firestore.Timestamp.fromDate(
+          new Date(ocrData.serviceDate)) :
       null,
     "dueDate": ocrData.dueDate ?
       admin.firestore.Timestamp.fromDate(
@@ -698,15 +707,20 @@ const processExpenseInvoiceOcr = onCall(
 
         // Get exchange rate if currency is not PLN
         let exchangeRateData = null;
-        const totalGross = ocrData.summary?.grossTotal || 0;
+        const totalGross = ocrData.summary?.totalGross || 0;
 
         if (ocrData.currency && ocrData.currency !== "PLN") {
           try {
-            logger.info(`[Expense OCR Retry] Fetching exchange rate for ${ocrData.currency}`);
-            const invoiceDate = ocrData.invoiceDate ? new Date(ocrData.invoiceDate) : new Date();
-            // Polish tax law (Art. 31a VAT): use NBP rate from day BEFORE invoice date
-            const rateDateForNBP = new Date(invoiceDate);
+            // Art. 31a VAT: use NBP rate from day BEFORE tax obligation date
+            // Tax obligation = serviceDate (if set), else invoiceDate
+            const taxObligationDate = ocrData.serviceDate ?
+              new Date(ocrData.serviceDate) :
+              (ocrData.invoiceDate ? new Date(ocrData.invoiceDate) : new Date());
+            const rateDateForNBP = new Date(taxObligationDate);
             rateDateForNBP.setDate(rateDateForNBP.getDate() - 1);
+            logger.info(`[Expense OCR Retry] Fetching exchange rate for ${ocrData.currency}, ` +
+              `taxObligationDate: ${taxObligationDate.toISOString().slice(0, 10)}, ` +
+              `rateDate: ${rateDateForNBP.toISOString().slice(0, 10)}`);
             exchangeRateData = await convertToPLN(totalGross, ocrData.currency, rateDateForNBP);
             logger.info(`[Expense OCR Retry] Rate: ${exchangeRateData.rate}, Total in PLN: ${exchangeRateData.amountInPLN.toFixed(2)}`);
           } catch (rateError) {
@@ -773,6 +787,10 @@ const processExpenseInvoiceOcr = onCall(
           "invoiceDate": ocrData.invoiceDate ?
             admin.firestore.Timestamp.fromDate(
                 new Date(ocrData.invoiceDate)) :
+            null,
+          "serviceDate": ocrData.serviceDate ?
+            admin.firestore.Timestamp.fromDate(
+                new Date(ocrData.serviceDate)) :
             null,
           "dueDate": ocrData.dueDate ?
             admin.firestore.Timestamp.fromDate(

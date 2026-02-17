@@ -1,5 +1,9 @@
 {
   "title": "Component Orders",
+  "tabs": {
+    "orders": "Orders",
+    "forecasts": "Procurement Forecasts"
+  },
   "detailsTitle": "Component Order Details",
   "newOrder": "New order",
   "editOrder": "Edit order",

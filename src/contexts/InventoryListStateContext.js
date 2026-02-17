@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useMemo } from 'react';
 
 // Kontekst dla zarządzania stanem listy pozycji magazynowych
 const InventoryListStateContext = createContext();
@@ -220,8 +220,8 @@ export const InventoryListStateProvider = ({ children }) => {
     }
   }, []);
 
-  // Funkcje pomocnicze do zarządzania stanem
-  const actions = {
+  // Memoizowane akcje — dispatch jest stabilny, więc actions tworzone RAZ
+  const actions = useMemo(() => ({
     setSearchTerm: (term) => dispatch({ type: actionTypes.SET_SEARCH_TERM, payload: term }),
     setSearchCategory: (category) => dispatch({ type: actionTypes.SET_SEARCH_CATEGORY, payload: category }),
     setSelectedWarehouse: (warehouseId) => dispatch({ type: actionTypes.SET_SELECTED_WAREHOUSE, payload: warehouseId }),
@@ -237,10 +237,13 @@ export const InventoryListStateProvider = ({ children }) => {
     setReservationFilter: (filter) => dispatch({ type: actionTypes.SET_RESERVATION_FILTER, payload: filter }),
     setMoFilter: (filter) => dispatch({ type: actionTypes.SET_MO_FILTER, payload: filter }),
     resetState: () => dispatch({ type: actionTypes.RESET_STATE })
-  };
+  }), [dispatch]);
+
+  // Memoizowana wartość kontekstu — zmienia się tylko gdy state się zmieni
+  const contextValue = useMemo(() => ({ state, actions }), [state, actions]);
 
   return (
-    <InventoryListStateContext.Provider value={{ state, actions }}>
+    <InventoryListStateContext.Provider value={contextValue}>
       {children}
     </InventoryListStateContext.Provider>
   );

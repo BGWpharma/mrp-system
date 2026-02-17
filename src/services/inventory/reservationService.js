@@ -1844,30 +1844,43 @@ export const cleanupDeletedTaskReservations = async () => {
     const deletedReservations = [];
     const errors = [];
     
-    // Dla każdej rezerwacji z usuniętym zadaniem
+    // Batch fetch rezerwacji zamiast N+1 getDoc
+    const reservationIds = result.deletedTasks.map(r => r.id);
+    const reservationDataMap = {};
+    if (reservationIds.length > 0) {
+      const resChunks = [];
+      for (let i = 0; i < reservationIds.length; i += 30) {
+        resChunks.push(reservationIds.slice(i, i + 30));
+      }
+      const resResults = await Promise.all(
+        resChunks.map(chunk => {
+          const q = query(
+            collection(db, COLLECTIONS.INVENTORY_TRANSACTIONS),
+            where('__name__', 'in', chunk)
+          );
+          return getDocs(q);
+        })
+      );
+      resResults.forEach(snap => {
+        snap.docs.forEach(d => { reservationDataMap[d.id] = d.data(); });
+      });
+    }
+    
+    // Sekwencyjna aktualizacja magazynu i usunięcie rezerwacji
     for (const reservation of result.deletedTasks) {
       try {
-        // Pobierz dane rezerwacji
-        const reservationRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_TRANSACTIONS, reservation.id);
-        const reservationDoc = await getDoc(reservationRef);
+        const reservationData = reservationDataMap[reservation.id];
         
-        if (reservationDoc.exists()) {
-          const reservationData = reservationDoc.data();
-          
-          // Pobierz informacje o produkcie
+        if (reservationData) {
           const itemId = reservationData.itemId;
           const quantity = reservationData.quantity;
           
           if (itemId) {
-            // Zaktualizuj stan magazynowy - zmniejsz ilość zarezerwowaną
             const item = await getInventoryItemById(itemId);
             
             const bookedQuantity = item.bookedQuantity || 0;
-            
-            // Oblicz nową wartość bookedQuantity (nie może być ujemna)
             const newBookedQuantity = formatQuantityPrecision(Math.max(0, bookedQuantity - quantity), 3);
             
-            // Aktualizuj pozycję magazynową
             const itemRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY, itemId);
             await updateDoc(itemRef, {
               bookedQuantity: newBookedQuantity,
@@ -1877,7 +1890,7 @@ export const cleanupDeletedTaskReservations = async () => {
             console.log(`Zaktualizowano bookedQuantity dla ${itemId}: ${bookedQuantity} -> ${newBookedQuantity}`);
           }
           
-          // Usuń rezerwację
+          const reservationRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_TRANSACTIONS, reservation.id);
           await deleteDoc(reservationRef);
           
           console.log(`Usunięto rezerwację ${reservation.id} dla usuniętego zadania ${reservationData.referenceId}`);

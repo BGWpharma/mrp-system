@@ -2742,34 +2742,37 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
     }
   };
 
-  // Pobiera dane do raportów produkcyjnych
+  // Pobiera dane do raportów produkcyjnych — z filtrami datowymi na Firestore
   export const getProductionReports = async (startDate, endDate) => {
     try {
       const tasksRef = collection(db, 'productionTasks');
-      const snapshot = await getDocs(tasksRef);
       
-      const tasks = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Konwersja dat do Timestamp jeśli to obiekty Date
+      const start = startDate instanceof Date ? Timestamp.fromDate(startDate) : startDate;
+      const end = endDate instanceof Date ? Timestamp.fromDate(endDate) : endDate;
       
-      // Filtruj zadania według daty
-      return tasks.filter(task => {
-        // Sprawdź daty rozpoczęcia lub zakończenia
-        let taskDate = null;
-        
-        if (task.completionDate) {
-          taskDate = new Date(task.completionDate);
-        } else if (task.startDate) {
-          taskDate = new Date(task.startDate);
-        } else if (task.scheduledDate) {
-          taskDate = new Date(task.scheduledDate);
+      // 3 zapytania na 3 pola datowe — merge wyników z deduplikacją
+      const queries = [
+        query(tasksRef, where('completionDate', '>=', start), where('completionDate', '<=', end)),
+        query(tasksRef, where('startDate', '>=', start), where('startDate', '<=', end)),
+        query(tasksRef, where('scheduledDate', '>=', start), where('scheduledDate', '<=', end))
+      ];
+      
+      const snapshots = await Promise.allSettled(queries.map(q => getDocs(q)));
+      
+      // Deduplikacja po ID
+      const tasksMap = new Map();
+      snapshots.forEach(result => {
+        if (result.status === 'fulfilled') {
+          result.value.docs.forEach(doc => {
+            if (!tasksMap.has(doc.id)) {
+              tasksMap.set(doc.id, { id: doc.id, ...doc.data() });
+            }
+          });
         }
-        
-        if (!taskDate) return false;
-        
-        return taskDate >= startDate && taskDate <= endDate;
       });
+      
+      return Array.from(tasksMap.values());
     } catch (error) {
       console.error('Błąd podczas pobierania danych raportów:', error);
       throw error;

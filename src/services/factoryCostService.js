@@ -1100,14 +1100,34 @@ export const updateFactoryCostInTasks = async (factoryCostId) => {
     // Oblicz koszty dla każdego zadania
     const taskCostMap = await calculateFactoryCostForTasks(factoryCost);
     
-    // Najpierw wyczyść koszty zakładu dla wykluczonych zadań
+    // Batch fetch WSZYSTKICH tasków (excluded + costMap) zamiast N+1 getDoc
     const excludedTaskIds = factoryCost.excludedTaskIds || [];
+    const costTaskIds = Object.keys(taskCostMap);
+    const allTaskIds = [...new Set([...excludedTaskIds, ...costTaskIds])];
+    
+    const taskDataMap = {};
+    if (allTaskIds.length > 0) {
+      const taskChunks = [];
+      for (let i = 0; i < allTaskIds.length; i += 30) {
+        taskChunks.push(allTaskIds.slice(i, i + 30));
+      }
+      const taskResults = await Promise.all(
+        taskChunks.map(chunk => {
+          const q = query(collection(db, 'productionTasks'), where('__name__', 'in', chunk));
+          return getDocs(q);
+        })
+      );
+      taskResults.forEach(snap => {
+        snap.docs.forEach(d => { taskDataMap[d.id] = d.data(); });
+      });
+    }
+    
+    // Wyczyść koszty zakładu dla wykluczonych zadań
     for (const taskId of excludedTaskIds) {
       try {
-        const taskRef = doc(db, 'productionTasks', taskId);
-        const taskDoc = await getDoc(taskRef);
-        if (taskDoc.exists()) {
-          const taskData = taskDoc.data();
+        const taskData = taskDataMap[taskId];
+        if (taskData) {
+          const taskRef = doc(db, 'productionTasks', taskId);
           const totalFullProductionCost = parseFloat(taskData.totalFullProductionCost) || 0;
           const unitFullProductionCost = parseFloat(taskData.unitFullProductionCost) || 0;
           
@@ -1130,7 +1150,6 @@ export const updateFactoryCostInTasks = async (factoryCostId) => {
     if (Object.keys(taskCostMap).length === 0) {
       console.log('[FACTORY COST] Brak zadań do aktualizacji (wszystkie wykluczone lub brak sesji)');
       
-      // Mimo braku zadań do aktualizacji, propaguj do zamówień aby wyczyścić koszty
       if (excludedTaskIds.length > 0) {
         console.log(`[FACTORY COST] Propagowanie wyczyszczonych kosztów do zamówień dla ${excludedTaskIds.length} wykluczonych zadań...`);
         await propagateFactoryCostToOrders(excludedTaskIds, taskCostMap, excludedTaskIds);
@@ -1139,20 +1158,16 @@ export const updateFactoryCostInTasks = async (factoryCostId) => {
       return { updated: 0, excludedCleared: excludedTaskIds.length };
     }
 
-    // Aktualizuj zadania
+    // Aktualizuj zadania — korzysta z taskDataMap
     let updatedCount = 0;
     for (const [taskId, costData] of Object.entries(taskCostMap)) {
       try {
         const taskRef = doc(db, 'productionTasks', taskId);
-        
-        // Pobierz aktualne dane zadania aby obliczyć totalCostWithFactory
-        const taskDoc = await getDoc(taskRef);
-        const taskData = taskDoc.exists() ? taskDoc.data() : {};
+        const taskData = taskDataMap[taskId] || {};
         
         const totalFullProductionCost = parseFloat(taskData.totalFullProductionCost) || 0;
         const unitFullProductionCost = parseFloat(taskData.unitFullProductionCost) || 0;
         
-        // Oblicz pełne koszty z zakładem
         const totalCostWithFactory = totalFullProductionCost + costData.factoryCostTotal;
         const unitCostWithFactory = unitFullProductionCost + costData.factoryCostPerUnit;
         
@@ -1162,12 +1177,10 @@ export const updateFactoryCostInTasks = async (factoryCostId) => {
           factoryCostMinutes: costData.proportionalMinutes,
           factoryCostId: factoryCostId,
           factoryCostUpdatedAt: serverTimestamp(),
-          // Nowe pola z pełnym kosztem (materiały + zakład)
           totalCostWithFactory: Math.round(totalCostWithFactory * 100) / 100,
           unitCostWithFactory: Math.round(unitCostWithFactory * 10000) / 10000
         });
         
-        // Zaktualizuj taskCostMap o pełne koszty (do propagacji do zamówień)
         taskCostMap[taskId].totalCostWithFactory = totalCostWithFactory;
         taskCostMap[taskId].unitCostWithFactory = unitCostWithFactory;
         taskCostMap[taskId].totalFullProductionCost = totalFullProductionCost;
@@ -1182,12 +1195,11 @@ export const updateFactoryCostInTasks = async (factoryCostId) => {
     console.log(`[FACTORY COST] Zaktualizowano ${updatedCount} zadań produkcyjnych`);
 
     // Propaguj koszty do zamówień (CO)
-    const taskIds = Object.keys(taskCostMap);
-    const allTaskIds = [...taskIds, ...excludedTaskIds];
+    const propagateTaskIds = [...Object.keys(taskCostMap), ...excludedTaskIds];
     
-    if (allTaskIds.length > 0) {
-      console.log(`[FACTORY COST] Propagowanie kosztów do zamówień dla ${allTaskIds.length} zadań...`);
-      await propagateFactoryCostToOrders(allTaskIds, taskCostMap, excludedTaskIds);
+    if (propagateTaskIds.length > 0) {
+      console.log(`[FACTORY COST] Propagowanie kosztów do zamówień dla ${propagateTaskIds.length} zadań...`);
+      await propagateFactoryCostToOrders(propagateTaskIds, taskCostMap, excludedTaskIds);
     }
 
     return { updated: updatedCount, taskCostMap };

@@ -108,6 +108,23 @@ const InvoiceDetails = () => {
     }
   };
 
+  const refreshInvoice = async () => {
+    try {
+      const fetchedInvoice = await getInvoiceById(invoiceId);
+      setInvoice(fetchedInvoice);
+      
+      if (fetchedInvoice.orderId) {
+        await fetchRelatedInvoices(fetchedInvoice.orderId);
+      }
+      
+      if (fetchedInvoice.isProforma) {
+        await fetchInvoicesUsingProforma(invoiceId);
+      }
+    } catch (error) {
+      console.error('Błąd podczas odświeżania faktury:', error);
+    }
+  };
+
   const fetchRelatedInvoices = async (orderId) => {
     if (!orderId) {
       setRelatedInvoices([]);
@@ -1369,7 +1386,7 @@ const InvoiceDetails = () => {
       <Paper sx={{ p: 3, mb: 3 }}>
         <PaymentsSection 
           invoice={invoice} 
-          onPaymentChange={fetchInvoice}
+          onPaymentChange={refreshInvoice}
         />
       </Paper>
       

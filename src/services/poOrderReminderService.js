@@ -82,39 +82,77 @@ export const getUnorderedMaterialAlerts = async () => {
       reservationsByPO.get(key).push(reservation);
     });
 
-    // 3. Przetwórz każde PO
+    // 3. Dwuetapowy batch fetch: PO → filtr draft → taski
     const processedPOs = new Set();
+    
+    // Etap 1: batch fetch PO
+    const allPoIds = [...reservationsByPO.keys()];
+    const poDataMap = {};
+    if (allPoIds.length > 0) {
+      const poChunks = [];
+      for (let i = 0; i < allPoIds.length; i += 30) {
+        poChunks.push(allPoIds.slice(i, i + 30));
+      }
+      const poResults = await Promise.all(
+        poChunks.map(chunk => {
+          const q = query(collection(db, PURCHASE_ORDERS_COLLECTION), where('__name__', 'in', chunk));
+          return getDocs(q);
+        })
+      );
+      poResults.forEach(snap => {
+        snap.docs.forEach(d => { poDataMap[d.id] = d.data(); });
+      });
+    }
+    
+    // Etap 2: zbierz taskId tylko z draft PO
+    const taskIdsToFetch = new Set();
+    for (const [poId, reservations] of reservationsByPO) {
+      const po = poDataMap[poId];
+      if (!po || po.status !== 'draft') continue;
+      reservations.forEach(r => { if (r.taskId) taskIdsToFetch.add(r.taskId); });
+    }
+    
+    // Batch fetch tasków
+    const taskDataMap = {};
+    const taskIdArray = [...taskIdsToFetch];
+    if (taskIdArray.length > 0) {
+      const taskChunks = [];
+      for (let i = 0; i < taskIdArray.length; i += 30) {
+        taskChunks.push(taskIdArray.slice(i, i + 30));
+      }
+      const taskResults = await Promise.all(
+        taskChunks.map(chunk => {
+          const q = query(collection(db, PRODUCTION_TASKS_COLLECTION), where('__name__', 'in', chunk));
+          return getDocs(q);
+        })
+      );
+      taskResults.forEach(snap => {
+        snap.docs.forEach(d => { taskDataMap[d.id] = d.data(); });
+      });
+    }
 
     for (const [poId, reservations] of reservationsByPO) {
       try {
-        // Pobierz PO
-        const poDoc = await getDoc(doc(db, PURCHASE_ORDERS_COLLECTION, poId));
+        const po = poDataMap[poId];
         
-        if (!poDoc.exists()) {
+        if (!po) {
           console.warn(`PO ${poId} nie istnieje`);
           continue;
         }
 
-        const po = poDoc.data();
-
-        // Sprawdź czy PO jest w statusie 'draft'
         if (po.status !== 'draft') {
           continue;
         }
 
         processedPOs.add(poId);
 
-        // Dla każdej rezerwacji sprawdź termin produkcji
         for (const reservation of reservations) {
           try {
-            // Pobierz zadanie produkcyjne
-            const taskDoc = await getDoc(doc(db, PRODUCTION_TASKS_COLLECTION, reservation.taskId));
+            const task = taskDataMap[reservation.taskId];
             
-            if (!taskDoc.exists()) {
+            if (!task) {
               continue;
             }
-
-            const task = taskDoc.data();
 
             // Pobierz scheduledDate
             let scheduledDate = null;

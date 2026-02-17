@@ -133,14 +133,24 @@ export const getUsersDisplayNames = async (userIds) => {
         userNames[userId] = userData.displayName || userData.email || userId;
       });
     } else {
-      // Dla większej liczby użytkowników pobierz wszystkich i przefiltruj
+      // Firestore 'in' wspiera do 30 elementów — dziel na chunki zamiast pobierania całej kolekcji
       const usersRef = collection(db, 'users');
-      const querySnapshot = await getDocs(usersRef);
+      const chunks = [];
+      for (let i = 0; i < uncachedUserIds.length; i += 30) {
+        chunks.push(uncachedUserIds.slice(i, i + 30));
+      }
       
-      querySnapshot.docs.forEach(doc => {
-        const userId = doc.id;
-        if (uncachedUserIds.includes(userId)) {
+      const results = await Promise.all(
+        chunks.map(chunk => {
+          const q = query(usersRef, where('__name__', 'in', chunk));
+          return getDocs(q);
+        })
+      );
+      
+      results.forEach(querySnapshot => {
+        querySnapshot.docs.forEach(doc => {
           const userData = doc.data();
+          const userId = doc.id;
           
           // Zapisz w cache
           userCache.set(userId, {
@@ -150,7 +160,7 @@ export const getUsersDisplayNames = async (userIds) => {
           
           // Dodaj do wyników
           userNames[userId] = userData.displayName || userData.email || userId;
-        }
+        });
       });
     }
 

@@ -54,8 +54,8 @@ export const getSuppliersByIds = async (supplierIds) => {
   if (!supplierIds || supplierIds.length === 0) return [];
   
   try {
-    // Firestore ma limit 10 dla 'in' operator, więc dzielimy na partie
-    const batchSize = 10;
+    // Firestore obsługuje do 30 elementów w operatorze 'in'
+    const batchSize = 30;
     const batches = [];
     
     for (let i = 0; i < supplierIds.length; i += batchSize) {

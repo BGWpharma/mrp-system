@@ -1,5 +1,9 @@
 {
   "title": "Zamówienia Komponentów",
+  "tabs": {
+    "orders": "Zamówienia",
+    "forecasts": "Prognozy zakupowe"
+  },
   "detailsTitle": "Szczegóły Zamówienia Komponentów",
   "newOrder": "Nowe zamówienie",
   "editOrder": "Edytuj zamówienie",

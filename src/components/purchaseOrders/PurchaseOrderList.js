@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Container, Typography, Paper, Table, TableBody, TableCell, TableContainer,
@@ -42,6 +42,140 @@ import PurchaseOrderReportDialog from './PurchaseOrderReportDialog';
 import POOrderReminderDialog from './POOrderReminderDialog';
 import { generatePurchaseOrderReport } from '../../services/purchaseOrderReportService';
 import { getUnorderedMaterialAlertsCount } from '../../services/poOrderReminderService';
+
+// Czysta funkcja — przeniesiona poza komponent
+const formatCurrencySymbol = (currencyCode) => {
+  const currencySymbols = {
+    'EUR': '€',
+    'USD': '$',
+    'PLN': 'zł',
+    'GBP': '£'
+  };
+  return currencySymbols[currencyCode] || currencyCode;
+};
+
+// Pomocnicza funkcja formatowania dat — przeniesiona poza komponent
+const formatDateValue = (dateValue) => {
+  if (!dateValue) return '-';
+  try {
+    let dateObj;
+    if (dateValue && typeof dateValue.toDate === 'function') {
+      dateObj = dateValue.toDate();
+    } else if (typeof dateValue === 'string') {
+      dateObj = new Date(dateValue);
+    } else if (dateValue instanceof Date) {
+      dateObj = dateValue;
+    } else {
+      return 'Invalid Date';
+    }
+    return dateObj.toLocaleDateString();
+  } catch {
+    return 'Invalid Date';
+  }
+};
+
+// Memoized wiersz tabeli — eliminuje re-render WSZYSTKICH wierszy przy zmianie stanu jednego
+const PurchaseOrderRow = React.memo(({ 
+  po, visibleColumns, getStatusChip, getPaymentStatusChip, 
+  onUpdateBatches, onDeleteClick, isUpdating, t 
+}) => (
+  <TableRow>
+    {visibleColumns['number'] && (
+      <TableCell>
+        <Link 
+          to={`/purchase-orders/${po.id}`}
+          style={{ textDecoration: 'none', color: 'inherit' }}
+        >
+          <Typography variant="body2" fontWeight="medium">
+            {po.number || `#${po.id.substring(0, 8).toUpperCase()}`}
+          </Typography>
+        </Link>
+      </TableCell>
+    )}
+    
+    {visibleColumns['supplier'] && (
+      <TableCell>
+        {po.supplier ? po.supplier.name : '-'}
+      </TableCell>
+    )}
+    
+    {visibleColumns['orderDate'] && (
+      <TableCell>{formatDateValue(po.orderDate)}</TableCell>
+    )}
+    
+    {visibleColumns['expectedDeliveryDate'] && (
+      <TableCell>{formatDateValue(po.expectedDeliveryDate)}</TableCell>
+    )}
+    
+    {visibleColumns['value'] && (
+      <TableCell>
+        {po.totalGross !== undefined ? 
+          `${Number(po.totalGross).toFixed(2)} ${formatCurrencySymbol(po.currency || 'PLN')}` : 
+          '-'}
+      </TableCell>
+    )}
+    
+    {visibleColumns['statusAndPayment'] && (
+      <TableCell>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          {getStatusChip(po.status, po)}
+          {getPaymentStatusChip(po.paymentStatus, po)}
+        </Box>
+      </TableCell>
+    )}
+    
+    <TableCell align="right">
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Tooltip title={t('purchaseOrders.actions.view')}>
+          <IconButton 
+            size="small" 
+            component={Link}
+            to={`/purchase-orders/${po.id}`}
+          >
+            <ViewIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        
+        <Tooltip title={t('purchaseOrders.actions.edit')}>
+          <IconButton 
+            size="small" 
+            component={Link}
+            to={`/purchase-orders/${po.id}/edit`}
+          >
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        
+        <Tooltip title="Aktualizuj ceny partii">
+          <IconButton 
+            size="small" 
+            color="primary"
+            onClick={() => onUpdateBatches(po)}
+            disabled={isUpdating}
+          >
+            {isUpdating ? (
+              <CircularProgress size={16} />
+            ) : (
+              <SyncIcon fontSize="small" />
+            )}
+          </IconButton>
+        </Tooltip>
+        
+        <Tooltip title={t('purchaseOrders.actions.delete')}>
+          <IconButton 
+            size="small" 
+            color="error"
+            onClick={() => onDeleteClick(po)}
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+    </TableCell>
+  </TableRow>
+));
+
+PurchaseOrderRow.displayName = 'PurchaseOrderRow';
 
 const PurchaseOrderList = () => {
   const { t } = useTranslation();
@@ -283,13 +417,13 @@ const PurchaseOrderList = () => {
     }
   };
   
-  const handleDeleteClick = (po) => {
+  const handleDeleteClick = useCallback((po) => {
     setPoToDelete(po);
     setDeleteDialogOpen(true);
-  };
+  }, []);
   
   // Funkcja obsługi aktualizacji partii
-  const handleUpdateBatches = async (po) => {
+  const handleUpdateBatches = useCallback(async (po) => {
     try {
       setUpdatingBatches(prev => ({ ...prev, [po.id]: true }));
       
@@ -320,7 +454,7 @@ const PurchaseOrderList = () => {
     } finally {
       setUpdatingBatches(prev => ({ ...prev, [po.id]: false }));
     }
-  };
+  }, [currentUser, showSuccess, showError]);
   
   const handleDeleteConfirm = async () => {
     if (poToDelete) {
@@ -675,16 +809,6 @@ const PurchaseOrderList = () => {
   };
   
   // Funkcja do formatowania symboli walut
-  const formatCurrencySymbol = (currencyCode) => {
-    const currencySymbols = {
-      'EUR': '€',
-      'USD': '$',
-      'PLN': 'zł',
-      'GBP': '£'
-    };
-    return currencySymbols[currencyCode] || currencyCode;
-  };
-  
   // Komponent dla nagłówka kolumny z sortowaniem
   const SortableTableCell = ({ id, label, disableSorting = false, sx }) => {
     return (
@@ -934,154 +1058,17 @@ const PurchaseOrderList = () => {
                   </TableRow>
                 ) : (
                   filteredPOs.map((po) => (
-                    <TableRow key={po.id}>
-                      {visibleColumns['number'] && (
-                        <TableCell>
-                          <Link 
-                            to={`/purchase-orders/${po.id}`}
-                            style={{ textDecoration: 'none', color: 'inherit' }}
-                          >
-                            <Typography variant="body2" fontWeight="medium">
-                              {po.number || `#${po.id.substring(0, 8).toUpperCase()}`}
-                            </Typography>
-                          </Link>
-                        </TableCell>
-                      )}
-                      
-                      {visibleColumns['supplier'] && (
-                        <TableCell>
-                          {po.supplier ? po.supplier.name : '-'}
-                        </TableCell>
-                      )}
-                      
-                      {visibleColumns['orderDate'] && (
-                        <TableCell>
-                          {(() => {
-                            if (!po.orderDate) return '-';
-                            try {
-                              let dateObj;
-                              
-                              // Obsługa Firestore Timestamp
-                              if (po.orderDate && typeof po.orderDate.toDate === 'function') {
-                                dateObj = po.orderDate.toDate();
-                              } 
-                              // Obsługa stringa ISO
-                              else if (typeof po.orderDate === 'string') {
-                                dateObj = new Date(po.orderDate);
-                              } 
-                              // Obsługa obiektu Date
-                              else if (po.orderDate instanceof Date) {
-                                dateObj = po.orderDate;
-                              } 
-                              else {
-                                return 'Invalid Date';
-                              }
-                              
-                              return dateObj.toLocaleDateString();
-                            } catch (error) {
-                              return 'Invalid Date';
-                            }
-                          })()}
-                        </TableCell>
-                      )}
-                      
-                      {visibleColumns['expectedDeliveryDate'] && (
-                        <TableCell>
-                          {(() => {
-                            if (!po.expectedDeliveryDate) return '-';
-                            try {
-                              let dateObj;
-                              
-                              // Obsługa Firestore Timestamp
-                              if (po.expectedDeliveryDate && typeof po.expectedDeliveryDate.toDate === 'function') {
-                                dateObj = po.expectedDeliveryDate.toDate();
-                              } 
-                              // Obsługa stringa ISO
-                              else if (typeof po.expectedDeliveryDate === 'string') {
-                                dateObj = new Date(po.expectedDeliveryDate);
-                              } 
-                              // Obsługa obiektu Date
-                              else if (po.expectedDeliveryDate instanceof Date) {
-                                dateObj = po.expectedDeliveryDate;
-                              } 
-                              else {
-                                return 'Invalid Date';
-                              }
-                              
-                              return dateObj.toLocaleDateString();
-                            } catch (error) {
-                              return 'Invalid Date';
-                            }
-                          })()}
-                        </TableCell>
-                      )}
-                      
-                      {visibleColumns['value'] && (
-                        <TableCell>
-                          {po.totalGross !== undefined ? 
-                            `${Number(po.totalGross).toFixed(2)} ${formatCurrencySymbol(po.currency || 'PLN')}` : 
-                            '-'}
-                        </TableCell>
-                      )}
-                      
-                      {visibleColumns['statusAndPayment'] && (
-                        <TableCell>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            {getStatusChip(po.status, po)}
-                            {getPaymentStatusChip(po.paymentStatus, po)}
-                          </Box>
-                        </TableCell>
-                      )}
-                      
-                      <TableCell align="right">
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                          <Tooltip title={t('purchaseOrders.actions.view')}>
-                            <IconButton 
-                              size="small" 
-                              component={Link}
-                              to={`/purchase-orders/${po.id}`}
-                            >
-                              <ViewIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          
-                          <Tooltip title={t('purchaseOrders.actions.edit')}>
-                            <IconButton 
-                              size="small" 
-                              component={Link}
-                              to={`/purchase-orders/${po.id}/edit`}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          
-                          <Tooltip title="Aktualizuj ceny partii">
-                            <IconButton 
-                              size="small" 
-                              color="primary"
-                              onClick={() => handleUpdateBatches(po)}
-                              disabled={updatingBatches[po.id] || false}
-                            >
-                              {updatingBatches[po.id] ? (
-                                <CircularProgress size={16} />
-                              ) : (
-                                <SyncIcon fontSize="small" />
-                              )}
-                            </IconButton>
-                          </Tooltip>
-                          
-                          <Tooltip title={t('purchaseOrders.actions.delete')}>
-                            <IconButton 
-                              size="small" 
-                              color="error"
-                              onClick={() => handleDeleteClick(po)}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
+                    <PurchaseOrderRow
+                      key={po.id}
+                      po={po}
+                      visibleColumns={visibleColumns}
+                      getStatusChip={getStatusChip}
+                      getPaymentStatusChip={getPaymentStatusChip}
+                      onUpdateBatches={handleUpdateBatches}
+                      onDeleteClick={handleDeleteClick}
+                      isUpdating={updatingBatches[po.id] || false}
+                      t={t}
+                    />
                   ))
                 )}
               </TableBody>

@@ -16,8 +16,11 @@ import {
 import { db } from './firebase/config';
 import { generateCONumber, generatePONumber } from '../utils/numberGenerators';
 import { formatDateForInput } from '../utils/dateUtils';
+import { ServiceCacheManager } from './cache/serviceCacheManager';
 
 const ORDERS_COLLECTION = 'orders';
+const ORDERS_CACHE_KEY = 'orders:all';
+const ORDERS_CACHE_TTL = 3 * 60 * 1000; // 3 minuty
 const CUSTOMERS_COLLECTION = 'customers';
 
 // Cache dla statystyk zamówień
@@ -2734,30 +2737,21 @@ export const cleanupObsoleteCMRConnections = async (obsoleteItems, userId = 'sys
  */
 export const getOrdersByProductionTaskId = async (productionTaskId) => {
   try {
-    const ordersRef = collection(db, ORDERS_COLLECTION);
+    // Cache pełnej kolekcji zamówień — unika wielokrotnych pełnych fetchów
+    const allOrders = await ServiceCacheManager.getOrFetch(
+      ORDERS_CACHE_KEY,
+      async () => {
+        const ordersRef = collection(db, ORDERS_COLLECTION);
+        const querySnapshot = await getDocs(ordersRef);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      },
+      ORDERS_CACHE_TTL
+    );
     
-    // Użyj array-contains-any do wyszukania zamówień z zadaniami produkcyjnymi
-    // Ponieważ produktionTasks może zawierać obiekty, musimy wyszukać inaczej
-    const q = query(ordersRef);
-    const querySnapshot = await getDocs(q);
-    
-    const relatedOrders = [];
-    
-    querySnapshot.forEach((doc) => {
-      const orderData = doc.data();
-      
-      // Sprawdź czy zamówienie ma pozycje powiązane z tym zadaniem
-      const hasRelatedItem = orderData.items && orderData.items.some(item => item.productionTaskId === productionTaskId);
-      
-      // Sprawdź czy zamówienie ma zadanie produkcyjne w tablicy productionTasks
-      const hasRelatedTask = orderData.productionTasks && orderData.productionTasks.some(task => task.id === productionTaskId);
-      
-      if (hasRelatedItem || hasRelatedTask) {
-        relatedOrders.push({
-          id: doc.id,
-          ...orderData
-        });
-      }
+    const relatedOrders = allOrders.filter(order => {
+      const hasRelatedItem = order.items?.some(item => item.productionTaskId === productionTaskId);
+      const hasRelatedTask = order.productionTasks?.some(task => task.id === productionTaskId);
+      return hasRelatedItem || hasRelatedTask;
     });
     
     console.log(`🔍 Znaleziono ${relatedOrders.length} zamówień powiązanych z zadaniem ${productionTaskId}`);

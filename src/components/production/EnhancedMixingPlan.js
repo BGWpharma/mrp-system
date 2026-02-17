@@ -92,7 +92,7 @@ import {
   getVirtualReservationsFromSnapshots,
   getLinkedReservationIds
 } from '../../services/mixingPlanReservationService';
-import { debounce } from 'lodash';
+import debounce from 'lodash/debounce';
 
 // ===============================================
 // 🚀 OPTYMALIZACJA: Wydzielone zmemoizowane komponenty

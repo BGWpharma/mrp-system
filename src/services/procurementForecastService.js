@@ -10,6 +10,7 @@ import {
   where, 
   orderBy, 
   limit,
+  onSnapshot,
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from './firebase/config';
@@ -205,11 +206,37 @@ export const deleteProcurementForecast = async (id) => {
   }
 };
 
+/**
+ * Real-time listener na kolekcję prognoz zakupowych
+ * Automatycznie reaguje na zmiany (np. z Cloud Function triggera PO)
+ * @param {Function} callback - wywoływana z tablicą prognoz
+ * @returns {Function} unsubscribe - funkcja do odsubskrybowania
+ */
+export const subscribeToProcurementForecasts = (callback) => {
+  const q = query(
+    collection(db, COLLECTION),
+    orderBy('createdAt', 'desc')
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const data = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
+      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt
+    }));
+    callback(data);
+  }, (error) => {
+    console.error('Błąd subskrypcji prognoz zakupowych:', error);
+  });
+};
+
 export default {
   createProcurementForecast,
   getAllProcurementForecasts,
   getProcurementForecastById,
   updateProcurementForecast,
   archiveProcurementForecast,
-  deleteProcurementForecast
+  deleteProcurementForecast,
+  subscribeToProcurementForecasts
 };

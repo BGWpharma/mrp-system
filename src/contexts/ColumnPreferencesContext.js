@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase/config';
 import { useAuth } from '../hooks/useAuth';
@@ -98,55 +98,49 @@ export const ColumnPreferencesProvider = ({ children }) => {
     }
   }, [currentUser]);
 
-  // Funkcja do aktualizacji preferencji kolumn
-  const updateColumnPreferences = async (viewId, columnName, isVisible) => {
-    // Utwórz kopię aktualnych preferencji
-    const updatedPreferences = { ...columnPreferences };
-    
-    // Upewnij się, że istnieje obiekt dla danego widoku
-    if (!updatedPreferences[viewId]) {
-      updatedPreferences[viewId] = {};
-    }
-    
-    // Aktualizuj preferencję
-    updatedPreferences[viewId][columnName] = isVisible;
-    
-    // Zaktualizuj stan
-    setColumnPreferences(updatedPreferences);
-    
-    // Zapisz w lokalnym storage
-    localStorage.setItem('columnPreferences', JSON.stringify(updatedPreferences));
-    
-    // Zapisz w profilu użytkownika, jeśli jest zalogowany
-    if (auth?.currentUser) {
-      try {
-        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+  // Stabilna funkcja — nie powoduje re-renderów konsumentów
+  const updateColumnPreferences = useCallback(async (viewId, columnName, isVisible) => {
+    setColumnPreferences(prev => {
+      const updatedPreferences = { ...prev };
+      if (!updatedPreferences[viewId]) {
+        updatedPreferences[viewId] = {};
+      }
+      updatedPreferences[viewId] = { ...updatedPreferences[viewId], [columnName]: isVisible };
+      
+      // Zapisz w lokalnym storage
+      localStorage.setItem('columnPreferences', JSON.stringify(updatedPreferences));
+      
+      // Zapisz w profilu użytkownika, jeśli jest zalogowany
+      if (auth?.currentUser) {
+        updateDoc(doc(db, 'users', auth.currentUser.uid), {
           columnPreferences: updatedPreferences,
           updatedAt: new Date()
+        }).catch(error => {
+          console.error('Błąd podczas zapisywania preferencji kolumn:', error);
         });
-      } catch (error) {
-        console.error('Błąd podczas zapisywania preferencji kolumn:', error);
       }
-    }
-  };
+      
+      return updatedPreferences;
+    });
+  }, [auth]);
 
-  // Funkcja do pobierania preferencji dla konkretnego widoku
-  const getColumnPreferencesForView = (viewId) => {
-    // Jeśli istnieją preferencje dla widoku, zwróć je
+  // Stabilna funkcja helper
+  const getColumnPreferencesForView = useCallback((viewId) => {
     if (columnPreferences[viewId]) {
       return columnPreferences[viewId];
     }
-    
-    // Jeśli nie istnieją, zwróć domyślne preferencje dla widoku lub pusty obiekt
     return defaultColumnPreferences[viewId] || {};
-  };
+  }, [columnPreferences]);
+
+  // Memoizowana wartość kontekstu — zmienia się tylko gdy state lub funkcje się zmienią
+  const contextValue = useMemo(() => ({
+    columnPreferences, 
+    updateColumnPreferences,
+    getColumnPreferencesForView
+  }), [columnPreferences, updateColumnPreferences, getColumnPreferencesForView]);
 
   return (
-    <ColumnPreferencesContext.Provider value={{ 
-      columnPreferences, 
-      updateColumnPreferences,
-      getColumnPreferencesForView
-    }}>
+    <ColumnPreferencesContext.Provider value={contextValue}>
       {children}
     </ColumnPreferencesContext.Provider>
   );

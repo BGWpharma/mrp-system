@@ -868,44 +868,59 @@ export const refreshLinkedBatchesQuantities = async (batchId = null) => {
     let updatedCount = 0;
     let errorCount = 0;
     
-    for (const reservation of reservations) {
-      // Pomiń rezerwacje bez powiązanych partii
-      if (!reservation.linkedBatches || reservation.linkedBatches.length === 0) {
-        continue;
+    // Zbierz unikalne batchId ze WSZYSTKICH kwalifikujących się rezerwacji
+    const relevantReservations = reservations.filter(r => {
+      if (!r.linkedBatches || r.linkedBatches.length === 0) return false;
+      if (batchId && !r.linkedBatches.some(b => b.batchId === batchId)) return false;
+      return true;
+    });
+    
+    const allBatchIds = new Set();
+    relevantReservations.forEach(r => {
+      r.linkedBatches.forEach(b => allBatchIds.add(b.batchId));
+    });
+    
+    // Batch fetch partii zamiast N+1 getDoc
+    const batchDataMap = {};
+    const batchIdArray = [...allBatchIds];
+    if (batchIdArray.length > 0) {
+      const batchChunks = [];
+      for (let i = 0; i < batchIdArray.length; i += 30) {
+        batchChunks.push(batchIdArray.slice(i, i + 30));
       }
-      
-      // Jeśli podano konkretną partię, sprawdź czy ta rezerwacja ją zawiera
-      if (batchId && !reservation.linkedBatches.some(batch => batch.batchId === batchId)) {
-        continue;
-      }
-      
+      const batchResults = await Promise.all(
+        batchChunks.map(chunk => {
+          const q = query(collection(db, INVENTORY_BATCHES_COLLECTION), where('__name__', 'in', chunk));
+          return getDocs(q);
+        })
+      );
+      batchResults.forEach(snap => {
+        snap.docs.forEach(d => { batchDataMap[d.id] = d.data(); });
+      });
+    }
+    
+    for (const reservation of relevantReservations) {
       try {
         let hasChanges = false;
         const updatedLinkedBatches = [];
         
-        // Dla każdej powiązanej partii, pobierz aktualną ilość z magazynu
         for (const linkedBatch of reservation.linkedBatches) {
-          const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, linkedBatch.batchId);
-          const batchDoc = await getDoc(batchRef);
+          const currentBatchData = batchDataMap[linkedBatch.batchId];
           
-          if (batchDoc.exists()) {
-            const currentBatchData = batchDoc.data();
+          if (currentBatchData) {
             const currentQuantity = currentBatchData.quantity || 0;
             
-            // Sprawdź czy ilość się zmieniła
             if (currentQuantity !== linkedBatch.quantity) {
               hasChanges = true;
               console.log(`Aktualizacja partii ${linkedBatch.batchNumber}: ${linkedBatch.quantity} → ${currentQuantity}`);
             }
             
-            // Zaktualizuj dane partii, filtrując undefined wartości
             const updatedBatch = {
               batchId: linkedBatch.batchId,
               quantity: currentQuantity,
               batchNumber: currentBatchData.batchNumber || currentBatchData.lotNumber || linkedBatch.batchNumber || 'Bez numeru'
             };
             
-            // Dodaj tylko zdefiniowane wartości
             const expiryDate = currentBatchData.expiryDate || linkedBatch.expiryDate;
             if (expiryDate !== undefined && expiryDate !== null) {
               updatedBatch.expiryDate = expiryDate;
@@ -918,7 +933,6 @@ export const refreshLinkedBatchesQuantities = async (batchId = null) => {
             
             updatedLinkedBatches.push(updatedBatch);
           } else {
-            // Partia została usunięta z magazynu
             console.warn(`Partia ${linkedBatch.batchId} nie istnieje w magazynie, usuwam z rezerwacji`);
             hasChanges = true;
           }

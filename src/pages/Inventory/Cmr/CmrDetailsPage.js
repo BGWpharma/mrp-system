@@ -488,33 +488,26 @@ const CmrDetailsPage = () => {
       
       console.log('🔍 Checking CMR variants:', cmrVariants);
       
-      let loadingData = [];
+      // Jedno zapytanie 'in' zamiast pętli po wariantach
+      const loadingQuery = query(
+        collection(db, 'Forms/ZaladunekTowaru/Odpowiedzi'), 
+        where('cmrNumber', 'in', cmrVariants)
+      );
+      const loadingSnapshot = await getDocs(loadingQuery);
       
-      // Spróbuj wszystkie warianty
-      for (const variant of cmrVariants) {
-        const loadingQuery = query(
-          collection(db, 'Forms/ZaladunekTowaru/Odpowiedzi'), 
-          where('cmrNumber', '==', variant)
-        );
-        const loadingSnapshot = await getDocs(loadingQuery);
-        
-        console.log(`📄 Found ${loadingSnapshot.docs.length} loading form responses for variant: "${variant}"`);
-        
-        if (loadingSnapshot.docs.length > 0) {
-          const variantData = loadingSnapshot.docs.map(doc => {
-            const data = doc.data();
-            console.log('📝 Processing document:', doc.id, 'with CMR:', data.cmrNumber);
-            return {
-              id: doc.id,
-              ...data,
-              fillDate: data.fillDate?.toDate(),
-              loadingDate: data.loadingDate?.toDate(),
-              formType: 'loading'
-            };
-          });
-          loadingData.push(...variantData);
-        }
-      }
+      console.log(`📄 Found ${loadingSnapshot.docs.length} loading form responses for variants:`, cmrVariants);
+      
+      let loadingData = loadingSnapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('📝 Processing document:', doc.id, 'with CMR:', data.cmrNumber);
+        return {
+          id: doc.id,
+          ...data,
+          fillDate: data.fillDate?.toDate(),
+          loadingDate: data.loadingDate?.toDate(),
+          formType: 'loading'
+        };
+      });
       
       // Jeśli nadal nic nie znaleziono, pokaż wszystkie numery CMR w kolekcji dla debugowania
       if (loadingData.length === 0) {

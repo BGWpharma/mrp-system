@@ -88,7 +88,7 @@ import {
 } from '@mui/icons-material';
 import { getAllTasks, updateTaskStatus, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction, getProductionTasksOptimized, clearProductionTasksCache, forceRefreshProductionTasksCache, removeDuplicatesFromCache, updateTaskInCache, addTaskToCache, removeTaskFromCache, getProductionTasksCacheStatus } from '../../services/productionService';
 import { db } from '../../services/firebase/config';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { getAllWarehouses } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -760,52 +760,28 @@ const TaskList = () => {
     }
   }, [debouncedSearchTerm]);
 
-  // Real-time updates listener - nasłuchuje zmian w zadaniach produkcyjnych
+  // Real-time change detector — nasłuchuje tylko ostatnio zmodyfikowanego taska
+  // zamiast całej kolekcji (redukcja reads ~100x)
   useEffect(() => {
     let updateTimeout = null;
     let isInitialSnapshot = true;
     
-    const unsubscribe = onSnapshot(
+    const changeDetectorQuery = query(
       collection(db, 'productionTasks'),
+      orderBy('updatedAt', 'desc'),
+      limit(1)
+    );
+    
+    const unsubscribe = onSnapshot(
+      changeDetectorQuery,
       (snapshot) => {
-        const changes = snapshot.docChanges();
-        // Pomiń initial snapshot — Firestore wysyła wszystkie dokumenty jako "added"
-        // przy pierwszym podłączeniu, dane są już pobierane przez efekt inicjalizacyjny
+        // Pomiń initial snapshot
         if (isInitialSnapshot) {
           isInitialSnapshot = false;
-          changes.forEach((change) => {
-            const task = { id: change.doc.id, ...change.doc.data() };
-            addTaskToCache(task);
-          });
           return;
         }
         
-        let hasChanges = false;
-        
-        changes.forEach((change) => {
-          const task = { id: change.doc.id, ...change.doc.data() };
-          
-          if (change.type === 'added') {
-            addTaskToCache(task);
-            hasChanges = true;
-          }
-          
-          if (change.type === 'modified') {
-            const updated = addTaskToCache(task);
-            if (updated) {
-              hasChanges = true;
-            }
-          }
-          
-          if (change.type === 'removed') {
-            const removed = removeTaskFromCache(task.id);
-            if (removed) {
-              hasChanges = true;
-            }
-          }
-        });
-        
-        if (hasChanges) {
+        if (snapshot.docChanges().length > 0 && !snapshot.metadata.hasPendingWrites) {
           if (updateTimeout) {
             clearTimeout(updateTimeout);
           }

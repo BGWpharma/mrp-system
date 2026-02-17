@@ -41,8 +41,9 @@ import {
   Info as InfoIcon,
   LocalShipping as ShippingIcon,
   Edit as EditIcon,
-  Save as SaveIcon,
-  Close as CloseIcon
+    Save as SaveIcon,
+    Close as CloseIcon,
+    Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -50,7 +51,8 @@ import {
   getAllProcurementForecasts,
   deleteProcurementForecast,
   archiveProcurementForecast,
-  updateProcurementForecast
+  updateProcurementForecast,
+  subscribeToProcurementForecasts
 } from '../../services/procurementForecastService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -86,9 +88,15 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
     }
   }, [showError]);
 
+  // Real-time listener — automatycznie reaguje na zmiany z Cloud Function (PO trigger)
   useEffect(() => {
-    fetchForecasts();
-  }, [fetchForecasts]);
+    const unsubscribe = subscribeToProcurementForecasts((data) => {
+      setForecasts(data);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const filteredForecasts = forecasts.filter(f => {
     if (statusFilter === 'active' && f.status !== 'active') return false;
@@ -433,6 +441,11 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
             {t('states.procurementForecasts.description')}
           </Typography>
         </Box>
+        <Tooltip title={t('states.procurementForecasts.refresh', 'Odśwież dane')}>
+          <IconButton onClick={fetchForecasts} color="primary">
+            <RefreshIcon />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       <Box sx={{ mb: 2 }}>
@@ -547,9 +560,16 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                         {formatDateTimeDisplay(forecast.createdAt)}
                       </Typography>
                       {forecast.createdByName && (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" display="block">
                           {forecast.createdByName}
                         </Typography>
+                      )}
+                      {forecast.lastAutoUpdateReason && (
+                        <Tooltip title={forecast.lastAutoUpdateReason}>
+                          <Typography variant="caption" color="info.main" sx={{ fontSize: '0.65rem', cursor: 'help' }}>
+                            {t('states.procurementForecasts.autoUpdated', 'Auto-aktualizacja')}: {formatDateTimeDisplay(forecast.updatedAt)}
+                          </Typography>
+                        </Tooltip>
                       )}
                     </TableCell>
                     <TableCell>{getStatusChip(forecast.status)}</TableCell>

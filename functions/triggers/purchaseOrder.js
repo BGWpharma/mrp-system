@@ -6,6 +6,10 @@
  * Trigger 2: PO Status Change → Supplier Product Catalog
  * Automatycznie aktualizuje katalog produktów dostawcy gdy PO zmienia status z draft
  *
+ * Trigger 3: PO → Procurement Forecasts
+ * Automatycznie aktualizuje aktywne prognozy zakupowe gdy zmienia się PO
+ * (status, ilości, daty dostawy, received quantities)
+ *
  * DEPLOYMENT:
  * firebase deploy --only functions:bgw-mrp:onPurchaseOrderUpdate
  */
@@ -137,6 +141,181 @@ async function updateSupplierProductCatalog(db, orderId, poData, logger) {
   });
 }
 
+/**
+ * Aktualizuje aktywne prognozy zakupowe przy zmianie PO
+ * Szuka prognoz zawierających materiały z dostawami powiązanymi z tym PO
+ * i aktualizuje: status, ilości remaining, daty dostawy, bilanse
+ *
+ * @param {Object} db - Firestore database instance
+ * @param {string} orderId - Purchase order ID
+ * @param {Object} beforeData - PO data before update
+ * @param {Object} afterData - PO data after update
+ */
+async function updateProcurementForecasts(db, orderId, beforeData, afterData) {
+  try {
+    // Pobierz tylko aktywne prognozy
+    const forecastsQuery = db.collection("procurementForecasts")
+        .where("status", "==", "active");
+    const forecastsSnapshot = await forecastsQuery.get();
+
+    if (forecastsSnapshot.empty) {
+      logger.info("No active procurement forecasts found, skipping");
+      return;
+    }
+
+    const poNumber = afterData.number || "";
+    const poStatus = afterData.status || "";
+    const poItems = afterData.items || [];
+    const poExpectedDeliveryDate = afterData.expectedDeliveryDate || null;
+    const supplierName = afterData.supplierName || "";
+
+    // Statusy PO które oznaczają "nie będzie już dostawy"
+    const terminalStatuses = ["completed", "cancelled"];
+
+    let updatedForecastsCount = 0;
+
+    for (const forecastDoc of forecastsSnapshot.docs) {
+      const forecast = forecastDoc.data();
+      const materials = forecast.materials || [];
+      let forecastChanged = false;
+
+      const updatedMaterials = materials.map((material) => {
+        const deliveries = material.futureDeliveries || [];
+        if (deliveries.length === 0) return material;
+
+        // Sprawdź czy jakiekolwiek dostawy odnoszą się do tego PO
+        const hasMatchingDelivery = deliveries.some(
+            (d) => d.poId === orderId,
+        );
+        if (!hasMatchingDelivery) return material;
+
+        // Aktualizuj dostawy powiązane z tym PO
+        let updatedDeliveries = deliveries.map((delivery) => {
+          if (delivery.poId !== orderId) return delivery;
+
+          // Znajdź odpowiednią pozycję w PO dla tego materiału
+          const matchingPoItem = poItems.find(
+              (item) => item.inventoryItemId === material.materialId,
+          );
+
+          if (!matchingPoItem) {
+            // Pozycja została usunięta z PO - oznacz dostawę jako cancelled
+            forecastChanged = true;
+            return {
+              ...delivery,
+              status: "cancelled",
+              quantity: 0,
+              poNumber: poNumber || delivery.poNumber,
+            };
+          }
+
+          const quantityOrdered = parseFloat(matchingPoItem.quantity) || 0;
+          const quantityReceived = parseFloat(matchingPoItem.received) || 0;
+          const quantityRemaining = Math.max(
+              0, quantityOrdered - quantityReceived,
+          );
+          const deliveryDate = matchingPoItem.plannedDeliveryDate ||
+            poExpectedDeliveryDate;
+
+          // Sprawdź czy coś się zmieniło
+          const oldQuantity = parseFloat(delivery.quantity) || 0;
+          const oldStatus = delivery.status || "";
+
+          if (
+            oldQuantity !== quantityRemaining ||
+            oldStatus !== poStatus ||
+            delivery.expectedDeliveryDate !== deliveryDate ||
+            delivery.supplierName !== supplierName
+          ) {
+            forecastChanged = true;
+          }
+
+          return {
+            ...delivery,
+            status: poStatus,
+            quantity: quantityRemaining,
+            poNumber: poNumber || delivery.poNumber,
+            expectedDeliveryDate: deliveryDate || delivery.expectedDeliveryDate,
+            supplierName: supplierName || delivery.supplierName,
+          };
+        });
+
+        // Usuń dostawy z terminalnych statusów gdzie remaining = 0
+        updatedDeliveries = updatedDeliveries.filter((d) => {
+          if (terminalStatuses.includes(d.status) && d.quantity <= 0) {
+            forecastChanged = true;
+            return false;
+          }
+          return true;
+        });
+
+        // Przelicz sumy i bilanse
+        const newFutureDeliveriesTotal = updatedDeliveries.reduce(
+            (sum, d) => sum + (parseFloat(d.quantity) || 0), 0,
+        );
+        const newBalanceWithFutureDeliveries =
+          (material.availableQuantity || 0) +
+          newFutureDeliveriesTotal -
+          (material.requiredQuantity || 0);
+
+        return {
+          ...material,
+          futureDeliveries: updatedDeliveries,
+          futureDeliveriesTotal: parseFloat(
+              newFutureDeliveriesTotal.toFixed(2),
+          ),
+          balanceWithFutureDeliveries: parseFloat(
+              newBalanceWithFutureDeliveries.toFixed(2),
+          ),
+        };
+      });
+
+      if (!forecastChanged) continue;
+
+      // Przelicz podsumowanie prognozy
+      const materialsWithShortage = updatedMaterials.filter(
+          (m) => m.balanceWithFutureDeliveries < 0,
+      ).length;
+      const totalShortageValue = updatedMaterials
+          .filter((m) => m.balanceWithFutureDeliveries < 0)
+          .reduce(
+              (sum, m) => sum + (
+                Math.abs(m.balanceWithFutureDeliveries) * (m.price || 0)
+              ), 0,
+          );
+
+      await forecastDoc.ref.update({
+        materials: updatedMaterials,
+        materialsWithShortage,
+        totalShortageValue: parseFloat(totalShortageValue.toFixed(2)),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: "system",
+        lastAutoUpdateReason: `PO ${poNumber} updated (${poStatus})`,
+      });
+
+      updatedForecastsCount++;
+      logger.info(`Procurement forecast ${forecastDoc.id} updated`, {
+        forecastNumber: forecast.number,
+        materialsWithShortage,
+        totalShortageValue: totalShortageValue.toFixed(2),
+      });
+    }
+
+    logger.info(
+        `✅ Procurement forecasts update complete: ${updatedForecastsCount}`,
+        {orderId, updatedForecastsCount},
+    );
+  } catch (error) {
+    logger.error("❌ Error updating procurement forecasts", {
+      orderId,
+      error: error.message,
+      stack: error.stack,
+    });
+    // Nie rzucamy błędu - aktualizacja prognoz nie powinna blokować
+    // głównego triggera (ceny partii, katalog dostawcy)
+  }
+}
+
 const onPurchaseOrderUpdate = onDocumentUpdated(
     {
       document: "purchaseOrders/{orderId}",
@@ -166,10 +345,22 @@ const onPurchaseOrderUpdate = onDocumentUpdated(
           await updateSupplierProductCatalog(db, orderId, afterData, logger);
         }
 
-        // === TRIGGER 1: Aktualizacja cen partii magazynowych ===
-        // Sprawdź czy są zmiany w pozycjach lub dodatkowych kosztach
+        // === TRIGGER 3: Aktualizacja prognoz zakupowych ===
+        // Reaguje na zmiany statusu, ilości, dat dostawy, received
         const itemsChanged = JSON.stringify(beforeData.items) !==
                             JSON.stringify(afterData.items);
+        const poStatusChanged = beforeData.status !== afterData.status;
+        const deliveryDateChanged = beforeData.expectedDeliveryDate !==
+                                    afterData.expectedDeliveryDate;
+
+        if (itemsChanged || poStatusChanged || deliveryDateChanged) {
+          await updateProcurementForecasts(
+              db, orderId, beforeData, afterData,
+          );
+        }
+
+        // === TRIGGER 1: Aktualizacja cen partii magazynowych ===
+        // Sprawdź czy są zmiany w pozycjach lub dodatkowych kosztach
         const additionalCostsChanged =
           JSON.stringify(beforeData.additionalCostsItems) !==
             JSON.stringify(afterData.additionalCostsItems) ||

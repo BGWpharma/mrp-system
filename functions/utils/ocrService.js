@@ -41,6 +41,7 @@ RETURN JSON in this EXACT format:
   "documentType": "invoice" or "proforma" or "credit_note" or "debit_note",
   "invoiceNumber": "EXACT number from document",
   "invoiceDate": "YYYY-MM-DD",
+  "serviceDate": "YYYY-MM-DD or null - date of service/delivery/sale. Look for: 'Data wykonania usługi', 'Data sprzedaży', 'Data dostawy', 'Service date', 'Delivery date', 'Datum der Leistung'. If not found or same as invoiceDate, set null.",
   "dueDate": "YYYY-MM-DD or null",
   "supplier": {
     "name": "supplier company name",
@@ -281,6 +282,7 @@ const normalizeOcrResult = (ocrData) => {
     documentType: ocrData.documentType || "invoice",
     invoiceNumber: ocrData.invoiceNumber || "UNKNOWN",
     invoiceDate: ocrData.invoiceDate || null,
+    serviceDate: ocrData.serviceDate || null,
     dueDate: ocrData.dueDate || null,
     supplier: {
       name: ocrData.supplier?.name || "Unknown Supplier",

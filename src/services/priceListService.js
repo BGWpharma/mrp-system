@@ -447,31 +447,40 @@ export const getPriceListsContainingRecipe = async (recipeId) => {
       return [];
     }
     
-    const priceListsWithItems = [];
+    // Batch fetch list cenowych zamiast N+1 getDoc
+    const allItems = itemsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    const priceListIds = [...new Set(allItems.map(i => i.priceListId).filter(Boolean))];
     
-    // Dla każdego znalezionego elementu, pobierz informacje o liście cenowej
-    for (const itemDoc of itemsSnapshot.docs) {
-      const itemData = { id: itemDoc.id, ...itemDoc.data() };
-      
-      try {
-        // Pobierz szczegóły listy cenowej
-        const priceListDoc = await getDoc(doc(db, PRICE_LISTS_COLLECTION, itemData.priceListId));
-        
-        if (priceListDoc.exists()) {
-          const priceListData = { id: priceListDoc.id, ...priceListDoc.data() };
-          
-          priceListsWithItems.push({
-            priceList: priceListData,
-            item: itemData,
-            customerName: priceListData.customerName || 'Nieznany klient',
-            price: itemData.price || 0,
-            unit: itemData.unit || 'szt.',
-            notes: itemData.notes || '',
-            isActive: priceListData.isActive || false
-          });
-        }
-      } catch (error) {
-        console.error(`Błąd podczas pobierania listy cenowej ${itemData.priceListId}:`, error);
+    const priceListMap = {};
+    if (priceListIds.length > 0) {
+      const chunks = [];
+      for (let i = 0; i < priceListIds.length; i += 30) {
+        chunks.push(priceListIds.slice(i, i + 30));
+      }
+      const plResults = await Promise.all(
+        chunks.map(chunk => {
+          const plq = query(collection(db, PRICE_LISTS_COLLECTION), where('__name__', 'in', chunk));
+          return getDocs(plq);
+        })
+      );
+      plResults.forEach(snap => {
+        snap.docs.forEach(d => { priceListMap[d.id] = { id: d.id, ...d.data() }; });
+      });
+    }
+    
+    const priceListsWithItems = [];
+    for (const itemData of allItems) {
+      const priceListData = priceListMap[itemData.priceListId];
+      if (priceListData) {
+        priceListsWithItems.push({
+          priceList: priceListData,
+          item: itemData,
+          customerName: priceListData.customerName || 'Nieznany klient',
+          price: itemData.price || 0,
+          unit: itemData.unit || 'szt.',
+          notes: itemData.notes || '',
+          isActive: priceListData.isActive || false
+        });
       }
     }
     

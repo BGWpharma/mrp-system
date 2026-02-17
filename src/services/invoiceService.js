@@ -2569,12 +2569,28 @@ export const syncProformaNumberInLinkedInvoices = async (proformaId, newProforma
     let skippedCount = 0;
     const updateResults = [];
     
-    // Aktualizuj każdą powiązaną fakturę
+    // Batch fetch powiązanych faktur zamiast N+1 getDoc
+    const invoiceDataMap = {};
+    const invoiceChunks = [];
+    for (let i = 0; i < linkedInvoiceIds.length; i += 30) {
+      invoiceChunks.push(linkedInvoiceIds.slice(i, i + 30));
+    }
+    const invoiceFetchResults = await Promise.all(
+      invoiceChunks.map(chunk => {
+        const q = query(collection(db, INVOICES_COLLECTION), where('__name__', 'in', chunk));
+        return getDocs(q);
+      })
+    );
+    invoiceFetchResults.forEach(snap => {
+      snap.docs.forEach(d => { invoiceDataMap[d.id] = d.data(); });
+    });
+    
+    // Sekwencyjna aktualizacja (updateDoc musi pozostać sekwencyjny)
     for (const invoiceId of linkedInvoiceIds) {
       try {
-        const invoiceDoc = await getDoc(doc(db, INVOICES_COLLECTION, invoiceId));
+        const invoiceData = invoiceDataMap[invoiceId];
         
-        if (!invoiceDoc.exists()) {
+        if (!invoiceData) {
           console.warn(`Faktura ${invoiceId} nie istnieje, pomijam`);
           skippedCount++;
           updateResults.push({
@@ -2585,10 +2601,8 @@ export const syncProformaNumberInLinkedInvoices = async (proformaId, newProforma
           continue;
         }
         
-        const invoiceData = invoiceDoc.data();
         const proformAllocation = invoiceData.proformAllocation || [];
         
-        // Sprawdź czy ta faktura rzeczywiście używa tej proformy
         const allocationIndex = proformAllocation.findIndex(allocation => allocation.proformaId === proformaId);
         
         if (allocationIndex === -1) {
@@ -2602,7 +2616,6 @@ export const syncProformaNumberInLinkedInvoices = async (proformaId, newProforma
           continue;
         }
         
-        // Zaktualizuj numer proformy w alokacji
         const updatedAllocation = [...proformAllocation];
         const oldNumber = updatedAllocation[allocationIndex].proformaNumber;
         updatedAllocation[allocationIndex] = {
@@ -2610,7 +2623,6 @@ export const syncProformaNumberInLinkedInvoices = async (proformaId, newProforma
           proformaNumber: newProformaNumber
         };
         
-        // Zaktualizuj fakturę w bazie danych
         await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), {
           proformAllocation: updatedAllocation,
           updatedAt: serverTimestamp(),
@@ -2755,15 +2767,24 @@ export const updateInvoicesExchangeRates = async (invoiceIds = [], userId = null
     
     let invoicesToUpdate = [];
     
-    // Jeśli podano konkretne ID, pobierz tylko te faktury
+    // Jeśli podano konkretne ID, pobierz batch zamiast N+1 getDoc
     if (invoiceIds && invoiceIds.length > 0) {
       console.log(`Pobieranie ${invoiceIds.length} konkretnych faktur...`);
-      for (const id of invoiceIds) {
-        const docSnap = await getDoc(doc(db, INVOICES_COLLECTION, id));
-        if (docSnap.exists()) {
-          invoicesToUpdate.push({ id: docSnap.id, ...docSnap.data() });
-        }
+      const idChunks = [];
+      for (let i = 0; i < invoiceIds.length; i += 30) {
+        idChunks.push(invoiceIds.slice(i, i + 30));
       }
+      const idResults = await Promise.all(
+        idChunks.map(chunk => {
+          const q = query(collection(db, INVOICES_COLLECTION), where('__name__', 'in', chunk));
+          return getDocs(q);
+        })
+      );
+      idResults.forEach(snap => {
+        snap.docs.forEach(d => {
+          invoicesToUpdate.push({ id: d.id, ...d.data() });
+        });
+      });
     } else {
       // Pobierz wszystkie faktury
       console.log('Pobieranie wszystkich faktur...');

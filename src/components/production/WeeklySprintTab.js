@@ -34,20 +34,70 @@ import {
   FilterList as FilterIcon,
   Schedule as ScheduleIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
-  KeyboardArrowUp as KeyboardArrowUpIcon
+  KeyboardArrowUp as KeyboardArrowUpIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  TrendingFlat as TrendingFlatIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
-import { format, startOfDay, endOfDay, subMonths } from 'date-fns';
+import { format, startOfDay, endOfDay, subMonths, getISOWeek, getISOWeekYear } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { exportToCSV, exportToExcel, formatDateForExport } from '../../utils/exportUtils';
 import { getAllCustomers } from '../../services/customerService';
+
+const getWeekKey = (date) => {
+  const d = date instanceof Date ? date : 
+            date?.toDate ? date.toDate() : 
+            new Date(date);
+  if (isNaN(d.getTime())) return null;
+  return `${getISOWeekYear(d)}-W${String(getISOWeek(d)).padStart(2, '0')}`;
+};
+
+const calculateTrend = (samples) => {
+  if (!samples || samples.length < 2) return { trend: 'stable', change: 0 };
+  const midPoint = Math.floor(samples.length / 2);
+  const firstHalf = samples.slice(0, midPoint);
+  const secondHalf = samples.slice(midPoint);
+  const firstAvg = firstHalf.reduce((s, v) => s + v, 0) / firstHalf.length;
+  const secondAvg = secondHalf.reduce((s, v) => s + v, 0) / secondHalf.length;
+  if (firstAvg === 0) return { trend: 'stable', change: 0 };
+  const change = ((secondAvg - firstAvg) / firstAvg) * 100;
+  const trend = change > 5 ? 'improving' : change < -5 ? 'declining' : 'stable';
+  return { trend, change: Math.round(change * 10) / 10 };
+};
+
+const SprintSparkline = ({ data, theme }) => {
+  if (!data || data.length < 2) return null;
+  const width = 72;
+  const height = 24;
+  const pad = 2;
+  const minVal = Math.min(...data);
+  const maxVal = Math.max(...data);
+  const range = maxVal - minVal || 1;
+  const first = data[0];
+  const last = data[data.length - 1];
+  const color = last > first ? theme.palette.success.main
+    : last < first ? theme.palette.error.main
+    : theme.palette.text.secondary;
+  const points = data.map((v, i) => {
+    const x = pad + (i / (data.length - 1)) * (width - 2 * pad);
+    const y = height - pad - ((v - minVal) / range) * (height - 2 * pad);
+    return `${x},${y}`;
+  }).join(' ');
+  return (
+    <svg width={width} height={height} style={{ display: 'block' }}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={pad + ((data.length - 1) / (data.length - 1)) * (width - 2 * pad)} cy={height - pad - ((last - minVal) / range) * (height - 2 * pad)} r="2.5" fill={color} />
+    </svg>
+  );
+};
 
 const WeeklySprintTab = ({ isMobileView }) => {
   const { currentUser } = useAuth();
@@ -374,7 +424,8 @@ const WeeklySprintTab = ({ isMobileView }) => {
               totalPackages: 0,
               totalPackagingTime: 0,
               tasks: new Set(),
-              packagingSamples: []
+              packagingSamples: [],
+              productivitySamples: []
             };
           }
           
@@ -386,6 +437,11 @@ const WeeklySprintTab = ({ isMobileView }) => {
             timeMinutes: packagingTimeMinutes,
             packagesPerHour: packagesPerHour
           });
+          const sessionDate = session.startDate || session.endDate || task.scheduledDate;
+          const weekKey = getWeekKey(sessionDate);
+          if (weekKey) {
+            skuMap[productName].productivitySamples.push({ weekKey, value: packagesPerHour });
+          }
         });
         
         return;
@@ -447,7 +503,8 @@ const WeeklySprintTab = ({ isMobileView }) => {
           totalMixings: 0,
           totalPieces: 0,
           tasks: new Set(),
-          timeSamples: []
+          timeSamples: [],
+          productivitySamples: []
         };
       }
 
@@ -457,23 +514,55 @@ const WeeklySprintTab = ({ isMobileView }) => {
       
       if (avgTimePerMixing !== null) {
         skuMap[productName].timeSamples.push(avgTimePerMixing);
+        if (piecesPerMixing > 0 && avgTimePerMixing > 0) {
+          const weekKey = getWeekKey(task.scheduledDate);
+          const prodPerHour = (piecesPerMixing / avgTimePerMixing) * 60;
+          if (weekKey) {
+            skuMap[productName].productivitySamples.push({ weekKey, value: prodPerHour });
+          }
+        }
       }
     });
 
     return Object.values(skuMap).map(sku => {
+      // Agreguj produktywność per tydzień
+      const weekMap = {};
+      (sku.productivitySamples || []).forEach(s => {
+        if (!weekMap[s.weekKey]) weekMap[s.weekKey] = [];
+        weekMap[s.weekKey].push(s.value);
+      });
+      const weeklyProductivity = Object.entries(weekMap)
+        .map(([week, vals]) => ({ week, avg: vals.reduce((a, b) => a + b, 0) / vals.length }))
+        .sort((a, b) => a.week.localeCompare(b.week));
+      const trendData = calculateTrend(weeklyProductivity.map(w => w.avg));
+
       if (sku.category === 'capsules') {
         const avgPackagesPerHour = sku.packagingSamples && sku.packagingSamples.length > 0
           ? sku.packagingSamples.reduce((sum, sample) => sum + sample.packagesPerHour, 0) / sku.packagingSamples.length
           : sku.packagesPerHour || 0;
         
-        return { ...sku, tasksCount: sku.tasks.size, packagesPerHour: avgPackagesPerHour };
+        return {
+          ...sku, tasksCount: sku.tasks.size, packagesPerHour: avgPackagesPerHour,
+          productivityPerHour: Math.round(avgPackagesPerHour * 10) / 10,
+          productivityUnit: 'opak/h',
+          weeklyProductivity, trend: trendData.trend, trendChange: trendData.change
+        };
       }
       
       const avgTime = sku.timeSamples.length > 0
         ? sku.timeSamples.reduce((sum, val) => sum + val, 0) / sku.timeSamples.length
         : sku.avgTimePerMixing;
 
-      return { ...sku, tasksCount: sku.tasks.size, avgTimePerMixing: avgTime };
+      const prodPerHour = avgTime > 0 && sku.piecesPerMixing > 0
+        ? Math.round(((sku.piecesPerMixing / avgTime) * 60) * 10) / 10
+        : null;
+
+      return {
+        ...sku, tasksCount: sku.tasks.size, avgTimePerMixing: avgTime,
+        productivityPerHour: prodPerHour,
+        productivityUnit: 'szt/h',
+        weeklyProductivity, trend: trendData.trend, trendChange: trendData.change
+      };
     }).sort((a, b) => {
       const aTotal = a.category === 'capsules' ? a.totalPackages : a.totalPieces;
       const bTotal = b.category === 'capsules' ? b.totalPackages : b.totalPieces;
@@ -587,6 +676,9 @@ const WeeklySprintTab = ({ isMobileView }) => {
           'SKU': sku.sku,
           'Pieces per Mixing': sku.piecesPerMixing || '-',
           'Time per Mixing (min)': sku.avgTimePerMixing ? sku.avgTimePerMixing.toFixed(1) : '-',
+          'Productivity (pcs/h)': sku.productivityPerHour || '-',
+          'Trend (%)': sku.trendChange !== undefined ? sku.trendChange : '-',
+          'Trend Direction': sku.trend || '-',
           'Mixings per Day': sku.estimatedMixingsPerDay || '-',
           'Pieces per Day': sku.estimatedPiecesPerDay || '-',
           'Sprint Mixings (Mon-Thu)': sku.totalSprintMixings || '-',
@@ -600,6 +692,9 @@ const WeeklySprintTab = ({ isMobileView }) => {
             { label: 'SKU', key: 'SKU' },
             { label: 'Pieces per Mixing', key: 'Pieces per Mixing' },
             { label: 'Time per Mixing (min)', key: 'Time per Mixing (min)' },
+            { label: 'Productivity (pcs/h)', key: 'Productivity (pcs/h)' },
+            { label: 'Trend (%)', key: 'Trend (%)' },
+            { label: 'Trend Direction', key: 'Trend Direction' },
             { label: 'Mixings per Day', key: 'Mixings per Day' },
             { label: 'Pieces per Day', key: 'Pieces per Day' },
             { label: 'Sprint Mixings (Mon-Thu)', key: 'Sprint Mixings (Mon-Thu)' },
@@ -613,6 +708,9 @@ const WeeklySprintTab = ({ isMobileView }) => {
           'SKU': sku.sku,
           'Capsules per Package': sku.capsulesPerPackage || '-',
           'Packages per Hour': sku.packagesPerHour ? sku.packagesPerHour.toFixed(1) : '-',
+          'Productivity (pkg/h)': sku.productivityPerHour || '-',
+          'Trend (%)': sku.trendChange !== undefined ? sku.trendChange : '-',
+          'Trend Direction': sku.trend || '-',
           'Packages per Day': sku.estimatedPackagesPerDay || '-',
           'Barrels per Day (15k)': sku.estimatedBarrelsPerDay ? sku.estimatedBarrelsPerDay.toFixed(2) : '-',
           'Sprint Packages (Mon-Thu)': sku.totalSprintPackages || '-',
@@ -626,6 +724,9 @@ const WeeklySprintTab = ({ isMobileView }) => {
             { label: 'SKU', key: 'SKU' },
             { label: 'Capsules per Package', key: 'Capsules per Package' },
             { label: 'Packages per Hour', key: 'Packages per Hour' },
+            { label: 'Productivity (pkg/h)', key: 'Productivity (pkg/h)' },
+            { label: 'Trend (%)', key: 'Trend (%)' },
+            { label: 'Trend Direction', key: 'Trend Direction' },
             { label: 'Packages per Day', key: 'Packages per Day' },
             { label: 'Barrels per Day (15k)', key: 'Barrels per Day (15k)' },
             { label: 'Sprint Packages (Mon-Thu)', key: 'Sprint Packages (Mon-Thu)' },
@@ -651,47 +752,6 @@ const WeeklySprintTab = ({ isMobileView }) => {
     }
   };
 
-  const stats = useMemo(() => {
-    const capsulesData = skuData.filter(sku => sku.category === 'capsules');
-    const powderData = skuData.filter(sku => sku.category === 'powder');
-    
-    const totalPackages = capsulesData.reduce((sum, sku) => sum + (sku.totalPackages || 0), 0);
-    const totalMixings = powderData.reduce((sum, sku) => sum + (sku.totalMixings || 0), 0);
-    const totalPieces = powderData.reduce((sum, sku) => sum + (sku.totalPieces || 0), 0);
-    const totalProducts = skuData.length;
-    
-    const skuWithTime = filteredSkuData.filter(sku => 
-      sku.category === 'powder' && sku.avgTimePerMixing !== null && sku.avgTimePerMixing !== undefined
-    );
-    const avgTime = skuWithTime.length > 0
-      ? skuWithTime.reduce((sum, sku) => sum + (sku.avgTimePerMixing || 0), 0) / skuWithTime.length
-      : 0;
-
-    const estimatedSprintPackages = calculateSprintPlan
-      .filter(sku => sku.category === 'capsules')
-      .reduce((sum, sku) => sum + (sku.totalSprintPackages || 0), 0);
-    
-    const estimatedSprintBarrels = calculateSprintPlan
-      .filter(sku => sku.category === 'capsules')
-      .reduce((sum, sku) => sum + (sku.totalSprintBarrels || 0), 0);
-    
-    const estimatedSprintPieces = calculateSprintPlan
-      .filter(sku => sku.category === 'powder')
-      .reduce((sum, sku) => sum + (sku.totalSprintPieces || 0), 0);
-    
-    const estimatedSprintMixings = calculateSprintPlan
-      .filter(sku => sku.category === 'powder')
-      .reduce((sum, sku) => sum + (sku.totalSprintMixings || 0), 0);
-
-    return {
-      totalMixings, totalPieces, estimatedSprintPieces, estimatedSprintMixings,
-      totalPackages, estimatedSprintPackages, estimatedSprintBarrels,
-      totalProducts, avgTime,
-      workHours: endHour - startHour,
-      availableMinutes: availableMinutesPerDay,
-      realizationRate: estimatedSprintPieces > 0 ? (totalPieces / estimatedSprintPieces * 100).toFixed(1) : 0
-    };
-  }, [skuData, filteredSkuData, calculateSprintPlan, startHour, endHour, availableMinutesPerDay]);
 
   if (loading) {
     return (
@@ -850,102 +910,6 @@ const WeeklySprintTab = ({ isMobileView }) => {
         </Box>
       </Paper>
 
-      {/* Karty statystyk */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {productType !== 'powder' && (
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ background: 'linear-gradient(135deg, #fc466b 0%, #3f5efb 100%)', color: 'white' }}>
-              <CardContent sx={{ py: 2 }}>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Kapsułki - Pakowania (Sprint)
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                  {stats.estimatedSprintPackages ? stats.estimatedSprintPackages.toLocaleString('pl-PL') : 0}
-                </Typography>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                  opakowań (4 dni)
-                </Typography>
-                {stats.estimatedSprintBarrels > 0 && (
-                  <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
-                    {stats.estimatedSprintBarrels.toFixed(2)} beczek
-                  </Typography>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-        
-        {productType !== 'capsules' && (
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
-              <CardContent sx={{ py: 2 }}>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Proszki - Mieszania (Sprint)
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                  {stats.estimatedSprintMixings || 0}
-                </Typography>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                  Pon-Czw ({stats.workHours}h/dzień)
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-        
-        {productType !== 'capsules' && (
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)', color: 'white' }}>
-              <CardContent sx={{ py: 2 }}>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Proszki - Produkcja (Sprint)
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                  {stats.estimatedSprintPieces ? stats.estimatedSprintPieces.toLocaleString('pl-PL') : 0}
-                </Typography>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                  sztuk (4 dni)
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-        
-        {productType !== 'capsules' && (
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', color: 'white' }}>
-              <CardContent sx={{ py: 2 }}>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Śr. czas mieszania
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                  {stats.avgTime > 0 ? Math.round(stats.avgTime) : '-'}
-                </Typography>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                  minut
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', color: 'white' }}>
-            <CardContent sx={{ py: 2 }}>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Produkty w sprincie
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                {stats.totalProducts}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                SKU
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
       {/* Główna tabela */}
       <Paper sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
@@ -970,8 +934,13 @@ const WeeklySprintTab = ({ isMobileView }) => {
                 <TableRow>
                   <TableCell sx={{ fontWeight: 'bold', width: 50 }} />
                   <TableCell sx={{ fontWeight: 'bold' }}>SKU</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>Metoda produkcji</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>Wydajność</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>Parametry</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 'bold', bgcolor: alpha(theme.palette.success.main, 0.08) }}>
+                    Wydajność (j/h)
+                  </TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 'bold', bgcolor: alpha(theme.palette.info.main, 0.08) }}>
+                    Trend
+                  </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>Dziennie</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold', bgcolor: 'primary.light', color: 'primary.contrastText' }}>
                     Sprint (Pon-Czw)
@@ -997,14 +966,6 @@ const WeeklySprintTab = ({ isMobileView }) => {
                         
                         <TableCell align="right">
                           {sku.category === 'capsules' ? (
-                            <Chip label="Pakowanie" size="small" sx={{ bgcolor: '#fc466b', color: 'white' }} />
-                          ) : (
-                            <Chip label="Mieszanie" size="small" sx={{ bgcolor: '#667eea', color: 'white' }} />
-                          )}
-                        </TableCell>
-                        
-                        <TableCell align="right">
-                          {sku.category === 'capsules' ? (
                             sku.packagesPerHour ? (
                               <Chip label={`${Math.round(sku.packagesPerHour)} opak/h`} size="small" color="success" variant="outlined" />
                             ) : (
@@ -1019,6 +980,41 @@ const WeeklySprintTab = ({ isMobileView }) => {
                                 <Chip label={`${Math.round(sku.avgTimePerMixing)} min`} size="small" color="info" variant="outlined" sx={{ ml: 0.5 }} />
                               ) : null}
                             </Box>
+                          )}
+                        </TableCell>
+
+                        {/* Wydajność (j/h) */}
+                        <TableCell align="center" sx={{ bgcolor: alpha(theme.palette.success.main, 0.04) }}>
+                          {sku.productivityPerHour ? (
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'success.dark' }}>
+                              {sku.productivityPerHour.toLocaleString('pl-PL')}
+                              <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                                {sku.productivityUnit}
+                              </Typography>
+                            </Typography>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">-</Typography>
+                          )}
+                        </TableCell>
+
+                        {/* Trend */}
+                        <TableCell align="center" sx={{ bgcolor: alpha(theme.palette.info.main, 0.04) }}>
+                          {sku.weeklyProductivity && sku.weeklyProductivity.length >= 2 ? (
+                            <Tooltip title={`${sku.weeklyProductivity.length} tyg. danych | Zmiana: ${sku.trendChange > 0 ? '+' : ''}${sku.trendChange}%`} arrow>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                                <SprintSparkline data={sku.weeklyProductivity.map(w => w.avg)} theme={theme} />
+                                <Chip
+                                  icon={sku.trend === 'improving' ? <TrendingUpIcon sx={{ fontSize: '14px !important' }} /> : sku.trend === 'declining' ? <TrendingDownIcon sx={{ fontSize: '14px !important' }} /> : <TrendingFlatIcon sx={{ fontSize: '14px !important' }} />}
+                                  label={`${sku.trendChange > 0 ? '+' : ''}${sku.trendChange}%`}
+                                  size="small"
+                                  color={sku.trend === 'improving' ? 'success' : sku.trend === 'declining' ? 'error' : 'default'}
+                                  variant="outlined"
+                                  sx={{ height: 20, fontSize: '0.7rem', '& .MuiChip-icon': { fontSize: 14 } }}
+                                />
+                              </Box>
+                            </Tooltip>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">-</Typography>
                           )}
                         </TableCell>
                         
@@ -1091,9 +1087,51 @@ const WeeklySprintTab = ({ isMobileView }) => {
                       </TableRow>
 
                       <TableRow>
-                        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
+                        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={7}>
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                             <Box sx={{ m: 1.5, p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
+                              {/* Wydajność tygodniowa */}
+                              {sku.weeklyProductivity && sku.weeklyProductivity.length >= 2 && (
+                                <Box sx={{ mb: 3 }}>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary', mb: 1.5 }}>
+                                    Wydajność tygodniowa ({sku.productivityUnit})
+                                  </Typography>
+                                  <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 0.5, height: 80, px: 1 }}>
+                                    {sku.weeklyProductivity.map((wp, i) => {
+                                      const maxVal = Math.max(...sku.weeklyProductivity.map(w => w.avg));
+                                      const barHeight = maxVal > 0 ? (wp.avg / maxVal) * 64 : 0;
+                                      const isLast = i === sku.weeklyProductivity.length - 1;
+                                      const barColor = isLast ? theme.palette.primary.main : alpha(theme.palette.primary.main, 0.4);
+                                      return (
+                                        <Tooltip key={wp.week} title={`${wp.week}: ${Math.round(wp.avg)} ${sku.productivityUnit}`} arrow>
+                                          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, maxWidth: 48 }}>
+                                            <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', mb: 0.5, fontWeight: isLast ? 700 : 400 }}>
+                                              {Math.round(wp.avg)}
+                                            </Typography>
+                                            <Box sx={{
+                                              width: '100%', minWidth: 12, height: Math.max(barHeight, 4), borderRadius: '4px 4px 0 0',
+                                              bgcolor: barColor, transition: 'all 0.3s',
+                                              border: isLast ? `2px solid ${theme.palette.primary.dark}` : 'none'
+                                            }} />
+                                            <Typography variant="caption" sx={{ fontSize: '0.55rem', color: 'text.secondary', mt: 0.5 }}>
+                                              {wp.week.split('-W')[1]}
+                                            </Typography>
+                                          </Box>
+                                        </Tooltip>
+                                      );
+                                    })}
+                                  </Box>
+                                  {sku.trend !== 'stable' && (
+                                    <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                      {sku.trend === 'improving' ? <TrendingUpIcon sx={{ fontSize: 16, color: 'success.main' }} /> : <TrendingDownIcon sx={{ fontSize: 16, color: 'error.main' }} />}
+                                      <Typography variant="caption" sx={{ color: sku.trend === 'improving' ? 'success.main' : 'error.main' }}>
+                                        Wydajność {sku.trend === 'improving' ? 'rośnie' : 'spada'} ({sku.trendChange > 0 ? '+' : ''}{sku.trendChange}% w okresie)
+                                      </Typography>
+                                    </Box>
+                                  )}
+                                </Box>
+                              )}
+
                               <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'primary.main', mb: 2 }}>
                                 Weekly Sprint (Poniedziałek - Czwartek)
                               </Typography>

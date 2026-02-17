@@ -1722,23 +1722,39 @@ export const generateCmrReport = async (filters = {}) => {
     
     console.log('generateCmrReport - dokumenty po filtrowaniu:', cmrDocuments.length);
     
-    // Opcjonalnie pobieramy elementy dla każdego dokumentu
+    // Batch fetch items dla wszystkich CMR — chunki 'in' zamiast N oddzielnych zapytań
     if (filters.includeItems) {
-      const promises = cmrDocuments.map(async (doc) => {
-        const itemsRef = collection(db, CMR_ITEMS_COLLECTION);
-        const itemsQuery = query(itemsRef, where('cmrId', '==', doc.id));
-        const itemsSnapshot = await getDocs(itemsQuery);
-        
-        doc.items = itemsSnapshot.docs.map(itemDoc => ({
-          id: itemDoc.id,
-          ...itemDoc.data()
-        }));
-        
-        return doc;
+      const cmrIds = cmrDocuments.map(d => d.id);
+      const itemChunks = [];
+      for (let i = 0; i < cmrIds.length; i += 30) {
+        itemChunks.push(cmrIds.slice(i, i + 30));
+      }
+      
+      const itemResults = await Promise.all(
+        itemChunks.map(chunk => {
+          const q = query(
+            collection(db, CMR_ITEMS_COLLECTION),
+            where('cmrId', 'in', chunk)
+          );
+          return getDocs(q);
+        })
+      );
+      
+      // Grupuj items po cmrId
+      const itemsByCmrId = {};
+      itemResults.forEach(snapshot => {
+        snapshot.docs.forEach(itemDoc => {
+          const data = itemDoc.data();
+          const cmrId = data.cmrId;
+          if (!itemsByCmrId[cmrId]) itemsByCmrId[cmrId] = [];
+          itemsByCmrId[cmrId].push({ id: itemDoc.id, ...data });
+        });
       });
       
-      // Czekamy na zakończenie wszystkich zapytań
-      await Promise.all(promises);
+      // Przypisz items do dokumentów
+      cmrDocuments.forEach(doc => {
+        doc.items = itemsByCmrId[doc.id] || [];
+      });
     }
     
     // Statystyki raportu

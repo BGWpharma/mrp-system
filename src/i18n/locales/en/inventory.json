@@ -142,6 +142,8 @@
       "unarchive": "Restore",
       "delete": "Delete",
       "viewDetails": "Details",
+      "refresh": "Refresh data",
+      "autoUpdated": "Auto-updated",
       "confirmDelete": "Are you sure you want to delete this forecast? This operation is irreversible.",
       "deleteSuccess": "Forecast has been deleted",
       "archiveSuccess": "Forecast has been archived",

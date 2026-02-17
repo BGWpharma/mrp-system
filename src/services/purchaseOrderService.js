@@ -1520,33 +1520,41 @@ export const getPurchaseOrdersByStatus = async (status) => {
     );
     
     const querySnapshot = await getDocs(q);
-    const purchaseOrders = [];
     
-    for (const docRef of querySnapshot.docs) {
-      const poData = docRef.data();
-      
-      // Pobierz dane dostawcy
-      let supplierData = null;
-      if (poData.supplierId) {
-        const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, poData.supplierId));
-        if (supplierDoc.exists()) {
-          supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
-        }
+    // Batch fetch dostawców zamiast N+1 getDoc
+    const supplierIds = [...new Set(
+      querySnapshot.docs.map(d => d.data().supplierId).filter(Boolean)
+    )];
+    
+    const supplierMap = {};
+    if (supplierIds.length > 0) {
+      const chunks = [];
+      for (let i = 0; i < supplierIds.length; i += 30) {
+        chunks.push(supplierIds.slice(i, i + 30));
       }
-      
-      purchaseOrders.push({
+      const supplierResults = await Promise.all(
+        chunks.map(chunk => {
+          const sq = query(collection(db, SUPPLIERS_COLLECTION), where('__name__', 'in', chunk));
+          return getDocs(sq);
+        })
+      );
+      supplierResults.forEach(snap => {
+        snap.docs.forEach(d => { supplierMap[d.id] = { id: d.id, ...d.data() }; });
+      });
+    }
+    
+    return querySnapshot.docs.map(docRef => {
+      const poData = docRef.data();
+      return {
         id: docRef.id,
         ...poData,
-        supplier: supplierData,
-        // Bezpieczna konwersja dat zamiast bezpośredniego wywołania toDate()
+        supplier: poData.supplierId ? (supplierMap[poData.supplierId] || null) : null,
         orderDate: safeConvertDate(poData.orderDate),
         expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
         createdAt: safeConvertDate(poData.createdAt),
         updatedAt: safeConvertDate(poData.updatedAt)
-      });
-    }
-    
-    return purchaseOrders;
+      };
+    });
   } catch (error) {
     console.error(`Błąd podczas pobierania zamówień zakupowych o statusie ${status}:`, error);
     throw error;
@@ -1555,6 +1563,15 @@ export const getPurchaseOrdersByStatus = async (status) => {
 
 export const getPurchaseOrdersBySupplier = async (supplierId) => {
   try {
+    // Pobierz dostawcę RAZ (supplierId jest zawsze taki sam w wynikach)
+    let supplierData = null;
+    if (supplierId) {
+      const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, supplierId));
+      if (supplierDoc.exists()) {
+        supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
+      }
+    }
+    
     const q = query(
       collection(db, PURCHASE_ORDERS_COLLECTION), 
       where('supplierId', '==', supplierId),
@@ -1562,33 +1579,19 @@ export const getPurchaseOrdersBySupplier = async (supplierId) => {
     );
     
     const querySnapshot = await getDocs(q);
-    const purchaseOrders = [];
     
-    for (const docRef of querySnapshot.docs) {
+    return querySnapshot.docs.map(docRef => {
       const poData = docRef.data();
-      
-      // Pobierz dane dostawcy
-      let supplierData = null;
-      if (poData.supplierId) {
-        const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, poData.supplierId));
-        if (supplierDoc.exists()) {
-          supplierData = { id: supplierDoc.id, ...supplierDoc.data() };
-        }
-      }
-      
-      purchaseOrders.push({
+      return {
         id: docRef.id,
         ...poData,
         supplier: supplierData,
-        // Bezpieczna konwersja dat zamiast bezpośredniego wywołania toDate()
         orderDate: safeConvertDate(poData.orderDate),
         expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
         createdAt: safeConvertDate(poData.createdAt),
         updatedAt: safeConvertDate(poData.updatedAt)
-      });
-    }
-    
-    return purchaseOrders;
+      };
+    });
   } catch (error) {
     console.error(`Błąd podczas pobierania zamówień zakupowych dla dostawcy o ID ${supplierId}:`, error);
     throw error;

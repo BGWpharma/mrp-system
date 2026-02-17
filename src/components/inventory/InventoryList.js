@@ -105,7 +105,7 @@ import {
 import ExpiryDatesPage from '../../pages/Inventory/ExpiryDatesPage';
 import SuppliersPage from '../../pages/SuppliersPage';
 import StocktakingPage from '../../pages/Inventory/StocktakingPage';
-import ProcurementForecastsPage from '../../pages/Inventory/ProcurementForecastsPage';
+
 
 // Definicje stałych
 const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
@@ -565,23 +565,44 @@ const InventoryList = () => {
       // Unikalny zestaw ID zadań do sprawdzenia
       const uniqueTaskIds = [...new Set(taskIds)];
       
-      // Sprawdź, które zadania istnieją
+      // Batch fetch tasków — chunki po 30 zamiast N+1 getDoc
       const existingTasksMap = {};
-      for (const taskId of uniqueTaskIds) {
-        try {
-          const taskRef = doc(db, 'productionTasks', taskId);
-          const taskDoc = await getDoc(taskRef);
-          existingTasksMap[taskId] = taskDoc.exists();
-        } catch (error) {
-          console.error(`Błąd podczas sprawdzania zadania ${taskId}:`, error);
-          existingTasksMap[taskId] = false;
+      const taskDataMap = {};
+      
+      if (uniqueTaskIds.length > 0) {
+        const taskChunks = [];
+        for (let i = 0; i < uniqueTaskIds.length; i += 30) {
+          taskChunks.push(uniqueTaskIds.slice(i, i + 30));
         }
+        
+        const taskResults = await Promise.all(
+          taskChunks.map(chunk => {
+            const q = query(
+              collection(db, 'productionTasks'),
+              where('__name__', 'in', chunk)
+            );
+            return getDocs(q);
+          })
+        );
+        
+        taskResults.forEach(snapshot => {
+          snapshot.docs.forEach(docSnap => {
+            existingTasksMap[docSnap.id] = true;
+            taskDataMap[docSnap.id] = docSnap.data();
+          });
+        });
+        
+        uniqueTaskIds.forEach(id => {
+          if (!(id in existingTasksMap)) {
+            existingTasksMap[id] = false;
+          }
+        });
       }
       
       // Filtruj rezerwacje - usuń te, których zadania nie istnieją
       bookingTransactions = bookingTransactions.filter(transaction => {
-        if (!transaction.referenceId) return true; // Zachowaj rezerwacje bez zadania
-        return existingTasksMap[transaction.referenceId] !== false; // Zachowaj tylko te z istniejącymi zadaniami
+        if (!transaction.referenceId) return true;
+        return existingTasksMap[transaction.referenceId] !== false;
       });
       
       // Sprawdź, czy są rezerwacje bez numerów MO
@@ -589,27 +610,20 @@ const InventoryList = () => {
         transaction => !transaction.taskNumber && transaction.referenceId && existingTasksMap[transaction.referenceId]
       );
       
-      // Jeśli są rezerwacje bez numerów MO, próbuj je uzupełnić automatycznie
+      // Uzupełnij MO korzystając z taskDataMap (bez dodatkowych getDoc)
       if (reservationsWithoutTasks.length > 0) {
         console.log(`Znaleziono ${reservationsWithoutTasks.length} rezerwacji bez numerów MO. Próbuję zaktualizować...`);
         
-        // Aktualizuj rezerwacje bez numerów MO
         for (const reservation of reservationsWithoutTasks) {
           try {
-            const taskRef = doc(db, 'productionTasks', reservation.referenceId);
-            const taskDoc = await getDoc(taskRef);
-            
-            if (taskDoc.exists()) {
-              const taskData = taskDoc.data();
+            const taskData = taskDataMap[reservation.referenceId];
+            if (taskData) {
               const taskName = taskData.name || '';
-              // Sprawdź zarówno pole moNumber jak i number (moNumber jest nowszym polem)
               const taskNumber = taskData.moNumber || taskData.number || '';
               const clientName = taskData.clientName || '';
               const clientId = taskData.clientId || '';
               
-              // Sprawdź, czy zadanie ma numer MO
               if (taskNumber) {
-                // Zaktualizuj rezerwację
                 const transactionRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservation.id);
                 await updateDoc(transactionRef, {
                   taskName,
@@ -619,7 +633,6 @@ const InventoryList = () => {
                   updatedAt: serverTimestamp()
                 });
                 
-                // Zaktualizuj lokalnie
                 reservation.taskName = taskName;
                 reservation.taskNumber = taskNumber;
                 reservation.clientName = clientName;
@@ -2274,7 +2287,6 @@ const InventoryList = () => {
         <Tab label={t('inventory.states.tabs.suppliers')} />
         <Tab label={t('inventory.states.tabs.stocktaking')} />
         <Tab label={t('inventory.states.tabs.reservations')} />
-        <Tab label={t('inventory.states.tabs.procurementForecasts')} />
       </Tabs>
 
       {/* Zawartość pierwszej zakładki - Stany */}
@@ -3247,13 +3259,6 @@ const InventoryList = () => {
             </Table>
           </TableContainer>
         </>
-      )}
-
-      {/* Zakładka Prognozy zakupowe */}
-      {currentTab === 6 && (
-        <Box sx={{ mt: -1 }}>
-          <ProcurementForecastsPage embedded={true} />
-        </Box>
       )}
 
       {/* Dialog z rezerwacjami */}

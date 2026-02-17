@@ -15,7 +15,7 @@
  * - getRandomBatch            (callable)
  * - recalculateShippedQuantities (callable)
  * - suggestAccountsForPosting (callable: AI account suggestions)
- * - onPurchaseOrderUpdate     (trigger: purchaseOrders)
+ * - onPurchaseOrderUpdate     (trigger: purchaseOrders → batches, supplier catalog, forecasts)
  * - onBatchPriceUpdate        (trigger: _systemEvents)
  * - onProductionTaskCostUpdate (trigger: _systemEvents)
  * - onProductionTaskScheduleUpdate (trigger: productionTasks)

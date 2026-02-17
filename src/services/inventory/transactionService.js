@@ -881,25 +881,35 @@ const enrichTransactionsWithTaskData = async (transactions) => {
 
   if (transactionsToUpdate.length === 0) return;
 
-  const transactionsRef = FirebaseQueryBuilder.getCollectionRef(COLLECTIONS.INVENTORY_TRANSACTIONS);
+  // Deduplikacja + batch fetch tasków zamiast N+1 getDoc
+  const uniqueRefIds = [...new Set(transactionsToUpdate.map(t => t.referenceId))];
+  const taskDataMap = {};
+  const taskChunks = [];
+  for (let i = 0; i < uniqueRefIds.length; i += 30) {
+    taskChunks.push(uniqueRefIds.slice(i, i + 30));
+  }
+  const taskResults = await Promise.all(
+    taskChunks.map(chunk => {
+      const q = query(collection(db, 'productionTasks'), where('__name__', 'in', chunk));
+      return getDocs(q);
+    })
+  );
+  taskResults.forEach(snap => {
+    snap.docs.forEach(d => { taskDataMap[d.id] = d.data(); });
+  });
 
+  // Sekwencyjne updateDoc
   for (const transaction of transactionsToUpdate) {
     try {
-      // Sprawdź aktualny stan zadania produkcyjnego
-      const taskRef = FirebaseQueryBuilder.getDocRef('productionTasks', transaction.referenceId);
-      const taskDoc = await getDoc(taskRef);
+      const taskData = taskDataMap[transaction.referenceId];
       
-      if (taskDoc.exists()) {
-        const taskData = taskDoc.data();
-        
-        // Aktualizuj dane w transakcji (w pamięci)
+      if (taskData) {
         transaction.taskName = taskData.name || '';
         transaction.taskNumber = taskData.number || '';
         transaction.moNumber = taskData.moNumber || '';
         transaction.clientName = taskData.clientName || '';
         transaction.clientId = taskData.clientId || '';
         
-        // Zaktualizuj transakcję w bazie danych jeśli dane się zmieniły
         const transactionRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_TRANSACTIONS, transaction.id);
         await updateDoc(transactionRef, {
           taskName: transaction.taskName,
@@ -911,7 +921,6 @@ const enrichTransactionsWithTaskData = async (transactions) => {
       }
     } catch (error) {
       console.error('Błąd podczas pobierania danych zadania:', error);
-      // Kontynuuj, nawet jeśli nie udało się pobrać danych zadania
     }
   }
 };
@@ -927,26 +936,38 @@ const enrichTransactionsWithBatchData = async (transactions, itemId) => {
 
   if (bookingTransactions.length === 0) return;
 
-  const transactionsRef = FirebaseQueryBuilder.getCollectionRef(COLLECTIONS.INVENTORY_TRANSACTIONS);
+  // Deduplikacja + batch fetch tasków zamiast N+1 getDoc
+  const uniqueRefIds = [...new Set(bookingTransactions.map(t => t.referenceId).filter(Boolean))];
+  const taskDataMap = {};
+  if (uniqueRefIds.length > 0) {
+    const taskChunks = [];
+    for (let i = 0; i < uniqueRefIds.length; i += 30) {
+      taskChunks.push(uniqueRefIds.slice(i, i + 30));
+    }
+    const taskResults = await Promise.all(
+      taskChunks.map(chunk => {
+        const q = query(collection(db, 'productionTasks'), where('__name__', 'in', chunk));
+        return getDocs(q);
+      })
+    );
+    taskResults.forEach(snap => {
+      snap.docs.forEach(d => { taskDataMap[d.id] = d.data(); });
+    });
+  }
 
   for (const transaction of bookingTransactions) {
     try {
-      // Znajdź partie dla tego zadania w danych zadania
-      const taskRef = FirebaseQueryBuilder.getDocRef('productionTasks', transaction.referenceId);
-      const taskDoc = await getDoc(taskRef);
+      const taskData = taskDataMap[transaction.referenceId];
       
-      if (taskDoc.exists()) {
-        const taskData = taskDoc.data();
+      if (taskData) {
         const materialBatches = taskData.materialBatches || {};
         
         if (materialBatches[itemId] && materialBatches[itemId].length > 0) {
           const firstBatch = materialBatches[itemId][0];
           
-          // Aktualizuj dane w transakcji (w pamięci)
           transaction.batchId = firstBatch.batchId;
           transaction.batchNumber = firstBatch.batchNumber;
           
-          // Zaktualizuj transakcję w bazie danych
           const transactionRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_TRANSACTIONS, transaction.id);
           await updateDoc(transactionRef, {
             batchId: transaction.batchId,

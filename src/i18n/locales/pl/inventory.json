@@ -142,6 +142,8 @@
       "unarchive": "Przywróć",
       "delete": "Usuń",
       "viewDetails": "Szczegóły",
+      "refresh": "Odśwież dane",
+      "autoUpdated": "Auto-aktualizacja",
       "confirmDelete": "Czy na pewno chcesz usunąć tę prognozę? Ta operacja jest nieodwracalna.",
       "deleteSuccess": "Prognoza została usunięta",
       "archiveSuccess": "Prognoza została zarchiwizowana",

@@ -1446,35 +1446,46 @@ const updateMaterialBatchesAfterCancellation = async (results, batchId) => {
     
     console.log(`🔄 Aktualizuję materialBatches w ${taskIds.length} zadaniach produkcyjnych po anulowaniu rezerwacji partii ${batchId}`);
     
+    // Batch fetch tasków zamiast N+1 getDoc
+    const { query: fbQuery, where: fbWhere } = await import('firebase/firestore');
+    const taskDataMap = {};
+    const taskChunks = [];
+    for (let i = 0; i < taskIds.length; i += 30) {
+      taskChunks.push(taskIds.slice(i, i + 30));
+    }
+    const taskResults = await Promise.all(
+      taskChunks.map(chunk => {
+        const q = fbQuery(collection(db, 'productionTasks'), fbWhere('__name__', 'in', chunk));
+        return getDocs(q);
+      })
+    );
+    taskResults.forEach(snap => {
+      snap.docs.forEach(d => { taskDataMap[d.id] = d.data(); });
+    });
+    
     for (const taskId of taskIds) {
       try {
-        const taskRef = FirebaseQueryBuilder.getDocRef('productionTasks', taskId);
-        const taskDoc = await getDoc(taskRef);
+        const taskData = taskDataMap[taskId];
         
-        if (!taskDoc.exists()) {
+        if (!taskData) {
           console.log(`⚠️ Zadanie ${taskId} nie istnieje`);
           continue;
         }
         
-        const taskData = taskDoc.data();
         const materialBatches = { ...taskData.materialBatches } || {};
         let hasChanges = false;
         
-        // Sprawdź wszystkie materiały w zadaniu
         for (const [itemId, batches] of Object.entries(materialBatches)) {
           if (Array.isArray(batches)) {
-            // Usuń partie o danym batchId
             const filteredBatches = batches.filter(batch => batch.batchId !== batchId);
             
             if (filteredBatches.length !== batches.length) {
               hasChanges = true;
               
               if (filteredBatches.length === 0) {
-                // Usuń całkowicie materiał jeśli nie ma żadnych partii
                 delete materialBatches[itemId];
                 console.log(`🗑️ Usunięto materiał ${itemId} z zadania ${taskId} (brak partii)`);
               } else {
-                // Zaktualizuj partie
                 materialBatches[itemId] = filteredBatches;
                 console.log(`📝 Zaktualizowano partie dla materiału ${itemId} w zadaniu ${taskId}`);
               }
@@ -1482,8 +1493,8 @@ const updateMaterialBatchesAfterCancellation = async (results, batchId) => {
           }
         }
         
-        // Zapisz zmiany jeśli są jakieś
         if (hasChanges) {
+          const taskRef = FirebaseQueryBuilder.getDocRef('productionTasks', taskId);
           const hasAnyReservations = Object.keys(materialBatches).length > 0;
           
           await updateDoc(taskRef, {

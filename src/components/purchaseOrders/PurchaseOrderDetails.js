@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link, Link as RouterLink, useLocation } from 'react-router-dom';
 import { 
   Container, Typography, Paper, Button, Box, Chip, Grid, Divider, 
@@ -123,46 +123,64 @@ const PurchaseOrderDetails = ({ orderId }) => {
   
   // Stan dla refakturowanych kwot
   const [reinvoicedAmounts, setReinvoicedAmounts] = useState({ items: {}, additionalCosts: {} });
-  
-  useEffect(() => {
-    const fetchPurchaseOrder = async () => {
-      try {
-        const data = await getPurchaseOrderById(orderId);
-        setPurchaseOrder(data);
-        
-        // Jeśli zamówienie ma historię zmian statusu, pobierz dane użytkowników
-        if (data.statusHistory && data.statusHistory.length > 0) {
-          const userIds = data.statusHistory.map(change => change.changedBy).filter(id => id);
-          const uniqueUserIds = [...new Set(userIds)];
-          const names = await getUsersDisplayNames(uniqueUserIds);
-          setUserNames(names);
-        }
-        
-        // Pobierz powiązane LOTy
-        await fetchRelatedBatches(orderId);
-        
-        // Pobierz rezerwacje PO
-        if (data.items && data.items.length > 0) {
-          await loadPOReservations(orderId, data.items);
-        }
-        
-        // Pobierz refaktury powiązane z tym PO i oblicz refakturowane kwoty
-        await fetchRefInvoices(orderId, data);
-        
-        // Pobierz odpowiedzi formularzy rozładunku dla tego PO
-        if (data && data.number) {
-          console.log('🚛 PO Document loaded with number:', data.number, '(type:', typeof data.number, ')');
-          fetchUnloadingFormResponses(data.number);
-        } else {
-          console.log('❌ No PO number found in document data:', data);
-        }
-      } catch (error) {
-        showError('Błąd podczas pobierania danych zamówienia: ' + error.message);
-      } finally {
-        setLoading(false);
+
+  // Funkcja pobierania pełnych danych PO (z loading spinnerem)
+  const fetchPurchaseOrder = useCallback(async () => {
+    try {
+      const data = await getPurchaseOrderById(orderId);
+      setPurchaseOrder(data);
+      
+      // Jeśli zamówienie ma historię zmian statusu, pobierz dane użytkowników
+      if (data.statusHistory && data.statusHistory.length > 0) {
+        const userIds = data.statusHistory.map(change => change.changedBy).filter(id => id);
+        const uniqueUserIds = [...new Set(userIds)];
+        const names = await getUsersDisplayNames(uniqueUserIds);
+        setUserNames(names);
       }
-    };
-    
+      
+      // Pobierz powiązane LOTy
+      await fetchRelatedBatches(orderId);
+      
+      // Pobierz rezerwacje PO
+      if (data.items && data.items.length > 0) {
+        await loadPOReservations(orderId, data.items);
+      }
+      
+      // Pobierz refaktury powiązane z tym PO i oblicz refakturowane kwoty
+      await fetchRefInvoices(orderId, data);
+      
+      // Pobierz odpowiedzi formularzy rozładunku dla tego PO
+      if (data && data.number) {
+        console.log('🚛 PO Document loaded with number:', data.number, '(type:', typeof data.number, ')');
+        fetchUnloadingFormResponses(data.number);
+      } else {
+        console.log('❌ No PO number found in document data:', data);
+      }
+    } catch (error) {
+      showError('Błąd podczas pobierania danych zamówienia: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId]);
+
+  // Lekka funkcja odświeżania danych bez full-page spinnera
+  const refreshPurchaseOrderData = useCallback(async () => {
+    if (!orderId) return;
+    try {
+      const data = await getPurchaseOrderById(orderId);
+      setPurchaseOrder(data);
+      
+      // Odśwież refaktury i kwoty refakturowane
+      await fetchRefInvoices(orderId, data);
+      
+      // Odśwież powiązane LOTy
+      await fetchRelatedBatches(orderId);
+    } catch (error) {
+      console.error('Błąd podczas odświeżania danych zamówienia:', error);
+    }
+  }, [orderId]);
+
+  useEffect(() => {
     if (orderId) {
       fetchPurchaseOrder();
     }
@@ -179,6 +197,29 @@ const PurchaseOrderDetails = ({ orderId }) => {
       }, 500);
     }
   }, [orderId, showError]);
+
+  // Odświeżaj dane gdy strona staje się widoczna (powrót z innej zakładki/strony)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && orderId) {
+        refreshPurchaseOrderData();
+      }
+    };
+
+    const handleWindowFocus = () => {
+      if (orderId) {
+        refreshPurchaseOrderData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWindowFocus);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [orderId, refreshPurchaseOrderData]);
   
   const fetchRelatedBatches = async (poId) => {
     try {
@@ -313,68 +354,58 @@ const PurchaseOrderDetails = ({ orderId }) => {
       
       console.log('🔍 Checking PO variants:', poVariants);
       
-      let unloadingData = [];
+      // Jedno zapytanie 'in' zamiast pętli po wariantach
+      const unloadingQuery = query(
+        collection(db, 'Forms/RozladunekTowaru/Odpowiedzi'), 
+        where('poNumber', 'in', poVariants)
+      );
+      const unloadingSnapshot = await getDocs(unloadingQuery);
       
-      // Spróbuj wszystkie warianty
-      for (const variant of poVariants) {
-        const unloadingQuery = query(
-          collection(db, 'Forms/RozladunekTowaru/Odpowiedzi'), 
-          where('poNumber', '==', variant)
-        );
-        const unloadingSnapshot = await getDocs(unloadingQuery);
-        
-        console.log(`📄 Found ${unloadingSnapshot.docs.length} unloading form responses for variant: "${variant}"`);
-        
-        if (unloadingSnapshot.docs.length > 0) {
-          const variantData = unloadingSnapshot.docs.map(doc => {
-            const data = doc.data();
-            console.log('📝 Processing document:', doc.id, 'with PO:', data.poNumber);
-            return {
-              id: doc.id,
-              ...data,
-              fillDate: data.fillDate?.toDate(),
-              unloadingDate: data.unloadingDate?.toDate(),
-              formType: 'unloading',
-              // Obsługa selectedItems z bezpieczną konwersją dat ważności
-              selectedItems: data.selectedItems?.map(item => {
-                // Pomocnicza funkcja do konwersji daty
-                const convertDate = (dateValue) => {
-                  if (!dateValue) return null;
-                  try {
-                    if (dateValue.toDate && typeof dateValue.toDate === 'function') {
-                      return dateValue.toDate();
-                    } else if (typeof dateValue === 'string') {
-                      const parsed = new Date(dateValue);
-                      return isNaN(parsed.getTime()) ? null : parsed;
-                    } else if (dateValue instanceof Date) {
-                      return dateValue;
-                    }
-                  } catch (error) {
-                    console.error('Błąd konwersji daty:', error, dateValue);
-                  }
-                  return null;
-                };
-                
-                // NOWY FORMAT: Konwersja dat w partiach (batches)
-                const convertedBatches = item.batches?.map(batch => ({
-                  ...batch,
-                  expiryDate: convertDate(batch.expiryDate)
-                })) || [];
-                
-                // STARY FORMAT: Konwersja daty ważności na poziomie pozycji (kompatybilność wsteczna)
-                const convertedExpiryDate = convertDate(item.expiryDate);
-                
-                return {
-                  ...item,
-                  batches: convertedBatches,
-                  expiryDate: convertedExpiryDate
-                };
-              }) || []
-            };
-          });
-          unloadingData.push(...variantData);
+      console.log(`📄 Found ${unloadingSnapshot.docs.length} unloading form responses for variants:`, poVariants);
+      
+      // Pomocnicza funkcja do konwersji daty
+      const convertDate = (dateValue) => {
+        if (!dateValue) return null;
+        try {
+          if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+            return dateValue.toDate();
+          } else if (typeof dateValue === 'string') {
+            const parsed = new Date(dateValue);
+            return isNaN(parsed.getTime()) ? null : parsed;
+          } else if (dateValue instanceof Date) {
+            return dateValue;
+          }
+        } catch (error) {
+          console.error('Błąd konwersji daty:', error, dateValue);
         }
-      }
+        return null;
+      };
+      
+      let unloadingData = unloadingSnapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('📝 Processing document:', doc.id, 'with PO:', data.poNumber);
+        return {
+          id: doc.id,
+          ...data,
+          fillDate: data.fillDate?.toDate(),
+          unloadingDate: data.unloadingDate?.toDate(),
+          formType: 'unloading',
+          selectedItems: data.selectedItems?.map(item => {
+            const convertedBatches = item.batches?.map(batch => ({
+              ...batch,
+              expiryDate: convertDate(batch.expiryDate)
+            })) || [];
+            
+            const convertedExpiryDate = convertDate(item.expiryDate);
+            
+            return {
+              ...item,
+              batches: convertedBatches,
+              expiryDate: convertedExpiryDate
+            };
+          }) || []
+        };
+      });
       
       // Sortowanie odpowiedzi od najnowszych (według daty wypełnienia)
       const sortByFillDate = (a, b) => {
