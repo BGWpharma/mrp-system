@@ -58,7 +58,7 @@ const InteractionDetailsPage = () => {
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('interactions');
   const navigate = useNavigate();
 
   useEffect(() => {

@@ -58,7 +58,7 @@ const ImportPriceListDialog = ({ open, onClose, priceListId, priceList, onImport
   const fileInputRef = useRef(null);
   const { currentUser } = useAuth();
   const { showNotification } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('priceLists');
   
   const handleClose = () => {
     if (!importing) {

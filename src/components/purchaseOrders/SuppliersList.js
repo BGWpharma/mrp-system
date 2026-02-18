@@ -36,7 +36,7 @@ import {
 import { rebuildAllSupplierCatalogs } from '../../services/supplierProductService';
 
 const SuppliersList = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('suppliers');
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
   const { currentUser } = useAuth();

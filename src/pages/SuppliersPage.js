@@ -4,7 +4,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import SuppliersList from '../components/purchaseOrders/SuppliersList';
 
 const SuppliersPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('suppliers');
   
   return (
     <Container>

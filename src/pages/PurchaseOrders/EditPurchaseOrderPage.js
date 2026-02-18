@@ -28,7 +28,7 @@ import { getSupplierProducts } from '../../services/supplierProductService';
 import LoadingScreen from '../../components/common/LoadingScreen';
 
 const EditPurchaseOrderPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('purchaseOrders');
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();

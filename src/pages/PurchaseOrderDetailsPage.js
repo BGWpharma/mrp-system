@@ -6,7 +6,7 @@ import { useTranslation } from '../hooks/useTranslation';
 
 const PurchaseOrderDetailsPage = () => {
   const { id } = useParams();
-  const { t } = useTranslation();
+  const { t } = useTranslation('purchaseOrders');
   
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>

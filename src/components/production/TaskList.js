@@ -423,7 +423,7 @@ const TaskTableRow = memo(({
 TaskTableRow.displayName = 'TaskTableRow';
 
 const TaskList = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('production');
   
   // Funkcja formatowania daty i godziny w formacie liczbowym
   const formatDateTimeNumeric = (date) => {

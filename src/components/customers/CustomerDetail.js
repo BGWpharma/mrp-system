@@ -83,7 +83,7 @@ const formatCurrency = (amount, currency = 'EUR') => {
 
 // Komponent CustomerDetail
 const CustomerDetail = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('customers');
   const { customerId } = useParams();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();

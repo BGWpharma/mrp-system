@@ -94,7 +94,10 @@
       "dailyPaid": "Daily paid",
       "dailyExpected": "Daily expected",
       "date": "Date",
-      "amount": "Amount"
+      "amount": "Amount",
+      "revenue": "Revenue",
+      "expenses": "Expenses",
+      "netCashflow": "Net Cashflow"
     },
     
     "table": {
@@ -114,7 +117,11 @@
       "viewOrder": "View order",
       "count": "pcs",
       "noOrders": "No orders matching the criteria",
-      "clickForDetails": "Click to see details"
+      "clickForDetails": "Click to see details",
+      "expenses": "Expenses",
+      "profit": "Profit",
+      "profitMargin": "Margin",
+      "revenue": "Revenue"
     },
     
     "remaining": {
@@ -159,10 +166,43 @@
       "overdue": "Overdue"
     },
     
+    "profitability": {
+      "title": "Profitability",
+      "revenue": "Revenue (CO)",
+      "expenses": "Expenses (PO)",
+      "expectedProfit": "Expected profit",
+      "margin": "Margin",
+      "paid": "Paid",
+      "expensesPaid": "Paid for PO",
+      "netCashflow": "Net cashflow (actual)",
+      "linkedPOCount": "Linked PO"
+    },
+
     "notifications": {
       "exportSuccess": "Data exported successfully",
       "exportError": "Error while exporting data",
-      "loadError": "Error while loading cashflow data"
+      "loadError": "Error while loading cashflow data",
+      "exportDetailedSuccess": "Detailed CSV report has been exported"
+    },
+
+    "csvExport": {
+      "periodSummary": "Period summary",
+      "customerOrders": "Customer orders (CO)",
+      "expensesPO": "Expenses - Purchase Orders",
+      "orderCount": "Order count",
+      "orderValue": "Order value",
+      "paidAmount": "Paid amount",
+      "expectedPayments": "Expected payments",
+      "expenseCount": "PO count",
+      "expenseValue": "PO value",
+      "expensesPaid": "Paid for PO",
+      "expensesRemaining": "Remaining to pay",
+      "netCashflow": "Period net cashflow",
+      "netProfit": "Period net profit",
+      "profitMargin": "Period margin",
+      "detailedReport": "Detailed report",
+      "paymentTimeline": "Payment timeline",
+      "expensesSummary": "Expenses summary"
     }
   }
 }

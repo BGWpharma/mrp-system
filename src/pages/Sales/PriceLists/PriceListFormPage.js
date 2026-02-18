@@ -48,7 +48,7 @@ const PriceListFormPage = () => {
   
   const { currentUser } = useAuth();
   const { showNotification } = useNotification();
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage } = useTranslation('priceLists');
   
   useEffect(() => {
     async function loadData() {

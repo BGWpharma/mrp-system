@@ -38,7 +38,7 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
   
   const { currentUser } = useAuth();
   const { showNotification } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('priceLists');
   
   useEffect(() => {
     if (open) {

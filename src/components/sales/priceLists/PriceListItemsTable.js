@@ -39,7 +39,7 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
   const [itemToDelete, setItemToDelete] = useState(null);
   
   const { showNotification } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('priceLists');
   
   useEffect(() => {
     fetchItems();

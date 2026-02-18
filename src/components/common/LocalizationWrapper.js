@@ -10,7 +10,7 @@ import { useTranslation } from '../../hooks/useTranslation';
  * w zależności od wybranego języka w aplikacji
  */
 const LocalizationWrapper = ({ children }) => {
-  const { currentLanguage } = useTranslation();
+  const { currentLanguage } = useTranslation('common');
   
   // Wybierz odpowiedni locale na podstawie języka
   const locale = currentLanguage === 'en' ? enUS : pl;

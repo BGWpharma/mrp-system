@@ -154,7 +154,7 @@ const statusTranslations = {
 };
 
 const CmrListPage = () => {
-  const { t: translate } = useTranslation();
+  const { t: translate } = useTranslation('cmr');
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();

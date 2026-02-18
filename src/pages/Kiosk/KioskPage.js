@@ -26,7 +26,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import BackgroundEffects from '../../components/common/BackgroundEffects';
 
 const KioskPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('common');
   const { mode } = useThemeContext();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));

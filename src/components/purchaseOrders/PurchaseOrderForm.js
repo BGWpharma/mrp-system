@@ -112,7 +112,7 @@ const INCOTERMS_OPTIONS = [
 ];
 
 const PurchaseOrderForm = ({ orderId }) => {
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage } = useTranslation('purchaseOrders');
   const { poId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();

@@ -6,7 +6,7 @@ import { PurchaseOrderListStateProvider } from '../contexts/PurchaseOrderListSta
 import { useTranslation } from '../hooks/useTranslation';
 
 const PurchaseOrdersPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('purchaseOrders');
   const [currentTab, setCurrentTab] = useState(0);
 
   return (

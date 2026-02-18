@@ -484,7 +484,7 @@ const TimelineExport = ({
   showSuccess,
   showError 
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('production');
   const [exportDialog, setExportDialog] = useState(false);
   const [exportFilters, setExportFilters] = useState({
     startDate: startDate ? new Date(startDate) : new Date(),

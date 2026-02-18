@@ -28,7 +28,7 @@ const FileOrCameraInput = ({
   maxHeight = "80vh",
   ...inputProps 
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('common');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [stream, setStream] = useState(null);
   const [facingMode, setFacingMode] = useState('environment'); // 'user' dla przedniej, 'environment' dla tylnej

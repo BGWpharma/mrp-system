@@ -22,7 +22,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('customers');
   const [formData, setFormData] = useState({ ...DEFAULT_CUSTOMER });
   const [loading, setLoading] = useState(false);
   const [verifyingNip, setVerifyingNip] = useState(false);

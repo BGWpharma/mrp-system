@@ -111,7 +111,7 @@ import StocktakingPage from '../../pages/Inventory/StocktakingPage';
 const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
 
 const InventoryList = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('inventory');
   const [inventoryItems, setInventoryItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [loading, setLoading] = useState(true);

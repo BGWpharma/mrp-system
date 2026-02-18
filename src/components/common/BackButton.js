@@ -4,7 +4,7 @@ import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button, IconButton, Tooltip } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 
 /**
  * Uniwersalny przycisk nawigacji wstecz.
@@ -26,7 +26,7 @@ const BackButton = ({
   ...props 
 }) => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t } = useTranslation('common');
 
   const displayLabel = label || t('common.back');
   const tooltipText = tooltip || displayLabel;

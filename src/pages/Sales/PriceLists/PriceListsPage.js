@@ -42,7 +42,7 @@ const PriceListsPage = () => {
   
   const { currentUser } = useAuth();
   const { showNotification } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('priceLists');
   
   useEffect(() => {
     fetchPriceLists();

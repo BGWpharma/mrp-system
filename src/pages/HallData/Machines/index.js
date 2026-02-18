@@ -71,7 +71,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useTranslation } from '../../../hooks/useTranslation';
 
 const HallDataMachinesPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('machines');
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { currentUser } = useAuth();

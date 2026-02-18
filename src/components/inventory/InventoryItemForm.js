@@ -59,7 +59,7 @@ const InventoryItemForm = ({ itemId }) => {
   const [recipeUpdateDialog, setRecipeUpdateDialog] = useState({ open: false, count: 0 });
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('inventory');
   const navigate = useNavigate();
   
   const [itemData, setItemData] = useState({

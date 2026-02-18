@@ -74,7 +74,7 @@ import ProductionTimeAnalysisTab from '../../components/production/ProductionTim
 import ProgressReportTab from '../../components/production/ProgressReportTab';
 
 const ProductionReportPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('production');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
@@ -304,7 +304,7 @@ const ProductionReportPage = () => {
 
 // Komponent zakładki konsumpcji MO
 const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, onDateChange }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('production');
   const { showError } = useNotification();
   const [consumptionData, setConsumptionData] = useState([]);
   const [loading, setLoading] = useState(true);

@@ -47,7 +47,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import CustomerForm from './CustomerForm';
 
 const CustomersList = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('customers');
   const { data: customers, loading: customersLoading, refresh: refreshCustomers } = useServiceData(
     CUSTOMERS_CACHE_KEY,
     getAllCustomers,

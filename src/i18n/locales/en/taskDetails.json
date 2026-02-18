@@ -325,10 +325,18 @@
         "totalRequired": "Total required: {{quantity}} {{unit}}",
         "selectReservation": "Select reservation",
         "quantityToLink": "Quantity to link",
+        "editMixing": "Edit mixing",
+        "editMixingDialogTitle": "Edit mixing details",
+        "mixingName": "Mixing name",
+        "mixingNameHelper": "Custom mixing name (e.g. 'Mixing No. 1', 'Mix A', 'Test sample')",
+        "piecesCountLabel": "Pieces count in mixing",
+        "piecesCountLabelHelper": "Optional: How many product pieces should this mixing produce",
+        "editMixingInfo": "Changing the name or pieces count will update the mixing header. Ingredient totals will be recalculated automatically.",
         "errors": {
             "addMixingFailed": "Failed to add mixing",
             "removeMixingFailed": "Failed to remove mixing",
-            "invalidMixingId": "Invalid mixing ID"
+            "invalidMixingId": "Invalid mixing ID",
+            "updateMixingFailed": "Failed to update mixing"
         }
     },
     "productionHistory": {

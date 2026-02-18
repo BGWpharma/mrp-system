@@ -24,6 +24,7 @@
   "cancel": "Cancel",
   "searchPlaceholder": "Search stocktaking...",
   "products": "Products ({{count}})",
+  "itemsToComplete": "Items to complete",
   "addProduct": "Add product",
   "statusValues": {
     "otwarta": "Open",

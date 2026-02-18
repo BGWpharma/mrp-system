@@ -95,7 +95,7 @@ const RecipeList = () => {
   const [filteredRecipes, setFilteredRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const { showSuccess, showError, showInfo } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('recipes');
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   

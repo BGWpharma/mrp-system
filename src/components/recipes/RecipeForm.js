@@ -279,7 +279,7 @@ const SortableIngredientRow = ({
 const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showWarning, showInfo } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('recipes');
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(!!recipeId);

@@ -47,7 +47,7 @@ import { formatDate, formatCurrency } from '../../utils/formatters';
 const StocktakingReportPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t } = useTranslation('stocktaking');
   
   const [stocktaking, setStocktaking] = useState(null);
   const [items, setItems] = useState([]);

@@ -135,7 +135,7 @@ const COReportsPage = () => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
   const theme = useTheme();
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage } = useTranslation('orders');
   
   // Stan komponentu
   const [loading, setLoading] = useState(true);

@@ -38,7 +38,7 @@ const PriceListDetailsPage = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   
   const { showNotification } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('priceLists');
   
   useEffect(() => {
     fetchPriceList();

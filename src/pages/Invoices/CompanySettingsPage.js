@@ -11,7 +11,7 @@ const CompanySettingsPage = () => {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
-  const { t } = useTranslation();
+  const { t } = useTranslation('invoices');
 
   const handleBack = () => {
     navigate('/invoices');

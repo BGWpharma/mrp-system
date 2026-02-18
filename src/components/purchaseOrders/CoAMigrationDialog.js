@@ -41,7 +41,7 @@ const CoAMigrationDialog = ({
   relatedBatches,
   onMigrationComplete 
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('purchaseOrders');
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   

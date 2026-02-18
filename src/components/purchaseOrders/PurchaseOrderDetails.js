@@ -76,7 +76,7 @@ import { createPurchaseOrderPdfGenerator } from './PurchaseOrderPdfGenerator';
 import CoAMigrationDialog from './CoAMigrationDialog';
 
 const PurchaseOrderDetails = ({ orderId }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('purchaseOrders');
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();

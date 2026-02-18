@@ -46,7 +46,9 @@
     "phone": "Phone",
     "vatEu": "VAT-EU / Tax ID",
     "vatEuFormat": "Format: PL0000000000 or 0000000000",
+    "vatEuHelp": "Format: PL0000000000 or 0000000000",
     "vatEuVerify": "Verify Tax ID",
+    "verifyNip": "Verify Tax ID",
     "vatEuVerifying": "Verifying...",
     "vatEuVerifyTitle": "Verify Tax ID",
     "orderAffix": "Customer Order Affix",
@@ -61,6 +63,8 @@
     "update": "Update",
     "add": "Add"
   },
+  "addNewCustomerLabel": "Add new customer",
+  "editCustomerLabel": "Edit customer",
   "addCustomer": "Add Customer",
   "searchPlaceholder": "Search customers...",
   "search": "Search",
@@ -161,9 +165,17 @@
   },
   "delete": {
     "title": "Confirm Deletion",
+    "confirmTitle": "Confirm Deletion",
+    "confirmMessage": "Are you sure you want to delete customer \"{{name}}\"? This operation cannot be undone.",
     "message": "Are you sure you want to delete customer \"{{name}}\"? This operation cannot be undone.",
     "confirm": "Delete",
     "cancel": "Cancel"
+  },
+  "customerFlags": {
+    "standard": "Standard",
+    "euVat": "EU VAT",
+    "yes": "Yes",
+    "no": "No"
   },
   "notifications": {
     "customerAdded": "Customer has been added",

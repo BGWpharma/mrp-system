@@ -59,7 +59,7 @@ const useDebounce = (value, delay) => {
 const CalculatorPage = () => {
   const { showSuccess, showError, showInfo } = useNotification();
   const { currentUser } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useTranslation('calculator');
   
   // Główne stany kalkulatora
   const [mainIngredientQuantity, setMainIngredientQuantity] = useState(100);

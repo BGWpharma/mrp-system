@@ -43,7 +43,7 @@ import {
 // Komponent strony odpowiedzi formularzy magazynowych z optymalizacjami
 const InventoryFormsResponsesPage = () => {
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t } = useTranslation('forms');
   const location = useLocation();
   const navigate = useNavigate();
   

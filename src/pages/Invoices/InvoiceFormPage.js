@@ -6,7 +6,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 
 const InvoiceFormPage = () => {
   const { invoiceId } = useParams();
-  const { t } = useTranslation();
+  const { t } = useTranslation('invoices');
   
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>

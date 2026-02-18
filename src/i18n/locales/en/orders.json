@@ -208,7 +208,9 @@
       "refreshCmrDocuments": "Refresh CMR documents list",
       "clickToSeeInvoiceDetails": "Click to see invoice details ({{count}})",
       "clickToSeeAllInvoices": "Click to see all invoices",
-      "recalculateShippedQuantities": "Recalculate shipped quantities based on all CMR documents"
+      "recalculateShippedQuantities": "Recalculate shipped quantities based on all CMR documents",
+      "viewOrderDetails": "View order details",
+      "clickToChangeStatus": "Click to change order status"
     },
     "deliveryProof": {
       "altText": "Delivery proof",
@@ -345,7 +347,9 @@
       "emailSent": "Email sent",
       "emailError": "Error sending email",
       "orderNumberUpdated": "Order number successfully updated",
-      "orderNumberUpdateError": "Error updating order number"
+      "orderNumberUpdateError": "Error updating order number",
+      "statusUpdated": "Order status has been updated",
+      "statusUpdateError": "Failed to update order status"
     },
     "dialogs": {
       "purchaseOrder": {
@@ -389,6 +393,14 @@
         "cancel": "Cancel",
         "updating": "Updating...",
         "warningMessage": "This operation is irreversible. Make sure the new number is correct."
+      },
+      "statusChange": {
+        "title": "Change order status",
+        "selectStatus": "Select new status for the order:",
+        "orderNumber": "Number:",
+        "status": "Status",
+        "cancel": "Cancel",
+        "update": "Update"
       }
     }
   },

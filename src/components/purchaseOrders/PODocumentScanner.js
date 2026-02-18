@@ -75,7 +75,7 @@ const PODocumentScanner = ({
   onApplyInvoiceUpdates,
   disabled = false 
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('purchaseOrders');
   const { currentUser } = useAuth();
   const { showSuccess, showError, showWarning } = useNotification();
   const fileInputRef = useRef(null);

@@ -31,7 +31,7 @@ import {
 } from '../../services/comarchOptimaExportService';
 
 const InvoiceOptimaExport = ({ selectedInvoices = [], allInvoices = [], customers = [] }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('invoices');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [validationResults, setValidationResults] = useState([]);

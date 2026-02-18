@@ -30,7 +30,7 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
   
   const { currentUser } = useAuth();
   const { showNotification } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('priceLists');
   
   useEffect(() => {
     if (item && open) {

@@ -48,7 +48,7 @@ const StocktakingAttachments = ({
 }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('stocktaking');
   
   const [uploading, setUploading] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);

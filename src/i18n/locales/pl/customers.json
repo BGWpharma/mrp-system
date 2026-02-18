@@ -46,6 +46,8 @@
     "phone": "Telefon",
     "vatEu": "VAT-EU / NIP",
     "vatEuHelp": "Format: PL0000000000 lub 0000000000",
+    "vatEuFormat": "Format: PL0000000000 lub 0000000000",
+    "vatEuVerify": "Zweryfikuj NIP",
     "verifyNip": "Zweryfikuj NIP",
     "vatEuVerifying": "Weryfikowanie...",
     "vatEuVerifyTitle": "Zweryfikuj NIP",

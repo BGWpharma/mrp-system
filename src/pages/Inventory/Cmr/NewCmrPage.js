@@ -12,7 +12,7 @@ import { useEffect } from 'react';
 const NewCmrPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { t } = useTranslation();
+  const { t } = useTranslation('cmr');
   const [cmrData, setCmrData] = useState(null);
   const [loading, setLoading] = useState(!!id);
   const [error, setError] = useState(null);

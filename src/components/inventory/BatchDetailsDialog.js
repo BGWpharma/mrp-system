@@ -58,7 +58,7 @@ const TRANSACTION_TYPE_LABELS = {
 };
 
 const BatchDetailsDialog = ({ open, onClose, batch }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('inventory');
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);

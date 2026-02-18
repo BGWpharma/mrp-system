@@ -26,7 +26,7 @@ import {
  * oraz porady jak rozwiązać ten problem
  */
   const APIQuotaAlert = () => {
-    const { t } = useTranslation();
+    const { t } = useTranslation('aiAssistant');
   const handleOpenBillingPage = () => {
     window.open('https://platform.openai.com/account/billing', '_blank');
   };

@@ -53,7 +53,7 @@ const RecipeDesignAttachments = ({
 }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('recipes');
   
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);

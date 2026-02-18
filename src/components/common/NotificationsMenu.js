@@ -67,7 +67,7 @@ const NotificationsMenu = () => {
   const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const { currentUser } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useTranslation('common');
   const navigate = useNavigate();
   const open = Boolean(anchorEl);
   

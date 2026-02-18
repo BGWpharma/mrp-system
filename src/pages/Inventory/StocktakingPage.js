@@ -57,7 +57,7 @@ const StocktakingPage = () => {
   const [stocktakingToCorrect, setStocktakingToCorrect] = useState(null);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('stocktaking');
   const [userNames, setUserNames] = useState({});
 
   useEffect(() => {

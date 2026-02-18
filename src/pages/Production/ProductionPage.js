@@ -21,7 +21,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { useNotification } from '../../hooks/useNotification';
 
 const ProductionPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('production');
   const [activeTab, setActiveTab] = useState(0);
   const [viewMode, setViewMode] = useState('list');
   const [adminDialogOpen, setAdminDialogOpen] = useState(false);

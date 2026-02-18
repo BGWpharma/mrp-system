@@ -4,7 +4,7 @@ import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const PdfMiniaturePreview = ({ pdfUrl, fileName, onClick }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('common');
   const [previewImage, setPreviewImage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);

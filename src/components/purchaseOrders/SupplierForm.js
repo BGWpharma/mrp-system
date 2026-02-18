@@ -22,7 +22,7 @@ import { validateNipFormat, getBasicCompanyDataByNip } from '../../services/nipV
 import SupplierProductCatalog from './SupplierProductCatalog';
 
 const SupplierForm = ({ viewOnly = false, supplierId }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('suppliers');
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();

@@ -49,7 +49,8 @@
     "partiallyPaid": "Partially Paid",
     "overdue": "Overdue",
     "cancelled": "Cancelled",
-    "unpaid": "Unpaid"
+    "unpaid": "Unpaid",
+    "refundDue": "Refund Due"
   },
   "form": {
     "title": {

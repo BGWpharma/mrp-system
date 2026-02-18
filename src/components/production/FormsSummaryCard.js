@@ -20,7 +20,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 
 const FormsSummaryCard = ({ formResponses }) => {
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t } = useTranslation('production');
 
   // Funkcja pomocnicza do analizy wartości tekstowych/liczbowych
   const analyzeRawMaterialLossData = (forms) => {

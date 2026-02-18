@@ -130,7 +130,7 @@ const translations = {
 };
 
 const InvoiceCsvExport = ({ invoices, customers }) => {
-  const { t: translate } = useTranslation();
+  const { t: translate } = useTranslation('invoices');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [reportData, setReportData] = useState(null);

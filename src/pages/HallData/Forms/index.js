@@ -11,7 +11,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from '../../../hooks/useTranslation';
 
 const HallDataFormsPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('forms');
   
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>

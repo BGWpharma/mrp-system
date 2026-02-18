@@ -54,7 +54,7 @@ import {
 } from '../../services/taskboardAttachmentService';
 import PersonIcon from '@mui/icons-material/Person';
 import { nanoid } from 'nanoid';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import MentionTextarea from './MentionTextarea';
 
 // Helper do rozpoznawania typu pliku po URL lub type

@@ -12,7 +12,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const FormsPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('forms');
   // URL do strony Google Sites
   const googleSiteUrl = 'https://sites.google.com/bgwpharma.com/brygadzisci/g%C5%82%C3%B3wna';
   

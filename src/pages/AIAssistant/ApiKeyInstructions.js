@@ -21,7 +21,7 @@ import {
   import { useTranslation } from '../../hooks/useTranslation';
 
   const ApiKeyInstructions = () => {
-    const { t } = useTranslation();
+    const { t } = useTranslation('aiAssistant');
     return (
     <Paper sx={{ p: 3, mt: 4, mb: 4 }}>
       <Typography variant="h5" gutterBottom>

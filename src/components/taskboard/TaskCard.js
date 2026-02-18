@@ -30,7 +30,7 @@ import { format, isToday, isTomorrow, isPast, differenceInDays } from 'date-fns'
 import { pl } from 'date-fns/locale';
 import TaskDetailsDialog from './TaskDetailsDialog';
 import MentionText from './MentionText';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {}, disableDrag = false }) => {
   const { t } = useTranslation('taskboard');

@@ -74,7 +74,7 @@ import APIQuotaAlert from './APIQuotaAlert';
   const { mode } = useTheme();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-    const { t, formatDate: formatDateLocalized, currentLanguage } = useTranslation();
+    const { t, formatDate: formatDateLocalized, currentLanguage } = useTranslation('aiAssistant');
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);

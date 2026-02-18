@@ -32,7 +32,7 @@ const languages = [
 ];
 
 const LanguageSwitcher = ({ variant = 'icon' }) => {
-  const { i18n, t } = useTranslation();
+  const { i18n, t } = useTranslation('common');
   const { showSuccess, showError } = useNotification();
   const [anchorEl, setAnchorEl] = useState(null);
   const [isChanging, setIsChanging] = useState(false);

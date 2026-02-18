@@ -102,7 +102,7 @@ const DropZone = styled(Paper)(({ theme }) => ({
 const BugReportDialog = ({ open, onClose }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showWarning, showInfo } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('common');
   
   const [formData, setFormData] = useState({
     title: '',

@@ -88,7 +88,7 @@ const StocktakingDetailsPage = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('stocktaking');
   const { canCompleteStocktaking, loading: permissionsLoading } = usePermissions();
   
   const [stocktaking, setStocktaking] = useState(null);

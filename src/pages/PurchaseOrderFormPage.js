@@ -6,7 +6,7 @@ import { useTranslation } from '../hooks/useTranslation';
 
 const PurchaseOrderFormPage = () => {
   const { id } = useParams();
-  const { t } = useTranslation();
+  const { t } = useTranslation('purchaseOrders');
   const isNew = id === 'new';
   
   return (

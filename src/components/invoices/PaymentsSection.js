@@ -59,7 +59,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('invoices');
 
   const paymentMethods = [
     { value: 'przelew', label: t('invoices.payments.methods.przelew') },

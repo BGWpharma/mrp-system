@@ -5,7 +5,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import SupplierForm from '../components/purchaseOrders/SupplierForm';
 
 const SupplierFormPage = ({ viewOnly = false }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('suppliers');
   const { id } = useParams();
   const isEditMode = Boolean(id) && !viewOnly;
 

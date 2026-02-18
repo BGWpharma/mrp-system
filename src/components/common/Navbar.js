@@ -117,7 +117,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 const Navbar = () => {
   const { currentUser, logout } = useAuth();
   const { mode, toggleTheme } = useTheme();
-  const { t } = useTranslation();
+  const { t } = useTranslation('navigation');
   const muiTheme = useMuiTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
   const [anchorEl, setAnchorEl] = useState(null);

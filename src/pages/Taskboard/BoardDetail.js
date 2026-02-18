@@ -31,7 +31,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import LockIcon from '@mui/icons-material/Lock';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import BackButton from '../../components/common/BackButton';
 import ROUTES from '../../constants/routes';
 import {

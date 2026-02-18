@@ -83,7 +83,7 @@ const RecipeDetailsPage = () => {
   const navigate = useNavigate();
   const { showError, showSuccess, showWarning, showInfo } = useNotification();
   const { currentUser } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useTranslation('recipes');
   const [recipe, setRecipe] = useState(null);
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(true);

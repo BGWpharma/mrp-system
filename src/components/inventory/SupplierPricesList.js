@@ -48,7 +48,7 @@ import SupplierPriceHistory from './SupplierPriceHistory';
 const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('inventory');
   
   const [supplierPrices, setSupplierPrices] = useState([]);
   const [suppliers, setSuppliers] = useState([]);

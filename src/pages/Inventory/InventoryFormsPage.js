@@ -9,7 +9,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const InventoryFormsPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('forms');
   
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>

@@ -50,7 +50,7 @@ import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import TaskCard from './TaskCard';
 import { createTask, moveTask, updateTask, updateColumn } from '../../services/taskboardService';
 import { useAuth } from '../../hooks/useAuth';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 
 // Komponent nagłówka kolumny z menu edycji
 const ColumnHeader = React.memo(({ 

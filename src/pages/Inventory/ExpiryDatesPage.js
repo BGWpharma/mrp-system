@@ -59,7 +59,7 @@ function TabPanel(props) {
 }
 
 const ExpiryDatesPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('expiryDates');
   const navigate = useNavigate();
   const { showError } = useNotification();
   const [expiringBatches, setExpiringBatches] = useState([]);

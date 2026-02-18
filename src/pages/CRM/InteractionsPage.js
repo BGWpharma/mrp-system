@@ -70,7 +70,7 @@ const InteractionsPage = () => {
   
   const { showSuccess, showError } = useNotification();
   const { currentUser } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useTranslation('interactions');
   
   useEffect(() => {
     fetchInteractions();

@@ -141,7 +141,8 @@
       "discount": "Discount %",
       "vatRate": "VAT",
       "amountAfterConversion": "Amount after conversion",
-      "defaultSupplierPrice": "Default supplier price"
+      "defaultSupplierPrice": "Default supplier price",
+      "expiryDate": "Expiry Date"
     },
     "summary": {
       "title": "Cost Summary",
@@ -200,6 +201,14 @@
     "deleteFailed": "Failed to delete order",
     "statusUpdateFailed": "Failed to update status",
     "productNotLinked": "This product is not linked to an inventory item"
+  },
+  "notifications": {
+    "statusUpdateSuccess": "Order status has been updated",
+    "statusUpdateError": "Error updating order status",
+    "paymentStatusUpdateSuccess": "Payment status has been updated",
+    "paymentStatusUpdateError": "Error updating payment status",
+    "deleteSuccess": "Order has been deleted",
+    "deleteError": "Error deleting order"
   },
   "batchNotFoundInDb": "Batch not found in database.",
   "loadingOrderDetails": "Loading order details...",

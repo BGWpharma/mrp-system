@@ -42,7 +42,7 @@ import {
 } from '../../services/poOrderReminderService';
 
 const POOrderReminderDialog = ({ open, onClose }) => {
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage } = useTranslation('purchaseOrders');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

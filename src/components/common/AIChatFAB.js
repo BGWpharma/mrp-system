@@ -66,7 +66,7 @@ const AIChatFAB = () => {
   const muiTheme = useMuiTheme();
   const { currentUser } = useAuth();
   const { showError, showSuccess } = useNotification();
-  const { t, currentLanguage } = useTranslation();
+  const { t, currentLanguage } = useTranslation('aiAssistant');
   const navigate = useNavigate();
   const location = useLocation();
   

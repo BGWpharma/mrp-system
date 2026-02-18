@@ -49,7 +49,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import LockIcon from '@mui/icons-material/Lock';
 import PublicIcon from '@mui/icons-material/Public';
 import { useAuth } from '../../hooks/useAuth';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { getAccessibleBoards, createBoard, updateBoard, deleteBoard, getOrCreateMainBoard } from '../../services/taskboardService';
 import BoardDetail from './BoardDetail';
 import { format } from 'date-fns';

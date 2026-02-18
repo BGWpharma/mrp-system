@@ -11,7 +11,7 @@ const CmrCreatePage = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('cmr');
 
   const handleSubmit = async (formData) => {
     try {

@@ -50,7 +50,7 @@ import {
 // Komponent strony odpowiedzi formularzy
 const FormsResponsesPage = () => {
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t } = useTranslation('forms');
   const { showError } = useNotification();
   const location = useLocation();
   const navigate = useNavigate();

@@ -277,7 +277,24 @@
       "noSessionsForCriteria": "Brak sesji spełniających wybrane kryteria",
       "taskNotExistsError": "Zadanie nie istnieje lub zostało usunięte",
       "charts": {
-        "timeDistribution": "Rozkład czasu"
+        "timeDistribution": "Rozkład czasu",
+        "dailyTrend": "Trend dzienny",
+        "weeklyTrend": "Trend tygodniowy",
+        "monthlyTrend": "Trend miesięczny",
+        "timeHours": "Czas (h)",
+        "sessions": "Sesje",
+        "quantity": "Ilość"
+      },
+      "filters": {
+        "dateRange": "Zakres dat",
+        "task": "Zadanie",
+        "allTasks": "Wszystkie zadania"
+      },
+      "summary": {
+        "noData": "Brak danych dla wybranego okresu",
+        "dataRange": "Dane za okres od {{startDate}} do {{endDate}}",
+        "totalTimeSpent": "Łączny czas poświęcony na produkcję",
+        "productionEfficiency": "Wydajność produkcji"
       },
       "tableHeaders": {
         "date": "Data",
@@ -286,7 +303,13 @@
         "endTime": "Koniec",
         "timeSpent": "Czas trwania",
         "quantity": "Ilość",
-        "timePerUnit": "Czas/szt. (s)"
+        "timePerUnit": "Czas/szt. (s)",
+        "totalTime": "Łączny czas",
+        "sessionsCount": "Liczba sesji",
+        "averageTime": "Średni czas",
+        "period": "Okres",
+        "taskName": "Nazwa zadania",
+        "moNumber": "Numer MO"
       },
       "exportCsv": "Eksport CSV",
       "gapAnalysis": {

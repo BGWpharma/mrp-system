@@ -29,7 +29,7 @@ import { getAllActiveUsers } from '../../services/userService';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useTranslation('dashboard');
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
   

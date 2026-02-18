@@ -4,7 +4,7 @@ import InvoicesList from '../../components/invoices/InvoicesList';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const InvoicesListPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('invoices');
   
   return (
     <Container maxWidth="xl" sx={{ mt: 2, mb: 2 }}>

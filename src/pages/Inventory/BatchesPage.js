@@ -84,7 +84,7 @@ const BatchesPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { showError, showSuccess } = useNotification();
   const { currentUser } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useTranslation('inventory');
   const [localUser, setLocalUser] = useState(null);
   const [item, setItem] = useState(null);
   const [batches, setBatches] = useState([]);

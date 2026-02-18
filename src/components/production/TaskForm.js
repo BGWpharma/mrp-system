@@ -105,7 +105,7 @@ const TaskForm = ({ taskId }) => {
   const [inventoryProducts, setInventoryProducts] = useState([]);
   const { currentUser } = useAuth();
   const { showSuccess, showError, showWarning } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('production');
   const navigate = useNavigate();
   const location = useLocation();
   

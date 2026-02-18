@@ -60,7 +60,7 @@ import { format, subHours, subDays, subWeeks, subMonths, isValid } from 'date-fn
 import { useTranslation } from '../../../hooks/useTranslation';
 
 const HallDataConditionsPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('environmentalConditions');
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [loading, setLoading] = useState(true);

@@ -178,7 +178,7 @@ const PurchaseOrderRow = React.memo(({
 PurchaseOrderRow.displayName = 'PurchaseOrderRow';
 
 const PurchaseOrderList = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('purchaseOrders');
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();

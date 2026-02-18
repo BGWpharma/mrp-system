@@ -351,7 +351,12 @@
       "close": "Close",
       "indexWarningTitle": "Warning: Missing required database index",
       "indexWarningMessage": "Customer filtering may work slower. Administrator should add an index to the \"recipes\" collection: customerId (Ascending), updatedAt (Descending)."
-    }
+    },
+    "exportWithSuppliers": "Export with suppliers",
+    "exportWithSuppliersTitle": "Export recipes with suppliers",
+    "exportWithSuppliersDescription": "Select filters for exporting recipes with ingredients and suppliers. For each ingredient, suppliers from two sources will be listed: from inventory item (price list) and from actual purchase orders (PO).",
+    "export": "Export",
+    "exporting": "Exporting..."
   },
   "createProductDialog": {
     "title": "Add product to inventory",
