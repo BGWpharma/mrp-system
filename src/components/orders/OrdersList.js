@@ -32,7 +32,9 @@ import {
   DialogContentText,
   DialogActions,
   Divider,
-  Link
+  Link,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -52,7 +54,9 @@ import {
   Refresh as RefreshIcon,
   ShoppingCart as ShoppingCartIcon,
   ArrowDropDown as ArrowDropDownIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  Archive as ArchiveIcon,
+  Unarchive as UnarchiveIcon
 } from '@mui/icons-material';
 import { 
   getAllOrders, 
@@ -60,7 +64,9 @@ import {
   updateOrderStatus, 
   getOrderById,
   ORDER_STATUSES,
-  getOrdersWithPagination
+  getOrdersWithPagination,
+  archiveOrder,
+  unarchiveOrder
 } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -93,6 +99,7 @@ const OrdersList = () => {
   const [customersLoading, setCustomersLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [orderToUpdateStatus, setOrderToUpdateStatus] = useState(null);
   const [newStatus, setNewStatus] = useState('');
 
@@ -356,6 +363,21 @@ const OrdersList = () => {
     fetchOrders();
   };
 
+  const handleArchiveOrder = async (order) => {
+    try {
+      if (order.archived) {
+        await unarchiveOrder(order.id);
+        showSuccess(t('common.unarchiveSuccess', { ns: 'common' }));
+      } else {
+        await archiveOrder(order.id);
+        showSuccess(t('common.archiveSuccess', { ns: 'common' }));
+      }
+      fetchOrders();
+    } catch (error) {
+      showError(error.message);
+    }
+  };
+
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     // Dla pól typu date (fromDate, toDate) zapewniamy poprawny format
@@ -487,8 +509,7 @@ const OrdersList = () => {
     setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
   };
 
-  // Używamy danych bezpośrednio z serwera
-  const displayedOrders = orders;
+  const displayedOrders = showArchived ? orders : orders.filter(order => !order.archived);
 
   const getStatusChipColor = (status) => {
     switch (status) {
@@ -1521,6 +1542,18 @@ const OrdersList = () => {
             sx={{ width: 300 }}
           />
 
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+                size="small"
+              />
+            }
+            label={t('common.showArchived', { ns: 'common' })}
+            sx={{ ml: 1 }}
+          />
+
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button
               variant="contained"
@@ -1746,7 +1779,7 @@ const OrdersList = () => {
                   ) : (
                     displayedOrders.map((order) => (
                       <React.Fragment key={order.id}>
-                        <TableRow hover>
+                        <TableRow hover sx={{ opacity: order.archived ? 0.5 : 1 }}>
                           <TableCell>
                             <IconButton
                               size="small"
@@ -1844,6 +1877,14 @@ const OrdersList = () => {
                                 color="primary"
                               >
                                 <EventNoteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title={order.archived ? t('common.unarchive', { ns: 'common' }) : t('common.archive', { ns: 'common' })}>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleArchiveOrder(order)}
+                              >
+                                {order.archived ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
                               </IconButton>
                             </Tooltip>
                             <Tooltip title={t('orders.actions.delete')}>

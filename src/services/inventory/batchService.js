@@ -1587,3 +1587,51 @@ export const calculateEstimatedPricesForMultipleMaterials = async (materialIds) 
     return {};
   }
 };
+
+/**
+ * Archiwizuje partię (lot). Dozwolone tylko gdy quantity === 0.
+ */
+export const archiveBatch = async (batchId) => {
+  try {
+    if (!batchId) throw new Error('ID partii jest wymagane');
+    const docRef = doc(db, COLLECTIONS.INVENTORY_BATCHES, batchId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error('Partia nie istnieje');
+
+    const batchData = docSnap.data();
+    if ((batchData.quantity || 0) !== 0) {
+      throw new Error('Nie można zarchiwizować partii z niezerową ilością. Ilość musi wynosić 0.');
+    }
+
+    await updateDoc(docRef, {
+      archived: true,
+      archivedAt: serverTimestamp(),
+      archivedBy: 'manual'
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas archiwizacji partii:', error);
+    throw error;
+  }
+};
+
+/**
+ * Przywraca partię z archiwum
+ */
+export const unarchiveBatch = async (batchId) => {
+  try {
+    if (!batchId) throw new Error('ID partii jest wymagane');
+    const docRef = doc(db, COLLECTIONS.INVENTORY_BATCHES, batchId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error('Partia nie istnieje');
+
+    await updateDoc(docRef, {
+      archived: false,
+      archivedAt: deleteField()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas przywracania partii z archiwum:', error);
+    throw error;
+  }
+};

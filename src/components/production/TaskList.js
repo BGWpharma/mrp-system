@@ -84,9 +84,11 @@ import {
   ArrowDropDown as ArrowDropDownIcon,
   Download as DownloadIcon,
   Sort as SortIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Archive as ArchiveIcon,
+  Unarchive as UnarchiveIcon
 } from '@mui/icons-material';
-import { getAllTasks, updateTaskStatus, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction, getProductionTasksOptimized, clearProductionTasksCache, forceRefreshProductionTasksCache, removeDuplicatesFromCache, updateTaskInCache, addTaskToCache, removeTaskFromCache, getProductionTasksCacheStatus } from '../../services/productionService';
+import { getAllTasks, updateTaskStatus, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction, getProductionTasksOptimized, clearProductionTasksCache, forceRefreshProductionTasksCache, removeDuplicatesFromCache, updateTaskInCache, addTaskToCache, removeTaskFromCache, getProductionTasksCacheStatus, archiveProductionTask, unarchiveProductionTask } from '../../services/productionService';
 import { db } from '../../services/firebase/config';
 import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { getAllWarehouses } from '../../services/inventory';
@@ -174,6 +176,7 @@ const TaskTableRow = memo(({
   onStatusChange,
   onStopProductionDirect,
   onRefresh,
+  onArchive,
   navigate,
   t
 }) => {
@@ -271,7 +274,7 @@ const TaskTableRow = memo(({
   }, [task.status, task.id, task.materialConsumptionConfirmed, isFullyProduced, handleStartProduction, handleStopProduction, t]);
   
   return (
-    <TableRow key={task.id}>
+    <TableRow key={task.id} sx={{ opacity: task.archived ? 0.5 : 1 }}>
       {visibleColumns.name && (
         <TableCell sx={{ maxWidth: 200 }}>
           <Link to={`/production/tasks/${task.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -412,6 +415,15 @@ const TaskTableRow = memo(({
                 <EditIcon fontSize="small" />
               </IconButton>
             </Tooltip>
+
+            <Tooltip title={task.archived ? t('common:common.unarchive') : t('common:common.archive')}>
+              <IconButton
+                size="small"
+                onClick={() => onArchive(task)}
+              >
+                {task.archived ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
           </Box>
         </TableCell>
       )}
@@ -475,6 +487,7 @@ const TaskList = () => {
   const [tasks, setTasks] = useState([]);
   const [filteredTasks, setFilteredTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -835,6 +848,21 @@ const TaskList = () => {
   const handleSearchChange = (event) => {
     listActions.setSearchTerm(event.target.value);
   };
+
+  const handleArchiveTask = useCallback(async (task) => {
+    try {
+      if (task.archived) {
+        await unarchiveProductionTask(task.id);
+        showSuccess(t('common:common.unarchiveSuccess'));
+      } else {
+        await archiveProductionTask(task.id);
+        showSuccess(t('common:common.archiveSuccess'));
+      }
+      await fetchTasksOptimized(null, null, true);
+    } catch (error) {
+      showError(error.message);
+    }
+  }, [showSuccess, showError, t]);
 
   // Zoptymalizowana funkcja pobierania zadań
   const fetchTasksOptimized = async (newSortField = null, newSortOrder = null, forceRefresh = false) => {
@@ -2096,6 +2124,18 @@ const TaskList = () => {
                 <MenuItem value="Anulowane">Anulowane</MenuItem>
               </Select>
             </FormControl>
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={showArchived}
+                  onChange={(e) => setShowArchived(e.target.checked)}
+                  size="small"
+                />
+              }
+              label={t('common:common.showArchived')}
+              sx={{ ml: 1, whiteSpace: 'nowrap' }}
+            />
           </Box>
           
           {/* Prawa strona - Przyciski i konfiguracja */}
@@ -2370,7 +2410,7 @@ const TaskList = () => {
               </TableHead>
               <TableBody>
                 {/* 🚀 OPTYMALIZACJA: Użycie memoizowanego komponentu TaskTableRow */}
-                {filteredTasks.map((task) => (
+                {(showArchived ? filteredTasks : filteredTasks.filter(task => !task.archived)).map((task) => (
                   <TaskTableRow
                     key={task.id}
                     task={task}
@@ -2379,6 +2419,7 @@ const TaskList = () => {
                     onStatusChange={handleStatusChangeCallback}
                     onStopProductionDirect={handleStopProductionDirectCallback}
                     onRefresh={handleRefreshCallback}
+                    onArchive={handleArchiveTask}
                     navigate={navigate}
                     t={t}
                   />

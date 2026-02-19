@@ -41,7 +41,7 @@ import AdminRoute from './components/common/AdminRoute';
 import AIChatFAB from './components/common/AIChatFAB';
 
 // Styles
-import './assets/styles/global.css';
+import './styles/global.css';
 
 // ============================================================================
 // LAZY LOADED PAGES - ładowane on-demand dla lepszej wydajności
@@ -118,11 +118,11 @@ const OrderForm = lazy(() => import('./components/orders/OrderForm'));
 const OrderDetails = lazy(() => import('./components/orders/OrderDetails'));
 
 // Purchase Orders
-const PurchaseOrdersPage = lazy(() => import('./pages/PurchaseOrdersPage'));
-const PurchaseOrderFormPage = lazy(() => import('./pages/PurchaseOrderFormPage'));
-const PurchaseOrderDetailsPage = lazy(() => import('./pages/PurchaseOrderDetailsPage'));
-const SuppliersPage = lazy(() => import('./pages/SuppliersPage'));
-const SupplierFormPage = lazy(() => import('./pages/SupplierFormPage'));
+const PurchaseOrdersPage = lazy(() => import('./pages/PurchaseOrders/PurchaseOrdersPage'));
+const PurchaseOrderFormPage = lazy(() => import('./pages/PurchaseOrders/PurchaseOrderFormPage'));
+const PurchaseOrderDetailsPage = lazy(() => import('./pages/PurchaseOrders/PurchaseOrderDetailsPage'));
+const SuppliersPage = lazy(() => import('./pages/Suppliers/SuppliersPage'));
+const SupplierFormPage = lazy(() => import('./pages/Suppliers/SupplierFormPage'));
 
 // Customers
 const CustomersList = lazy(() => import('./components/customers/CustomersList'));

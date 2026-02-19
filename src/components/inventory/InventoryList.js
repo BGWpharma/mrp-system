@@ -66,9 +66,12 @@ import {
   Refresh as RefreshIcon,
   Upload as UploadIcon,
   Layers as LayersIcon,
-  Calculate as CalculateIcon
+  Calculate as CalculateIcon,
+  Archive as ArchiveIcon,
+  Unarchive as UnarchiveIcon
 } from '@mui/icons-material';
-import { getAllInventoryItems, getInventoryItemsOptimized, clearInventoryItemsCache, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventory';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import { getAllInventoryItems, getInventoryItemsOptimized, clearInventoryItemsCache, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations, archiveInventoryItem, unarchiveInventoryItem } from '../../services/inventory';
 import { getBatchesWithFilters } from '../../services/inventory/batchService';
 import { convertTimestampToDate, isDefaultDate } from '../../services/inventory/utils/formatters';
 import { exportToExcel } from '../../utils/exportUtils';
@@ -103,7 +106,7 @@ import {
 
 // Importy komponentów dla zakładek
 import ExpiryDatesPage from '../../pages/Inventory/ExpiryDatesPage';
-import SuppliersPage from '../../pages/SuppliersPage';
+import SuppliersPage from '../../pages/Suppliers/SuppliersPage';
 import StocktakingPage from '../../pages/Inventory/StocktakingPage';
 
 
@@ -115,6 +118,7 @@ const InventoryList = () => {
   const [inventoryItems, setInventoryItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
   const [expiringCount, setExpiringCount] = useState(0);
   const [expiredCount, setExpiredCount] = useState(0);
   const { showSuccess, showError } = useNotification();
@@ -213,13 +217,19 @@ const InventoryList = () => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
   const [debouncedSearchCategory, setDebouncedSearchCategory] = useState(searchCategory);
 
-  // Filtrowanie pozycji po przypisanym kliencie (front-end)
+  // Filtrowanie pozycji po przypisanym kliencie i archiwizacji (front-end)
   const displayedItems = useMemo(() => {
-    if (!customerFilter) return filteredItems;
-    return filteredItems.filter(item =>
-      item.allCustomers || (item.customerIds && item.customerIds.includes(customerFilter))
-    );
-  }, [filteredItems, customerFilter]);
+    let items = filteredItems;
+    if (!showArchived) {
+      items = items.filter(item => !item.archived);
+    }
+    if (customerFilter) {
+      items = items.filter(item =>
+        item.allCustomers || (item.customerIds && item.customerIds.includes(customerFilter))
+      );
+    }
+    return items;
+  }, [filteredItems, customerFilter, showArchived]);
 
   // Helper: mapa ID klienta -> nazwa
   const customerNameMap = useMemo(() => {
@@ -863,6 +873,21 @@ const InventoryList = () => {
       setSelectedItem(null);
       setSelectedItemBatches([]);
     }, 300);
+  };
+
+  const handleArchiveItem = async (item) => {
+    try {
+      if (item.archived) {
+        await unarchiveInventoryItem(item.id);
+        showSuccess(t('common:common.unarchiveSuccess'));
+      } else {
+        await archiveInventoryItem(item.id);
+        showSuccess(t('common:common.archiveSuccess'));
+      }
+      fetchInventoryItems();
+    } catch (error) {
+      showError(error.message);
+    }
   };
 
   const handleMenuOpen = (event, item) => {
@@ -2360,6 +2385,16 @@ const InventoryList = () => {
                   <RefreshIcon />
                 </IconButton>
               </Tooltip>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={showArchived}
+                    onChange={(e) => setShowArchived(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label={t('common:common.showArchived')}
+              />
               <Tooltip title={t('inventory.states.configureColumns')}>
                 <IconButton onClick={handleColumnMenuOpen}>
                   <ViewColumnIcon />
@@ -2595,6 +2630,7 @@ const InventoryList = () => {
                             <TableRow 
                               sx={{ 
                                 transition: 'all 0.08s ease-in-out',
+                                opacity: item.archived ? 0.5 : 1,
                                 '&:hover': {
                                   backgroundColor: 'action.hover',
                                   transform: 'translateX(1px)'
@@ -2773,6 +2809,17 @@ const InventoryList = () => {
                                     >
                                       <IssueIcon />
                                     </IconButton>
+                                    <Tooltip title={item.archived ? t('common:common.unarchive') : t('common:common.archive')}>
+                                      <IconButton
+                                        onClick={() => handleArchiveItem(item)}
+                                        sx={{ 
+                                          transition: 'all 0.15s ease-in-out',
+                                          '&:hover': { transform: 'scale(1.1)' }
+                                        }}
+                                      >
+                                        {item.archived ? <UnarchiveIcon /> : <ArchiveIcon />}
+                                      </IconButton>
+                                    </Tooltip>
                                     <IconButton
                                       onClick={(e) => handleMenuOpen(e, item)}
                                       color="primary"

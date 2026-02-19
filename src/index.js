@@ -6,7 +6,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import App from './App';
-import './assets/styles/global.css';
+import './styles/global.css';
 import './styles/enhancements.css';
 
 // Pobierz wersję z package.json dla release tracking

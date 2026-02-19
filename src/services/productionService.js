@@ -17,7 +17,8 @@ import {
     arrayUnion,
     limit,
     onSnapshot,
-    writeBatch
+    writeBatch,
+    deleteField
   } from 'firebase/firestore';
   import { db } from './firebase/config';
   import { format } from 'date-fns';
@@ -7106,4 +7107,51 @@ export const calculateCostStatistics = (tasks) => {
   });
   
   return stats;
+};
+
+/**
+ * Archiwizuje zadanie produkcyjne (MO)
+ */
+export const archiveProductionTask = async (taskId) => {
+  try {
+    if (!taskId) throw new Error('ID zadania produkcyjnego jest wymagane');
+    const docRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error('Zadanie produkcyjne nie istnieje');
+
+    await updateDoc(docRef, {
+      archived: true,
+      archivedAt: serverTimestamp(),
+      archivedBy: 'manual'
+    });
+
+    productionTasksCacheTimestamp = null;
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas archiwizacji zadania produkcyjnego:', error);
+    throw error;
+  }
+};
+
+/**
+ * Przywraca zadanie produkcyjne z archiwum
+ */
+export const unarchiveProductionTask = async (taskId) => {
+  try {
+    if (!taskId) throw new Error('ID zadania produkcyjnego jest wymagane');
+    const docRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error('Zadanie produkcyjne nie istnieje');
+
+    await updateDoc(docRef, {
+      archived: false,
+      archivedAt: deleteField()
+    });
+
+    productionTasksCacheTimestamp = null;
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas przywracania zadania produkcyjnego z archiwum:', error);
+    throw error;
+  }
 };

@@ -9,7 +9,8 @@ import {
 } from '@mui/material';
 import { format, isValid } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon, Sync as SyncIcon, Assessment as ReportIcon, Warning as WarningIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon, Sync as SyncIcon, Assessment as ReportIcon, Warning as WarningIcon, Archive as ArchiveIcon, Unarchive as UnarchiveIcon } from '@mui/icons-material';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import Badge from '@mui/material/Badge';
 import { 
   getAllPurchaseOrders, 
@@ -31,7 +32,9 @@ import {
   PURCHASE_ORDER_PAYMENT_STATUSES, 
   translateStatus, 
   translatePaymentStatus,
-  getNextPaymentDueDate
+  getNextPaymentDueDate,
+  archivePurchaseOrder,
+  unarchivePurchaseOrder
 } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -77,9 +80,9 @@ const formatDateValue = (dateValue) => {
 // Memoized wiersz tabeli — eliminuje re-render WSZYSTKICH wierszy przy zmianie stanu jednego
 const PurchaseOrderRow = React.memo(({ 
   po, visibleColumns, getStatusChip, getPaymentStatusChip, 
-  onUpdateBatches, onDeleteClick, isUpdating, t 
+  onUpdateBatches, onDeleteClick, onArchive, isUpdating, t 
 }) => (
-  <TableRow>
+  <TableRow sx={{ opacity: po.archived ? 0.5 : 1 }}>
     {visibleColumns['number'] && (
       <TableCell>
         <Link 
@@ -161,6 +164,15 @@ const PurchaseOrderRow = React.memo(({
           </IconButton>
         </Tooltip>
         
+        <Tooltip title={po.archived ? t('common:common.unarchive') : t('common:common.archive')}>
+          <IconButton 
+            size="small"
+            onClick={() => onArchive(po)}
+          >
+            {po.archived ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
+        
         <Tooltip title={t('purchaseOrders.actions.delete')}>
           <IconButton 
             size="small" 
@@ -221,6 +233,7 @@ const PurchaseOrderList = () => {
   // Stany dla animacji ładowania (podobnie jak w TaskList)
   const [mainTableLoading, setMainTableLoading] = useState(false);
   const [showContent, setShowContent] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const isFirstRender = useRef(true);
   
   // Używamy kontekstu preferencji kolumn
@@ -421,6 +434,21 @@ const PurchaseOrderList = () => {
     setPoToDelete(po);
     setDeleteDialogOpen(true);
   }, []);
+
+  const handleArchivePO = useCallback(async (po) => {
+    try {
+      if (po.archived) {
+        await unarchivePurchaseOrder(po.id);
+        showSuccess(t('common:common.unarchiveSuccess'));
+      } else {
+        await archivePurchaseOrder(po.id);
+        showSuccess(t('common:common.archiveSuccess'));
+      }
+      await fetchPurchaseOrdersOptimized(true);
+    } catch (error) {
+      showError(error.message);
+    }
+  }, [showSuccess, showError, t]);
   
   // Funkcja obsługi aktualizacji partii
   const handleUpdateBatches = useCallback(async (po) => {
@@ -905,6 +933,17 @@ const PurchaseOrderList = () => {
             </IconButton>
           </Tooltip>
           
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+                size="small"
+              />
+            }
+            label={t('common:common.showArchived')}
+          />
+
           <Tooltip title={t('common:common.refreshDataClearCache')}>
             <IconButton 
               color="warning" 
@@ -1057,7 +1096,7 @@ const PurchaseOrderList = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredPOs.map((po) => (
+                  (showArchived ? filteredPOs : filteredPOs.filter(po => !po.archived)).map((po) => (
                     <PurchaseOrderRow
                       key={po.id}
                       po={po}
@@ -1066,6 +1105,7 @@ const PurchaseOrderList = () => {
                       getPaymentStatusChip={getPaymentStatusChip}
                       onUpdateBatches={handleUpdateBatches}
                       onDeleteClick={handleDeleteClick}
+                      onArchive={handleArchivePO}
                       isUpdating={updatingBatches[po.id] || false}
                       t={t}
                     />

@@ -222,13 +222,13 @@ const Dashboard = () => {
       : '';
 
     const authorText = announcementMeta.updatedByName 
-      ? t('dashboard.by', { name: announcementMeta.updatedByName })
+      ? t('by', { name: announcementMeta.updatedByName })
       : '';
 
     return (
       <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
-          {t('dashboard.lastUpdated')}: {formattedDate} {authorText}
+          {t('lastUpdated')}: {formattedDate} {authorText}
         </Typography>
       </Box>
     );
@@ -285,7 +285,7 @@ const Dashboard = () => {
               color: 'text.primary'
             }}
           >
-            {t('dashboard.title')}
+            {t('title')}
           </Typography>
         </Fade>
 
@@ -298,7 +298,7 @@ const Dashboard = () => {
               color: 'text.secondary'
             }}
           >
-            {t('dashboard.welcome', { name: currentUser.displayName || currentUser.email })}
+            {t('welcome', { name: currentUser.displayName || currentUser.email })}
           </Typography>
         </Fade>
 
@@ -338,7 +338,7 @@ const Dashboard = () => {
                 <AnnouncementIcon sx={{ color: 'primary.main', fontSize: 22 }} />
               </Box>
               <Typography variant="h5" sx={{ fontWeight: 600, flex: 1 }}>
-                {t('dashboard.announcements')}
+                {t('announcements')}
               </Typography>
               {!isEditingAnnouncement && (
                 <IconButton 
@@ -351,7 +351,7 @@ const Dashboard = () => {
                       bgcolor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
                     }
                   }}
-                  title={t('dashboard.editAnnouncement')}
+                  title={t('editAnnouncement')}
                 >
                   <EditIcon sx={{ fontSize: 20 }} />
                 </IconButton>
@@ -360,7 +360,7 @@ const Dashboard = () => {
             
             {!announcementInitialized ? (
               <Typography variant="body2" sx={{ mt: 2, fontStyle: 'italic', color: 'text.secondary' }}>
-                {t('dashboard.loadingAnnouncements')}
+                {t('loadingAnnouncements')}
               </Typography>
             ) : isEditingAnnouncement ? (
               <Box sx={{ mt: 2 }}>
@@ -369,11 +369,11 @@ const Dashboard = () => {
                   multiline
                   rows={4}
                   variant="outlined"
-                  placeholder={t('dashboard.announcementPlaceholder')}
+                  placeholder={t('announcementPlaceholder')}
                   value={editedAnnouncement}
                   onChange={(e) => setEditedAnnouncement(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  helperText={t('dashboard.announcementHelper')}
+                  helperText={t('announcementHelper')}
                 />
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2, gap: 1.5 }}>
                   <Button 
@@ -381,14 +381,14 @@ const Dashboard = () => {
                     startIcon={<CancelIcon />}
                     onClick={cancelEditingAnnouncement}
                   >
-                    {t('dashboard.cancel')}
+                    {t('cancel')}
                   </Button>
                   <Button 
                     variant="contained" 
                     startIcon={<SaveIcon />}
                     onClick={saveAnnouncement}
                   >
-                    {t('dashboard.save')}
+                    {t('save')}
                   </Button>
                 </Box>
               </Box>
@@ -428,7 +428,7 @@ const Dashboard = () => {
                   textAlign: 'center'
                 }}>
                   <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                    {t('dashboard.noAnnouncements')}
+                    {t('noAnnouncements')}
                   </Typography>
                 </Box>
                 {renderLastUpdatedInfo()}

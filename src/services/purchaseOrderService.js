@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   serverTimestamp,
+  deleteField,
   limit as firebaseLimit,
   limit
 } from 'firebase/firestore';
@@ -4257,6 +4258,178 @@ export const getRecentPurchaseOrders = async (limit = 20) => {
     }));
   } catch (error) {
     console.error('Błąd podczas pobierania najnowszych PO:', error);
+    throw error;
+  }
+};
+
+/**
+ * Archiwizuje zamówienie zakupowe (PO)
+ */
+export const archivePurchaseOrder = async (purchaseOrderId) => {
+  try {
+    if (!purchaseOrderId) throw new Error('ID zamówienia zakupowego jest wymagane');
+    const docRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error('Zamówienie zakupowe nie istnieje');
+
+    await updateDoc(docRef, {
+      archived: true,
+      archivedAt: serverTimestamp(),
+      archivedBy: 'manual'
+    });
+
+    purchaseOrdersCacheTimestamp = null;
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas archiwizacji zamówienia zakupowego:', error);
+    throw error;
+  }
+};
+
+/**
+ * Przywraca zamówienie zakupowe z archiwum
+ */
+export const unarchivePurchaseOrder = async (purchaseOrderId) => {
+  try {
+    if (!purchaseOrderId) throw new Error('ID zamówienia zakupowego jest wymagane');
+    const docRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error('Zamówienie zakupowe nie istnieje');
+
+    await updateDoc(docRef, {
+      archived: false,
+      archivedAt: deleteField()
+    });
+
+    purchaseOrdersCacheTimestamp = null;
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas przywracania zamówienia zakupowego z archiwum:', error);
+    throw error;
+  }
+};
+
+/**
+ * Przelicza status płatności PO na podstawie wpłat na powiązanych fakturach.
+ * Sumuje bezpośrednie wpłaty (payments[]) ze wszystkich faktur/proform
+ * przypisanych do PO i porównuje z wartością brutto PO.
+ * Nie uwzględnia settledFromProformas, aby uniknąć podwójnego liczenia.
+ *
+ * @param {string} purchaseOrderId - ID zamówienia zakupowego
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<object>} - Wynik przeliczenia
+ */
+export const recalculatePOPaymentFromInvoices = async (purchaseOrderId, userId) => {
+  try {
+    if (!purchaseOrderId) {
+      throw new Error('ID zamówienia zakupowego jest wymagane');
+    }
+
+    const poRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
+    const poDoc = await getDoc(poRef);
+
+    if (!poDoc.exists()) {
+      throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${purchaseOrderId}`);
+    }
+
+    const poData = poDoc.data();
+    const poTotalGross = parseFloat(poData.totalGross) || 0;
+
+    const invoicesQuery = query(
+      collection(db, 'purchaseInvoices'),
+      where('sourceId', '==', purchaseOrderId),
+      where('sourceType', '==', 'po')
+    );
+    const invoicesSnapshot = await getDocs(invoicesQuery);
+
+    let totalPaidForPO = 0;
+    let hasAnyDueDate = false;
+    const invoicesSummary = [];
+
+    invoicesSnapshot.forEach((docSnap) => {
+      const inv = docSnap.data();
+      if (inv.status === 'rejected') return;
+
+      const directPayments = (inv.payments || []).reduce(
+        (sum, p) => sum + (parseFloat(p.amount) || 0), 0
+      );
+      totalPaidForPO += directPayments;
+
+      if (inv.dueDate) hasAnyDueDate = true;
+
+      invoicesSummary.push({
+        id: docSnap.id,
+        number: inv.invoiceNumber || inv.number,
+        isProforma: inv.isProforma || false,
+        directPayments,
+        paymentStatus: inv.paymentStatus,
+      });
+    });
+
+    const poItems = poData.items || [];
+    if (poItems.some(item => item.paymentDueDate)) {
+      hasAnyDueDate = true;
+    }
+
+    let newPaymentStatus;
+    if (poTotalGross <= 0) {
+      newPaymentStatus = PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID;
+    } else if (totalPaidForPO >= poTotalGross - 0.01) {
+      newPaymentStatus = PURCHASE_ORDER_PAYMENT_STATUSES.PAID;
+    } else if (totalPaidForPO > 0.01) {
+      newPaymentStatus = PURCHASE_ORDER_PAYMENT_STATUSES.PARTIALLY_PAID;
+    } else if (hasAnyDueDate) {
+      newPaymentStatus = PURCHASE_ORDER_PAYMENT_STATUSES.TO_BE_PAID;
+    } else {
+      newPaymentStatus = PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID;
+    }
+
+    const oldPaymentStatus = poData.paymentStatus || PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID;
+
+    const updateFields = {
+      paymentStatus: newPaymentStatus,
+      totalPaidFromInvoices: totalPaidForPO,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId,
+    };
+
+    if (oldPaymentStatus !== newPaymentStatus) {
+      const paymentStatusHistory = poData.paymentStatusHistory || [];
+      paymentStatusHistory.push({
+        from: oldPaymentStatus,
+        to: newPaymentStatus,
+        changedBy: userId || 'system:manual-recalc',
+        changedAt: new Date(),
+        timestamp: new Date().toISOString(),
+        totalPaid: totalPaidForPO,
+        poTotalGross,
+      });
+      updateFields.paymentStatusHistory = paymentStatusHistory;
+    }
+
+    await updateDoc(poRef, updateFields);
+
+    searchCache.invalidateForOrder(purchaseOrderId);
+    updatePurchaseOrderInCache(purchaseOrderId, {
+      paymentStatus: newPaymentStatus,
+      totalPaidFromInvoices: totalPaidForPO,
+      updatedAt: new Date(),
+    });
+
+    return {
+      success: true,
+      paymentStatus: newPaymentStatus,
+      oldPaymentStatus,
+      totalPaidFromInvoices: totalPaidForPO,
+      poTotalGross,
+      coveragePercent: poTotalGross > 0
+        ? Math.round((totalPaidForPO / poTotalGross) * 100)
+        : 0,
+      invoicesCount: invoicesSummary.length,
+      invoicesSummary,
+    };
+  } catch (error) {
+    console.error('Błąd podczas przeliczania statusu płatności PO z faktur:', error);
     throw error;
   }
 };

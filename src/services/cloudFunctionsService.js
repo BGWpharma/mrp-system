@@ -57,5 +57,18 @@ export const recalculateShippedQuantities = async (orderId) => {
   }
 };
 
-
+/**
+ * Ręczne wywołanie automatycznej archiwizacji starych dokumentów
+ * @returns {Promise<Object>} Podsumowanie archiwizacji {totalArchived, summary}
+ */
+export const runAutoArchive = async () => {
+  try {
+    const runAutoArchiveFn = httpsCallable(functions, 'runAutoArchive', { timeout: 300000 });
+    const result = await runAutoArchiveFn();
+    return result.data;
+  } catch (error) {
+    console.error('Error calling runAutoArchive:', error);
+    throw new Error(`Nie udało się uruchomić archiwizacji: ${error.message}`);
+  }
+};
 

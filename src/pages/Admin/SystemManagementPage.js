@@ -31,7 +31,8 @@ import {
   BugReport as BugReportIcon,
   Storage as StorageIcon,
   Build as BuildIcon,
-  Science as ScienceIcon
+  Science as ScienceIcon,
+  Archive as ArchiveIcon
 } from '@mui/icons-material';
 import * as Sentry from '@sentry/react';
 import { addBreadcrumb } from '../../utils/errorHandler';
@@ -61,6 +62,7 @@ import {
   checkInventoryIntegrityAndFix,
   bulkUpdateSupplierPricesFromCompletedPOs
 } from '../../services/inventory';
+import ArchiveManager from '../../components/admin/ArchiveManager';
 
 /**
  * Strona dla administratorów z narzędziami do zarządzania systemem
@@ -503,6 +505,7 @@ const SystemManagementPage = () => {
           <Tab icon={<StorageIcon />} label="Baza danych" iconPosition="start" />
           <Tab icon={<BuildIcon />} label="Migracje" iconPosition="start" />
           <Tab icon={<ScienceIcon />} label="Testy i diagnostyka" iconPosition="start" />
+          <Tab icon={<ArchiveIcon />} label="Archiwum" iconPosition="start" />
         </Tabs>
 
         <Box sx={{ p: 3 }}>
@@ -1122,6 +1125,11 @@ const SystemManagementPage = () => {
           </CardContent>
         </Card>
             </Box>
+          )}
+
+          {/* ZAKŁADKA 5: ARCHIWUM */}
+          {activeTab === 4 && (
+            <ArchiveManager />
           )}
         </Box>
       </Paper>

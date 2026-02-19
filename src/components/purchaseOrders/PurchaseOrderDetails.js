@@ -5,7 +5,7 @@ import {
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   FormControl, InputLabel, Select, MenuItem, TextField, CircularProgress, IconButton,
-  List, ListItem, ListItemText, ListItemIcon, Collapse, Tooltip, Menu, ButtonGroup
+  List, ListItem, ListItemText, ListItemIcon, Collapse, Tooltip, Menu, ButtonGroup, LinearProgress
 } from '@mui/material';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
@@ -61,7 +61,8 @@ import {
   PURCHASE_ORDER_PAYMENT_STATUSES,
   translateStatus,
   translatePaymentStatus,
-  getNextPaymentDueDate
+  getNextPaymentDueDate,
+  recalculatePOPaymentFromInvoices
 } from '../../services/purchaseOrderService';
 import { getBatchesByPurchaseOrderId, getInventoryBatch, getWarehouseById } from '../../services/inventory';
 import { getPOReservationsForItem } from '../../services/poReservationService';
@@ -99,6 +100,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [warehouseNames, setWarehouseNames] = useState({});
   const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
+  const [recalculating, setRecalculating] = useState(false);
   const [supplierPricesDialogOpen, setSupplierPricesDialogOpen] = useState(false);
   const [relatedRefInvoices, setRelatedRefInvoices] = useState([]);
   const [loadingRefInvoices, setLoadingRefInvoices] = useState(false);
@@ -1354,6 +1356,26 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
   };
 
+  const handleRecalculateFromInvoices = async () => {
+    setRecalculating(true);
+    try {
+      const result = await recalculatePOPaymentFromInvoices(orderId, currentUser.uid);
+      
+      const updatedOrder = await getPurchaseOrderById(orderId);
+      setPurchaseOrder(updatedOrder);
+      setPaymentStatusDialogOpen(false);
+      
+      showSuccess(
+        `Przeliczono: ${result.totalPaidFromInvoices.toFixed(2)} / ${result.poTotalGross.toFixed(2)} ${purchaseOrder.currency || 'EUR'} (${result.coveragePercent}%) — ${result.invoicesCount} faktur`
+      );
+    } catch (error) {
+      console.error('Błąd podczas przeliczania statusu płatności z faktur:', error);
+      showError('Nie udało się przeliczyć statusu płatności z faktur');
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
   // Funkcje obsługi dialogu migracji CoA
   const handleCoAMigration = () => {
     setCoaMigrationDialogOpen(true);
@@ -1610,6 +1632,37 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       </Box>
                     </Typography>
                   </Box>
+
+                  {purchaseOrder.totalPaidFromInvoices != null && purchaseOrder.totalGross > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Wpłacono z faktur:
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {parseFloat(purchaseOrder.totalPaidFromInvoices).toFixed(2)} / {parseFloat(purchaseOrder.totalGross).toFixed(2)} {purchaseOrder.currency || 'EUR'}
+                          {' '}({Math.min(100, Math.round((purchaseOrder.totalPaidFromInvoices / purchaseOrder.totalGross) * 100))}%)
+                        </Typography>
+                      </Box>
+                      <LinearProgress
+                        variant="determinate"
+                        value={Math.min(100, (purchaseOrder.totalPaidFromInvoices / purchaseOrder.totalGross) * 100)}
+                        sx={{
+                          height: 6,
+                          borderRadius: 3,
+                          backgroundColor: 'grey.200',
+                          '& .MuiLinearProgress-bar': {
+                            borderRadius: 3,
+                            backgroundColor: purchaseOrder.totalPaidFromInvoices >= purchaseOrder.totalGross - 0.01
+                              ? 'success.main'
+                              : purchaseOrder.totalPaidFromInvoices > 0.01
+                                ? 'info.main'
+                                : 'grey.400',
+                          },
+                        }}
+                      />
+                    </Box>
+                  )}
                   
                   <Typography variant="body1" gutterBottom>
                     <strong>{t('purchaseOrders.details.orderDate')}:</strong> {formatDate(purchaseOrder.orderDate)}
@@ -3327,12 +3380,37 @@ const PurchaseOrderDetails = ({ orderId }) => {
       <Dialog
         open={paymentStatusDialogOpen}
         onClose={() => setPaymentStatusDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
       >
         <DialogTitle>Zmień status płatności</DialogTitle>
         <DialogContent>
+          {purchaseOrder?.totalPaidFromInvoices != null && purchaseOrder?.totalGross > 0 && (
+            <Box sx={{ mb: 2, p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Aktualny stan wpłat z faktur:
+              </Typography>
+              <Typography variant="body1" fontWeight="medium">
+                {parseFloat(purchaseOrder.totalPaidFromInvoices).toFixed(2)} / {parseFloat(purchaseOrder.totalGross).toFixed(2)} {purchaseOrder.currency || 'EUR'}
+                {' '}({Math.min(100, Math.round((purchaseOrder.totalPaidFromInvoices / purchaseOrder.totalGross) * 100))}%)
+              </Typography>
+            </Box>
+          )}
           <DialogContentText sx={mb2}>
-            Wybierz nowy status płatności zamówienia:
+            Wybierz nowy status płatności zamówienia lub przelicz automatycznie na podstawie wpłat na fakturach:
           </DialogContentText>
+          <Button
+            variant="outlined"
+            color="info"
+            fullWidth
+            onClick={handleRecalculateFromInvoices}
+            disabled={recalculating}
+            startIcon={recalculating ? <CircularProgress size={18} /> : <RefreshIcon />}
+            sx={{ mb: 2 }}
+          >
+            {recalculating ? 'Przeliczanie...' : 'Przelicz automatycznie z faktur'}
+          </Button>
+          <Divider sx={{ mb: 2 }}>lub ustaw ręcznie</Divider>
           <FormControl fullWidth>
             <InputLabel>{t('common:common.paymentStatus')}</InputLabel>
             <Select
@@ -3357,7 +3435,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPaymentStatusDialogOpen(false)}>Anuluj</Button>
-          <Button onClick={handlePaymentStatusUpdate} color="primary">Zapisz</Button>
+          <Button onClick={handlePaymentStatusUpdate} color="primary">Zapisz ręcznie</Button>
         </DialogActions>
       </Dialog>
       

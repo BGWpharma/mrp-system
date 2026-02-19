@@ -11,7 +11,8 @@ import {
   query, 
   where,
   orderBy,
-  serverTimestamp
+  serverTimestamp,
+  deleteField
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { COLLECTIONS, SORT_FIELD_MAPPING } from './config/constants.js';
@@ -1620,5 +1621,62 @@ export const getInventoryItemsCacheStatus = () => {
              (now - inventoryItemsCacheTimestamp) < CACHE_EXPIRY_MS,
     expiryTime: inventoryItemsCacheTimestamp ? inventoryItemsCacheTimestamp + CACHE_EXPIRY_MS : null
   };
+};
+
+/**
+ * Archiwizuje pozycję magazynową.
+ * Dozwolone tylko gdy wszystkie powiązane loty mają quantity === 0.
+ */
+export const archiveInventoryItem = async (itemId) => {
+  try {
+    if (!itemId) throw new Error('ID pozycji magazynowej jest wymagane');
+    const docRef = doc(db, COLLECTIONS.INVENTORY, itemId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error('Pozycja magazynowa nie istnieje');
+
+    const batchesRef = collection(db, COLLECTIONS.INVENTORY_BATCHES);
+    const batchesQuery = query(batchesRef, where('itemId', '==', itemId));
+    const batchesSnapshot = await getDocs(batchesQuery);
+
+    const nonZeroBatch = batchesSnapshot.docs.find(d => (d.data().quantity || 0) !== 0);
+    if (nonZeroBatch) {
+      throw new Error('Nie można zarchiwizować pozycji magazynowej — posiada loty z niezerową ilością.');
+    }
+
+    await updateDoc(docRef, {
+      archived: true,
+      archivedAt: serverTimestamp(),
+      archivedBy: 'manual'
+    });
+
+    clearInventoryItemsCache();
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas archiwizacji pozycji magazynowej:', error);
+    throw error;
+  }
+};
+
+/**
+ * Przywraca pozycję magazynową z archiwum
+ */
+export const unarchiveInventoryItem = async (itemId) => {
+  try {
+    if (!itemId) throw new Error('ID pozycji magazynowej jest wymagane');
+    const docRef = doc(db, COLLECTIONS.INVENTORY, itemId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error('Pozycja magazynowa nie istnieje');
+
+    await updateDoc(docRef, {
+      archived: false,
+      archivedAt: deleteField()
+    });
+
+    clearInventoryItemsCache();
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas przywracania pozycji magazynowej z archiwum:', error);
+    throw error;
+  }
 };
 

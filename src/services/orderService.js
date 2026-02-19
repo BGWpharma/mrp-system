@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   serverTimestamp,
+  deleteField,
   Timestamp,
   limit
 } from 'firebase/firestore';
@@ -2978,4 +2979,47 @@ export const validateOrderNumberFormat = (orderNumber) => {
   // Przykłady: CO00001, CO-ABC-00001, CO00001-XYZ
   const coPattern = /^CO[\w-]*\d+[\w-]*$/i;
   return coPattern.test(orderNumber);
+};
+
+/**
+ * Archiwizuje zamówienie klienta (CO)
+ */
+export const archiveOrder = async (orderId) => {
+  try {
+    if (!orderId) throw new Error('ID zamówienia jest wymagane');
+    const docRef = doc(db, ORDERS_COLLECTION, orderId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error('Zamówienie nie istnieje');
+
+    await updateDoc(docRef, {
+      archived: true,
+      archivedAt: serverTimestamp(),
+      archivedBy: 'manual'
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas archiwizacji zamówienia:', error);
+    throw error;
+  }
+};
+
+/**
+ * Przywraca zamówienie klienta z archiwum
+ */
+export const unarchiveOrder = async (orderId) => {
+  try {
+    if (!orderId) throw new Error('ID zamówienia jest wymagane');
+    const docRef = doc(db, ORDERS_COLLECTION, orderId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error('Zamówienie nie istnieje');
+
+    await updateDoc(docRef, {
+      archived: false,
+      archivedAt: deleteField()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Błąd podczas przywracania zamówienia z archiwum:', error);
+    throw error;
+  }
 };

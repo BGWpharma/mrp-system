@@ -50,7 +50,9 @@ import {
   Delete as DeleteIcon,
   FileUpload as FileUploadIcon,
   InsertDriveFile as InsertDriveFileIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Archive as ArchiveIcon,
+  Unarchive as UnarchiveIcon
 } from '@mui/icons-material';
 import { 
   getInventoryItemById, 
@@ -66,6 +68,7 @@ import {
   debugDuplicateBatches,
   debugAndCleanDuplicateReservations
 } from '../../services/inventory';
+import { archiveBatch, unarchiveBatch } from '../../services/inventory/batchService';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, formatQuantity } from '../../utils/formatters';
@@ -92,6 +95,7 @@ const BatchesPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [hideDepleted, setHideDepleted] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [orderBy, setOrderBy] = useState('batchNumber');
   const [order, setOrder] = useState('asc');
   const [page, setPage] = useState(0);
@@ -266,9 +270,14 @@ const BatchesPage = () => {
     if (hideDepleted) {
       filtered = filtered.filter(batch => batch.quantity > 0);
     }
+
+    // Ukryj zarchiwizowane partie jeśli opcja jest wyłączona
+    if (!showArchived) {
+      filtered = filtered.filter(batch => !batch.archived);
+    }
     
     setFilteredBatches(filtered);
-  }, [searchTerm, batches, hideDepleted]);
+  }, [searchTerm, batches, hideDepleted, showArchived]);
 
   // Dodaj funkcje debugowania do globalnego zakresu (TYLKO DLA TESTÓW)
   useEffect(() => {
@@ -878,6 +887,30 @@ const BatchesPage = () => {
     }
   };
 
+  const handleArchiveBatch = async (batch) => {
+    try {
+      if (batch.archived) {
+        await unarchiveBatch(batch.id);
+        showSuccess(t('common:common.unarchiveSuccess'));
+      } else {
+        await archiveBatch(batch.id);
+        showSuccess(t('common:common.archiveSuccess'));
+      }
+      const batchesData = await getItemBatches(id);
+      const enhancedBatches = batchesData.map(b => {
+        const warehouse = warehouses.find(w => w.id === b.warehouseId);
+        return {
+          ...b,
+          warehouseName: warehouse?.name || 'Magazyn podstawowy',
+          warehouseAddress: warehouse?.address || '',
+        };
+      });
+      setBatches(enhancedBatches);
+    } catch (error) {
+      showError(error.message);
+    }
+  };
+
   const handleDeleteBatch = async () => {
     if (!selectedBatchForDelete) return;
     
@@ -1065,6 +1098,24 @@ const BatchesPage = () => {
                     </Typography>
                   }
                 />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={showArchived}
+                      onChange={(e) => {
+                        setShowArchived(e.target.checked);
+                        setPage(0);
+                      }}
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Typography variant="body2">
+                      {t('common:common.showArchived')}
+                    </Typography>
+                  }
+                />
               </Box>
               <Tooltip title={t('inventory.batches.refreshData')}>
                 <IconButton 
@@ -1180,15 +1231,18 @@ const BatchesPage = () => {
                     return (
                       <TableRow 
                         key={batch.id}
-                        sx={highlightedBatchId === batch.id ? {
-                          backgroundColor: theme => theme.palette.mode === 'dark' 
-                            ? 'rgba(33, 150, 243, 0.3)' 
-                            : 'rgba(33, 150, 243, 0.15)',
-                          transition: 'background-color 0.5s ease',
-                          '& td': {
-                            fontWeight: 500
-                          }
-                        } : {}}
+                        sx={{
+                          opacity: batch.archived ? 0.5 : 1,
+                          ...(highlightedBatchId === batch.id ? {
+                            backgroundColor: theme => theme.palette.mode === 'dark' 
+                              ? 'rgba(33, 150, 243, 0.3)' 
+                              : 'rgba(33, 150, 243, 0.15)',
+                            transition: 'background-color 0.5s ease',
+                            '& td': {
+                              fontWeight: 500
+                            }
+                          } : {})
+                        }}
                       >
                         <TableCell>
                           {batch.batchNumber || batch.lotNumber || 'Brak numeru'}
@@ -1552,6 +1606,16 @@ const BatchesPage = () => {
                               </IconButton>
                             </Tooltip>
                             
+                            <Tooltip title={batch.archived ? t('common:common.unarchive') : t('common:common.archive')}>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleArchiveBatch(batch)}
+                                disabled={!batch.archived && (batch.quantity || 0) !== 0}
+                              >
+                                {batch.archived ? <UnarchiveIcon fontSize="small" /> : <ArchiveIcon fontSize="small" />}
+                              </IconButton>
+                            </Tooltip>
+
                             <Tooltip title={t('common.delete')}>
                               <IconButton
                                 size="small"
