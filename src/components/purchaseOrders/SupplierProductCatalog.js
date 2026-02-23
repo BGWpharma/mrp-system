@@ -60,22 +60,26 @@ const SupplierProductCatalog = ({ supplierId }) => {
     certificateValidTo: ''
   });
 
-  const fetchProducts = useCallback(async () => {
+  const fetchProducts = useCallback(async (cancelCheck = { current: false }) => {
     try {
       setLoading(true);
       const data = await getSupplierProducts(supplierId);
+      if (cancelCheck.current) return;
       setProducts(data);
     } catch (error) {
+      if (cancelCheck.current) return;
       console.error('Błąd podczas pobierania produktów:', error);
     } finally {
-      setLoading(false);
+      if (!cancelCheck.current) setLoading(false);
     }
   }, [supplierId]);
 
   useEffect(() => {
+    const cancelCheck = { current: false };
     if (supplierId) {
-      fetchProducts();
+      fetchProducts(cancelCheck);
     }
+    return () => { cancelCheck.current = true; };
   }, [supplierId, fetchProducts]);
 
   const handleRebuildCatalog = async () => {

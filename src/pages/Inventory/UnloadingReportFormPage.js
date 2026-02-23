@@ -124,19 +124,24 @@ const UnloadingReportFormPage = () => {
 
   // Wyszukiwanie PO na podstawie zapytania z debounce
   useEffect(() => {
+    let cancelled = false;
+
     const searchPOs = async () => {
       if (!debouncedSearchQuery || debouncedSearchQuery.trim().length < 2) {
-        // Dla pustego wyszukiwania pokaż najnowsze zamówienia
         try {
           setPoLoading(true);
           const recentOrders = await getRecentPurchaseOrders(15);
+          if (cancelled) return;
           setSearchResults(recentOrders);
           console.log(`✅ Załadowano ${recentOrders.length} najnowszych PO`);
         } catch (error) {
+          if (cancelled) return;
           console.error('Błąd podczas pobierania najnowszych PO:', error);
           setSearchResults([]);
         } finally {
-          setPoLoading(false);
+          if (!cancelled) {
+            setPoLoading(false);
+          }
         }
         return;
       }
@@ -145,25 +150,32 @@ const UnloadingReportFormPage = () => {
         setPoLoading(true);
         console.log(`🔍 Wyszukuję PO dla: "${debouncedSearchQuery}"`);
         const results = await searchPurchaseOrdersQuick(debouncedSearchQuery, 15);
+        if (cancelled) return;
         setSearchResults(results);
         console.log(`✅ Znaleziono ${results.length} PO`);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas wyszukiwania PO:', error);
         setSearchResults([]);
       } finally {
-        setPoLoading(false);
+        if (!cancelled) {
+          setPoLoading(false);
+        }
       }
     };
 
     searchPOs();
+
+    return () => { cancelled = true; };
   }, [debouncedSearchQuery]);
 
   // Automatyczne ładowanie pozycji PO po wpisaniu dokładnego numeru
   useEffect(() => {
+    let cancelled = false;
+
     const loadPoItemsByNumber = async () => {
       if (!poSearchQuery.trim() || poItems.length > 0) return;
       
-      // Szukaj dokładnego dopasowania numeru PO w wynikach wyszukiwania
       const exactMatch = searchResults.find(po => 
         po.number?.toLowerCase() === poSearchQuery.toLowerCase() ||
         po.id?.toLowerCase() === poSearchQuery.toLowerCase()
@@ -171,24 +183,29 @@ const UnloadingReportFormPage = () => {
       
       if (exactMatch) {
         console.log('Znaleziono dokładne dopasowanie PO:', exactMatch.number);
+        if (cancelled) return;
         await handlePoSelectionWithDetails(exactMatch, false);
       }
     };
 
-    // Dodaj opóźnienie żeby nie wywoływać za często
     const timeoutId = setTimeout(loadPoItemsByNumber, 500);
-    return () => clearTimeout(timeoutId);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [poSearchQuery, searchResults, poItems.length]);
 
   // Ładowanie pozycji PO w trybie edycji
   useEffect(() => {
+    let cancelled = false;
+
     if (isEditMode && formData.poNumber && poItems.length === 0) {
       const loadPoForEdit = async () => {
         try {
           console.log('📝 Ładowanie PO w trybie edycji:', formData.poNumber);
           
-          // Wyszukaj PO po numerze
           const searchResults = await searchPurchaseOrdersQuick(formData.poNumber, 5);
+          if (cancelled) return;
           const matchingPo = searchResults.find(po => 
             po.number?.toLowerCase() === formData.poNumber.toLowerCase() ||
             po.id?.toLowerCase() === formData.poNumber.toLowerCase()
@@ -201,12 +218,15 @@ const UnloadingReportFormPage = () => {
             console.log('⚠️ Nie znaleziono PO w trybie edycji dla:', formData.poNumber);
           }
         } catch (error) {
+          if (cancelled) return;
           console.error('Błąd podczas ładowania PO w trybie edycji:', error);
         }
       };
       
       loadPoForEdit();
     }
+
+    return () => { cancelled = true; };
   }, [isEditMode, formData.poNumber, poItems.length]);
 
 

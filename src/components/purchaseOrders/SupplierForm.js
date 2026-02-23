@@ -56,18 +56,22 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
   });
   
   useEffect(() => {
+    let cancelled = false;
     const fetchSupplier = async () => {
       try {
         if (supplierId) {
           const data = await getSupplierById(supplierId);
-          // Zapewnienie zgodności z nowym modelem adresów
+          if (cancelled) return;
           setSupplierData({
             ...data,
             addresses: data.addresses || []
           });
         }
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania danych dostawcy:', error);
         showError(t('suppliers.notifications.dataLoadFailed'));
         setLoading(false);
@@ -75,6 +79,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
     };
     
     fetchSupplier();
+    return () => { cancelled = true; };
   }, [supplierId]);
   
   const handleChange = (e) => {

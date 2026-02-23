@@ -751,6 +751,7 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
 
   // Real-time synchronizacja zadań produkcyjnych
   useEffect(() => {
+    let cancelled = false;
     let unsubscribe = null;
 
     const setupRealtimeListener = () => {
@@ -758,7 +759,6 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
         setLoading(true);
         setError(null);
 
-        // Real-time listener dla zadań produkcyjnych
         const tasksRef = collection(db, 'productionTasks');
         const activeTasksQuery = query(
           tasksRef,
@@ -766,6 +766,7 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
         );
 
         unsubscribe = onSnapshot(activeTasksQuery, async (snapshot) => {
+          if (cancelled) return;
           try {
             setIsUpdating(true);
             
@@ -774,12 +775,10 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
               ...doc.data()
             }));
 
-            // Filtrujemy zadania - wyłączamy tylko anulowane
             const activeTasks = tasksData.filter(task => 
               task.status !== 'Anulowane'
             );
 
-            // Sortujemy według statusu i daty
             const sortedTasks = activeTasks.sort((a, b) => {
               const statusPriority = {
                 'W trakcie': 1,
@@ -796,42 +795,45 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
                 return priorityA - priorityB;
               }
               
-              // Jeśli ten sam status, sortuj według daty
               const dateA = a.scheduledDate?.toDate?.() || new Date(a.scheduledDate);
               const dateB = b.scheduledDate?.toDate?.() || new Date(b.scheduledDate);
               return dateA - dateB;
             });
 
+            if (cancelled) return;
             setTasks(sortedTasks);
             const now = new Date();
             setLastUpdate(now);
             
-            // Powiadom rodzica o aktualizacji (dla wyświetlenia czasu w header)
             if (onLastUpdateChange) {
               onLastUpdateChange(now);
             }
 
-            // ✅ OPTYMALIZACJA 5: Pobierz nazwy użytkowników tylko dla pierwszych 30 zadań
             await loadVisibleUserNames(sortedTasks);
+            if (cancelled) return;
 
-            // Animacja aktualizacji
             setTimeout(() => setIsUpdating(false), 500);
             
             console.log('🔄 Lista zadań zaktualizowana w czasie rzeczywistym:', sortedTasks.length, 'zadań');
             
           } catch (error) {
+            if (cancelled) return;
             console.error('Błąd podczas przetwarzania zmian zadań:', error);
             setError('Błąd podczas aktualizacji listy zadań');
           } finally {
-            setLoading(false);
+            if (!cancelled) {
+              setLoading(false);
+            }
           }
         }, (error) => {
+          if (cancelled) return;
           console.error('Błąd listenera zadań:', error);
           setError('Błąd podczas nasłuchiwania zmian zadań');
           setLoading(false);
         });
 
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas konfiguracji real-time listenera:', error);
         setError('Nie udało się skonfigurować synchronizacji w czasie rzeczywistym');
         setLoading(false);
@@ -840,8 +842,8 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
 
     setupRealtimeListener();
 
-    // Cleanup function
     return () => {
+      cancelled = true;
       if (unsubscribe) {
         unsubscribe();
         console.log('🛑 Odłączono listener listy zadań');

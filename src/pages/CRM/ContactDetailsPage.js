@@ -65,28 +65,34 @@ const ContactDetailsPage = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
+    let cancelled = false;
+    const fetchContactData = async () => {
+      try {
+        setLoading(true);
+        
+        // Pobierz dane kontaktu
+        const contactData = await getContactById(contactId);
+        if (cancelled) return;
+        setContact(contactData);
+        
+        // Pobierz interakcje zakupowe związane z kontaktem
+        const contactInteractions = await getContactInteractions(contactId);
+        if (cancelled) return;
+        setInteractions(contactInteractions);
+        
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania danych kontaktu:', error);
+        showError('Nie udało się pobrać danych kontaktu: ' + error.message);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
     fetchContactData();
+    return () => { cancelled = true; };
   }, [contactId]);
-  
-  const fetchContactData = async () => {
-    try {
-      setLoading(true);
-      
-      // Pobierz dane kontaktu
-      const contactData = await getContactById(contactId);
-      setContact(contactData);
-      
-      // Pobierz interakcje zakupowe związane z kontaktem
-      const contactInteractions = await getContactInteractions(contactId);
-      setInteractions(contactInteractions);
-      
-    } catch (error) {
-      console.error('Błąd podczas pobierania danych kontaktu:', error);
-      showError('Nie udało się pobrać danych kontaktu: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
   
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);

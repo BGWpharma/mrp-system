@@ -97,6 +97,7 @@ const FormOptionsManager = () => {
 
   useEffect(() => {
     fetchOptions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedType]);
 
   const fetchOptions = async () => {

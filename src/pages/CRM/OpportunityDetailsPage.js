@@ -57,7 +57,35 @@ const OpportunityDetailsPage = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
-    fetchOpportunityDetails();
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        
+        const oppData = await getOpportunityById(opportunityId);
+        if (cancelled) return;
+        setOpportunity(oppData);
+        
+        if (oppData.contactId) {
+          try {
+            const contactData = await getContactById(oppData.contactId);
+            if (cancelled) return;
+            setContact(contactData);
+          } catch (error) {
+            if (cancelled) return;
+            console.error('Błąd podczas pobierania kontaktu:', error);
+            showError('Nie udało się pobrać danych kontaktu: ' + error.message);
+          }
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania szansy sprzedaży:', error);
+        showError('Nie udało się pobrać szczegółów szansy sprzedaży: ' + error.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [opportunityId]);
   
   const fetchOpportunityDetails = async () => {

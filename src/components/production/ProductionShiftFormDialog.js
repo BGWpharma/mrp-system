@@ -143,40 +143,46 @@ const ProductionShiftFormDialog = ({
 
   // Pobierz numery MO przy pierwszym renderowaniu komponentu
   useEffect(() => {
-    if (open) {
-      const fetchMONumbers = async () => {
-        try {
-          setLoadingMO(true);
-          const options = await getMONumbersForSelect();
-          setMoOptions(options);
-        } catch (error) {
-          console.error('Błąd podczas pobierania numerów MO:', error);
-        } finally {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingMO(true);
+        const options = await getMONumbersForSelect();
+        if (cancelled) return;
+        setMoOptions(options);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania numerów MO:', error);
+      } finally {
+        if (!cancelled) {
           setLoadingMO(false);
         }
-      };
-
-      fetchMONumbers();
-    }
+      }
+    })();
+    return () => { cancelled = true; };
   }, [open]);
 
   // Pobierz magazyny przy otwieraniu dialogu
   useEffect(() => {
-    if (open) {
-      const fetchWarehouses = async () => {
-        try {
-          setWarehousesLoading(true);
-          const warehousesList = await getAllWarehouses();
-          setWarehouses(warehousesList);
-        } catch (error) {
-          console.error('Błąd podczas pobierania magazynów:', error);
-        } finally {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setWarehousesLoading(true);
+        const warehousesList = await getAllWarehouses();
+        if (cancelled) return;
+        setWarehouses(warehousesList);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania magazynów:', error);
+      } finally {
+        if (!cancelled) {
           setWarehousesLoading(false);
         }
-      };
-
-      fetchWarehouses();
-    }
+      }
+    })();
+    return () => { cancelled = true; };
   }, [open]);
 
   const handleChange = async (e) => {

@@ -82,7 +82,69 @@ const ConsumptionPage = () => {
   
   // Pobieranie danych zadania
   useEffect(() => {
-    fetchTaskData();
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        setLoading(true);
+        
+        const taskData = await getTaskById(taskId);
+        if (cancelled) return;
+        setTask(taskData);
+        
+        if (taskData?.consumedMaterials?.length > 0) {
+          const enrichedConsumptions = await Promise.all(
+            taskData.consumedMaterials.map(async (consumption) => {
+              const material = taskData.materials?.find(m => 
+                (m.inventoryItemId || m.id) === consumption.materialId
+              );
+              
+              let unitPrice = consumption.unitPrice || 0;
+              
+              if (consumption.batchId) {
+                try {
+                  const { getInventoryBatch } = await import('../../services/inventory');
+                  const batchData = await getInventoryBatch(consumption.batchId);
+                  
+                  if (batchData && batchData.unitPrice !== undefined) {
+                    unitPrice = batchData.unitPrice;
+                    console.log(`Pobrano rzeczywistą cenę z partii ${consumption.batchId}: ${unitPrice} €`);
+                  } else {
+                    console.warn(`Nie znaleziono ceny w partii ${consumption.batchId}, używam ceny z konsumpcji: ${unitPrice} €`);
+                  }
+                } catch (error) {
+                  console.error(`Błąd podczas pobierania ceny z partii ${consumption.batchId}:`, error);
+                  unitPrice = consumption.unitPrice || material?.unitPrice || 0;
+                }
+              }
+              
+              return {
+                ...consumption,
+                materialName: material?.name || 'Nieznany materiał',
+                materialUnit: material?.unit || 'szt.',
+                unitPrice: unitPrice
+              };
+            })
+          );
+          
+          if (cancelled) return;
+          setConsumptionData(enrichedConsumptions);
+        } else {
+          if (cancelled) return;
+          setConsumptionData([]);
+        }
+        
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania danych zadania:', error);
+        showError('Nie udało się pobrać danych zadania');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
   }, [taskId]);
   
   const fetchTaskData = async () => {

@@ -49,28 +49,31 @@ const APIKeySettings = () => {
   
   // Pobierz aktualne ustawienia
   useEffect(() => {
+    let cancelled = false;
+
     const fetchSettings = async () => {
       try {
         setError(null);
-        // Pobierz ustawienia systemowe
         const settings = await getSystemSettings();
+        if (cancelled) return;
         setUseGlobalApiKey(settings.useGlobalApiKey || false);
         setUseGlobalGeminiKey(settings.useGlobalGeminiKey || false);
         
-        // Sprawdź czy istnieje globalny klucz API OpenAI
         const apiKey = await getGlobalOpenAIApiKey();
+        if (cancelled) return;
         if (apiKey) {
-          setGlobalApiKey('•'.repeat(apiKey.length > 10 ? 10 : apiKey.length)); // Maski dla bezpieczeństwa
+          setGlobalApiKey('•'.repeat(apiKey.length > 10 ? 10 : apiKey.length));
           setHasGlobalApiKey(true);
         }
         
-        // Sprawdź czy istnieje globalny klucz API Gemini
         const geminiKey = await getGlobalGeminiApiKey();
+        if (cancelled) return;
         if (geminiKey) {
-          setGlobalGeminiKey('•'.repeat(geminiKey.length > 10 ? 10 : geminiKey.length)); // Maski dla bezpieczeństwa
+          setGlobalGeminiKey('•'.repeat(geminiKey.length > 10 ? 10 : geminiKey.length));
           setHasGlobalGeminiKey(true);
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania ustawień:', error);
         setError('Nie udało się pobrać ustawień systemowych. Szczegóły: ' + error.message);
         showError('Nie udało się pobrać ustawień systemowych');
@@ -78,6 +81,8 @@ const APIKeySettings = () => {
     };
     
     fetchSettings();
+
+    return () => { cancelled = true; };
   }, [showError]);
   
   // Obsługa zapisu globalnego klucza API

@@ -73,7 +73,38 @@ const InteractionsPage = () => {
   const { t } = useTranslation('interactions');
   
   useEffect(() => {
+    let cancelled = false;
+    const fetchInteractions = async () => {
+      try {
+        setLoading(true);
+        const allInteractions = await getAllInteractions();
+        if (cancelled) return;
+        setInteractions(allInteractions);
+        
+        // Pobieramy dane dostawców
+        const suppliersData = await getAllSuppliers();
+        if (cancelled) return;
+        setSuppliers(suppliersData);
+        
+        // Tworzymy mapę nazw dostawców
+        const supplierNamesObj = {};
+        suppliersData.forEach(supplier => {
+          supplierNamesObj[supplier.id] = supplier.name || t('purchaseInteractions.details.unknownSupplier');
+        });
+        
+        setSupplierNames(supplierNamesObj);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania interakcji:', error);
+        showError(t('purchaseInteractions.notifications.loadFailed') + ': ' + error.message);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
     fetchInteractions();
+    return () => { cancelled = true; };
   }, []);
   
   useEffect(() => {
@@ -94,31 +125,6 @@ const InteractionsPage = () => {
       );
     }
   }, [searchTerm, interactions, supplierNames]);
-  
-  const fetchInteractions = async () => {
-    try {
-      setLoading(true);
-      const allInteractions = await getAllInteractions();
-      setInteractions(allInteractions);
-      
-      // Pobieramy dane dostawców
-      const suppliersData = await getAllSuppliers();
-      setSuppliers(suppliersData);
-      
-      // Tworzymy mapę nazw dostawców
-      const supplierNamesObj = {};
-      suppliersData.forEach(supplier => {
-        supplierNamesObj[supplier.id] = supplier.name || t('purchaseInteractions.details.unknownSupplier');
-      });
-      
-      setSupplierNames(supplierNamesObj);
-    } catch (error) {
-      console.error('Błąd podczas pobierania interakcji:', error);
-      showError(t('purchaseInteractions.notifications.loadFailed') + ': ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
   
   const handleChangePage = (event, newPage) => {
     setPage(newPage);

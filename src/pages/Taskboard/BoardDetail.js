@@ -94,8 +94,8 @@ const BoardDetail = ({
 
   // Pobierz nazwy użytkowników dla wszystkich przypisanych osób (zoptymalizowane)
   useEffect(() => {
+    let cancelled = false;
     const fetchUserNames = async () => {
-      // Zbierz wszystkie unikalne userId z zadań
       const allUserIds = new Set();
       tasks.forEach(task => {
         if (task.assignedTo) {
@@ -105,20 +105,22 @@ const BoardDetail = ({
       
       if (allUserIds.size === 0) return;
       
-      // Sprawdź które userId nie są jeszcze w cache
       const missingUserIds = [...allUserIds].filter(id => !userNamesMap[id]);
       
       if (missingUserIds.length === 0) return;
       
       try {
         const names = await getUsersDisplayNames(missingUserIds);
+        if (cancelled) return;
         setUserNamesMap(prev => ({ ...prev, ...names }));
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania nazw użytkowników:', error);
       }
     };
 
     fetchUserNames();
+    return () => { cancelled = true; };
   }, [tasks]);
 
   // Refs dla debounce timeouts

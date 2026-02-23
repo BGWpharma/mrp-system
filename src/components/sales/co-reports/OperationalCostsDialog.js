@@ -97,9 +97,30 @@ const OperationalCostsDialog = ({
 
   // Pobierz dane przy otwarciu dialogu
   useEffect(() => {
-    if (open && dateFrom && dateTo) {
-      fetchData();
-    }
+    if (!open || !dateFrom || !dateTo) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getOperationalCostsInRange(dateFrom, dateTo);
+        if (cancelled) return;
+        setMonthsData(data);
+        if (data.length > 0) {
+          const firstWithCosts = data.find(m => m.costs && m.costs.length > 0);
+          setExpandedMonth(firstWithCosts?.id || data[0]?.id);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Błąd pobierania kosztów:', err);
+        setError('Nie udało się pobrać kosztów operacyjnych');
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
   }, [open, dateFrom, dateTo]);
 
   const fetchData = async () => {
@@ -108,8 +129,6 @@ const OperationalCostsDialog = ({
     try {
       const data = await getOperationalCostsInRange(dateFrom, dateTo);
       setMonthsData(data);
-      
-      // Rozwiń pierwszy miesiąc z kosztami lub pierwszy miesiąc
       if (data.length > 0) {
         const firstWithCosts = data.find(m => m.costs && m.costs.length > 0);
         setExpandedMonth(firstWithCosts?.id || data[0]?.id);

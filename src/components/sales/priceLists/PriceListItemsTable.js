@@ -42,7 +42,24 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
   const { t } = useTranslation('priceLists');
   
   useEffect(() => {
-    fetchItems();
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await getPriceListItems(priceListId);
+        if (cancelled) return;
+        setItems(data);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania elementów listy cenowej:', error);
+        showNotification(t('priceLists.messages.errors.fetchItemsFailed'), 'error');
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
   }, [priceListId]);
   
   const fetchItems = async () => {

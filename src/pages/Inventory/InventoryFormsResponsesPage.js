@@ -273,18 +273,22 @@ const InventoryFormsResponsesPage = () => {
   
   // Pobierz liczby odpowiedzi dla wszystkich zakładek na starcie
   useEffect(() => {
+    let cancelled = false;
     const loadAllCounts = async () => {
       try {
         const stats = await getInventoryFormsStatistics();
+        if (cancelled) return;
         setTabCounts({
           loadingReport: stats.loadingReports,
           unloadingReport: stats.unloadingReports
         });
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania liczby odpowiedzi:', error);
       }
     };
     loadAllCounts();
+    return () => { cancelled = true; };
   }, []);
   
   // ✅ OPTYMALIZACJA: Reset pagination and cursors when changing tabs

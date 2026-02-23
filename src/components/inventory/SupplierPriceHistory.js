@@ -41,42 +41,49 @@ const SupplierPriceHistory = ({ priceId, supplierId, itemId, currency = 'EUR' })
   const [userNames, setUserNames] = useState({});
   
   useEffect(() => {
+    let cancelled = false;
+
     if (dialogOpen && priceId) {
-      fetchPriceHistory();
-    }
-  }, [dialogOpen, priceId]);
-  
-  // Pobieranie historii cen
-  const fetchPriceHistory = async () => {
-    try {
-      setLoading(true);
-      const data = await getSupplierPriceHistory(priceId);
-      setHistory(data);
-      
-      // Pobierz dane użytkowników, którzy dokonali zmian
-      const userIds = [...new Set(data.map(item => item.changedBy).filter(Boolean))];
-      const userData = {};
-      
-      for (const userId of userIds) {
+      const loadPriceHistory = async () => {
         try {
-          const userDetails = await getUserById(userId);
-          userData[userId] = userDetails ? 
-            userDetails.displayName || userDetails.email || userId
-            : userId;
+          setLoading(true);
+          const data = await getSupplierPriceHistory(priceId);
+          if (cancelled) return;
+          setHistory(data);
+          
+          const userIds = [...new Set(data.map(item => item.changedBy).filter(Boolean))];
+          const userData = {};
+          
+          for (const userId of userIds) {
+            if (cancelled) return;
+            try {
+              const userDetails = await getUserById(userId);
+              if (cancelled) return;
+              userData[userId] = userDetails ? 
+                userDetails.displayName || userDetails.email || userId
+                : userId;
+            } catch (error) {
+              console.error(`Błąd podczas pobierania danych użytkownika ${userId}:`, error);
+              userData[userId] = userId;
+            }
+          }
+          
+          setUserNames(userData);
         } catch (error) {
-          console.error(`Błąd podczas pobierania danych użytkownika ${userId}:`, error);
-          userData[userId] = userId;
+          if (cancelled) return;
+          console.error('Błąd podczas pobierania historii cen:', error);
+          showError('Nie udało się pobrać historii zmian cen');
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
         }
-      }
-      
-      setUserNames(userData);
-    } catch (error) {
-      console.error('Błąd podczas pobierania historii cen:', error);
-      showError('Nie udało się pobrać historii zmian cen');
-    } finally {
-      setLoading(false);
+      };
+      loadPriceHistory();
     }
-  };
+
+    return () => { cancelled = true; };
+  }, [dialogOpen, priceId]);
   
   // Obsługa otwierania dialogu historii
   const handleOpenDialog = () => {

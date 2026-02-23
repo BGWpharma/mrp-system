@@ -264,31 +264,35 @@ const TaskForm = ({ taskId }) => {
 
   // Optymalizowane pobieranie danych - tylko niezbędne przy starcie
   useEffect(() => {
+    let cancelled = false;
     const fetchCriticalData = async () => {
       try {
         setLoading(true);
         
         if (taskId && taskId !== 'new') {
-          // Tryb edycji - najpierw pobierz zadanie, potem resztę w tle
           await fetchTask();
-          // Pobierz podstawowe dane równolegle w tle
+          if (cancelled) return;
           fetchSupportingDataInBackground();
         } else {
-          // Tryb nowego zadania - pobierz tylko podstawowe dane
           await Promise.all([
             fetchRecipes(),
             fetchWorkstations()
           ]);
+          if (cancelled) return;
         }
       } catch (error) {
+        if (cancelled) return;
         showError('Błąd podczas ładowania danych: ' + error.message);
         console.error('Error loading data:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     
     fetchCriticalData();
+    return () => { cancelled = true; };
   }, [taskId]);
 
   // Ustaw selectedCustomerOrder po załadowaniu zamówień

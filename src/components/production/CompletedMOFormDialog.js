@@ -77,21 +77,29 @@ const CompletedMOFormDialog = ({
 
   // Pobierz numery MO przy pierwszym renderowaniu komponentu
   useEffect(() => {
+    let cancelled = false;
+
     if (open) {
       const fetchMONumbers = async () => {
         try {
           setLoadingMO(true);
           const options = await getMONumbersForSelect();
+          if (cancelled) return;
           setMoOptions(options);
         } catch (error) {
+          if (cancelled) return;
           console.error('Błąd podczas pobierania numerów MO:', error);
         } finally {
-          setLoadingMO(false);
+          if (!cancelled) {
+            setLoadingMO(false);
+          }
         }
       };
 
       fetchMONumbers();
     }
+
+    return () => { cancelled = true; };
   }, [open]);
 
   const handleChange = (e) => {

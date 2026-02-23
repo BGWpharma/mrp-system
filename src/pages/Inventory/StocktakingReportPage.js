@@ -71,36 +71,38 @@ const StocktakingReportPage = () => {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   
   useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const stocktakingData = await getStocktakingById(id);
+        if (cancelled) return;
+        setStocktaking(stocktakingData);
+        
+        const stocktakingItems = await getStocktakingItems(id);
+        if (cancelled) return;
+        
+        const warehouses = await getAllWarehouses();
+        if (cancelled) return;
+        const warehouseMap = {};
+        warehouses.forEach(warehouse => {
+          warehouseMap[warehouse.id] = warehouse.name;
+        });
+        setWarehouseNames(warehouseMap);
+        
+        setItems(stocktakingItems);
+        
+        calculateReportSummary(stocktakingItems);
+      } catch (error) {
+        console.error('Błąd podczas pobierania danych inwentaryzacji:', error);
+        if (!cancelled) setError('Nie udało się pobrać danych inwentaryzacji');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
     fetchData();
+    return () => { cancelled = true; };
   }, [id]);
-  
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const stocktakingData = await getStocktakingById(id);
-      setStocktaking(stocktakingData);
-      
-      const stocktakingItems = await getStocktakingItems(id);
-      
-      // Pobierz wszystkie magazyny i utwórz mapę ID -> Nazwa
-      const warehouses = await getAllWarehouses();
-      const warehouseMap = {};
-      warehouses.forEach(warehouse => {
-        warehouseMap[warehouse.id] = warehouse.name;
-      });
-      setWarehouseNames(warehouseMap);
-      
-      setItems(stocktakingItems);
-      
-      // Generate report summary
-      calculateReportSummary(stocktakingItems);
-    } catch (error) {
-      console.error('Błąd podczas pobierania danych inwentaryzacji:', error);
-      setError('Nie udało się pobrać danych inwentaryzacji');
-    } finally {
-      setLoading(false);
-    }
-  };
   
   const calculateReportSummary = (items) => {
     if (!items || items.length === 0) return;

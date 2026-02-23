@@ -135,6 +135,7 @@ const ItemDetailsPage = () => {
 
 
   useEffect(() => {
+    let cancelled = false;
     const fetchItemData = async () => {
       try {
         setLoading(true);
@@ -149,6 +150,7 @@ const ItemDetailsPage = () => {
           getItemBatches(id),
           getAllWarehouses()
         ]);
+        if (cancelled) return;
 
         // Obsługa wyników z error handling
         const itemData = itemResult.status === 'fulfilled' ? itemResult.value : null;
@@ -166,6 +168,7 @@ const ItemDetailsPage = () => {
         // Pobierz nazwy przypisanych klientów
         if (itemData.customerIds && itemData.customerIds.length > 0) {
           getAllCustomers().then(allCustomers => {
+            if (cancelled) return;
             const matched = allCustomers.filter(c => itemData.customerIds.includes(c.id));
             setAssignedCustomers(matched);
           }).catch(err => console.warn('Nie udało się pobrać klientów:', err));
@@ -175,8 +178,9 @@ const ItemDetailsPage = () => {
         if (itemData.parentPackageItemId) {
           try {
             const parentPackageItem = await getInventoryItemById(itemData.parentPackageItemId);
+            if (cancelled) return;
             itemData.parentPackageItem = parentPackageItem;
-            setItem({ ...itemData }); // Re-render z parent package
+            setItem({ ...itemData });
           } catch (error) {
             console.error(t('inventory.itemDetails.errorFetchingLinkedPackage'), error);
             itemData.parentPackageItem = null;
@@ -206,39 +210,60 @@ const ItemDetailsPage = () => {
 
         // 🚀 ROZWIĄZANIE 2: Optymalizacja pobierania dostawców - tylko potrzebni
         const supplierPricesPromise = getSupplierPrices(id).then(async (supplierPricesData) => {
-        if (supplierPricesData && supplierPricesData.length > 0) {
-            // Pobierz tylko potrzebnych dostawców (nie wszystkich)
+          if (cancelled) return;
+          if (supplierPricesData && supplierPricesData.length > 0) {
             const supplierIds = [...new Set(supplierPricesData.map(p => p.supplierId))];
             const relevantSuppliers = await getSuppliersByIds(supplierIds);
-            
-          const pricesWithDetails = supplierPricesData.map(price => {
+            if (cancelled) return;
+            const pricesWithDetails = supplierPricesData.map(price => {
               const supplier = relevantSuppliers.find(s => s.id === price.supplierId);
-            return {
-              ...price,
-              supplierName: supplier ? supplier.name : 'Nieznany dostawca'
-            };
-          });
-          setSupplierPrices(pricesWithDetails);
-        }
+              return {
+                ...price,
+                supplierName: supplier ? supplier.name : 'Nieznany dostawca'
+              };
+            });
+            setSupplierPrices(pricesWithDetails);
+          }
           updateLoadingState('suppliers', false);
         }).catch(error => {
           console.warn('Nie udało się pobrać cen dostawców:', error);
-          updateLoadingState('suppliers', false);
+          if (!cancelled) updateLoadingState('suppliers', false);
         });
 
-        // 🚀 ROZWIĄZANIE 3: Lazy loading dla zakładek - uruchom równolegle ale nie blokuj głównego UI
-        const reservationsPromise = fetchReservations(itemData).then(() => {
-          updateLoadingState('reservations', false);
+        const reservationsPromise = (async () => {
+          try {
+            const groupedReservations = await getReservationsGroupedByTask(itemData.id);
+            if (cancelled) return;
+            setReservations(groupedReservations);
+            filterAndSortReservations(reservationFilter, reservationSortField, reservationSortOrder, groupedReservations);
+          } catch (error) {
+            console.error('Błąd podczas pobierania rezerwacji:', error);
+            if (!cancelled) showError('Nie udało się pobrać listy rezerwacji');
+          }
+        })().then(() => {
+          if (!cancelled) updateLoadingState('reservations', false);
         }).catch(error => {
           console.warn('Nie udało się pobrać rezerwacji:', error);
-          updateLoadingState('reservations', false);
+          if (!cancelled) updateLoadingState('reservations', false);
         });
 
-        const awaitingPromise = fetchAwaitingOrders(id).then(() => {
-          updateLoadingState('awaiting', false);
+        const awaitingPromise = (async () => {
+          try {
+            setAwaitingOrdersLoading(true);
+            const awaitingOrdersData = await getAwaitingOrdersForInventoryItem(id);
+            if (cancelled) return;
+            setAwaitingOrders(awaitingOrdersData);
+          } catch (error) {
+            console.error(t('inventory.itemDetails.errorFetchingAwaitingOrders'), error);
+            if (!cancelled) showError(t('inventory.itemDetails.errorFetchingAwaitingOrdersMessage') + ': ' + error.message);
+          } finally {
+            if (!cancelled) setAwaitingOrdersLoading(false);
+          }
+        })().then(() => {
+          if (!cancelled) updateLoadingState('awaiting', false);
         }).catch(error => {
           console.warn('Nie udało się pobrać oczekujących zamówień:', error);
-          updateLoadingState('awaiting', false);
+          if (!cancelled) updateLoadingState('awaiting', false);
         });
 
         // Poczekaj na wszystkie sekundarne operacje
@@ -249,10 +274,10 @@ const ItemDetailsPage = () => {
         ]);
 
       } catch (error) {
-        showError(t('inventory.itemDetails.errorFetchingData') + ': ' + error.message);
         console.error('Error fetching item details:', error);
+        if (!cancelled) showError(t('inventory.itemDetails.errorFetchingData') + ': ' + error.message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
@@ -269,8 +294,8 @@ const ItemDetailsPage = () => {
     
     window.addEventListener('inventory-updated', handleInventoryUpdate);
     
-    // Usuń nasłuchiwanie przy odmontowaniu komponentu
     return () => {
+      cancelled = true;
       window.removeEventListener('inventory-updated', handleInventoryUpdate);
     };
   }, [id, showError]);

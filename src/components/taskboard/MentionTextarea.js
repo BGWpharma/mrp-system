@@ -317,12 +317,26 @@ const MentionTextarea = ({
   // Debounce dla wyszukiwania
   useEffect(() => {
     if (menuStep !== 'search' || !selectedType) return;
-    
-    const timeoutId = setTimeout(() => {
-      handleSearch(searchTerm);
+    let cancelled = false;
+
+    const timeoutId = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const results = await searchDocumentsByType(selectedType, searchTerm, 15);
+        if (cancelled) return;
+        setSearchResults(results);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd wyszukiwania:', error);
+        setSearchResults([]);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     }, 300);
 
-    return () => clearTimeout(timeoutId);
+    return () => { cancelled = true; clearTimeout(timeoutId); };
   }, [searchTerm, selectedType, menuStep]);
 
   // Wybierz dokument i wstaw mention

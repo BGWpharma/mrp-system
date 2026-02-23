@@ -110,9 +110,26 @@ const OrdersList = () => {
 
   // Główny efekt inicjalizacyjny - wykonuje się tylko raz przy pierwszym renderowaniu
   useEffect(() => {
-    fetchCustomers();
-    // Nie wywołujemy tu fetchOrders() - zostanie wywołane przez efekt zależny od parametrów
+    let cancelled = false;
+    const loadCustomers = async () => {
+      try {
+        setCustomersLoading(true);
+        const { getAllCustomers } = await import('../../services/customerService');
+        const data = await getAllCustomers();
+        if (cancelled) return;
+        setCustomers(data);
+      } catch (error) {
+        if (cancelled) return;
+        console.error(t('orders.notifications.customersError'), error);
+      } finally {
+        if (!cancelled) {
+          setCustomersLoading(false);
+        }
+      }
+    };
+    loadCustomers();
     setIsInitialized(true);
+    return () => { cancelled = true; };
   }, []);
 
   // Obsługa debounce dla wyszukiwania
@@ -136,10 +153,11 @@ const OrdersList = () => {
   
   // Efekt odpowiedzialny za pobieranie zamówień przy zmianach parametrów
   useEffect(() => {
-    // Wywołujemy fetchOrders tylko jeśli komponent jest już zainicjalizowany
+    let cancelled = false;
     if (isInitialized) {
       fetchOrders();
     }
+    return () => { cancelled = true; };
   }, [state.page, state.rowsPerPage, state.orderBy, state.orderDirection, state.debouncedSearchTerm, isInitialized]);
 
   // Nasłuchiwanie powiadomień o aktualizacji kosztów zadań produkcyjnych
@@ -311,19 +329,6 @@ const OrdersList = () => {
       showError(t('orders.notifications.fetchError'));
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchCustomers = async () => {
-    try {
-      setCustomersLoading(true);
-      const { getAllCustomers } = await import('../../services/customerService');
-      const data = await getAllCustomers();
-      setCustomers(data);
-    } catch (error) {
-      console.error(t('orders.notifications.customersError'), error);
-    } finally {
-      setCustomersLoading(false);
     }
   };
 

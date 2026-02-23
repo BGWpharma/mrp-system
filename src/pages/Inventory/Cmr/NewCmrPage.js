@@ -18,26 +18,27 @@ const NewCmrPage = () => {
   const [error, setError] = useState(null);
   
   useEffect(() => {
-    // Jeśli mamy ID, to ładujemy dane dokumentu do edycji
+    let cancelled = false;
     if (id) {
-      const loadCmrData = async () => {
+      (async () => {
         try {
           const data = await getCmrById(id);
+          if (cancelled) return;
           if (data) {
             setCmrData(data);
           } else {
             setError('Nie znaleziono dokumentu CMR o podanym ID');
           }
         } catch (error) {
+          if (cancelled) return;
           console.error('Błąd podczas ładowania dokumentu CMR:', error);
           setError(`Błąd podczas ładowania dokumentu: ${error.message}`);
         } finally {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
         }
-      };
-      
-      loadCmrData();
+      })();
     }
+    return () => { cancelled = true; };
   }, [id]);
   
   const handleSubmit = async (formData) => {

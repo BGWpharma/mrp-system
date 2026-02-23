@@ -99,23 +99,78 @@ const RecipeDetailsPage = () => {
   const [priceLists, setPriceLists] = useState([]);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchRecipeData = async () => {
       try {
         setLoading(true);
-        await fetchRecipe();
-        await fetchVersions();
-        await fetchWorkstations();
-        await fetchInventoryProduct();
-        await fetchPriceLists();
+
+        try {
+          const recipeData = await getRecipeById(id);
+          if (cancelled) return;
+          setRecipe(recipeData);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Error fetching recipe:', error);
+          showError('Błąd podczas pobierania receptury');
+        }
+
+        if (cancelled) return;
+
+        try {
+          const versionsData = await getRecipeVersions(id);
+          if (cancelled) return;
+          setVersions(versionsData);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Error fetching versions:', error);
+          showError('Błąd podczas pobierania historii wersji receptury');
+        }
+
+        if (cancelled) return;
+
+        try {
+          const workstationsData = await getAllWorkstations();
+          if (cancelled) return;
+          setWorkstations(workstationsData);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Błąd podczas pobierania stanowisk produkcyjnych:', error);
+        }
+
+        if (cancelled) return;
+
+        try {
+          const inventoryItem = await getInventoryItemByRecipeId(id);
+          if (cancelled) return;
+          setInventoryProduct(inventoryItem);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Błąd podczas pobierania pozycji magazynowej:', error);
+        }
+
+        if (cancelled) return;
+
+        try {
+          const priceListsData = await getPriceListsContainingRecipe(id);
+          if (cancelled) return;
+          setPriceLists(priceListsData);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Błąd podczas pobierania list cenowych:', error);
+        }
       } catch (error) {
+        if (cancelled) return;
         console.error('Error fetching recipe data:', error);
         showError('Błąd podczas pobierania danych receptury');
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     
     fetchRecipeData();
+    return () => { cancelled = true; };
   }, [id]);
 
   const fetchRecipe = async () => {
@@ -125,43 +180,6 @@ const RecipeDetailsPage = () => {
     } catch (error) {
       console.error('Error fetching recipe:', error);
       showError('Błąd podczas pobierania receptury');
-    }
-  };
-
-  const fetchVersions = async () => {
-    try {
-      const versionsData = await getRecipeVersions(id);
-      setVersions(versionsData);
-    } catch (error) {
-      console.error('Error fetching versions:', error);
-      showError('Błąd podczas pobierania historii wersji receptury');
-    }
-  };
-
-  const fetchWorkstations = async () => {
-    try {
-      const workstationsData = await getAllWorkstations();
-      setWorkstations(workstationsData);
-    } catch (error) {
-      console.error('Błąd podczas pobierania stanowisk produkcyjnych:', error);
-    }
-  };
-
-  const fetchInventoryProduct = async () => {
-    try {
-      const inventoryItem = await getInventoryItemByRecipeId(id);
-      setInventoryProduct(inventoryItem);
-    } catch (error) {
-      console.error('Błąd podczas pobierania pozycji magazynowej:', error);
-    }
-  };
-
-  const fetchPriceLists = async () => {
-    try {
-      const priceListsData = await getPriceListsContainingRecipe(id);
-      setPriceLists(priceListsData);
-    } catch (error) {
-      console.error('Błąd podczas pobierania list cenowych:', error);
     }
   };
 

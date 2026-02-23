@@ -17,113 +17,42 @@ import {
 import { ref, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './firebase/config';
 import { createNotification } from './notificationService';
+import { ServiceCacheManager } from './cache/serviceCacheManager';
 
-// Stałe dla kolekcji w Firebase
 const PURCHASE_ORDERS_COLLECTION = 'purchaseOrders';
 const SUPPLIERS_COLLECTION = 'suppliers';
 
-// Dodajemy prosty mechanizm pamięci podręcznej dla zwiększenia wydajności
-const searchCache = {
-  results: new Map(),
-  timestamp: new Map(),
-  maxCacheAge: 60 * 1000, // 60 sekund (1 minuta)
-  
-  // Nowy cache dla wyszukiwania pozycji magazynowych
-  inventorySearchCache: new Map(),
-  inventorySearchTimestamp: new Map(),
-  
-  // Debouncing dla wyszukiwania pozycji magazynowych
-  inventorySearchTimeout: null,
-  
-  // Generuje klucz cache na podstawie parametrów zapytania
-  generateKey(page, itemsPerPage, sortField, sortOrder, filters) {
-    // Uwzględnij wszystkie filtry w kluczu cache, szczególnie searchTerm
-    return JSON.stringify({ 
-      page, 
-      itemsPerPage, 
-      sortField, 
-      sortOrder, 
-      filters: {
-        status: filters.status || null,
-        searchTerm: filters.searchTerm || null,
-        dateFrom: filters.dateFrom || null,
-        dateTo: filters.dateTo || null,
-        supplierName: filters.supplierName || null,
-        priceMin: filters.priceMin || null,
-        priceMax: filters.priceMax || null
-      }
-    });
-  },
-  
-  // Sprawdza, czy w cache istnieje aktualny wynik dla danego zapytania
-  has(key) {
-    if (!this.results.has(key)) return false;
-    
-    const timestamp = this.timestamp.get(key) || 0;
-    const now = Date.now();
-    return (now - timestamp) < this.maxCacheAge;
-  },
-  
-  // Pobiera wynik z cache
-  get(key) {
-    return this.results.get(key);
-  },
-  
-  // Zapisuje wynik do cache
-  set(key, result) {
-    this.results.set(key, result);
-    this.timestamp.set(key, Date.now());
-    
-    // Jeśli cache jest zbyt duży, usuń najstarsze wpisy
-    if (this.results.size > 50) {
-      const oldestKey = [...this.timestamp.entries()]
-        .sort((a, b) => a[1] - b[1])
-        [0][0];
-      
-      this.results.delete(oldestKey);
-      this.timestamp.delete(oldestKey);
+const PO_CACHE_PREFIX = 'po:search:';
+const PO_INV_SEARCH_PREFIX = 'po:inv-search:';
+const PO_CACHE_TTL = 60 * 1000; // 60 sekund
+
+const generatePOCacheKey = (page, itemsPerPage, sortField, sortOrder, filters) => {
+  return PO_CACHE_PREFIX + JSON.stringify({
+    page,
+    itemsPerPage,
+    sortField,
+    sortOrder,
+    filters: {
+      status: filters.status || null,
+      searchTerm: filters.searchTerm || null,
+      dateFrom: filters.dateFrom || null,
+      dateTo: filters.dateTo || null,
+      supplierName: filters.supplierName || null,
+      priceMin: filters.priceMin || null,
+      priceMax: filters.priceMax || null
     }
-  },
-  
-  // Czyści cache dla konkretnego zamówienia (używane po aktualizacji/usunięciu)
-  invalidateForOrder(orderId) {
-    for (const [key, result] of this.results.entries()) {
-      if (result && result.data && result.data.some(po => po.id === orderId)) {
-        this.results.delete(key);
-        this.timestamp.delete(key);
-      }
-    }
-  },
-  
-  // Czyści cały cache
-  clear() {
-    this.results.clear();
-    this.timestamp.clear();
-    this.inventorySearchCache.clear();
-    this.inventorySearchTimestamp.clear();
-    console.log('Cache został wyczyszczony');
-  },
-  
-  // Dodaj funkcję do czyszczenia cache dla zapytań wyszukiwania
-  clearSearchCache() {
-    for (const [key] of this.results.entries()) {
-      try {
-        const parsedKey = JSON.parse(key);
-        if (parsedKey.filters && parsedKey.filters.searchTerm) {
-          this.results.delete(key);
-          this.timestamp.delete(key);
-        }
-      } catch (error) {
-        // Jeśli nie można parsować klucza, usuń go
-        this.results.delete(key);
-        this.timestamp.delete(key);
-      }
-    }
-    // Wyczyść również cache wyszukiwania pozycji magazynowych
-    this.inventorySearchCache.clear();
-    this.inventorySearchTimestamp.clear();
-    console.log('Cache wyszukiwania został wyczyszczony');
-  }
+  });
+};
+
+const invalidatePOCacheForOrder = (orderId) => {
+  ServiceCacheManager.invalidateByPredicate(
+    (key, data) => key.startsWith(PO_CACHE_PREFIX) && data?.data?.some(po => po.id === orderId)
+  );
+};
+
+const clearAllPOCache = () => {
+  ServiceCacheManager.invalidateByPrefix(PO_CACHE_PREFIX);
+  ServiceCacheManager.invalidateByPrefix(PO_INV_SEARCH_PREFIX);
 };
 
 /**
@@ -247,15 +176,13 @@ export const getAllPurchaseOrders = async () => {
  */
 export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 10, sortField = 'createdAt', sortOrder = 'desc', filters = {}, useCache = true) => {
   try {
-    // Sprawdź, czy mamy dane w cache - ale nie używaj cache dla wyszukiwania
-    const cacheKey = searchCache.generateKey(page, itemsPerPage, sortField, sortOrder, filters);
+    const cacheKey = generatePOCacheKey(page, itemsPerPage, sortField, sortOrder, filters);
     
-    // Wyłącz cache dla zapytań wyszukiwania, aby zawsze pobierać świeże dane
     const shouldUseCache = useCache && (!filters.searchTerm || filters.searchTerm.trim() === '');
     
-    if (shouldUseCache && searchCache.has(cacheKey)) {
+    if (shouldUseCache && ServiceCacheManager.has(cacheKey)) {
       console.log('Używam danych z cache dla zapytania:', { page, itemsPerPage, sortField, sortOrder });
-      return searchCache.get(cacheKey);
+      return ServiceCacheManager.get(cacheKey);
     }
     
     console.log('Pobieranie świeżych danych dla zapytania:', { page, itemsPerPage, sortField, sortOrder, hasSearchTerm: !!(filters.searchTerm && filters.searchTerm.trim()) });
@@ -587,13 +514,10 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             const now = Date.now();
             let matchingInventoryItemIds = new Set();
             
-            if (searchCache.inventorySearchCache.has(inventoryCacheKey) && 
-                searchCache.inventorySearchTimestamp.has(inventoryCacheKey)) {
-              const cacheTime = searchCache.inventorySearchTimestamp.get(inventoryCacheKey);
-              if (now - cacheTime < searchCache.maxCacheAge) {
-                matchingInventoryItemIds = searchCache.inventorySearchCache.get(inventoryCacheKey);
-                console.log(`Używam cache dla wyszukiwania pozycji magazynowych: ${matchingInventoryItemIds.size} pozycji`);
-              }
+            const cachedInvSearch = ServiceCacheManager.get(`${PO_INV_SEARCH_PREFIX}${inventoryCacheKey}`);
+            if (cachedInvSearch) {
+              matchingInventoryItemIds = cachedInvSearch;
+              console.log(`Używam cache dla wyszukiwania pozycji magazynowych: ${matchingInventoryItemIds.size} pozycji`);
             }
             
             // Jeśli nie ma w cache lub cache wygasł, wykonaj wyszukiwanie
@@ -619,13 +543,10 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
                 
                 // Zapisz w cache tylko jeśli znaleziono wyniki
                 if (matchingInventoryItemIds.size > 0) {
-                  searchCache.inventorySearchCache.set(inventoryCacheKey, matchingInventoryItemIds);
-                  searchCache.inventorySearchTimestamp.set(inventoryCacheKey, now);
+                  ServiceCacheManager.set(`${PO_INV_SEARCH_PREFIX}${inventoryCacheKey}`, matchingInventoryItemIds, PO_CACHE_TTL);
                   console.log(`Zapisano ${matchingInventoryItemIds.size} pozycji magazynowych w cache`);
                 } else {
-                  // Zapisz również puste wyniki w cache, aby uniknąć powtórnych zapytań
-                  searchCache.inventorySearchCache.set(inventoryCacheKey, new Set());
-                  searchCache.inventorySearchTimestamp.set(inventoryCacheKey, now);
+                  ServiceCacheManager.set(`${PO_INV_SEARCH_PREFIX}${inventoryCacheKey}`, new Set(), PO_CACHE_TTL);
                   console.log(`Zapisano pusty wynik wyszukiwania pozycji magazynowych w cache`);
                 }
               } catch (inventoryError) {
@@ -837,7 +758,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
     };
     
     if (shouldUseCache) {
-      searchCache.set(cacheKey, result);
+      ServiceCacheManager.set(cacheKey, result, PO_CACHE_TTL);
       console.log('Zapisano wyniki do cache');
     } else {
       console.log('Wyniki wyszukiwania nie zostały zapisane do cache');
@@ -1094,8 +1015,7 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
     
     console.log("Nowe PO - wynik:", result);
     
-    // Wyczyść cache po utworzeniu nowego zamówienia
-    searchCache.clear();
+    clearAllPOCache();
     clearLimitedPOCache();
     
     // Dodaj nowe zamówienie do zoptymalizowanego cache
@@ -1262,7 +1182,7 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
     }
     
     // Wyczyść cache po aktualizacji
-    searchCache.invalidateForOrder(purchaseOrderId);
+    invalidatePOCacheForOrder(purchaseOrderId);
     clearLimitedPOCache();
     
     // Aktualizuj zamówienie w zoptymalizowanym cache
@@ -1293,7 +1213,7 @@ export const deletePurchaseOrder = async (id) => {
     await deleteDoc(purchaseOrderRef);
     
     // Wyczyść cache dotyczące tego zamówienia
-    searchCache.invalidateForOrder(id);
+    invalidatePOCacheForOrder(id);
     clearLimitedPOCache();
     
     // Usuń zamówienie z zoptymalizowanego cache
@@ -1496,7 +1416,7 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
     }
     
     // Wyczyść cache dotyczące tego zamówienia
-    searchCache.invalidateForOrder(purchaseOrderId);
+    invalidatePOCacheForOrder(purchaseOrderId);
     
     // Aktualizuj zamówienie w zoptymalizowanym cache
     updatePurchaseOrderInCache(purchaseOrderId, {
@@ -1970,7 +1890,7 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
     await updateDoc(poRef, updateData);
 
     // Wyczyść cache dotyczące tego zamówienia
-    searchCache.invalidateForOrder(purchaseOrderId);
+    invalidatePOCacheForOrder(purchaseOrderId);
 
     // Aktualizuj cache zamówień zakupu
     updatePurchaseOrderInCache(purchaseOrderId, {
@@ -2082,7 +2002,7 @@ export const updatePurchaseOrderItems = async (purchaseOrderId, updatedItems, us
     await updateDoc(purchaseOrderRef, updateFields);
     
     // Wyczyść cache dotyczące tego zamówienia
-    searchCache.invalidateForOrder(purchaseOrderId);
+    invalidatePOCacheForOrder(purchaseOrderId);
     
     // Pobierz zaktualizowane dane zamówienia
     const updatedDocSnap = await getDoc(purchaseOrderRef);
@@ -2309,7 +2229,7 @@ export const updateBatchesForPurchaseOrder = async (purchaseOrderId, userId) => 
     await updateBatchPricesWithAdditionalCosts(purchaseOrderId, poData, userId);
     
     // Wyczyść cache dotyczące tego zamówienia
-    searchCache.invalidateForOrder(purchaseOrderId);
+    invalidatePOCacheForOrder(purchaseOrderId);
     
     return { success: true };
   } catch (error) {
@@ -2327,12 +2247,12 @@ export const clearLimitedPOCache = () => {
 
 // Eksportuj funkcję do czyszczenia cache wyszukiwania
 export const clearSearchCache = () => {
-  searchCache.clearSearchCache();
+  clearAllPOCache();
 };
 
 // Eksportuj funkcję do czyszczenia całego cache
 export const clearAllCache = () => {
-  searchCache.clear();
+  clearAllPOCache();
   clearLimitedPOCache();
 };
 
@@ -2766,7 +2686,7 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
     }
     
     // Wyczyść cache dotyczące tego zamówienia
-    searchCache.invalidateForOrder(purchaseOrderId);
+    invalidatePOCacheForOrder(purchaseOrderId);
     
     return { success: true, updated: updatePromises.length };
   } catch (error) {
@@ -2974,7 +2894,7 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
     }
     
     // Wyczyść cache dotyczące tego zamówienia
-    searchCache.invalidateForOrder(purchaseOrderId);
+    invalidatePOCacheForOrder(purchaseOrderId);
     
     // ============================================================================
     // WYŁĄCZONE: Cloud Functions obsługują aktualizację zadań (onBatchPriceUpdate)
@@ -3245,7 +3165,7 @@ const updateBatchPricesWithDetails = async (purchaseOrderId, userId) => {
     }
     
     // Wyczyść cache
-    searchCache.invalidateForOrder(purchaseOrderId);
+    invalidatePOCacheForOrder(purchaseOrderId);
     
     // Zlicz różnice
     const changedBatches = updateDetails.filter(batch => batch.hasChanges).length;
@@ -3435,7 +3355,7 @@ export const updatePurchaseOrderPaymentStatus = async (purchaseOrderId, newPayme
     console.log(`Zaktualizowano status płatności zamówienia ${purchaseOrderId} z "${oldPaymentStatus}" na "${newPaymentStatus}"`);
 
     // Wyczyść cache dotyczące tego zamówienia
-    searchCache.invalidateForOrder(purchaseOrderId);
+    invalidatePOCacheForOrder(purchaseOrderId);
 
     // Aktualizuj zamówienie w zoptymalizowanym cache
     updatePurchaseOrderInCache(purchaseOrderId, {
@@ -3495,12 +3415,8 @@ export const updatePurchaseOrderAttachments = async (purchaseOrderId, attachment
 
     console.log(`Zaktualizowano załączniki zamówienia ${purchaseOrderId}`);
 
-    // Wyczyść cache dotyczące tego zamówienia
-    if (searchCache.invalidateForOrder) {
-      searchCache.invalidateForOrder(purchaseOrderId);
-    }
+    invalidatePOCacheForOrder(purchaseOrderId);
 
-    // Aktualizuj cache zamówień zakupu
     updatePurchaseOrderInCache(purchaseOrderId, updateFields);
 
     return { 
@@ -3615,10 +3531,7 @@ export const validateAndCleanupAttachments = async (purchaseOrderId, userId) => 
 
       console.log(`Usunięto ${totalRemoved} nieistniejących załączników z zamówienia ${purchaseOrderId}`);
 
-      // Wyczyść cache dotyczące tego zamówienia
-      if (searchCache.invalidateForOrder) {
-        searchCache.invalidateForOrder(purchaseOrderId);
-      }
+      invalidatePOCacheForOrder(purchaseOrderId);
     }
 
     return {
@@ -4409,7 +4322,7 @@ export const recalculatePOPaymentFromInvoices = async (purchaseOrderId, userId) 
 
     await updateDoc(poRef, updateFields);
 
-    searchCache.invalidateForOrder(purchaseOrderId);
+    invalidatePOCacheForOrder(purchaseOrderId);
     updatePurchaseOrderInCache(purchaseOrderId, {
       paymentStatus: newPaymentStatus,
       totalPaidFromInvoices: totalPaidForPO,

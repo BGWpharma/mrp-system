@@ -147,7 +147,34 @@ const QuotationTool = () => {
 
   // Ładowanie danych początkowych
   useEffect(() => {
-    loadInitialData();
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [materials, packagings, costMinData] = await Promise.all([
+          getRawMaterials(),
+          getPackagingItems(),
+          getCurrentCostPerMinute()
+        ]);
+        if (cancelled) return;
+        setRawMaterials(materials);
+        setPackagingItems(packagings);
+        if (costMinData.hasData && costMinData.costPerMinute > 0) {
+          setCostPerMinute(costMinData.costPerMinute);
+          setCostPerMinuteSource(costMinData.source || null);
+        } else {
+          setCostPerMinuteSource(null);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd ładowania danych:', error);
+        showNotification(t('quotation.errors.loadData', 'Błąd podczas ładowania danych'), 'error');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const loadInitialData = async () => {

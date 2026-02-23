@@ -93,36 +93,43 @@ const AIChatFAB = () => {
   // Ukryj FAB na stronie AI Assistant (pełna wersja)
   const isAIAssistantPage = location.pathname === '/ai-assistant';
 
-  // Sprawdź klucz API
   useEffect(() => {
+    let cancelled = false;
     const checkApiKey = async () => {
       if (!currentUser?.uid) return;
       try {
         const systemSettings = await getSystemSettings();
+        if (cancelled) return;
         const apiKey = await getOpenAIApiKey(currentUser.uid);
+        if (cancelled) return;
         setHasApiKey(!!apiKey || systemSettings.useGlobalApiKey);
       } catch (error) {
         console.error('Błąd sprawdzania klucza API:', error);
       }
     };
     checkApiKey();
+    return () => { cancelled = true; };
   }, [currentUser]);
 
-  // Pobierz historię konwersacji przy otwarciu
   useEffect(() => {
+    let cancelled = false;
     const fetchHistory = async () => {
       if (!currentUser?.uid || !open) return;
       try {
         setLoadingHistory(true);
         const history = await getUserConversations(currentUser.uid, 20);
+        if (cancelled) return;
         setConversationHistory(history);
       } catch (error) {
         console.error('Błąd pobierania historii:', error);
       } finally {
-        setLoadingHistory(false);
+        if (!cancelled) {
+          setLoadingHistory(false);
+        }
       }
     };
     fetchHistory();
+    return () => { cancelled = true; };
   }, [currentUser, open]);
 
   // Auto-scroll do najnowszej wiadomości

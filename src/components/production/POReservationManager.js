@@ -111,28 +111,31 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
   
   // Pobierz dane początkowe lub po zmianie refreshTrigger
   useEffect(() => {
-    loadReservations();
+    let cancelled = false;
+    loadReservations().then(() => { if (cancelled) return; });
+    return () => { cancelled = true; };
   }, [taskId, refreshTrigger]);
 
   // 📅 Opcjonalna synchronizacja w tle co 5 minut
   useEffect(() => {
     if (!backgroundSyncEnabled || !taskId) return;
+    let cancelled = false;
 
     const backgroundSyncInterval = setInterval(async () => {
       try {
         console.log('🔄 Synchronizacja w tle rezerwacji PO...');
         
-        // Sprawdź tylko ilości w partiach (lżejsza operacja)
         const refreshResult = await refreshLinkedBatchesQuantities();
+        if (cancelled) return;
         
         if (refreshResult.updatedCount > 0) {
           console.log(`✅ Synchronizacja w tle: zaktualizowano ${refreshResult.updatedCount} rezerwacji`);
           
-          // Odśwież dane tylko jeśli były zmiany
           const [updatedReservations, updatedStats] = await Promise.all([
             getPOReservationsForTask(taskId),
             getPOReservationStats(taskId)
           ]);
+          if (cancelled) return;
           
           setReservations(updatedReservations);
           setStats(updatedStats);
@@ -140,8 +143,8 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
           if (updatedReservations.length > 0) {
             await calculateBatchAvailableQuantities(updatedReservations);
           }
+          if (cancelled) return;
           
-          // Subtelne powiadomienie o zmianach w tle
           if (refreshResult.updatedCount >= 3) {
             showInfo(`Zaktualizowano ${refreshResult.updatedCount} rezerwacji PO z najnowszymi danymi`);
           }
@@ -151,13 +154,13 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
           }
         }
       } catch (error) {
+        if (cancelled) return;
         console.warn('⚠️ Błąd synchronizacji w tle:', error);
-        // Nie pokazujemy błędów - synchronizacja w tle nie powinna zakłócać pracy
       }
-    }, 5 * 60 * 1000); // Co 5 minut
+    }, 5 * 60 * 1000);
 
-    // Cleanup przy unmount lub zmianie taskId
     return () => {
+      cancelled = true;
       clearInterval(backgroundSyncInterval);
     };
   }, [taskId, backgroundSyncEnabled, onUpdate]);

@@ -73,51 +73,47 @@ const CRMDashboardPage = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
+    let cancelled = false;
     const fetchCRMData = async () => {
       try {
         setLoading(true);
         
-        // ✅ OPTYMALIZACJA: Równoległe pobieranie głównych danych CRM
         const [allContacts, activeCampaigns, allOpportunities] = await Promise.all([
           getAllContacts(),
           getActiveCampaigns(), 
           getAllOpportunities()
         ]);
+        if (cancelled) return;
 
         setContacts(allContacts);
         setCampaigns(activeCampaigns);
         setOpportunities(allOpportunities);
         
-        // Pobierz ostatnie interakcje zakupowe z pierwszych 5 kontaktów (dla wydajności)
         const interactionPromises = allContacts.slice(0, 5).map(contact => 
           getContactInteractions(contact.id).catch(err => {
             console.error(`Błąd pobierania interakcji dla kontaktu ${contact.id}:`, err);
-            return []; // Zwróć pustą tablicę w przypadku błędu
+            return [];
           })
         );
         
         const interactionResults = await Promise.all(interactionPromises);
+        if (cancelled) return;
         let interactions = interactionResults.flat();
         
-        // Posortuj interakcje zakupowe po dacie (od najnowszych) i weź 5 najnowszych
         interactions.sort((a, b) => new Date(b.date) - new Date(a.date));
         setRecentInteractions(interactions.slice(0, 5));
         
-        // Oblicz statystyki
         const now = new Date();
         const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         
-        // Nowe kontakty w bieżącym miesiącu
         const newContactsThisMonth = allContacts.filter(contact => {
           return contact.createdAt && new Date(contact.createdAt.seconds * 1000) >= firstDayOfMonth;
         }).length;
         
-        // Nadchodzące interakcje zakupowe
         const upcomingInteractions = interactions.filter(interaction => {
           return interaction.date && new Date(interaction.date) > now && interaction.status !== 'Anulowane';
         }).length;
         
-        // Aktywne możliwości sprzedaży i ich wartość
         const activeOpportunities = allOpportunities.filter(opp => 
           !opp.stage.includes('Zamknięte')
         );
@@ -126,7 +122,6 @@ const CRMDashboardPage = () => {
           sum + (opp.amount || 0) * (opp.probability || 0) / 100, 0
         );
         
-        // Wygrane transakcje w bieżącym miesiącu
         const wonDealsThisMonth = allOpportunities.filter(opp => {
           const closeDate = opp.updatedAt ? new Date(opp.updatedAt.seconds * 1000) : null;
           return opp.stage === OPPORTUNITY_STAGES.CLOSED_WON && closeDate && closeDate >= firstDayOfMonth;
@@ -145,14 +140,16 @@ const CRMDashboardPage = () => {
         setStatsLoading(false);
         console.log('✅ Dane CRM zostały załadowane równolegle');
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania danych CRM:', error);
         showError('Nie udało się pobrać danych CRM: ' + error.message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     
     fetchCRMData();
+    return () => { cancelled = true; };
   }, [showError]);
   
   const formatDate = (dateString) => {

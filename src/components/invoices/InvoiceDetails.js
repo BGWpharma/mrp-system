@@ -78,10 +78,12 @@ const InvoiceDetails = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
+    let cancelled = false;
     if (invoiceId) {
-      fetchInvoice();
-      fetchCompanyInfo();
+      fetchInvoice().then(() => { if (cancelled) return; });
+      fetchCompanyInfo().then(() => { if (cancelled) return; });
     }
+    return () => { cancelled = true; };
   }, [invoiceId]);
   
   const fetchInvoice = async () => {

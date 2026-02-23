@@ -69,9 +69,51 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
   });
   
   useEffect(() => {
+    let cancelled = false;
     if (itemId) {
-      fetchSupplierPrices();
+      (async () => {
+        try {
+          setLoading(true);
+          const data = await getSupplierPrices(itemId);
+          if (cancelled) return;
+          
+          if (suppliers.length === 0) {
+            const suppliersList = await getAllSuppliers();
+            if (cancelled) return;
+            setSuppliers(suppliersList);
+            
+            const pricesWithSupplierDetails = data.map((price) => {
+              const supplier = suppliersList.find(s => s.id === price.supplierId);
+              return {
+                ...price,
+                supplierName: supplier ? supplier.name : 'Nieznany dostawca'
+              };
+            });
+            
+            setSupplierPrices(pricesWithSupplierDetails);
+          } else {
+            const pricesWithSupplierDetails = data.map((price) => {
+              const supplier = suppliers.find(s => s.id === price.supplierId);
+              return {
+                ...price,
+                supplierName: supplier ? supplier.name : 'Nieznany dostawca'
+              };
+            });
+            
+            setSupplierPrices(pricesWithSupplierDetails);
+          }
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Błąd podczas pobierania cen dostawców:', error);
+          showError('Nie udało się pobrać cen dostawców');
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
+      })();
     }
+    return () => { cancelled = true; };
   }, [itemId]);
   
   // Pobieranie cen dostawców dla pozycji

@@ -146,23 +146,28 @@ const WeeklySprintTab = ({ isMobileView }) => {
 
   // Pobierz listę klientów
   useEffect(() => {
+    let cancelled = false;
     const fetchCustomers = async () => {
       try {
         const data = await getAllCustomers();
+        if (cancelled) return;
         setCustomers(data || []);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania klientów:', error);
       }
     };
     fetchCustomers();
+    return () => { cancelled = true; };
   }, []);
 
-  // Pobierz dane o mieszaniach
   useEffect(() => {
-    fetchMixingData();
+    const cancelCheck = { current: false };
+    fetchMixingData(cancelCheck);
+    return () => { cancelCheck.current = true; };
   }, [startDate, endDate, selectedCustomer]);
 
-  const fetchMixingData = async () => {
+  const fetchMixingData = async (cancelCheck = { current: false }) => {
     try {
       setLoading(true);
 
@@ -177,6 +182,7 @@ const WeeklySprintTab = ({ isMobileView }) => {
       );
 
       const snapshot = await getDocs(q);
+      if (cancelCheck.current) return;
       const tasks = [];
 
       snapshot.forEach(doc => {
@@ -201,10 +207,11 @@ const WeeklySprintTab = ({ isMobileView }) => {
       const processedData = processMixingDataPerSKU(tasks);
       setSkuData(processedData);
     } catch (error) {
+      if (cancelCheck.current) return;
       console.error('Błąd podczas pobierania danych mieszań:', error);
       showError('Nie udało się pobrać danych');
     } finally {
-      setLoading(false);
+      if (!cancelCheck.current) setLoading(false);
     }
   };
 

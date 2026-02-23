@@ -219,13 +219,17 @@ const HallDataFormsResponsesPage = () => {
     loadCurrentTabData();
   }, [loadCurrentTabData]);
   
-  // Pobierz liczby odpowiedzi dla wszystkich zakładek na starcie
   useEffect(() => {
+    let cancelled = false;
+
     const loadAllCounts = async () => {
       const counts = await getAllHallDataFormsCounts();
+      if (cancelled) return;
       setTabCounts(counts);
     };
     loadAllCounts();
+
+    return () => { cancelled = true; };
   }, []);
   
   // Resetuj paginację przy zmianie zakładki

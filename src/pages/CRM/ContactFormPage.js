@@ -41,23 +41,28 @@ const ContactFormPage = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
+    let cancelled = false;
     if (isEditMode) {
+      const fetchContact = async () => {
+        try {
+          setLoading(true);
+          const contact = await getContactById(contactId);
+          if (cancelled) return;
+          setFormData(contact);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Błąd podczas pobierania kontaktu:', error);
+          showError('Nie udało się pobrać danych kontaktu: ' + error.message);
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
+      };
       fetchContact();
     }
+    return () => { cancelled = true; };
   }, [contactId]);
-  
-  const fetchContact = async () => {
-    try {
-      setLoading(true);
-      const contact = await getContactById(contactId);
-      setFormData(contact);
-    } catch (error) {
-      console.error('Błąd podczas pobierania kontaktu:', error);
-      showError('Nie udało się pobrać danych kontaktu: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
   
   const validateForm = () => {
     const newErrors = {};

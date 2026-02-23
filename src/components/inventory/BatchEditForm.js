@@ -58,11 +58,12 @@ const BatchEditForm = () => {
   });
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchData = async () => {
       try {
         setLoading(true);
         
-        // Określ ID partii - może być w parametrze batchId lub id (jeśli wchodzimy bezpośrednio ze ścieżki /inventory/batch/:batchId)
         const actualBatchId = batchId || id;
         
         if (!actualBatchId) {
@@ -71,16 +72,14 @@ const BatchEditForm = () => {
           return;
         }
         
-        // Jeśli mamy zarówno id produktu jak i batchId, używamy zwykłej ścieżki
         if (id && batchId) {
-          // Pobierz dane pozycji magazynowej
           const itemData = await getInventoryItemById(id);
+          if (cancelled) return;
           setItem(itemData);
           
-          // Pobierz partie dla tej pozycji
           const batches = await getItemBatches(id);
+          if (cancelled) return;
           
-          // Znajdź konkretną partię
           const batch = batches.find(b => b.id === batchId);
           
           if (!batch) {
@@ -89,10 +88,8 @@ const BatchEditForm = () => {
             return;
           }
           
-          // Sprawdź, czy partia ma datę ważności
           const hasExpiryDate = batch.expiryDate !== null && batch.expiryDate !== undefined;
           
-          // Ustaw dane partii w formularzu
           setBatchData({
             batchNumber: batch.batchNumber || '',
             lotNumber: batch.lotNumber || '',
@@ -108,10 +105,10 @@ const BatchEditForm = () => {
             additionalCostPerUnit: batch.additionalCostPerUnit || 0
           });
 
-          // Jeśli partia ma powiązanie z PO, pobierz szczegóły PO
           if (batch.purchaseOrderDetails && batch.purchaseOrderDetails.id) {
             try {
               const poData = await getPurchaseOrderById(batch.purchaseOrderDetails.id);
+              if (cancelled) return;
               setSelectedPurchaseOrder(poData);
               if (batch.purchaseOrderDetails.itemPoId) {
                 setSelectedPOItemId(batch.purchaseOrderDetails.itemPoId);
@@ -121,9 +118,8 @@ const BatchEditForm = () => {
             }
           }
         } else {
-          // Jeśli mamy tylko ID partii (ze ścieżki /inventory/batch/:batchId)
-          // Pobierz dane partii bezpośrednio
           const batch = await getInventoryBatch(actualBatchId);
+          if (cancelled) return;
           
           if (!batch) {
             showError('Nie znaleziono partii o podanym ID');
@@ -131,10 +127,8 @@ const BatchEditForm = () => {
             return;
           }
           
-          // Sprawdź, czy partia ma datę ważności
           const hasExpiryDate = batch.expiryDate !== null && batch.expiryDate !== undefined;
           
-          // Ustaw dane partii w formularzu
           setBatchData({
             batchNumber: batch.batchNumber || '',
             lotNumber: batch.lotNumber || '',
@@ -150,10 +144,10 @@ const BatchEditForm = () => {
             additionalCostPerUnit: batch.additionalCostPerUnit || 0
           });
 
-          // Jeśli partia ma powiązanie z PO, pobierz szczegóły PO
           if (batch.purchaseOrderDetails && batch.purchaseOrderDetails.id) {
             try {
               const poData = await getPurchaseOrderById(batch.purchaseOrderDetails.id);
+              if (cancelled) return;
               setSelectedPurchaseOrder(poData);
               if (batch.purchaseOrderDetails.itemPoId) {
                 setSelectedPOItemId(batch.purchaseOrderDetails.itemPoId);
@@ -163,25 +157,27 @@ const BatchEditForm = () => {
             }
           }
           
-          // Jeśli mamy itemId w partii, pobierz dane produktu
           if (batch.itemId) {
             const itemData = await getInventoryItemById(batch.itemId);
+            if (cancelled) return;
             setItem(itemData);
           }
         }
-
-        // USUNIĘTO: Pobieranie zamówień zakupowych na początku
-        // Będą ładowane dopiero gdy użytkownik kliknie w pole Autocomplete
         
       } catch (error) {
+        if (cancelled) return;
         showError('Błąd podczas pobierania danych: ' + error.message);
         console.error('Error fetching data:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     
     fetchData();
+
+    return () => { cancelled = true; };
   }, [id, batchId, navigate, showError]);
 
   // Nowa funkcja do lazy loading zamówień zakupowych

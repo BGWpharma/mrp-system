@@ -39,53 +39,56 @@ const CompanyInfoForm = forwardRef((props, ref) => {
   }));
   
   useEffect(() => {
-    fetchCompanyData();
-  }, []);
-  
-  const fetchCompanyData = async () => {
-    setLoading(true);
-    try {
-      const data = await getCompanyInfo();
-      
-      // Migracja starych danych bankowych do nowego formatu
-      if (data && (data.bankName || data.bankAccount) && !data.bankAccounts) {
-        data.bankAccounts = [];
-        if (data.bankName || data.bankAccount) {
-          data.bankAccounts.push({
-            id: Date.now().toString(),
-            bankName: data.bankName || '',
-            accountNumber: data.bankAccount || '',
-            isDefault: true
+    let cancelled = false;
+
+    const loadCompanyData = async () => {
+      setLoading(true);
+      try {
+        const data = await getCompanyInfo();
+        if (cancelled) return;
+        
+        if (data && (data.bankName || data.bankAccount) && !data.bankAccounts) {
+          data.bankAccounts = [];
+          if (data.bankName || data.bankAccount) {
+            data.bankAccounts.push({
+              id: Date.now().toString(),
+              bankName: data.bankName || '',
+              accountNumber: data.bankAccount || '',
+              isDefault: true
+            });
+          }
+          delete data.bankName;
+          delete data.bankAccount;
+        }
+        
+        if (!data.bankAccounts) {
+          data.bankAccounts = [];
+        }
+        
+        if (data.bankAccounts && Array.isArray(data.bankAccounts)) {
+          data.bankAccounts = data.bankAccounts.map(account => {
+            if (!account.hasOwnProperty('swift')) {
+              return { ...account, swift: '' };
+            }
+            return account;
           });
         }
-        // Usuń stare pola
-        delete data.bankName;
-        delete data.bankAccount;
+        
+        setCompanyData(data);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania danych firmy:', error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-      
-      // Upewnij się, że bankAccounts istnieje
-      if (!data.bankAccounts) {
-        data.bankAccounts = [];
-      }
-      
-      // Dodaj pole swift do istniejących rachunków jeśli go nie ma
-      if (data.bankAccounts && Array.isArray(data.bankAccounts)) {
-        data.bankAccounts = data.bankAccounts.map(account => {
-          if (!account.hasOwnProperty('swift')) {
-            return { ...account, swift: '' };
-          }
-          return account;
-        });
-      }
-      
-      setCompanyData(data);
-    } catch (error) {
-      console.error('Błąd podczas pobierania danych firmy:', error);
-      // Błąd będzie obsłużony przez komponent nadrzędny
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    loadCompanyData();
+
+    return () => { cancelled = true; };
+  }, []);
   
   const handleChange = (e) => {
     const { name, value } = e.target;

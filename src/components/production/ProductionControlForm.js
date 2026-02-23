@@ -407,48 +407,49 @@ const ProductionControlForm = ({
 
   // Pobierz numery MO i ustaw email użytkownika przy pierwszym renderowaniu komponentu
   useEffect(() => {
-    const fetchMONumbers = async () => {
+    let cancelled = false;
+    (async () => {
       try {
         setLoadingMO(true);
         const options = await getMONumbersForSelect();
+        if (cancelled) return;
         setMoOptions(options);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania numerów MO:', error);
       } finally {
-        setLoadingMO(false);
+        if (!cancelled) {
+          setLoadingMO(false);
+        }
       }
-    };
+    })();
 
-    fetchMONumbers();
-
-    // Ustaw email zalogowanego użytkownika i upewnij się że domyślne wartości suwaków są ustawione
     if (currentUser && currentUser.email) {
       setFormData(prev => ({
         ...prev,
         email: currentUser.email,
-        // Upewnij się że domyślne wartości suwaków są ustawione jeśli nie są jeszcze
         humidity: prev.humidity !== '' ? prev.humidity : 45,
         temperature: prev.temperature !== '' ? prev.temperature : 20
       }));
     }
+    return () => { cancelled = true; };
   }, [currentUser]);
 
   // Pobierz listę zamówień klientów przy pierwszym renderowaniu komponentu
   useEffect(() => {
-    const fetchCustomerOrders = async () => {
+    let cancelled = false;
+    (async () => {
       try {
         setLoadingCustomerOrders(true);
-        // Pobierz wszystkie zamówienia klientów bez filtrowania po statusie
         const orders = await getAllOrders();
-        // Filtruj tylko aby upewnić się, że mają numer zamówienia
+        if (cancelled) return;
         const filteredOrders = orders.filter(order => 
           order.orderNumber && 
-          order.type !== 'purchase' // Upewnij się, że to nie są zamówienia zakupu
+          order.type !== 'purchase'
         );
 
         console.log('Pobrane zamówienia klientów:', filteredOrders);
 
-        // Przygotuj opcje dla selecta
         const options = filteredOrders.map(order => ({
           value: order.orderNumber,
           label: `${order.orderNumber} - ${order.customer?.name || 'Brak nazwy klienta'}`
@@ -456,35 +457,39 @@ const ProductionControlForm = ({
 
         setCustomerOrders(options);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania zamówień klientów:', error);
       } finally {
-        setLoadingCustomerOrders(false);
+        if (!cancelled) {
+          setLoadingCustomerOrders(false);
+        }
       }
-    };
-
-    fetchCustomerOrders();
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Pobierz listę dostępnych czujników
   useEffect(() => {
-    const fetchSensors = async () => {
+    let cancelled = false;
+    (async () => {
       try {
         setLoadingSensors(true);
         const sensorsList = await getSensors();
+        if (cancelled) return;
         setSensors(sensorsList);
-        
-        // Automatycznie wybierz pierwszy dostępny czujnik
         if (sensorsList.length > 0) {
           setSelectedSensor(sensorsList[0].id);
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania listy czujników:', error);
       } finally {
-        setLoadingSensors(false);
+        if (!cancelled) {
+          setLoadingSensors(false);
+        }
       }
-    };
-
-    fetchSensors();
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Sprawdź, czy istnieją dane do edycji w sessionStorage

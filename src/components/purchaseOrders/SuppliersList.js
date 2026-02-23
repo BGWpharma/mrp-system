@@ -71,7 +71,26 @@ const SuppliersList = () => {
   });
   
   useEffect(() => {
-    fetchSuppliers();
+    let cancelled = false;
+    const loadSuppliers = async () => {
+      try {
+        setLoading(true);
+        const data = await getAllSuppliers();
+        if (cancelled) return;
+        setSuppliers(data);
+        setFilteredSuppliers(data);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania dostawców:', error);
+        showError(t('suppliers.notifications.loadFailed'));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    loadSuppliers();
+    return () => { cancelled = true; };
   }, []);
   
   useEffect(() => {

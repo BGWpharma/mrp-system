@@ -267,38 +267,32 @@ const HallDataConditionsPage = () => {
   useEffect(() => {
     if (!selectedSensor || !isValid(startDate) || !isValid(endDate)) return;
     
+    let cancelled = false;
     setLoading(true);
     
-    // Konwersja dat do formatu ISO do porównania z bazą danych
     const startTimestamp = startDate.toISOString();
     const endTimestamp = endDate.toISOString();
     
-    // Nowa struktura danych - historia znajduje się bezpośrednio w węźle "history"
-    // z kluczami jako identyfikatory dokumentów i wartościami jako dane odczytów
     const historyRef = ref(rtdb, 'history/' + selectedSensor);
     
-    // Pobieramy wszystkie dane i filtrujemy po stronie klienta
     get(historyRef)
       .then((snapshot) => {
+        if (cancelled) return;
         if (snapshot.exists()) {
           const historyData = [];
           snapshot.forEach((childSnapshot) => {
             const reading = childSnapshot.val();
             
-            // Konwertuj timestamp do formatu daty
             try {
               const date = new Date(reading.timestamp);
               
-              // Sprawdź czy data mieści się w wybranym zakresie
               if (isValid(date) && date >= startDate && date <= endDate) {
-                // Sprawdź, czy mamy do czynienia z długim przedziałem czasu
                 const isLongRange = (timeRange === 'week' || timeRange === 'month' || 
                   (timeRange === 'custom' && (endDate - startDate) > (24 * 60 * 60 * 1000)));
                 
                 historyData.push({
                   time: format(date, 'HH:mm'),
                   fullTime: format(date, 'dd.MM.yyyy HH:mm'),
-                  // Dla długich przedziałów czasu dodajemy datę i godzinę
                   date: isLongRange ? format(date, 'dd.MM HH:mm') : format(date, 'dd.MM'),
                   timestamp: date,
                   temperature: reading.temperature || 0,
@@ -310,34 +304,26 @@ const HallDataConditionsPage = () => {
             }
           });
           
-          // Sortuj dane wg czasu
           historyData.sort((a, b) => a.timestamp - b.timestamp);
           
-          // Ogranicz ilość danych do wyświetlenia dla wydajności, jeśli jest ich zbyt dużo
-          // Zachowaj reprezentatywną próbkę danych dla dłuższych okresów
           let limitedData = historyData;
           
-          // Dla dłuższych okresów stosujemy próbkowanie danych zamiast zwykłego obcięcia
           if (historyData.length > 500) {
             const sampleRate = Math.ceil(historyData.length / 500);
             limitedData = historyData.filter((_, index) => index % sampleRate === 0);
             
-            // Zawsze dodajemy ostatni punkt danych dla zachowania ciągłości
             if (historyData.length > 0 && limitedData.length > 0 && 
                 limitedData[limitedData.length - 1] !== historyData[historyData.length - 1]) {
               limitedData.push(historyData[historyData.length - 1]);
             }
           }
           
-          // Ustaw minimalną i maksymalną wartość dla osi Y
           if (limitedData.length > 0) {
-            // Temperatura
             const temperatures = limitedData.map(item => Number(item.temperature));
             const minTemp = Math.floor(Math.min(...temperatures) - 1);
             const maxTemp = Math.ceil(Math.max(...temperatures) + 1);
             setTempMinMax({ min: minTemp, max: maxTemp });
             
-            // Wilgotność
             const humidities = limitedData.map(item => Number(item.humidity));
             const minHumidity = Math.floor(Math.min(...humidities) - 5);
             const maxHumidity = Math.ceil(Math.max(...humidities) + 5);
@@ -348,9 +334,10 @@ const HallDataConditionsPage = () => {
         } else {
           setHistoryData([]);
         }
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       })
       .catch((error) => {
+        if (cancelled) return;
         console.error("Błąd podczas pobierania historii:", error);
         if (error.message && error.message.includes('permission_denied')) {
           setPermissionError(true);
@@ -359,6 +346,8 @@ const HallDataConditionsPage = () => {
         }
         setLoading(false);
       });
+    
+    return () => { cancelled = true; };
   }, [selectedSensor, startDate, endDate, refreshTrigger, timeRange]);
 
   // Obsługa zmiany wybranego czujnika

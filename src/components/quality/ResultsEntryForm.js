@@ -77,18 +77,17 @@ const ResultsEntryForm = ({ testId }) => {
   const navigate = useNavigate();
   
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
       try {
-        // Pobierz dane testu
         const testData = await getTestById(testId);
+        if (cancelled) return;
         setTest(testData);
         
-        // Przygotuj parametry
         const parametersArray = testData.parameters.map(param => {
-          // Domyślna wartość zależna od typu parametru
           let defaultValue = '';
           if (param.type === 'boolean') {
-            defaultValue = null; // null oznacza, że nie wybrano jeszcze Tak/Nie
+            defaultValue = null;
           } else if (param.type === 'select') {
             defaultValue = param.options && param.options.length > 0 ? param.options[0] : '';
           } else if (param.type === 'numeric') {
@@ -103,7 +102,7 @@ const ResultsEntryForm = ({ testId }) => {
             minValue: param.minValue || '',
             maxValue: param.maxValue || '',
             description: param.description || '',
-            isCompliant: null, // null - nie sprawdzono, true - zgodny, false - niezgodny
+            isCompliant: null,
             options: param.options || [],
             isRequired: param.isRequired !== false,
             precision: param.precision || 2,
@@ -117,24 +116,27 @@ const ResultsEntryForm = ({ testId }) => {
           parameters: parametersArray
         }));
         
-        // Pobierz dane do wyboru z listy
         const items = await getAllInventoryItems();
+        if (cancelled) return;
         setInventoryItems(items);
         
         const tasks = await getProductionTasks();
+        if (cancelled) return;
         setProductionTasks(tasks);
         
       } catch (error) {
+        if (cancelled) return;
         showError('Błąd podczas pobierania danych: ' + error.message);
         console.error('Error fetching data:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     
     if (testId) {
       fetchData();
     }
+    return () => { cancelled = true; };
   }, [testId, showError]);
   
   const validateResults = () => {

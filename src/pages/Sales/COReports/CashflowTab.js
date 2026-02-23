@@ -69,7 +69,18 @@ const CashflowTab = () => {
 
   // Pobierz listę klientów przy montowaniu
   useEffect(() => {
-    fetchCustomers();
+    let cancelled = false;
+    (async () => {
+      try {
+        const customersData = await getAllCustomers();
+        if (cancelled) return;
+        setCustomers(customersData);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania klientów:', error);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Pobierz dane przy montowaniu i przy zmianie filtrów
@@ -77,6 +88,7 @@ const CashflowTab = () => {
     if (filters.dateFrom && filters.dateTo) {
       fetchCashflowData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   const fetchCustomers = async () => {

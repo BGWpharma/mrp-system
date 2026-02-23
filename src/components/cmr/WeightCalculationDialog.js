@@ -48,67 +48,70 @@ const WeightCalculationDialog = ({
 
   // Resetuj stan gdy dialog się otwiera
   useEffect(() => {
+    let cancelled = false;
+
     if (open && cmrItem) {
-      calculateWeight();
+      const doCalculateWeight = async () => {
+        setLoading(true);
+        setError('');
+        
+        try {
+          if (!cmrItem.linkedBatches || cmrItem.linkedBatches.length === 0) {
+            setError('Pozycja CMR nie ma powiązanych partii magazynowych. Aby obliczyć wagę, należy najpierw powiązać pozycję z partiami.');
+            setLoading(false);
+            return;
+          }
+
+          const inventoryItemData = await getInventoryDataFromBatches(cmrItem.linkedBatches);
+          if (cancelled) return;
+          
+          if (!inventoryItemData) {
+            setError('Nie udało się pobrać danych pozycji magazynowej. Sprawdź czy pozycja istnieje w magazynie.');
+            setLoading(false);
+            return;
+          }
+
+          setInventoryData(inventoryItemData);
+
+          let packageItemData = null;
+          if (inventoryItemData.parentPackageItemId) {
+            packageItemData = await getPackageData(inventoryItemData.parentPackageItemId);
+            if (cancelled) return;
+            setPackageData(packageItemData);
+          }
+
+          const calculationParams = {
+            quantity: parseFloat(cmrItem.quantity) || 0,
+            unitWeight: parseFloat(inventoryItemData.weight) || 0,
+            itemsPerBox: parseFloat(inventoryItemData.itemsPerBox) || 0,
+            boxesPerPallet: parseFloat(inventoryItemData.boxesPerPallet) || 0,
+            packageWeight: packageItemData ? parseFloat(packageItemData.weight) : 0.34,
+            palletWeight: 25
+          };
+
+          const result = calculateCmrItemWeight(calculationParams);
+          setCalculationResult(result);
+
+        } catch (err) {
+          if (cancelled) return;
+          console.error('Błąd podczas obliczania wagi:', err);
+          setError('Wystąpił błąd podczas obliczania wagi: ' + err.message);
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
+      };
+      doCalculateWeight();
     } else {
       setCalculationResult(null);
       setInventoryData(null);
       setPackageData(null);
       setError('');
     }
+
+    return () => { cancelled = true; };
   }, [open, cmrItem]);
-
-  const calculateWeight = async () => {
-    setLoading(true);
-    setError('');
-    
-    try {
-      // Sprawdź czy pozycja ma powiązane partie
-      if (!cmrItem.linkedBatches || cmrItem.linkedBatches.length === 0) {
-        setError('Pozycja CMR nie ma powiązanych partii magazynowych. Aby obliczyć wagę, należy najpierw powiązać pozycję z partiami.');
-        setLoading(false);
-        return;
-      }
-
-      // Pobierz dane pozycji magazynowej
-      const inventoryItemData = await getInventoryDataFromBatches(cmrItem.linkedBatches);
-      
-      if (!inventoryItemData) {
-        setError('Nie udało się pobrać danych pozycji magazynowej. Sprawdź czy pozycja istnieje w magazynie.');
-        setLoading(false);
-        return;
-      }
-
-      setInventoryData(inventoryItemData);
-
-      // Pobierz dane kartonu jeśli istnieje
-      let packageItemData = null;
-      if (inventoryItemData.parentPackageItemId) {
-        packageItemData = await getPackageData(inventoryItemData.parentPackageItemId);
-        setPackageData(packageItemData);
-      }
-
-      // Przygotuj parametry do obliczenia
-      const calculationParams = {
-        quantity: parseFloat(cmrItem.quantity) || 0,
-        unitWeight: parseFloat(inventoryItemData.weight) || 0,
-        itemsPerBox: parseFloat(inventoryItemData.itemsPerBox) || 0,
-        boxesPerPallet: parseFloat(inventoryItemData.boxesPerPallet) || 0,
-        packageWeight: packageItemData ? parseFloat(packageItemData.weight) : 0.34, // domyślna waga kartonu
-        palletWeight: 25 // stała waga palety
-      };
-
-      // Oblicz wagę
-      const result = calculateCmrItemWeight(calculationParams);
-      setCalculationResult(result);
-
-    } catch (err) {
-      console.error('Błąd podczas obliczania wagi:', err);
-      setError('Wystąpił błąd podczas obliczania wagi: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleAcceptWeight = () => {
     if (calculationResult && onAcceptWeight) {

@@ -102,15 +102,19 @@ const WeeklySprintPage = () => {
 
   // Pobierz listę klientów
   useEffect(() => {
+    let cancelled = false;
     const fetchCustomers = async () => {
       try {
         const data = await getAllCustomers();
+        if (cancelled) return;
         setCustomers(data || []);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania klientów:', error);
       }
     };
     fetchCustomers();
+    return () => { cancelled = true; };
   }, []);
 
   // Pobierz dane o mieszaniach

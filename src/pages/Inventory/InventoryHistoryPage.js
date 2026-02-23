@@ -27,23 +27,28 @@ const InventoryHistoryPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
       try {
         setLoading(true);
         const itemData = await getInventoryItemById(id);
+        if (cancelled) return;
         setItem(itemData);
         
         const transactionsData = await getItemTransactions(id);
+        if (cancelled) return;
         setTransactions(transactionsData);
       } catch (error) {
+        if (cancelled) return;
         showError('Błąd podczas pobierania danych: ' + error.message);
         console.error('Error fetching data:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     
     fetchData();
+    return () => { cancelled = true; };
   }, [id, showError]);
 
   if (loading) {

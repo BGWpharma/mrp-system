@@ -86,54 +86,47 @@ const NotificationsMenu = () => {
   // Ref do śledzenia czy subskrypcja została właśnie zainicjalizowana
   const isInitialLoad = useRef(true);
 
-  // Efekt dla nasłuchiwania w Realtime Database
   useEffect(() => {
     if (currentUser) {
-      // console.log("NotificationsMenu: Inicjalizacja dla użytkownika", currentUser.uid);
+      let cancelled = false;
       
-      // Oznacz że to początkowe ładowanie
       isInitialLoad.current = true;
       
-      // Pobierz początkowe dane
-      fetchUnreadCount();
+      (async () => {
+        try {
+          const realtimeCount = await getUnreadRealtimeNotificationsCount(currentUser.uid);
+          if (cancelled) return;
+          setUnreadCount(realtimeCount);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('NotificationsMenu: Błąd podczas pobierania liczby nieprzeczytanych powiadomień:', error);
+          setUnreadCount(0);
+        }
+      })();
       
-      // Nasłuchuj na zmiany liczby nieprzeczytanych powiadomień
       const unsubscribeCount = subscribeToUnreadCount(currentUser.uid, (count) => {
-        // console.log("NotificationsMenu: Otrzymano nową liczbę nieprzeczytanych powiadomień:", count);
         setUnreadCount(count);
       });
       
-      // Nasłuchuj na nowe powiadomienia
       const unsubscribeNotifications = subscribeToUserNotifications(currentUser.uid, (newNotification) => {
-        // console.log("NotificationsMenu: Otrzymano nowe powiadomienie:", newNotification);
-        
-        // Dodaj nowe powiadomienie do stanu
         setNotifications(prevNotifications => [newNotification, ...prevNotifications]);
         
-        // Pokaż toast z nowym powiadomieniem TYLKO jeśli to nie jest początkowe ładowanie
-        // onChildAdded wywołuje się dla wszystkich istniejących powiadomień przy montowaniu
         if (!isInitialLoad.current) {
           showToastNotification(newNotification);
         }
       });
       
-      // Po krótkim czasie oznacz że początkowe ładowanie się zakończyło
-      // To pozwoli na pokazywanie toastów dla prawdziwie nowych powiadomień
       const timer = setTimeout(() => {
         isInitialLoad.current = false;
-      }, 2000); // 2 sekundy na załadowanie istniejących powiadomień
+      }, 2000);
       
-      // Zapisz funkcje wyrejestrowania
       unsubscribeRefs.current = {
         notifications: unsubscribeNotifications,
         unreadCount: unsubscribeCount
       };
       
-      // console.log("NotificationsMenu: Subskrypcje zostały ustanowione");
-      
-      // Czyszczenie przy odmontowaniu
       return () => {
-        // console.log("NotificationsMenu: Czyszczenie subskrypcji");
+        cancelled = true;
         clearTimeout(timer);
         if (unsubscribeRefs.current.notifications) {
           unsubscribeRefs.current.notifications();
@@ -188,53 +181,33 @@ const NotificationsMenu = () => {
     setToastOpen(false);
   };
 
-  // Aktualizacja listy powiadomień, gdy menu jest otwarte
   useEffect(() => {
+    let cancelled = false;
     if (open && currentUser) {
-      // console.log("NotificationsMenu: Menu zostało otwarte, pobieranie powiadomień");
-      fetchNotifications();
+      (async () => {
+        setLoading(true);
+        try {
+          try {
+            const notificationsData = await getRealtimeUserNotifications(currentUser.uid, false, 10);
+            if (cancelled) return;
+            setNotifications(notificationsData);
+          } catch (offlineError) {
+            if (cancelled) return;
+            console.warn("NotificationsMenu: Błąd sieci podczas pobierania powiadomień:", offlineError.message);
+          }
+        } catch (error) {
+          if (cancelled) return;
+          console.error('NotificationsMenu: Błąd podczas pobierania powiadomień:', error);
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
+      })();
     }
+    return () => { cancelled = true; };
   }, [open, currentUser]);
 
-  const fetchUnreadCount = async () => {
-    if (!currentUser) return;
-    
-    try {
-      // Próbuj najpierw z Realtime Database
-      // console.log("NotificationsMenu: Pobieranie liczby nieprzeczytanych z Realtime Database");
-      const realtimeCount = await getUnreadRealtimeNotificationsCount(currentUser.uid);
-      // console.log("NotificationsMenu: Liczba nieprzeczytanych z Realtime:", realtimeCount);
-      
-      // Ustawiamy licznik tylko na podstawie Realtime Database, nie mieszamy z Firestore
-      setUnreadCount(realtimeCount);
-    } catch (error) {
-      console.error('NotificationsMenu: Błąd podczas pobierania liczby nieprzeczytanych powiadomień:', error);
-      // W przypadku błędu, ustaw na 0
-      setUnreadCount(0);
-    }
-  };
-
-  const fetchNotifications = async () => {
-    setLoading(true);
-    try {
-      // Używamy tylko Realtime Database dla spójności
-      // console.log("NotificationsMenu: Pobieranie powiadomień z Realtime Database");
-      try {
-        const notificationsData = await getRealtimeUserNotifications(currentUser.uid, false, 10);
-        // console.log("NotificationsMenu: Powiadomienia z Realtime:", notificationsData);
-        setNotifications(notificationsData);
-      } catch (offlineError) {
-        console.warn("NotificationsMenu: Błąd sieci podczas pobierania powiadomień:", offlineError.message);
-        // W trybie offline zachowujemy istniejące powiadomienia
-        // console.log("NotificationsMenu: Działanie w trybie offline - używanie istniejących powiadomień");
-      }
-    } catch (error) {
-      console.error('NotificationsMenu: Błąd podczas pobierania powiadomień:', error);
-      // Nie czyścimy powiadomień w przypadku błędu, aby zachować dane
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);

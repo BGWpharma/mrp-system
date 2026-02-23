@@ -54,10 +54,35 @@ const BoardSettingsDialog = ({ open, onClose, board, onBoardUpdated }) => {
 
   // Załaduj dane przy otwarciu dialogu
   useEffect(() => {
-    if (open && board) {
-      setIsPrivate(board.isPrivate || false);
-      loadData();
-    }
+    if (!open || !board) return;
+    let cancelled = false;
+    setIsPrivate(board.isPrivate || false);
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const users = await getAllActiveUsers();
+        if (cancelled) return;
+        const filteredUsers = users.filter(u => u.id !== board.createdBy);
+        setAllUsers(filteredUsers);
+        const allowed = await getBoardAllowedUsers(board.id);
+        if (cancelled) return;
+        const allowedWithDetails = allowed.map(userId => {
+          const user = users.find(u => u.id === userId);
+          return user || { id: userId, displayName: userId, email: '' };
+        });
+        setAllowedUsers(allowedWithDetails);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Błąd podczas ładowania danych:', err);
+        setError(t('errorLoadingData'));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
   }, [open, board]);
 
   const loadData = async () => {
@@ -67,21 +92,14 @@ const BoardSettingsDialog = ({ open, onClose, board, onBoardUpdated }) => {
     setError('');
     
     try {
-      // Pobierz wszystkich aktywnych użytkowników
       const users = await getAllActiveUsers();
-      // Filtruj właściciela z listy (właściciel ma zawsze dostęp)
       const filteredUsers = users.filter(u => u.id !== board.createdBy);
       setAllUsers(filteredUsers);
-      
-      // Pobierz listę użytkowników z dostępem
       const allowed = await getBoardAllowedUsers(board.id);
-      
-      // Zamień ID na pełne obiekty użytkowników
       const allowedWithDetails = allowed.map(userId => {
         const user = users.find(u => u.id === userId);
         return user || { id: userId, displayName: userId, email: '' };
       });
-      
       setAllowedUsers(allowedWithDetails);
     } catch (err) {
       console.error('Błąd podczas ładowania danych:', err);

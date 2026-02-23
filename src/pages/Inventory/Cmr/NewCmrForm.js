@@ -240,27 +240,23 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
   };
   
   useEffect(() => {
+    let cancelled = false;
     if (initialData) {
-      // Funkcja pomocnicza do konwersji dat
       const convertDate = (dateValue) => {
         if (!dateValue) return null;
         
-        // Jeśli to już obiekt Date
         if (dateValue instanceof Date) {
           return dateValue;
         }
         
-        // Obsługa timestampu Firestore
         if (dateValue && typeof dateValue === 'object' && typeof dateValue.toDate === 'function') {
           return dateValue.toDate();
         }
         
-        // Obsługa obiektów z sekundami (Firestore Timestamp format)
         if (dateValue && typeof dateValue === 'object' && dateValue.seconds) {
           return new Date(dateValue.seconds * 1000);
         }
         
-        // Obsługa stringów i innych formatów
         try {
           return new Date(dateValue);
         } catch (e) {
@@ -269,7 +265,6 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
         }
       };
       
-      // Konwertuj daty z różnych formatów na obiekty Date
       const processedData = {
         ...initialData,
         issueDate: convertDate(initialData.issueDate) || new Date(),
@@ -280,8 +275,8 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
       setFormData(processedData);
     }
     
-    // Załaduj dane firmy i uzupełnij pole nadawcy
     loadCompanyData();
+    return () => { cancelled = true; };
   }, [initialData]);
   
   const handleChange = (e) => {

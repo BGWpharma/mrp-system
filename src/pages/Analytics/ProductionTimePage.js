@@ -31,21 +31,26 @@ const ProductionTimePage = () => {
   const [endDate] = useState(endOfMonth(new Date()));
 
   useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const fetchedCustomers = await getAllCustomers();
+        if (cancelled) return;
+        setCustomers(fetchedCustomers);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania danych:', error);
+        showError(t('common.errors.fetchData'));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
     fetchData();
+    return () => { cancelled = true; };
   }, []);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const fetchedCustomers = await getAllCustomers();
-      setCustomers(fetchedCustomers);
-    } catch (error) {
-      console.error('Błąd podczas pobierania danych:', error);
-      showError(t('common.errors.fetchData'));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (

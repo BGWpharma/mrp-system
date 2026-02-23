@@ -76,10 +76,57 @@ const InteractionFormPage = () => {
   const isEditMode = Boolean(interactionId);
 
   useEffect(() => {
-    fetchSuppliers();
-    if (isEditMode) {
-      fetchInteractionData();
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        const suppliersData = await getAllSuppliers();
+        if (cancelled) return;
+        setSuppliers(suppliersData);
+
+        if (contactIdFromQuery) {
+          const supplier = suppliersData.find(s => s.id === contactIdFromQuery);
+          if (supplier) {
+            setSelectedSupplier(supplier);
+          }
+        }
+
+        if (isEditMode) {
+          const interactionData = await getInteractionById(interactionId);
+          if (cancelled) return;
+          
+          let date;
+          if (interactionData.date) {
+            if (typeof interactionData.date === 'object' && interactionData.date.seconds) {
+              date = new Date(interactionData.date.seconds * 1000);
+            } else {
+              date = new Date(interactionData.date);
+            }
+          } else {
+            date = new Date();
+          }
+          
+          setFormData({
+            ...interactionData,
+            date
+          });
+
+          if (interactionData.contactId) {
+            const supplier = suppliersData.find(s => s.id === interactionData.contactId);
+            if (supplier) {
+              setSelectedSupplier(supplier);
+            }
+          }
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas ładowania danych:', error);
+        showError(t('purchaseInteractions.notifications.loadFailed') + ': ' + error.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [interactionId]);
 
   const fetchSuppliers = async () => {

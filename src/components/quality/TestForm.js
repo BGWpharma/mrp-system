@@ -85,16 +85,16 @@ const TestForm = ({ testId }) => {
 
   useEffect(() => {
     if (testId) {
+      let cancelled = false;
       const fetchTest = async () => {
         try {
           const test = await getTestById(testId);
+          if (cancelled) return;
           
-          // Upewnij się, że zawsze jest przynajmniej jeden parametr
           if (!test.parameters || test.parameters.length === 0) {
             test.parameters = [{ ...DEFAULT_PARAMETER }];
           }
 
-          // Upewnij się, że wszystkie parametry mają typ i inne nowe pola
           const updatedParameters = test.parameters.map(param => ({
             ...DEFAULT_PARAMETER,
             ...param,
@@ -112,14 +112,16 @@ const TestForm = ({ testId }) => {
             requirePhoto: test.requirePhoto || false
           });
         } catch (error) {
+          if (cancelled) return;
           showError('Błąd podczas pobierania testu: ' + error.message);
           console.error('Error fetching test:', error);
         } finally {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
         }
       };
       
       fetchTest();
+      return () => { cancelled = true; };
     }
   }, [testId, showError]);
 

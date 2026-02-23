@@ -67,27 +67,34 @@ const BatchDetailsDialog = ({ open, onClose, batch }) => {
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchReservations = async () => {
       if (!batch || !batch.id) return;
       
       setLoading(true);
       try {
         const reservationsData = await getBatchReservations(batch.id);
+        if (cancelled) return;
         setReservations(reservationsData);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania rezerwacji partii:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     if (open && batch) {
       fetchReservations();
-      // Reset historii przy otwarciu nowego dialogu
       setHistoryOpen(false);
       setTransactionHistory([]);
       setHistoryLoaded(false);
     }
+
+    return () => { cancelled = true; };
   }, [open, batch]);
 
   const fetchTransactionHistory = useCallback(async () => {

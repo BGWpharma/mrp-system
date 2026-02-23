@@ -485,20 +485,22 @@ const OrderDetails = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchOrderDetails = async (retries = 3, delay = 1000) => {
       try {
         setLoading(true);
         
-        // Sprawdź, czy jesteśmy na właściwej trasie dla zamówień klientów
         if (location.pathname.includes('/purchase-orders/')) {
           setLoading(false);
           return;
         }
         
         const orderData = await getOrderById(orderId);
+        if (cancelled) return;
         
-        // Zweryfikuj, czy powiązane zadania produkcyjne istnieją
         const { order: verifiedOrder, removedCount, fullTasksMap } = await verifyProductionTasks(orderData);
+        if (cancelled) return;
         
         if (removedCount > 0) {
           showInfo(t('orderDetails.notifications.productionTasksRemoved', { count: removedCount }));
@@ -506,15 +508,12 @@ const OrderDetails = () => {
         
         setOrder(verifiedOrder);
         
-        // Zapisz pełne dane zadań (z datami) już teraz
         if (fullTasksMap && Object.keys(fullTasksMap).length > 0) {
           setFullProductionTasks(fullTasksMap);
         }
         
-        // 🚀 OPTYMALIZACJA: Równoległe pobieranie z cache (TYLKO KRYTYCZNE DANE)
         const fetchPromises = [];
         
-        // 1. Dane użytkowników z cache
         let userNamesPromise = null;
         if (verifiedOrder.statusHistory?.length > 0) {
           const userIds = [...new Set(
@@ -529,27 +528,19 @@ const OrderDetails = () => {
           }
         }
         
-        // 2. Pobierz TYLKO zafakturowane kwoty (bez pełnych danych faktur) - potrzebne do tabeli produktów
         const invoicedAmountsPromise = getInvoicedAmountsByOrderItems(orderId, null, verifiedOrder);
         fetchPromises.push(invoicedAmountsPromise);
         
-        // 2b. Pobierz kwoty proform (zaliczek) - potrzebne do tabeli produktów
         const proformaAmountsPromise = getProformaAmountsByOrderItems(orderId, null, verifiedOrder);
         fetchPromises.push(proformaAmountsPromise);
         
-        // 2c. Pobierz dostępne kwoty z proform (niewykorzystane zaliczki)
         const availableProformasPromise = getAvailableProformasForOrder(orderId);
         fetchPromises.push(availableProformasPromise);
         
-        // 2d. Pełne dane zadań produkcyjnych (z datami) zostały już pobrane podczas weryfikacji
-        
-        // 3. Faktury i CMR będą ładowane lazy loading przy scrollu - NIE pobieramy ich teraz!
-        
         try {
-          // Wykonaj wszystkie zapytania równolegle
           const results = await Promise.allSettled(fetchPromises);
+          if (cancelled) return;
           
-          // Przetwórz wyniki z lepszym error handlingiem
           let resultIndex = 0;
           
           if (userNamesPromise) {
@@ -561,7 +552,6 @@ const OrderDetails = () => {
             }
           }
           
-          // Pobierz tylko zafakturowane kwoty (bez pełnych danych faktur)
           const invoicedAmountsResult = results[resultIndex++];
           if (invoicedAmountsResult.status === 'fulfilled') {
             setInvoicedAmounts(invoicedAmountsResult.value);
@@ -569,7 +559,6 @@ const OrderDetails = () => {
             console.error('Błąd podczas pobierania zafakturowanych kwot:', invoicedAmountsResult.reason);
           }
           
-          // Pobierz kwoty proform (zaliczek)
           const proformaAmountsResult = results[resultIndex++];
           if (proformaAmountsResult.status === 'fulfilled') {
             setProformaAmounts(proformaAmountsResult.value);
@@ -577,11 +566,9 @@ const OrderDetails = () => {
             console.error('Błąd podczas pobierania kwot proform:', proformaAmountsResult.reason);
           }
           
-          // Pobierz dostępne kwoty z proform (niewykorzystane zaliczki)
           const availableProformasResult = results[resultIndex++];
           if (availableProformasResult.status === 'fulfilled') {
             const availableProformas = availableProformasResult.value;
-            // Utwórz mapę proformaId -> availableAmount
             const proformaAmountsMap = {};
             availableProformas.forEach(proforma => {
               proformaAmountsMap[proforma.id] = proforma.amountInfo?.available || 0;
@@ -592,14 +579,14 @@ const OrderDetails = () => {
           }
           
         } catch (error) {
+          if (cancelled) return;
           console.error('Błąd podczas równoległego pobierania danych:', error);
         }
       } catch (error) {
-        // Sprawdź, czy nie jesteśmy na stronie zamówienia zakupowego
+        if (cancelled) return;
         if (!location.pathname.includes('/purchase-orders/')) {
           console.error('Error fetching order details:', error);
           
-          // Jeśli mamy jeszcze próby, spróbuj ponownie po opóźnieniu
           if (retries > 0) {
             setTimeout(() => {
               fetchOrderDetails(retries - 1, delay * 1.5);
@@ -609,13 +596,17 @@ const OrderDetails = () => {
           }
         }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     if (orderId) {
       fetchOrderDetails();
     }
+
+    return () => { cancelled = true; };
   }, [orderId, showError, navigate, location.pathname]);
 
   // 📡 Real-time listener dla aktualizacji zamówienia (np. z Cloud Functions)

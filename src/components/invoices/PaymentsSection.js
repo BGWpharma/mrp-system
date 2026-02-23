@@ -71,9 +71,20 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
   ];
 
   useEffect(() => {
+    let cancelled = false;
     if (invoice?.id) {
-      loadPayments();
+      (async () => {
+        try {
+          const invoicePayments = await getInvoicePayments(invoice.id);
+          if (cancelled) return;
+          setPayments(invoicePayments);
+        } catch (error) {
+          if (cancelled) return;
+          console.error(t('invoices.payments.notifications.errors.loadPayments') + ':', error);
+        }
+      })();
     }
+    return () => { cancelled = true; };
   }, [invoice?.id]);
 
   const loadPayments = async () => {

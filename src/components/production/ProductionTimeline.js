@@ -757,9 +757,11 @@ const ProductionTimeline = React.memo(({
 
   // Pobranie danych
   useEffect(() => {
-    fetchWorkstations();
-    fetchCustomers();
-    fetchTasks();
+    let cancelled = false;
+    fetchWorkstations().then(() => { if (cancelled) return; });
+    fetchCustomers().then(() => { if (cancelled) return; });
+    fetchTasks().then(() => { if (cancelled) return; });
+    return () => { cancelled = true; };
   }, []);
 
 
@@ -907,11 +909,12 @@ const ProductionTimeline = React.memo(({
     setProductionHistoryMap(historyMap);
   }, [tasks]);
 
-  // Pobieranie historii produkcji gdy zadania się załadują
   useEffect(() => {
+    let cancelled = false;
     if (tasks.length > 0) {
-      fetchProductionHistoryForCompletedTasks();
+      fetchProductionHistoryForCompletedTasks().then(() => { if (cancelled) return; });
     }
+    return () => { cancelled = true; };
   }, [tasks, fetchProductionHistoryForCompletedTasks]);
 
   // Funkcja do obliczania rzeczywistych dat na podstawie historii produkcji

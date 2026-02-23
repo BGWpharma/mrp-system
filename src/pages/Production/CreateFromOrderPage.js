@@ -138,35 +138,36 @@ const CreateFromOrderPage = () => {
   };
   
   useEffect(() => {
+    let cancelled = false;
     const fetchInitialData = async () => {
       try {
-        // Pobierz wszystkie zamówienia
         const ordersData = await getAllOrders();
+        if (cancelled) return;
         setOrders(ordersData);
         
-        // Pobierz wszystkie receptury
         await fetchRecipes();
+        if (cancelled) return;
         
-        // Debuguj receptury po ich pobraniu
         debugRecipes();
         
-        // Pobierz wszystkie stanowiska produkcyjne
         await fetchWorkstations();
+        if (cancelled) return;
         
-        // Jeśli orderId zostało przekazane przez location.state, pobierz szczegóły zamówienia
         if (location.state?.orderId) {
           console.log('[CREATE-FROM-ORDER] Automatyczne ładowanie zamówienia z location.state:', location.state.orderId);
           await fetchOrderDetails(location.state.orderId);
         }
       } catch (error) {
+        if (cancelled) return;
         showError(t('createFromOrder.alerts.loadingDataError', { error: error.message }));
         console.error('Error loading initial data:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     
     fetchInitialData();
+    return () => { cancelled = true; };
   }, []);
   
   const fetchRecipes = async () => {

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import MaterialDetailsDialog from '../../components/forecast/MaterialDetailsDialog';
+import SaveToCrmDialog from '../../components/forecast/SaveToCrmDialog';
 import {
   Container,
   Typography,
@@ -83,8 +85,8 @@ import { formatDateTime } from '../../utils/formatters';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import SaveAltIcon from '@mui/icons-material/SaveAlt';
 import { toast } from 'react-hot-toast';
-import ExcelJS from 'exceljs';
 import { createProcurementForecast } from '../../services/procurementForecastService';
+import { generateForecastReport } from '../../services/forecastExcelExport';
 
 const ForecastPage = () => {
   const { t } = useTranslation('production');
@@ -538,378 +540,24 @@ const ForecastPage = () => {
     fetchData();
   };
   
-  // Generowanie raportu Excel z formatowaniem
+  // ✅ REFAKTORYZACJA: Generowanie raportu Excel wydzielone do src/services/forecastExcelExport.js
   const handleGenerateReport = async () => {
     try {
-      // Użyj przefiltrowanych i posortowanych danych z listy
       const dataToExport = filteredData();
-      
       if (dataToExport.length === 0) {
         showError('Brak danych do wygenerowania raportu');
         return;
       }
-      
-      // Utwórz nowy workbook
-      const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'BGW MRP System';
-      workbook.created = new Date();
-      
-      // ==================== ARKUSZ 1: MATERIAL FORECAST ====================
-      const forecastSheet = workbook.addWorksheet('Material Forecast', {
-        views: [{ state: 'frozen', xSplit: 0, ySplit: 7 }] // Zamroź nagłówki
+
+      await generateForecastReport({
+        forecastData: dataToExport,
+        unusedMaterialsData: filteredUnusedMaterials(),
+        unusedMaterialsDeliveries,
+        formatDateDisplay,
+        startDate,
+        endDate
       });
-      
-      // Kolory (dark theme jak w aplikacji)
-      const colors = {
-        headerBg: '1E293B',        // Ciemny niebieski nagłówek
-        headerText: 'FFFFFF',      // Biały tekst nagłówka
-        errorBg: 'FEE2E2',         // Jasny czerwony (shortage)
-        errorText: 'DC2626',       // Czerwony tekst
-        warningBg: 'FEF3C7',       // Jasny żółty (warning)
-        warningText: 'D97706',     // Pomarańczowy tekst
-        successBg: 'D1FAE5',       // Jasny zielony (sufficient)
-        successText: '059669',     // Zielony tekst
-        infoBg: 'DBEAFE',          // Jasny niebieski (info)
-        infoText: '2563EB',        // Niebieski tekst
-        borderColor: 'E5E7EB',     // Szary border
-        titleBg: '0F172A',         // Bardzo ciemny bg dla tytułu
-        subtitleBg: '334155'       // Ciemny szary dla podtytułów
-      };
-      
-      // Oblicz statystyki
-      const totalCost = dataToExport.reduce((sum, item) => sum + (item.cost || 0), 0);
-      const shortageValue = dataToExport
-        .filter(item => item.balance < 0)
-        .reduce((sum, item) => sum + (Math.abs(item.balance) * (item.price || 0)), 0);
-      const shortageValueAfterDeliveries = dataToExport
-        .filter(item => item.balanceWithFutureDeliveries < 0)
-        .reduce((sum, item) => sum + (Math.abs(item.balanceWithFutureDeliveries) * (item.price || 0)), 0);
-      const materialsWithShortage = dataToExport.filter(item => item.balance < 0).length;
-      const materialsWithShortageAfterDeliveries = dataToExport.filter(item => item.balanceWithFutureDeliveries < 0).length;
-      
-      // Szerokości kolumn
-      forecastSheet.columns = [
-        { header: '', key: 'material', width: 40 },
-        { header: '', key: 'available', width: 18 },
-        { header: '', key: 'required', width: 18 },
-        { header: '', key: 'balance', width: 18 },
-        { header: '', key: 'deliveries', width: 18 },
-        { header: '', key: 'eta', width: 16 },
-        { header: '', key: 'balanceWithDeliveries', width: 22 },
-        { header: '', key: 'price', width: 14 },
-        { header: '', key: 'cost', width: 16 },
-        { header: '', key: 'status', width: 24 }
-      ];
-      
-      // TYTUŁ RAPORTU (wiersz 1)
-      forecastSheet.mergeCells('A1:J1');
-      const titleRow = forecastSheet.getRow(1);
-      titleRow.getCell(1).value = 'MATERIAL DEMAND FORECAST REPORT';
-      titleRow.getCell(1).font = { bold: true, size: 16, color: { argb: 'FFFFFF' } };
-      titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.titleBg } };
-      titleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
-      titleRow.height = 30;
-      
-      // INFO (wiersz 2)
-      forecastSheet.mergeCells('A2:J2');
-      const infoRow = forecastSheet.getRow(2);
-      infoRow.getCell(1).value = `Period: ${formatDateDisplay(startDate)} - ${formatDateDisplay(endDate)}  |  Generated: ${formatDateDisplay(new Date())} at ${format(new Date(), 'HH:mm')}`;
-      infoRow.getCell(1).font = { size: 10, color: { argb: 'FFFFFF' } };
-      infoRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.subtitleBg } };
-      infoRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
-      infoRow.height = 22;
-      
-      // STATYSTYKI (wiersze 3-5)
-      forecastSheet.mergeCells('A3:E3');
-      forecastSheet.mergeCells('F3:J3');
-      const statsRow1 = forecastSheet.getRow(3);
-      statsRow1.getCell(1).value = `📊 Total materials: ${dataToExport.length}  |  ⚠️ Requiring purchase: ${materialsWithShortage}  |  ❌ Shortage after deliveries: ${materialsWithShortageAfterDeliveries}`;
-      statsRow1.getCell(1).font = { size: 10, bold: true };
-      statsRow1.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.infoBg } };
-      statsRow1.getCell(6).value = `💰 Shortage value: ${shortageValue.toLocaleString('en-US', { minimumFractionDigits: 2 })} €  |  After deliveries: ${shortageValueAfterDeliveries.toLocaleString('en-US', { minimumFractionDigits: 2 })} €`;
-      statsRow1.getCell(6).font = { size: 10, bold: true };
-      statsRow1.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.infoBg } };
-      statsRow1.height = 24;
-      
-      // Pusty wiersz 4
-      forecastSheet.getRow(4).height = 8;
-      
-      // LEGENDA (wiersz 5)
-      forecastSheet.mergeCells('A5:J5');
-      const legendRow = forecastSheet.getRow(5);
-      legendRow.getCell(1).value = '🔴 Shortage  |  🟡 Replenished by deliveries  |  🟢 Sufficient';
-      legendRow.getCell(1).font = { size: 9, italic: true };
-      legendRow.getCell(1).alignment = { horizontal: 'center' };
-      legendRow.height = 20;
-      
-      // Pusty wiersz 6
-      forecastSheet.getRow(6).height = 6;
-      
-      // NAGŁÓWKI TABELI (wiersz 7)
-      const headers = ['MATERIAL', 'AVAILABLE QTY', 'REQUIRED', 'BALANCE', 'PENDING DELIVERIES', 'ETA', 'BALANCE W/ DELIVERIES', 'PRICE', 'ESTIMATED COST', 'STATUS'];
-      const headerRow = forecastSheet.getRow(7);
-      headers.forEach((header, index) => {
-        const cell = headerRow.getCell(index + 1);
-        cell.value = header;
-        cell.font = { bold: true, size: 10, color: { argb: colors.headerText } };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.headerBg } };
-        cell.alignment = { horizontal: index === 0 ? 'left' : 'center', vertical: 'middle' };
-        cell.border = {
-          bottom: { style: 'medium', color: { argb: colors.borderColor } }
-        };
-      });
-      headerRow.height = 26;
-      
-      // DANE MATERIAŁÓW (od wiersza 8)
-      dataToExport.forEach((item, index) => {
-        const rowNum = 8 + index;
-        const row = forecastSheet.getRow(rowNum);
-        
-        const balance = item.balance || 0;
-        const balanceWithDeliveries = item.balanceWithFutureDeliveries || 0;
-        const unit = item.unit || 'pcs';
-        
-        // Przygotuj ETA
-        const eta = item.futureDeliveries && item.futureDeliveries.length > 0 && item.futureDeliveries[0].expectedDeliveryDate
-          ? formatDateDisplay(new Date(item.futureDeliveries[0].expectedDeliveryDate))
-          : '—';
-        const deliveriesCount = item.futureDeliveries?.length || 0;
-        const etaWithMore = deliveriesCount > 1 ? `${eta} (+${deliveriesCount - 1})` : eta;
-        
-        // Określ status i kolory
-        let statusText, statusColor, rowBgColor;
-        if (balanceWithDeliveries < 0) {
-          statusText = '❌ Shortage';
-          statusColor = colors.errorText;
-          rowBgColor = colors.errorBg;
-        } else if (balance < 0 && balanceWithDeliveries >= 0) {
-          statusText = '⏱️ Replenished';
-          statusColor = colors.warningText;
-          rowBgColor = colors.warningBg;
-        } else {
-          statusText = '✅ Sufficient';
-          statusColor = colors.successText;
-          rowBgColor = null; // Bez tła
-        }
-        
-        // Wartości komórek
-        const values = [
-          `${item.name || ''}\n${item.category || 'Other'}`,
-          `${(item.availableQuantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
-          `${(item.requiredQuantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
-          `${balance.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
-          `${(item.futureDeliveriesTotal || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
-          etaWithMore,
-          `${balanceWithDeliveries.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
-          item.price ? `${item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €` : '—',
-          item.cost ? `${item.cost.toLocaleString('en-US', { minimumFractionDigits: 2 })} €` : '—',
-          statusText
-        ];
-        
-        values.forEach((value, colIndex) => {
-          const cell = row.getCell(colIndex + 1);
-          cell.value = value;
-          cell.alignment = { 
-            horizontal: colIndex === 0 ? 'left' : 'center', 
-            vertical: 'middle',
-            wrapText: colIndex === 0 
-          };
-          
-          // Kolorowanie tła dla wierszy z problemami
-          if (rowBgColor) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBgColor } };
-          }
-          
-          // Specjalne formatowanie dla niektórych kolumn
-          if (colIndex === 3 && balance < 0) { // Balance
-            cell.font = { bold: true, color: { argb: colors.errorText } };
-          }
-          if (colIndex === 6 && balanceWithDeliveries < 0) { // Balance w/ deliveries
-            cell.font = { bold: true, color: { argb: colors.errorText } };
-          }
-          if (colIndex === 9) { // Status
-            cell.font = { bold: true, color: { argb: statusColor } };
-          }
-          
-          // Obramowania
-          cell.border = {
-            bottom: { style: 'thin', color: { argb: colors.borderColor } }
-          };
-        });
-        
-        row.height = 32;
-      });
-      
-      // ==================== ARKUSZ 2: UNUSED MATERIALS ====================
-      const unusedMaterialsData = filteredUnusedMaterials();
-      
-      if (unusedMaterialsData.length > 0) {
-        const unusedSheet = workbook.addWorksheet('Unused Materials', {
-          views: [{ state: 'frozen', xSplit: 0, ySplit: 4 }]
-        });
-        
-        unusedSheet.columns = [
-          { header: '', key: 'material', width: 40 },
-          { header: '', key: 'available', width: 20 },
-          { header: '', key: 'deliveries', width: 20 },
-          { header: '', key: 'eta', width: 18 },
-          { header: '', key: 'total', width: 22 }
-        ];
-        
-        // Tytuł
-        unusedSheet.mergeCells('A1:E1');
-        const unusedTitleRow = unusedSheet.getRow(1);
-        unusedTitleRow.getCell(1).value = 'UNUSED MATERIALS (NOT IN ANY MANUFACTURING ORDER)';
-        unusedTitleRow.getCell(1).font = { bold: true, size: 14, color: { argb: 'FFFFFF' } };
-        unusedTitleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.titleBg } };
-        unusedTitleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
-        unusedTitleRow.height = 28;
-        
-        // Info
-        unusedSheet.mergeCells('A2:E2');
-        const unusedInfoRow = unusedSheet.getRow(2);
-        unusedInfoRow.getCell(1).value = `Total: ${unusedMaterialsData.length} materials  |  Excluded: "Inne", "Gotowe produkty" categories and materials with quantity 0`;
-        unusedInfoRow.getCell(1).font = { size: 10, color: { argb: 'FFFFFF' } };
-        unusedInfoRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.subtitleBg } };
-        unusedInfoRow.getCell(1).alignment = { horizontal: 'center' };
-        unusedInfoRow.height = 22;
-        
-        // Pusty wiersz
-        unusedSheet.getRow(3).height = 6;
-        
-        // Nagłówki
-        const unusedHeaders = ['MATERIAL', 'AVAILABLE QTY', 'PENDING DELIVERIES', 'ETA', 'TOTAL AVAILABLE'];
-        const unusedHeaderRow = unusedSheet.getRow(4);
-        unusedHeaders.forEach((header, index) => {
-          const cell = unusedHeaderRow.getCell(index + 1);
-          cell.value = header;
-          cell.font = { bold: true, size: 10, color: { argb: colors.headerText } };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.headerBg } };
-          cell.alignment = { horizontal: index === 0 ? 'left' : 'center', vertical: 'middle' };
-        });
-        unusedHeaderRow.height = 24;
-        
-        // Dane
-        unusedMaterialsData.forEach((item, index) => {
-          const rowNum = 5 + index;
-          const row = unusedSheet.getRow(rowNum);
-          
-          const deliveryData = unusedMaterialsDeliveries[item.id];
-          const availableQty = parseFloat(item.quantity) || 0;
-          const pendingDeliveries = deliveryData?.total || 0;
-          const unit = item.unit || 'pcs';
-          const eta = deliveryData?.deliveries?.[0]?.expectedDeliveryDate 
-            ? formatDateDisplay(new Date(deliveryData.deliveries[0].expectedDeliveryDate))
-            : '—';
-          const deliveriesCount = deliveryData?.deliveries?.length || 0;
-          const etaWithMore = deliveriesCount > 1 ? `${eta} (+${deliveriesCount - 1})` : eta;
-          const totalAvailable = availableQty + pendingDeliveries;
-          
-          const values = [
-            `${item.name || ''}\n${item.category || 'Other'}`,
-            `${availableQty.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
-            `${pendingDeliveries.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
-            etaWithMore,
-            `${totalAvailable.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`
-          ];
-          
-          values.forEach((value, colIndex) => {
-            const cell = row.getCell(colIndex + 1);
-            cell.value = value;
-            cell.alignment = { 
-              horizontal: colIndex === 0 ? 'left' : 'center', 
-              vertical: 'middle',
-              wrapText: colIndex === 0
-            };
-            cell.border = {
-              bottom: { style: 'thin', color: { argb: colors.borderColor } }
-            };
-            
-            // Podświetl jeśli są dostawy w drodze
-            if (pendingDeliveries > 0 && colIndex === 2) {
-              cell.font = { color: { argb: colors.infoText }, bold: true };
-            }
-          });
-          
-          row.height = 30;
-        });
-      }
-      
-      // ==================== ARKUSZ 3: SUMMARY ====================
-      const summarySheet = workbook.addWorksheet('Summary');
-      
-      summarySheet.columns = [
-        { header: '', key: 'label', width: 40 },
-        { header: '', key: 'value', width: 30 }
-      ];
-      
-      // Tytuł
-      summarySheet.mergeCells('A1:B1');
-      const summaryTitleRow = summarySheet.getRow(1);
-      summaryTitleRow.getCell(1).value = 'FORECAST SUMMARY';
-      summaryTitleRow.getCell(1).font = { bold: true, size: 16, color: { argb: 'FFFFFF' } };
-      summaryTitleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.titleBg } };
-      summaryTitleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
-      summaryTitleRow.height = 30;
-      
-      // Dane podsumowania
-      const summaryData = [
-        ['', ''],
-        ['📅 REPORT DETAILS', ''],
-        ['Forecast Period', `${formatDateDisplay(startDate)} - ${formatDateDisplay(endDate)}`],
-        ['Generated On', `${formatDateDisplay(new Date())} at ${format(new Date(), 'HH:mm')}`],
-        ['', ''],
-        ['📊 MATERIALS STATISTICS', ''],
-        ['Total Materials in Forecast', dataToExport.length],
-        ['Materials Requiring Purchase', materialsWithShortage],
-        ['Materials with Shortage After Deliveries', materialsWithShortageAfterDeliveries],
-        ['Materials with Sufficient Stock', dataToExport.length - materialsWithShortage],
-        ['', ''],
-        ['💰 FINANCIAL SUMMARY', ''],
-        ['Total Shortage Value', `${shortageValue.toLocaleString('en-US', { minimumFractionDigits: 2 })} €`],
-        ['Shortage After Deliveries', `${shortageValueAfterDeliveries.toLocaleString('en-US', { minimumFractionDigits: 2 })} €`],
-        ['Total Estimated Cost', `${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })} €`],
-        ['', ''],
-        ['📦 UNUSED MATERIALS', ''],
-        ['Total Unused Materials', unusedMaterialsData.length]
-      ];
-      
-      summaryData.forEach((rowData, index) => {
-        const rowNum = 2 + index;
-        const row = summarySheet.getRow(rowNum);
-        
-        row.getCell(1).value = rowData[0];
-        row.getCell(2).value = rowData[1];
-        
-        // Formatowanie sekcji
-        if (rowData[0].includes('📅') || rowData[0].includes('📊') || rowData[0].includes('💰') || rowData[0].includes('📦')) {
-          row.getCell(1).font = { bold: true, size: 12, color: { argb: colors.infoText } };
-          row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.infoBg } };
-          row.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.infoBg } };
-          row.height = 24;
-        } else if (rowData[0]) {
-          row.getCell(1).font = { size: 11 };
-          row.getCell(2).font = { size: 11, bold: true };
-          row.getCell(2).alignment = { horizontal: 'right' };
-        }
-      });
-      
-      // Generuj plik Excel i pobierz
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      
-      const fileName = `material_demand_forecast_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.xlsx`;
-      
-      link.setAttribute('href', url);
-      link.setAttribute('download', fileName);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
+
       showSuccess('Excel report generated and downloaded successfully');
     } catch (error) {
       console.error('Błąd podczas generowania raportu Excel:', error);
@@ -1231,15 +879,99 @@ const ForecastPage = () => {
     }
   }, [endDate]);
 
-  // useEffect do pobierania dostaw dla nieużywanych materiałów po załadowaniu danych
   useEffect(() => {
+    let cancelled = false;
     if (forecastData && forecastData.length > 0 && inventoryItems && inventoryItems.length > 0) {
       const unusedMats = getUnusedMaterials();
       if (unusedMats.length > 0) {
-        fetchDeliveriesForUnusedMaterials(unusedMats);
+        const loadDeliveries = async () => {
+          if (!unusedMats || unusedMats.length === 0) {
+            setUnusedMaterialsDeliveries({});
+            return;
+          }
+
+          setLoadingUnusedDeliveries(true);
+          
+          try {
+            const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventory');
+            if (cancelled) return;
+            
+            const deliveriesMap = {};
+            
+            const promises = unusedMats.map(async (material) => {
+              try {
+                const purchaseOrders = await getAwaitingOrdersForInventoryItem(material.id);
+                
+                if (purchaseOrders && purchaseOrders.length > 0) {
+                  const deliveries = [];
+                  let totalDeliveryQuantity = 0;
+                  
+                  for (const po of purchaseOrders) {
+                    for (const item of po.items) {
+                      if (item.inventoryItemId === material.id) {
+                        const quantity = parseFloat(item.quantityRemaining) || 0;
+                        
+                        const deliveryDate = item.expectedDeliveryDate || po.expectedDeliveryDate;
+                        if (deliveryDate && endDate) {
+                          const deliveryDateObj = new Date(deliveryDate);
+                          const endDateObj = new Date(endDate);
+                          if (deliveryDateObj > endDateObj) {
+                            continue;
+                          }
+                        }
+                        
+                        if (quantity > 0) {
+                          totalDeliveryQuantity += quantity;
+                          deliveries.push({
+                            poNumber: po.number || 'Brak numeru',
+                            poId: po.id,
+                            status: po.status,
+                            quantity: quantity,
+                            expectedDeliveryDate: deliveryDate,
+                            supplier: item.supplierName || po.supplierName || ''
+                          });
+                        }
+                      }
+                    }
+                  }
+                  
+                  if (deliveries.length > 0) {
+                    deliveries.sort((a, b) => {
+                      if (!a.expectedDeliveryDate) return 1;
+                      if (!b.expectedDeliveryDate) return -1;
+                      return new Date(a.expectedDeliveryDate) - new Date(b.expectedDeliveryDate);
+                    });
+                    
+                    deliveriesMap[material.id] = {
+                      deliveries: deliveries,
+                      total: totalDeliveryQuantity
+                    };
+                  }
+                }
+              } catch (error) {
+                console.error(`Błąd pobierania PO dla materiału ${material.id}:`, error);
+              }
+            });
+            
+            await Promise.all(promises);
+            if (cancelled) return;
+            
+            setUnusedMaterialsDeliveries(deliveriesMap);
+            console.log(`Pobrano dostawy dla ${Object.keys(deliveriesMap).length} nieużywanych materiałów`);
+          } catch (error) {
+            if (cancelled) return;
+            console.error('Błąd podczas pobierania dostaw dla nieużywanych materiałów:', error);
+          } finally {
+            if (!cancelled) {
+              setLoadingUnusedDeliveries(false);
+            }
+          }
+        };
+        loadDeliveries();
       }
     }
-  }, [forecastData, inventoryItems, getUnusedMaterials, fetchDeliveriesForUnusedMaterials]);
+    return () => { cancelled = true; };
+  }, [forecastData, inventoryItems, getUnusedMaterials, endDate]);
   
   // Filtrowanie danych
   const filteredData = useCallback(() => {
@@ -2671,280 +2403,31 @@ const ForecastPage = () => {
         </Box>
       </Fade>
       
-      {/* Dialog ze szczegółami materiału */}
-      <Dialog open={detailsDialogOpen} onClose={handleCloseDetailsDialog} maxWidth="md" fullWidth>
-        <DialogTitle>{t('forecast.materialDetails')}</DialogTitle>
-        <DialogContent>
-          {selectedMaterial && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="h6">{selectedMaterial.name}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={mb2}>
-                {t('forecast.category')}: {selectedMaterial.category}
-              </Typography>
-              
-              <Grid container spacing={2} sx={mb3}>
-                <Grid item xs={6} md={3}>
-                  <Typography variant="body2" color="text.secondary">{t('forecast.details.availableQuantity')}:</Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                    {formatNumber(selectedMaterial.availableQuantity)} {selectedMaterial.unit}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6} md={3}>
-                  <Typography variant="body2" color="text.secondary">{t('forecast.details.requiredQuantity')}:</Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                    {formatNumber(selectedMaterial.requiredQuantity)} {selectedMaterial.unit}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6} md={3}>
-                  <Typography variant="body2" color="text.secondary">{t('forecast.details.alreadyConsumed')}:</Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 'medium', color: 'info.main' }}>
-                    {formatNumber(selectedMaterial.consumedQuantity || 0)} {selectedMaterial.unit}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6} md={3}>
-                  <Typography variant="body2" color="text.secondary">{t('forecast.details.balance')}:</Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 'medium' }} color={selectedMaterial.balance < 0 ? 'error.main' : 'success.main'}>
-                    {formatNumber(selectedMaterial.balance)} {selectedMaterial.unit}
-                  </Typography>
-                </Grid>
-              </Grid>
-              
-              {selectedMaterial.futureDeliveries && selectedMaterial.futureDeliveries.length > 0 && (
-                <>
-                  <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                    {t('forecast.expectedDeliveriesDetails', { total: formatNumber(selectedMaterial.futureDeliveriesTotal), unit: selectedMaterial.unit })}
-                  </Typography>
-                  <TableContainer component={Paper} variant="outlined" sx={mb2}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>{t('forecast.poNumber')}</TableCell>
-                          <TableCell>{t('forecast.details.supplier')}</TableCell>
-                          <TableCell>{t('forecast.table.status')}</TableCell>
-                          <TableCell align="right">{t('forecast.details.quantity')}</TableCell>
-                          <TableCell align="right">{t('forecast.deliveryDate')}</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {selectedMaterial.futureDeliveries.map((delivery, index) => (
-                          <TableRow key={`delivery-${index}`}>
-                            <TableCell>
-                              <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                  cursor: 'pointer', 
-                                  textDecoration: 'underline',
-                                  color: 'primary.main'
-                                }}
-                                onClick={() => navigate(`/purchase-orders/${delivery.poId}`)}
-                              >
-                                {delivery.poNumber}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="body2" color="text.secondary">
-                                {delivery.supplierName || t('forecast.details.noSupplier')}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>{delivery.status}</TableCell>
-                            <TableCell align="right">{formatNumber(delivery.quantity)} {selectedMaterial.unit}</TableCell>
-                            <TableCell align="right">
-                              {delivery.expectedDeliveryDate && delivery.expectedDeliveryDate !== ''
-                                ? (() => {
-                                    const formatted = formatDateDisplay(new Date(delivery.expectedDeliveryDate));
-                                    return formatted || t('forecast.noDate');
-                                  })()
-                                : t('forecast.noDate')
-                              }
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </>
-              )}
-              
-              {selectedMaterial.tasks && selectedMaterial.tasks.length > 0 && (
-                <>
-                  <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                    {t('forecast.tasksUsingMaterial')}
-                  </Typography>
-                  <TableContainer component={Paper} variant="outlined">
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>{t('forecast.taskName')}</TableCell>
-                          <TableCell>{t('forecast.moNumber')}</TableCell>
-                          <TableCell align="right">{t('forecast.productQuantity')}</TableCell>
-                          <TableCell align="right">{t('forecast.materialPerUnit')}</TableCell>
-                          <TableCell align="right">{t('forecast.executionDate')}</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {selectedMaterial.tasks.map(taskId => {
-                          const task = tasks.find(t => t.id === taskId);
-                          if (!task) return null;
-                          
-                          const materialInTask = task.materials?.find(m => m.id === selectedMaterial.id);
-                          
-                          // POPRAWKA: Pobierz rzeczywistą ilość z actualMaterialUsage, jeśli jest dostępna
-                          const actualMaterialUsage = task.actualMaterialUsage || {};
-                          const materialId = materialInTask?.id || selectedMaterial.id;
-                          const inventoryItemId = materialInTask?.inventoryItemId;
-                          const actualTotalQuantity = actualMaterialUsage[materialId] ?? actualMaterialUsage[inventoryItemId];
-                          
-                          // Użyj rzeczywistej ilości jeśli dostępna, w przeciwnym razie oryginalną
-                          const quantityPerUnit = actualTotalQuantity !== undefined 
-                            ? parseFloat(actualTotalQuantity) 
-                            : (materialInTask?.quantity || 0);
-                          
-                          return (
-                            <TableRow key={taskId}>
-                              <TableCell>
-                                <Link
-                                  to={`/production/tasks/${taskId}`}
-                                  style={{ 
-                                    cursor: 'pointer', 
-                                    textDecoration: 'underline',
-                                    color: 'inherit'
-                                  }}
-                                >
-                                  <Typography 
-                                    variant="body2" 
-                                    sx={{ 
-                                      color: 'primary.main'
-                                    }}
-                                  >
-                                    {task.name}
-                                  </Typography>
-                                </Link>
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2" color="text.secondary">
-                                  {task.moNumber || task.orderNumber || '-'}
-                                </Typography>
-                              </TableCell>
-                              <TableCell align="right">{formatNumber(task.quantity || 0)}</TableCell>
-                              <TableCell align="right">{formatNumber(quantityPerUnit)} {selectedMaterial.unit}</TableCell>
-                              <TableCell align="right">
-                                {task.scheduledDate && task.scheduledDate !== ''
-                                  ? (() => {
-                                      try {
-                                        let taskDate;
-                                        // Obsługa Firestore Timestamp
-                                        if (task.scheduledDate?.toDate) {
-                                          taskDate = task.scheduledDate.toDate();
-                                        } else if (typeof task.scheduledDate === 'string') {
-                                          taskDate = new Date(task.scheduledDate);
-                                        } else if (task.scheduledDate instanceof Date) {
-                                          taskDate = task.scheduledDate;
-                                        } else {
-                                          return t('forecast.noDate');
-                                        }
-                                        
-                                        const formatted = formatDateDisplay(taskDate);
-                                        return formatted || t('forecast.noDate');
-                                      } catch (error) {
-                                        console.error('Błąd formatowania daty zadania:', error);
-                                        return t('forecast.noDate');
-                                      }
-                                    })()
-                                  : t('forecast.noDate')
-                                }
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </>
-              )}
-              
-              {selectedMaterial.balance < 0 && (
-                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={<ShoppingCartIcon />}
-                    onClick={() => {
-                      navigate('/purchase-orders/new', { 
-                        state: { materialId: selectedMaterial.id, requiredQuantity: Math.abs(selectedMaterial.balance) }
-                      });
-                      handleCloseDetailsDialog();
-                    }}
-                  >
-                    {t('forecast.orderMaterial')}
-                  </Button>
-                </Box>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDetailsDialog}>{t('forecast.close')}</Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Dialog zapisu prognozy do CRM */}
-      <Dialog 
-        open={saveToCrmDialogOpen} 
-        onClose={() => !savingToCrm && setSaveToCrmDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Zapisz prognozę do CRM</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Zapisz aktualną prognozę zapotrzebowania jako snapshot. Będzie dostępna w zakładce Stany → Prognozy zakupowe.
-          </Typography>
-          <TextField
-            autoFocus
-            label="Nazwa prognozy"
-            fullWidth
-            variant="outlined"
-            value={saveToCrmName}
-            onChange={(e) => setSaveToCrmName(e.target.value)}
-            placeholder={`Prognoza ${format(startDate, 'dd.MM')} - ${format(endDate, 'dd.MM.yyyy')}`}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            label="Notatki (opcjonalne)"
-            fullWidth
-            variant="outlined"
-            multiline
-            rows={3}
-            value={saveToCrmNotes}
-            onChange={(e) => setSaveToCrmNotes(e.target.value)}
-            placeholder="Dodatkowe informacje do prognozy..."
-          />
-          <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Materiałów: <strong>{forecastData.length}</strong> | 
-              Z niedoborem: <strong style={{ color: '#d32f2f' }}>{forecastData.filter(i => i.balanceWithFutureDeliveries < 0).length}</strong> | 
-              Okres: <strong>{format(startDate, 'dd.MM.yyyy')} - {format(endDate, 'dd.MM.yyyy')}</strong>
-            </Typography>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button 
-            onClick={() => setSaveToCrmDialogOpen(false)} 
-            disabled={savingToCrm}
-          >
-            Anuluj
-          </Button>
-          <Button 
-            onClick={handleSaveToCrm} 
-            variant="contained" 
-            color="success"
-            disabled={savingToCrm}
-            startIcon={savingToCrm ? <CircularProgress size={20} /> : <SaveAltIcon />}
-          >
-            {savingToCrm ? 'Zapisywanie...' : 'Zapisz'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* ✅ REFAKTORYZACJA: Dialog ze szczegółami materiału - wydzielony komponent */}
+      <MaterialDetailsDialog
+        open={detailsDialogOpen}
+        onClose={handleCloseDetailsDialog}
+        material={selectedMaterial}
+        tasks={tasks}
+        formatNumber={formatNumber}
+        formatDateDisplay={formatDateDisplay}
+        t={t}
+      />
+
+      {/* ✅ REFAKTORYZACJA: Dialog zapisu prognozy do CRM - wydzielony komponent */}
+      <SaveToCrmDialog
+        open={saveToCrmDialogOpen}
+        onClose={() => setSaveToCrmDialogOpen(false)}
+        onSave={handleSaveToCrm}
+        name={saveToCrmName}
+        onNameChange={setSaveToCrmName}
+        notes={saveToCrmNotes}
+        onNotesChange={setSaveToCrmNotes}
+        saving={savingToCrm}
+        forecastData={forecastData}
+        startDate={startDate}
+        endDate={endDate}
+      />
     </Container>
   );
 };

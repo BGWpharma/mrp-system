@@ -134,46 +134,51 @@ const ProductionShiftForm = () => {
   const [warehousesLoading, setWarehousesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Pobierz numery MO przy pierwszym renderowaniu komponentu
   useEffect(() => {
+    let cancelled = false;
     const fetchMONumbers = async () => {
       try {
         setLoadingMO(true);
         const options = await getMONumbersForSelect();
+        if (cancelled) return;
         setMoOptions(options);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania numerów MO:', error);
       } finally {
-        setLoadingMO(false);
+        if (!cancelled) setLoadingMO(false);
       }
     };
 
     fetchMONumbers();
     
-    // Ustaw email zalogowanego użytkownika
     if (currentUser && currentUser.email) {
       setFormData(prev => ({
         ...prev,
         email: currentUser.email
       }));
     }
+    return () => { cancelled = true; };
   }, [currentUser]);
 
-  // Pobierz magazyny przy pierwszym renderowaniu komponentu
   useEffect(() => {
+    let cancelled = false;
     const fetchWarehouses = async () => {
       try {
         setWarehousesLoading(true);
         const warehousesList = await getAllWarehouses();
+        if (cancelled) return;
         setWarehouses(warehousesList);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania magazynów:', error);
       } finally {
-        setWarehousesLoading(false);
+        if (!cancelled) setWarehousesLoading(false);
       }
     };
 
     fetchWarehouses();
+    return () => { cancelled = true; };
   }, []);
 
   // Sprawdź, czy istnieją dane do edycji w sessionStorage

@@ -105,19 +105,27 @@ const LoadingReportFormPage = () => {
 
   // Pobieranie dokumentów CMR przy inicjalizacji
   useEffect(() => {
+    let cancelled = false;
+
     const fetchCmrDocuments = async () => {
       try {
         setCmrLoading(true);
         const documents = await getAllCmrDocuments();
+        if (cancelled) return;
         setCmrDocuments(documents);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania dokumentów CMR:', error);
       } finally {
-        setCmrLoading(false);
+        if (!cancelled) {
+          setCmrLoading(false);
+        }
       }
     };
 
     fetchCmrDocuments();
+
+    return () => { cancelled = true; };
   }, []);
 
   // Sprawdź czy istnieją dane do edycji w sessionStorage

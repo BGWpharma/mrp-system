@@ -107,23 +107,30 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
   const labelRef = useRef(null);
   
   useEffect(() => {
+    let cancelled = false;
+
     if (open) {
-      fetchCustomers();
+      const loadCustomers = async () => {
+        try {
+          setLoadingCustomers(true);
+          const customersData = await getAllCustomers();
+          if (cancelled) return;
+          setCustomers(customersData);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Error fetching customers:', error);
+        } finally {
+          if (!cancelled) {
+            setLoadingCustomers(false);
+          }
+        }
+      };
+      loadCustomers();
       setBoxQuantity(item?.itemsPerBox || '');
     }
-  }, [open, item]);
 
-  const fetchCustomers = async () => {
-    try {
-      setLoadingCustomers(true);
-      const customersData = await getAllCustomers();
-      setCustomers(customersData);
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-    } finally {
-      setLoadingCustomers(false);
-    }
-  };
+    return () => { cancelled = true; };
+  }, [open, item]);
   
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);

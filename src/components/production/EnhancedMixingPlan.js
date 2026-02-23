@@ -607,6 +607,7 @@ const EnhancedMixingPlan = ({
   // Problem: Dostępna ilość = (Rezerwacja - Powiązane) + Skonsumowane
   // Gdy konsumpcja się zmienia, musimy przeliczyć dostępne ilości
   useEffect(() => {
+    let cancelled = false;
     const refreshReservations = async () => {
       if (!task?.id) return;
       
@@ -614,8 +615,8 @@ const EnhancedMixingPlan = ({
       
       try {
         const updatedStandardRes = await getStandardReservationsForTask(task.id);
+        if (cancelled) return;
         setStandardReservations(prev => {
-          // Aktualizuj tylko standardowe rezerwacje, zachowaj wirtualne
           const virtualRes = prev.filter(r => r.type === 'virtual');
           const allReservations = [...updatedStandardRes, ...virtualRes];
           
@@ -623,11 +624,13 @@ const EnhancedMixingPlan = ({
           return allReservations;
         });
       } catch (error) {
+        if (cancelled) return;
         console.error('❌ [MIXING-PLAN] Błąd podczas odświeżania rezerwacji po konsumpcji:', error);
       }
     };
     
     refreshReservations();
+    return () => { cancelled = true; };
   }, [task?.consumedMaterials, task?.id]); // Reaguj na zmiany w consumedMaterials
 
   // ⚡ OPTYMALIZACJA: Real-time listener tylko dla powiązań rezerwacji

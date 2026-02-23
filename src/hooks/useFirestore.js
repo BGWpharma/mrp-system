@@ -29,21 +29,23 @@ import { useAuth } from './useAuth';
 export const useFirestore = (collectionName, options = {}) => {
   const { autoLoad = true } = options;
   const [documents, setDocuments] = useState([]);
-  const [loading, setLoading] = useState(autoLoad); // Ustaw loading na false jeśli autoLoad wyłączone
+  const [loading, setLoading] = useState(autoLoad);
   const [error, setError] = useState(null);
   const { currentUser } = useAuth();
   const unsubscribeRef = useRef(null);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const mountedRef = useRef(true);
   
   // Pobierz wszystkie dokumenty
   const getAll = async (options = {}) => {
     try {
-      setLoading(true);
-      setError(null);
+      if (mountedRef.current) {
+        setLoading(true);
+        setError(null);
+      }
       
       const collectionRef = collection(db, collectionName);
       
-      // Buduj zapytanie na podstawie opcji
       let q = collectionRef;
       
       if (options.where) {
@@ -64,22 +66,30 @@ export const useFirestore = (collectionName, options = {}) => {
         ...doc.data()
       }));
       
-      setDocuments(docsData);
+      if (mountedRef.current) {
+        setDocuments(docsData);
+      }
       return docsData;
     } catch (err) {
       console.error(`Error getting documents from ${collectionName}:`, err);
-      setError(err.message);
+      if (mountedRef.current) {
+        setError(err.message);
+      }
       throw err;
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
   
   // Pobierz jeden dokument
   const getOne = async (id) => {
     try {
-      setLoading(true);
-      setError(null);
+      if (mountedRef.current) {
+        setLoading(true);
+        setError(null);
+      }
       
       const docRef = doc(db, collectionName, id);
       const docSnapshot = await getDoc(docRef);
@@ -94,10 +104,14 @@ export const useFirestore = (collectionName, options = {}) => {
       }
     } catch (err) {
       console.error(`Error getting document from ${collectionName}:`, err);
-      setError(err.message);
+      if (mountedRef.current) {
+        setError(err.message);
+      }
       throw err;
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
   
@@ -251,7 +265,9 @@ export const useFirestore = (collectionName, options = {}) => {
   
   // Automatycznie odsubskrybuj przy odmontowaniu komponentu
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       unsubscribe();
     };
   }, []);

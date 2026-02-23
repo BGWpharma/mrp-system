@@ -189,19 +189,19 @@ const HallDataMachinesPage = () => {
   useEffect(() => {
     if (!selectedMachine) return;
     
+    let cancelled = false;
     setLoading(true);
     
-    const fetchAndProcessHistory = async () => {
+    (async () => {
       try {
-        // Pobierz dane z historii maszyny
         const historyRef = ref(rtdb, `weight_summaries_history/${selectedMachine}`);
         const historySnapshot = await get(historyRef);
+        if (cancelled) return;
         
         if (historySnapshot.exists()) {
           const historyData = historySnapshot.val();
           const historyArray = [];
           
-          // Konwersja obiektu historii do tablicy
           Object.keys(historyData).forEach(key => {
             historyArray.push({
               id: key,
@@ -209,9 +209,7 @@ const HallDataMachinesPage = () => {
             });
           });
           
-          // Przetwarzanie w zależności od filtrowania
           if (isFilteringByDate && selectedDate) {
-            // Filtruj według wybranej daty
             const filteredArray = historyArray.filter(record => {
               const recordDate = record.end_time || record.generated_at || '';
               if (!recordDate) return false;
@@ -224,7 +222,6 @@ const HallDataMachinesPage = () => {
               }
             });
             
-            // Sortowanie historii według timestamp (od najnowszych)
             filteredArray.sort((a, b) => {
               const dateA = a.end_time || a.generated_at || '';
               const dateB = b.end_time || b.generated_at || '';
@@ -236,8 +233,6 @@ const HallDataMachinesPage = () => {
               [selectedMachine]: filteredArray
             }));
           } else {
-            // Pokazuj wszystkie dane historyczne
-            // Sortowanie historii według timestamp (od najnowszych)
             historyArray.sort((a, b) => {
               const dateA = a.end_time || a.generated_at || '';
               const dateB = b.end_time || b.generated_at || '';
@@ -259,13 +254,14 @@ const HallDataMachinesPage = () => {
           setLoading(false);
         }
       } catch (error) {
+        if (cancelled) return;
         console.error("Błąd podczas pobierania historii:", error);
         setLoading(false);
         setError(t('machines.errors.loadingError'));
       }
-    };
+    })();
     
-    fetchAndProcessHistory();
+    return () => { cancelled = true; };
   }, [selectedMachine, rtdb, isFilteringByDate, selectedDate]);
   
   // Obsługa zmiany filtrowania według daty

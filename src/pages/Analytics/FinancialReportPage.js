@@ -94,7 +94,19 @@ const FinancialReportPage = () => {
   
   // Załaduj opcje filtrów przy montowaniu
   useEffect(() => {
+    let cancelled = false;
+    const loadFilterOptions = async () => {
+      try {
+        const options = await getFilterOptions();
+        if (cancelled) return;
+        setFilterOptions(options);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas ładowania opcji filtrów:', error);
+      }
+    };
     loadFilterOptions();
+    return () => { cancelled = true; };
   }, []);
   
   // Oblicz filteredData używając useMemo (bez race condition)
@@ -119,15 +131,6 @@ const FinancialReportPage = () => {
       (row.material_name || '').toLowerCase().includes(searchLower)
     );
   }, [reportData, filters.searchTerm]);
-  
-  const loadFilterOptions = async () => {
-    try {
-      const options = await getFilterOptions();
-      setFilterOptions(options);
-    } catch (error) {
-      console.error('Błąd podczas ładowania opcji filtrów:', error);
-    }
-  };
   
   const handleGenerateReport = async () => {
     try {

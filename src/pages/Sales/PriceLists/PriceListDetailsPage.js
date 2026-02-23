@@ -41,7 +41,23 @@ const PriceListDetailsPage = () => {
   const { t } = useTranslation('priceLists');
   
   useEffect(() => {
-    fetchPriceList();
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await getPriceListById(id);
+        if (cancelled) return;
+        setPriceList(data);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania listy cenowej:', error);
+        showNotification(t('priceLists.messages.errors.fetchDetailsFailed'), 'error');
+        navigate('/orders/price-lists');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [id]);
   
   const fetchPriceList = async () => {

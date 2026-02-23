@@ -35,27 +35,34 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
   const [selectedItem, setSelectedItem] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadInventoryItems = async () => {
+      setLoading(true);
+      try {
+        const itemsData = await getAllInventoryItems();
+        if (cancelled) return;
+        const filteredItems = (itemsData || []).filter(item => 
+          item.category !== 'Gotowe produkty' && item.category !== 'Inne'
+        );
+        setInventoryItems(filteredItems);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas ładowania pozycji magazynowych:', error);
+        showError('Błąd podczas ładowania listy pozycji magazynowych');
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
     if (open) {
       loadInventoryItems();
     }
-  }, [open]);
 
-  const loadInventoryItems = async () => {
-    setLoading(true);
-    try {
-      const itemsData = await getAllInventoryItems();
-      // Filtruj pozycje - usuń kategorie "Gotowe produkty" i "Inne"
-      const filteredItems = (itemsData || []).filter(item => 
-        item.category !== 'Gotowe produkty' && item.category !== 'Inne'
-      );
-      setInventoryItems(filteredItems);
-    } catch (error) {
-      console.error('Błąd podczas ładowania pozycji magazynowych:', error);
-      showError('Błąd podczas ładowania listy pozycji magazynowych');
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => { cancelled = true; };
+  }, [open]);
 
   const handleItemChange = (event, newValue) => {
     setSelectedItem(newValue);

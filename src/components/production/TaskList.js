@@ -711,23 +711,42 @@ const TaskList = () => {
 
   // Pobierz zadania przy inicjalizacji — JEDYNY efekt który fetchuje na mount
   useEffect(() => {
+    let cancelled = false;
     fetchTasksOptimized();
-    fetchWarehouses();
+
+    const loadWarehouses = async () => {
+      try {
+        setWarehousesLoading(true);
+        const warehousesList = await getAllWarehouses();
+        if (cancelled) return;
+        setWarehouses(warehousesList);
+        if (warehousesList.length > 0) {
+          setInventoryData(prev => ({
+            ...prev,
+            warehouseId: warehousesList[0].id
+          }));
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania magazynów:', error);
+      } finally {
+        if (!cancelled) {
+          setWarehousesLoading(false);
+        }
+      }
+    };
+    loadWarehouses();
     
-    // Odrocz ustawienie flagi na po zakończeniu wszystkich efektów z tego renderowania
-    // — bez tego efekty statusFilter/page/search widzą false i też fetchują
     const timer = setTimeout(() => {
       isFirstRender.current = false;
     }, 0);
     
-    // Nasłuchiwanie na zdarzenie aktualizacji zadań
     const handleTasksUpdate = () => {
       fetchTasksOptimized();
     };
     
     window.addEventListener('tasks-updated', handleTasksUpdate);
     
-    // BroadcastChannel listener dla aktualizacji kosztów
     let broadcastChannel = null;
     if (typeof BroadcastChannel !== 'undefined') {
       broadcastChannel = new BroadcastChannel('production-costs-update');
@@ -740,6 +759,7 @@ const TaskList = () => {
     }
     
     return () => {
+      cancelled = true;
       clearTimeout(timer);
       window.removeEventListener('tasks-updated', handleTasksUpdate);
       if (broadcastChannel) {
@@ -819,26 +839,6 @@ const TaskList = () => {
 
 
   // Funkcja do pobierania magazynów
-  const fetchWarehouses = async () => {
-    try {
-      setWarehousesLoading(true);
-      const warehousesList = await getAllWarehouses();
-      setWarehouses(warehousesList);
-      
-      // Jeśli jest przynajmniej jeden magazyn, ustaw go jako domyślny
-      if (warehousesList.length > 0) {
-        setInventoryData(prev => ({
-          ...prev,
-          warehouseId: warehousesList[0].id
-        }));
-      }
-    } catch (error) {
-      console.error('Błąd podczas pobierania magazynów:', error);
-    } finally {
-      setWarehousesLoading(false);
-    }
-  };
-
   // Obsługa zmiany filtra statusu - używa kontekstu
   const handleStatusFilterChange = (event) => {
     listActions.setStatusFilter(event.target.value);

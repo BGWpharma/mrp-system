@@ -45,3 +45,25 @@ export { useProductionHistoryState } from './useProductionHistoryState';
 
 // Stan załączników
 export { useAttachmentsState } from './useAttachmentsState';
+
+// ===== FAZA 2: Ekstrakcja handlerów =====
+
+// Handlery formularzy produkcyjnych
+export { useFormHandlers } from './useFormHandlers';
+
+// Handlery historii produkcji
+export { useHistoryHandlers } from './useHistoryHandlers';
+
+// Handlery materiałów (opakowania, surowce, usuwanie, koszty)
+export { useMaterialHandlers } from './useMaterialHandlers';
+
+// Handlery konsumpcji materiałów
+export { useConsumptionHandlers } from './useConsumptionHandlers';
+
+// Handlery rezerwacji materiałów
+export { useReservationHandlers } from './useReservationHandlers';
+
+// ===== FAZA 1.3: Rozszerzone hooki kosztów i synchronizacji =====
+
+// Synchronizacja real-time (Firestore onSnapshot)
+export { useTaskRealTimeSync } from './useTaskRealTimeSync';

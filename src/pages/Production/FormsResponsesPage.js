@@ -270,15 +270,19 @@ const FormsResponsesPage = () => {
   
   // Pobierz liczby odpowiedzi dla wszystkich zakładek na starcie
   useEffect(() => {
+    let cancelled = false;
     const loadAllCounts = async () => {
       try {
         const counts = await getAllProductionFormsCounts();
+        if (cancelled) return;
         setTabCounts(counts);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania liczby odpowiedzi:', error);
       }
     };
     loadAllCounts();
+    return () => { cancelled = true; };
   }, []);
   
   // Funkcja ładowania z filtrami dla Production Shift

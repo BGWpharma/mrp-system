@@ -48,6 +48,7 @@ const EditPurchaseOrderPage = () => {
 
   // Pobieranie danych zamówienia, dostawców i lokalizacji magazynowych
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -56,23 +57,29 @@ const EditPurchaseOrderPage = () => {
           getSuppliers(),
           getWarehouseLocations()
         ]);
+        if (cancelled) return;
         setPurchaseOrder(poData);
         setSuppliers(suppliersData);
         setWarehouses(warehousesData);
         
         if (poData && poData.supplierId) {
           const products = await getSupplierProducts(poData.supplierId);
+          if (cancelled) return;
           setSupplierProducts(products);
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas ładowania danych:', error);
         setError('Nie udało się załadować danych zamówienia. Spróbuj ponownie.');
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
+    return () => { cancelled = true; };
   }, [id]);
 
   // Funkcja do aktualizacji zamówienia

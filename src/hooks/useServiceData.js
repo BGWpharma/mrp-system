@@ -29,6 +29,9 @@ export const useServiceData = (cacheKey, fetchFn, options = {}) => {
   const fetchFnRef = useRef(fetchFn);
   fetchFnRef.current = fetchFn;
 
+  // Ochrona przed race conditions — starsze requesty nie nadpiszą nowszych
+  const requestIdRef = useRef(0);
+
   useEffect(() => {
     if (!enabled) {
       setLoading(false);
@@ -36,18 +39,19 @@ export const useServiceData = (cacheKey, fetchFn, options = {}) => {
     }
 
     let mounted = true;
+    const currentRequestId = ++requestIdRef.current;
 
     const load = async () => {
       try {
         if (mounted) setLoading(true);
         const result = await ServiceCacheManager.getOrFetch(cacheKey, fetchFnRef.current, ttl);
-        if (mounted) {
+        if (mounted && currentRequestId === requestIdRef.current) {
           setData(result);
           setError(null);
           setLoading(false);
         }
       } catch (err) {
-        if (mounted) {
+        if (mounted && currentRequestId === requestIdRef.current) {
           console.error(`[useServiceData] Błąd dla klucza "${cacheKey}":`, err);
           setError(err);
           setLoading(false);
@@ -59,12 +63,10 @@ export const useServiceData = (cacheKey, fetchFn, options = {}) => {
     const unsub = ServiceCacheManager.subscribe(cacheKey, (newData) => {
       if (!mounted) return;
       if (newData !== null) {
-        // Cache został zaktualizowany — ustaw nowe dane
         setData(newData);
         setError(null);
         setLoading(false);
       } else {
-        // Cache zinwalidowany — odśwież dane
         load();
       }
     });

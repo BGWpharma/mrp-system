@@ -215,19 +215,20 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
       console.log('Dane początkowe z formularza:', initialData);
     }
     
+    let cancelled = false;
+
     const fetchData = async () => {
       try {
         setLoading(true);
         
-        // Pobierz dane produktu
         const inventoryItem = await getInventoryItemById(itemId);
+        if (cancelled) return;
         setItem(inventoryItem);
         
-        // Pobierz dostępne magazyny
         const availableWarehouses = await getAllWarehouses();
+        if (cancelled) return;
         setWarehouses(availableWarehouses);
         
-        // Ustaw domyślny magazyn, jeśli istnieje tylko jeden
         if (availableWarehouses.length === 1) {
           setTransactionData(prev => ({
             ...prev,
@@ -235,21 +236,26 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
           }));
         }
         
-        // Pobierz partie dla wydania
         if (!isReceive && transactionData.warehouseId) {
           const fetchedBatches = await getItemBatches(itemId, transactionData.warehouseId);
+          if (cancelled) return;
           setBatches(fetchedBatches.filter(batch => batch.quantity > 0));
         }
       } catch (error) {
+        if (cancelled) return;
         showError('Błąd podczas pobierania danych: ' + error.message);
         console.error('Error fetching data:', error);
         navigate('/inventory');
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     
     fetchData();
+
+    return () => { cancelled = true; };
   }, [itemId, navigate, showError, isReceive, transactionData.warehouseId, initialData]);
 
   // Obsługa zmiany pliku certyfikatu

@@ -362,13 +362,10 @@ const RecipeList = () => {
     fetchRecipes();
   }, [fetchRecipes]);
   
-  // Pobieranie stanowisk produkcyjnych przy ładowaniu komponentu
   useEffect(() => {
     fetchWorkstations();
   }, [fetchWorkstations]);
   
-  // Ustawiamy klientów do wyświetlenia w zakładce "grupowane wg klienta"
-  // Odświeżamy listę klientów przy przełączeniu na zakładkę, aby nowi klienci byli widoczni
   useEffect(() => {
     if (tabValue === 1) {
       refreshCustomers();

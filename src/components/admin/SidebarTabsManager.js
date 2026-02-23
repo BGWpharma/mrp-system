@@ -43,32 +43,37 @@ const SidebarTabsManager = ({ open, onClose, selectedUser }) => {
   
   // Ładowanie danych przy otwarciu dialogu
   useEffect(() => {
+    let cancelled = false;
+
     if (open && selectedUser) {
-      loadUserTabsData();
+      const doLoadUserTabsData = async () => {
+        setLoading(true);
+        try {
+          const tabs = getAvailableSidebarTabs();
+          setAvailableTabs(tabs);
+          
+          const userHiddenTabs = await getUserHiddenSidebarTabs(selectedUser.id);
+          if (cancelled) return;
+          setHiddenTabs(userHiddenTabs);
+          
+          const userHiddenSubtabs = await getUserHiddenSidebarSubtabs(selectedUser.id);
+          if (cancelled) return;
+          setHiddenSubtabs(userHiddenSubtabs);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Błąd podczas ładowania danych zakładek:', error);
+          showError('Nie udało się załadować danych o zakładkach użytkownika');
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
+      };
+      doLoadUserTabsData();
     }
+
+    return () => { cancelled = true; };
   }, [open, selectedUser]);
-  
-  const loadUserTabsData = async () => {
-    setLoading(true);
-    try {
-      // Pobierz dostępne zakładki
-      const tabs = getAvailableSidebarTabs();
-      setAvailableTabs(tabs);
-      
-      // Pobierz ukryte zakładki użytkownika
-      const userHiddenTabs = await getUserHiddenSidebarTabs(selectedUser.id);
-      setHiddenTabs(userHiddenTabs);
-      
-      // Pobierz ukryte podzakładki użytkownika
-      const userHiddenSubtabs = await getUserHiddenSidebarSubtabs(selectedUser.id);
-      setHiddenSubtabs(userHiddenSubtabs);
-    } catch (error) {
-      console.error('Błąd podczas ładowania danych zakładek:', error);
-      showError('Nie udało się załadować danych o zakładkach użytkownika');
-    } finally {
-      setLoading(false);
-    }
-  };
   
   const handleTabToggle = (tabId) => {
     setHiddenTabs(prev => {

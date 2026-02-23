@@ -112,6 +112,50 @@ export const ServiceCacheManager = {
   },
 
   /**
+   * Invaliduje wszystkie klucze zaczynające się od podanego prefixu
+   * @param {string} prefix - Prefix kluczy do invalidacji
+   */
+  invalidateByPrefix(prefix) {
+    for (const key of [...cacheStore.keys()]) {
+      if (key.startsWith(prefix)) {
+        cacheStore.delete(key);
+        this._notify(key, null);
+      }
+    }
+  },
+
+  /**
+   * Invaliduje klucze pasujące do predykatu
+   * @param {function(string, *): boolean} predicate - Funkcja (key, data) => boolean
+   */
+  invalidateByPredicate(predicate) {
+    for (const [key, entry] of [...cacheStore.entries()]) {
+      if (predicate(key, entry.data)) {
+        cacheStore.delete(key);
+        this._notify(key, null);
+      }
+    }
+  },
+
+  /**
+   * Zwraca statystyki cache (do diagnostyki/monitoringu)
+   * @returns {{ total: number, keys: Array<{ key: string, ageMs: number, ttlMs: number, expired: boolean }> }}
+   */
+  getStats() {
+    const stats = { total: cacheStore.size, keys: [] };
+    for (const [key, entry] of cacheStore.entries()) {
+      const age = Date.now() - entry.timestamp;
+      stats.keys.push({
+        key,
+        ageMs: age,
+        ttlMs: entry.ttl,
+        expired: age > entry.ttl
+      });
+    }
+    return stats;
+  },
+
+  /**
    * Powiadamia subskrybentów o zmianie
    * @private
    */

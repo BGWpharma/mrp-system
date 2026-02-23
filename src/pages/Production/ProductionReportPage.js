@@ -95,7 +95,51 @@ const ProductionReportPage = () => {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
   useEffect(() => {
-    fetchData();
+    let cancelled = false;
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        console.log('[RAPORT PRODUKCJI] Rozpoczynam pobieranie danych...');
+        
+        const [fetchedTasks, fetchedOrders, fetchedCustomers] = await Promise.all([
+          getAllTasks(),
+          getAllOrders(),
+          getAllCustomers()
+        ]);
+        if (cancelled) return;
+        
+        console.log(`[RAPORT PRODUKCJI] Pobrano ${fetchedTasks.length} zadań produkcyjnych`);
+        
+        const tasksWithConsumption = fetchedTasks.filter(task => 
+          task.consumedMaterials && task.consumedMaterials.length > 0
+        );
+        
+        console.log(`[RAPORT PRODUKCJI] Zadania z konsumpcją: ${tasksWithConsumption.length}/${fetchedTasks.length}`);
+        
+        if (tasksWithConsumption.length > 0) {
+          console.log('[RAPORT PRODUKCJI] Przykładowe zadania z konsumpcją:');
+          tasksWithConsumption.slice(0, 3).forEach((task, index) => {
+            console.log(`  ${index + 1}. ${task.moNumber || task.name} - ${task.consumedMaterials.length} pozycji konsumpcji`);
+          });
+        } else {
+          console.warn('[RAPORT PRODUKCJI] UWAGA: Żadne zadanie nie ma danych konsumpcji!');
+        }
+        
+        setTasks(fetchedTasks);
+        setOrders(fetchedOrders);
+        setCustomers(fetchedCustomers);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania danych:', error);
+        showError('Nie udało się pobrać danych raportów: ' + error.message);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    loadData();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -103,47 +147,6 @@ const ProductionReportPage = () => {
       filterAndProcessData();
     }
   }, [tasks, orders, customers, startDate, endDate, selectedCustomer]);
-
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      console.log('[RAPORT PRODUKCJI] Rozpoczynam pobieranie danych...');
-      
-      const [fetchedTasks, fetchedOrders, fetchedCustomers] = await Promise.all([
-        getAllTasks(),
-        getAllOrders(),
-        getAllCustomers()
-      ]);
-      
-      console.log(`[RAPORT PRODUKCJI] Pobrano ${fetchedTasks.length} zadań produkcyjnych`);
-      
-      // Sprawdź ile zadań ma dane konsumpcji
-      const tasksWithConsumption = fetchedTasks.filter(task => 
-        task.consumedMaterials && task.consumedMaterials.length > 0
-      );
-      
-      console.log(`[RAPORT PRODUKCJI] Zadania z konsumpcją: ${tasksWithConsumption.length}/${fetchedTasks.length}`);
-      
-      if (tasksWithConsumption.length > 0) {
-        console.log('[RAPORT PRODUKCJI] Przykładowe zadania z konsumpcją:');
-        tasksWithConsumption.slice(0, 3).forEach((task, index) => {
-          console.log(`  ${index + 1}. ${task.moNumber || task.name} - ${task.consumedMaterials.length} pozycji konsumpcji`);
-        });
-      } else {
-        console.warn('[RAPORT PRODUKCJI] UWAGA: Żadne zadanie nie ma danych konsumpcji!');
-      }
-      
-      setTasks(fetchedTasks);
-      setOrders(fetchedOrders);
-      setCustomers(fetchedCustomers);
-    } catch (error) {
-      console.error('Błąd podczas pobierania danych:', error);
-      showError('Nie udało się pobrać danych raportów: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Funkcja do filtrowania zadań
   const filterAndProcessData = () => {

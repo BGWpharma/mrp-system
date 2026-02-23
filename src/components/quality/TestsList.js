@@ -40,21 +40,19 @@ const TestsList = () => {
   const [loading, setLoading] = useState(true);
   const { showSuccess, showError } = useNotification();
 
-  // Pobierz wszystkie testy przy montowaniu komponentu
   useEffect(() => {
-    fetchTests();
+    const cancelCheck = { current: false };
+    fetchTests(cancelCheck);
+    return () => { cancelCheck.current = true; };
   }, []);
 
-  // Filtruj testy przy zmianie searchTerm, categoryFilter lub tests
   useEffect(() => {
     let filtered = [...tests];
     
-    // Filtruj według kategorii
     if (categoryFilter) {
       filtered = filtered.filter(test => test.category === categoryFilter);
     }
     
-    // Filtruj według wyszukiwanego tekstu
     if (searchTerm.trim() !== '') {
       filtered = filtered.filter(test => 
         test.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -65,17 +63,19 @@ const TestsList = () => {
     setFilteredTests(filtered);
   }, [searchTerm, categoryFilter, tests]);
 
-  const fetchTests = async () => {
+  const fetchTests = async (cancelCheck = { current: false }) => {
     try {
       setLoading(true);
       const fetchedTests = await getAllTests();
+      if (cancelCheck.current) return;
       setTests(fetchedTests);
       setFilteredTests(fetchedTests);
     } catch (error) {
+      if (cancelCheck.current) return;
       showError('Błąd podczas pobierania testów: ' + error.message);
       console.error('Error fetching tests:', error);
     } finally {
-      setLoading(false);
+      if (!cancelCheck.current) setLoading(false);
     }
   };
 

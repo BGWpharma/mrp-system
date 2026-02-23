@@ -73,7 +73,28 @@ const ProductionCostsPage = () => {
   const [expandedRows, setExpandedRows] = useState({});
 
   useEffect(() => {
+    let cancelled = false;
+    const fetchInitialData = async () => {
+      try {
+        setLoading(true);
+        const [fetchedCustomers] = await Promise.all([
+          getAllCustomers()
+        ]);
+        if (cancelled) return;
+        setCustomers(fetchedCustomers || []);
+        await fetchProductionTasks();
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania danych:', error);
+        showError(t('productionCostsReport.errors.fetchData'));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
     fetchInitialData();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -81,22 +102,6 @@ const ProductionCostsPage = () => {
       fetchProductionTasks();
     }
   }, [startDate, endDate]);
-
-  const fetchInitialData = async () => {
-    try {
-      setLoading(true);
-      const [fetchedCustomers] = await Promise.all([
-        getAllCustomers()
-      ]);
-      setCustomers(fetchedCustomers || []);
-      await fetchProductionTasks();
-    } catch (error) {
-      console.error('Błąd podczas pobierania danych:', error);
-      showError(t('productionCostsReport.errors.fetchData'));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchProductionTasks = async () => {
     try {

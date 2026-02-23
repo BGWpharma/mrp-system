@@ -282,15 +282,19 @@ const Sidebar = ({ onToggle }) => {
   
   // Ładowanie ukrytych zakładek i podzakładek użytkownika
   useEffect(() => {
+    let cancelled = false;
     const loadUserHiddenTabs = async () => {
       if (currentUser?.uid) {
         try {
           const userHiddenTabs = await getUserHiddenSidebarTabs(currentUser.uid);
+          if (cancelled) return;
           setHiddenTabs(userHiddenTabs);
           
           const userHiddenSubtabs = await getUserHiddenSidebarSubtabs(currentUser.uid);
+          if (cancelled) return;
           setHiddenSubtabs(userHiddenSubtabs);
         } catch (error) {
+          if (cancelled) return;
           console.error('Błąd podczas ładowania ukrytych zakładek użytkownika:', error);
           setHiddenTabs([]);
           setHiddenSubtabs([]);
@@ -299,45 +303,45 @@ const Sidebar = ({ onToggle }) => {
     };
 
     loadUserHiddenTabs();
+    return () => { cancelled = true; };
   }, [currentUser?.uid]);
 
   useEffect(() => {
+    let cancelled = false;
     let hasTriggeredRefresh = false;
     
-    // ✅ OPTYMALIZACJA: Nasłuchuj na dokument agregatów zamiast pobierać wszystkie partie
-    // Cloud Function updateExpiryStats aktualizuje ten dokument co godzinę
-    // To redukuje liczbę odczytów z setek do 1
     const unsubscribe = onSnapshot(
       doc(db, 'aggregates', 'expiryStats'),
       async (snapshot) => {
+        if (cancelled) return;
         if (snapshot.exists()) {
           const data = snapshot.data();
           setExpiringItemsCount(data.totalCount || 0);
         } else {
-          // Dokument jeszcze nie istnieje - wywołaj Cloud Function żeby go utworzyć
           setExpiringItemsCount(0);
           
-          // Wywołaj refreshExpiryStats tylko raz (unikaj wielokrotnych wywołań)
           if (!hasTriggeredRefresh) {
             hasTriggeredRefresh = true;
             try {
               console.log('📊 Dokument agregatów nie istnieje - tworzę początkowe dane...');
               await refreshExpiryStats();
+              if (cancelled) return;
               console.log('✅ Początkowe agregaty utworzone pomyślnie');
             } catch (error) {
+              if (cancelled) return;
               console.warn('⚠️ Nie udało się utworzyć początkowych agregatów:', error.message);
-              // Nie blokuj aplikacji - scheduled function utworzy je później
             }
           }
         }
       },
       (error) => {
+        if (cancelled) return;
         console.error('Błąd podczas nasłuchiwania na agregaty wygasających partii:', error);
         setExpiringItemsCount(0);
       }
     );
 
-    return () => unsubscribe();
+    return () => { cancelled = true; unsubscribe(); };
   }, []);
   
   const isActive = (path) => {

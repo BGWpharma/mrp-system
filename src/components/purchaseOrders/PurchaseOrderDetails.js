@@ -183,21 +183,23 @@ const PurchaseOrderDetails = ({ orderId }) => {
   }, [orderId]);
 
   useEffect(() => {
+    let cancelled = false;
     if (orderId) {
-      fetchPurchaseOrder();
+      fetchPurchaseOrder().then(() => {
+        if (cancelled) return;
+      });
     }
     
-    // Sprawdź, czy należy odświeżyć dane po powrocie z innej strony
     const refreshId = localStorage.getItem('refreshPurchaseOrder');
     if (refreshId === orderId) {
-      // Usuń flagę, aby nie odświeżać wielokrotnie
       localStorage.removeItem('refreshPurchaseOrder');
-      // Odśwież dane po krótkim opóźnieniu, aby aplikacja zdążyła się załadować
       setTimeout(() => {
+        if (cancelled) return;
         fetchPurchaseOrder();
         showSuccess('Dane zamówienia zostały zaktualizowane po przyjęciu towaru');
       }, 500);
     }
+    return () => { cancelled = true; };
   }, [orderId, showError]);
 
   // Odświeżaj dane gdy strona staje się widoczna (powrót z innej zakładki/strony)

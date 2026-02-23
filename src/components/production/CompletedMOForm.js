@@ -196,27 +196,34 @@ const CompletedMOForm = () => {
 
   // Pobierz numery MO przy pierwszym renderowaniu komponentu
   useEffect(() => {
+    let cancelled = false;
+
     const fetchMONumbers = async () => {
       try {
         setLoadingMO(true);
         const options = await getMONumbersForSelect();
+        if (cancelled) return;
         setMoOptions(options);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania numerów MO:', error);
       } finally {
-        setLoadingMO(false);
+        if (!cancelled) {
+          setLoadingMO(false);
+        }
       }
     };
 
     fetchMONumbers();
     
-    // Ustaw email zalogowanego użytkownika
     if (currentUser && currentUser.email) {
       setFormData(prev => ({
         ...prev,
         email: currentUser.email
       }));
     }
+
+    return () => { cancelled = true; };
   }, [currentUser]);
 
   const handleChange = async (e) => {

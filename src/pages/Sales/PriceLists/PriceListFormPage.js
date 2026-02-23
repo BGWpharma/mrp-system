@@ -51,18 +51,18 @@ const PriceListFormPage = () => {
   const { t, currentLanguage } = useTranslation('priceLists');
   
   useEffect(() => {
+    let cancelled = false;
     async function loadData() {
       try {
-        // Najpierw załaduj klientów
         const customersData = await getAllCustomers();
+        if (cancelled) return;
         setCustomers(customersData);
         
-        // Następnie, jeśli jesteśmy w trybie edycji, pobierz listę cenową
         if (isEditMode) {
           setInitialLoading(true);
           const priceList = await getPriceListById(id);
+          if (cancelled) return;
           
-          // Konwertuj daty z Timestamp na Date
           const formattedPriceList = {
             ...priceList,
             validFrom: priceList.validFrom ? priceList.validFrom.toDate() : null,
@@ -71,24 +71,25 @@ const PriceListFormPage = () => {
           
           setFormData(formattedPriceList);
           
-          // Znajdź wybranego klienta z już załadowanej listy klientów
           if (priceList.customerId) {
             const customer = customersData.find(c => c.id === priceList.customerId);
             setSelectedCustomer(customer || null);
           }
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas ładowania danych:', error);
         showNotification(t('priceLists.messages.errors.loadDataFailed'), 'error');
         if (isEditMode) {
           navigate('/orders/price-lists');
         }
       } finally {
-        setInitialLoading(false);
+        if (!cancelled) setInitialLoading(false);
       }
     }
     
     loadData();
+    return () => { cancelled = true; };
   }, [id, isEditMode, navigate, showNotification]);
   
   const handleInputChange = (e) => {

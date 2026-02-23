@@ -154,8 +154,22 @@ const StocktakingDetailsPage = () => {
   const [currentStep, setCurrentStep] = useState('category'); // 'category', 'product', 'batches'
   
   useEffect(() => {
+    let cancelled = false;
     fetchStocktakingData();
-    fetchInventoryCategories();
+    (async () => {
+      try {
+        setLoadingCategories(true);
+        const categoriesData = await getInventoryCategories();
+        if (cancelled) return;
+        setCategories(categoriesData);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania kategorii:', error);
+      } finally {
+        if (!cancelled) setLoadingCategories(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [id]);
   
   useEffect(() => {
@@ -182,18 +196,6 @@ const StocktakingDetailsPage = () => {
       setError('Nie udało się pobrać danych inwentaryzacji');
     } finally {
       setLoading(false);
-    }
-  };
-  
-  const fetchInventoryCategories = async () => {
-    try {
-      setLoadingCategories(true);
-      const categoriesData = await getInventoryCategories();
-      setCategories(categoriesData);
-    } catch (error) {
-      console.error('Błąd podczas pobierania kategorii:', error);
-    } finally {
-      setLoadingCategories(false);
     }
   };
   

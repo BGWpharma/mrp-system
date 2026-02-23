@@ -98,23 +98,28 @@ const CustomerDetail = () => {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   
-  // Pobierz dane klienta
   useEffect(() => {
+    let cancelled = false;
     const fetchCustomerData = async () => {
       try {
         setLoading(true);
         const customerData = await getCustomerById(customerId);
+        if (cancelled) return;
         setCustomer(customerData);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania danych klienta:', error);
         showError(t('customers.notifications.loadDetailError'));
         navigate('/customers');
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     
     fetchCustomerData();
+    return () => { cancelled = true; };
   }, [customerId, navigate, showError]);
   
   // Obsługa zmiany zakładki

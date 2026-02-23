@@ -144,6 +144,8 @@ const BatchesPage = () => {
   }, [currentUser]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -153,12 +155,15 @@ const BatchesPage = () => {
         
         // Próbuj pobrać informacje o produkcie
         itemData = await getInventoryItemById(id);
+        if (cancelled) return;
         setItem(itemData); // może być null, co jest teraz obsługiwane
         
         try {
           // Pobierz partie niezależnie od tego, czy udało się pobrać produkt
           batchesData = await getItemBatches(id);
+          if (cancelled) return;
         } catch (batchError) {
+          if (cancelled) return;
           console.error('Error fetching batches:', batchError);
           showError('Nie znaleziono partii: ' + batchError.message);
           setLoading(false);
@@ -174,6 +179,7 @@ const BatchesPage = () => {
         }
         
         const warehousesData = await getAllWarehouses();
+        if (cancelled) return;
         setWarehouses(warehousesData);
         
         // Dodaj informacje o lokalizacji magazynu do każdej partii
@@ -189,14 +195,19 @@ const BatchesPage = () => {
         setBatches(enhancedBatches);
         setFilteredBatches(enhancedBatches);
       } catch (error) {
-        showError(t('inventory.batches.errorFetchingBatchData') + ': ' + error.message);
+        if (!cancelled) {
+          showError(t('inventory.batches.errorFetchingBatchData') + ': ' + error.message);
+        }
         console.error('Error fetching batch data:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
+    return () => { cancelled = true; };
   }, [id, showError]);
 
   // Funkcja odświeżania danych partii

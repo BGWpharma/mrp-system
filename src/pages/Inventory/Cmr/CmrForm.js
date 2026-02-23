@@ -11,44 +11,24 @@ import {
   Divider,
   MenuItem,
   IconButton,
-  FormHelperText,
   FormControl,
   InputLabel,
   Select,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   CircularProgress,
-  Autocomplete,
   Snackbar,
   Alert,
-  Checkbox,
-  FormControlLabel,
-  FormGroup,
-  Chip,
   Collapse
 } from '@mui/material';
 import { useTheme as useMuiTheme } from '@mui/material/styles';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import pl from 'date-fns/locale/pl';
-import { format } from 'date-fns';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import AddIcon from '@mui/icons-material/Add';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import SearchIcon from '@mui/icons-material/Search';
-import LinkIcon from '@mui/icons-material/Link';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import { Calculate as CalculateIcon } from '@mui/icons-material';
 import { 
   CMR_STATUSES, 
   CMR_PAYMENT_STATUSES, 
-  TRANSPORT_TYPES,
-  getTransportTypeLabel,
-  translatePaymentStatus 
+  TRANSPORT_TYPES
 } from '../../../services/cmrService';
 import { getOrderById, getAllOrders, searchOrdersByNumber } from '../../../services/orderService';
 import { getCustomerById } from '../../../services/customerService';
@@ -56,7 +36,21 @@ import { getCompanyData } from '../../../services/companyService';
 import { getAllCarriers, createCarrier, updateCarrier, deleteCarrier } from '../../../services/carrierService';
 import BatchSelector from '../../../components/cmr/BatchSelector';
 import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDialog';
+import {
+  OrderSelectionDialog,
+  SenderDataImportDialog,
+  OrderItemsSelectorDialog,
+  CarrierFormDialog,
+  DeleteCarrierDialog
+} from '../../../components/cmr/dialogs';
 import { calculatePalletWeights, calculateBoxWeights, calculateCmrItemWeight, getInventoryDataFromBatches } from '../../../utils/cmrWeightCalculator';
+import {
+  CmrBasicInfoCard,
+  CmrSenderCard,
+  CmrRecipientCard,
+  CmrCarrierCard,
+  CmrItemsSection
+} from '../../../components/cmr/form';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useAuth } from '../../../hooks/useAuth';
 import { useTranslation } from '../../../hooks/useTranslation';
@@ -2004,257 +1998,31 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
       <Grid container spacing={3}>
         
-        {/* Dialog wyboru zamówienia klienta (CO) */}
-        <Dialog open={isOrderDialogOpen} onClose={handleCloseOrderDialog} maxWidth="md" fullWidth>
-          <DialogTitle>Wybierz zamówienie klienta (CO)</DialogTitle>
-          <DialogContent>
-            <Box sx={{ mb: 2 }}>
-              <TextField
-                label={t('form.searchByOrderNumber')}
-                value={orderSearchQuery}
-                onChange={(e) => setOrderSearchQuery(e.target.value)}
-                fullWidth
-                variant="outlined"
-                sx={{ mb: 1 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleFindOrderByNumber();
-                  }
-                }}
-              />
-              
-              {/* Przyciski ułożone w poziomie */}
-              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<SearchIcon />}
-                  onClick={handleFindOrderByNumber}
-                  disabled={isLoadingOrder}
-                >
-                  Szukaj
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<RefreshIcon />}
-                  onClick={handleRefreshOrders}
-                  disabled={isLoadingOrder}
-                >
-                  Odśwież
-                </Button>
-              </Box>
-            </Box>
-            
-            {/* Opcje importu - zwijane/rozwijane */}
-            <Box sx={{ mb: 2 }}>
-              <Button
-                variant="text"
-                onClick={() => setIsImportOptionsExpanded(!isImportOptionsExpanded)}
-                sx={{ 
-                  textTransform: 'none', 
-                  p: 1,
-                  justifyContent: 'flex-start',
-                  width: '100%'
-                }}
-                endIcon={isImportOptionsExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-              >
-                <Typography variant="h6">
-                  Wybierz dane do importu:
-                </Typography>
-              </Button>
-              
-              <Collapse in={isImportOptionsExpanded}>
-                <FormGroup sx={{ ml: 2 }}>
-                  <FormControlLabel 
-                    control={
-                      <Checkbox 
-                        checked={importOptions.recipientData} 
-                        onChange={handleImportOptionChange} 
-                        name="recipientData" 
-                      />
-                    } 
-                    label="Dane odbiorcy" 
-                  />
-                  <FormControlLabel 
-                    control={
-                      <Checkbox 
-                        checked={importOptions.deliveryPlace} 
-                        onChange={handleImportOptionChange} 
-                        name="deliveryPlace" 
-                      />
-                    } 
-                    label="Miejsce dostawy" 
-                  />
-
-                  <FormControlLabel 
-                    control={
-                      <Checkbox 
-                        checked={importOptions.documents} 
-                        onChange={handleImportOptionChange} 
-                        name="documents" 
-                      />
-                    } 
-                    label="Informacje o dokumentach"
-                  />
-                </FormGroup>
-              </Collapse>
-            </Box>
-            
-            {isLoadingOrder ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : availableOrders.length === 0 ? (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <Typography variant="body1" color="text.secondary">
-                  Brak dostępnych zamówień klienta
-                </Typography>
-              </Box>
-            ) : (
-              <Box sx={{ maxHeight: 300, overflow: 'auto', mt: 2 }}>
-                {availableOrders.map(order => {
-                  // Bezpieczne pobieranie nazwy klienta
-                  const customerName = order.customer?.name || order.customerName || 'Nieznany klient';
-                  
-                  // Bezpieczne formatowanie daty
-                  let formattedDate = 'Brak daty';
-                  if (order.orderDate) {
-                    try {
-                      let dateObj;
-                      if (order.orderDate instanceof Date) {
-                        dateObj = order.orderDate;
-                      } else if (order.orderDate.toDate && typeof order.orderDate.toDate === 'function') {
-                        dateObj = order.orderDate.toDate();
-                      } else if (typeof order.orderDate === 'string' || typeof order.orderDate === 'number') {
-                        dateObj = new Date(order.orderDate);
-                      }
-                      
-                      if (dateObj && !isNaN(dateObj.getTime())) {
-                        formattedDate = dateObj.toLocaleDateString('pl-PL');
-                      }
-                    } catch (error) {
-                      console.warn('Błąd formatowania daty zamówienia:', error);
-                    }
-                  }
-                  
-                  return (
-                    <Box 
-                      key={order.id}
-                      sx={{ 
-                        p: 2, 
-                        border: (theme) => `1px solid ${theme.palette.divider}`, 
-                        borderRadius: 1, 
-                        mb: 1,
-                        cursor: 'pointer',
-                        bgcolor: 'background.paper',
-                        '&:hover': { 
-                          bgcolor: (theme) => theme.palette.mode === 'dark' 
-                            ? 'rgba(255, 255, 255, 0.08)' 
-                            : 'rgba(0, 0, 0, 0.04)',
-                          borderColor: (theme) => theme.palette.mode === 'dark'
-                            ? 'rgba(255, 255, 255, 0.2)'
-                            : 'rgba(0, 0, 0, 0.2)'
-                        },
-                        transition: 'all 0.2s ease-in-out'
-                      }}
-                      onClick={() => handleOrderSelect(order.id)}
-                    >
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                        Zamówienie: {order.orderNumber || `#${order.id.substring(0, 8)}`}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Klient: {customerName}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Data: {formattedDate}
-                      </Typography>
-                      {order.status && (
-                        <Typography variant="caption" color="primary">
-                          Status: {order.status}
-                        </Typography>
-                      )}
-                    </Box>
-                  );
-                })}
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseOrderDialog}>Anuluj</Button>
-          </DialogActions>
-        </Dialog>
+        <OrderSelectionDialog
+          open={isOrderDialogOpen}
+          onClose={handleCloseOrderDialog}
+          orderSearchQuery={orderSearchQuery}
+          onOrderSearchQueryChange={setOrderSearchQuery}
+          onFindOrderByNumber={handleFindOrderByNumber}
+          onRefreshOrders={handleRefreshOrders}
+          isLoadingOrder={isLoadingOrder}
+          isImportOptionsExpanded={isImportOptionsExpanded}
+          onToggleImportOptions={() => setIsImportOptionsExpanded(!isImportOptionsExpanded)}
+          importOptions={importOptions}
+          onImportOptionChange={handleImportOptionChange}
+          availableOrders={availableOrders}
+          onOrderSelect={handleOrderSelect}
+          t={t}
+        />
         
-        {/* Dialog wyboru danych nadawcy */}
-        <Dialog open={isSenderDialogOpen} onClose={handleCloseSenderDialog} maxWidth="sm" fullWidth>
-          <DialogTitle>Importuj dane firmy</DialogTitle>
-          <DialogContent>
-                <FormGroup>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Wybierz dane do importu:
-              </Typography>
-                  <FormControlLabel 
-                    control={
-                      <Checkbox 
-                        checked={senderImportOptions.name} 
-                        onChange={handleSenderImportOptionChange} 
-                        name="name" 
-                      />
-                    } 
-                label="Nazwa firmy"
-                  />
-                  <FormControlLabel 
-                    control={
-                      <Checkbox 
-                        checked={senderImportOptions.address} 
-                        onChange={handleSenderImportOptionChange} 
-                        name="address" 
-                      />
-                    } 
-                label="Adres"
-                  />
-                  <FormControlLabel 
-                    control={
-                      <Checkbox 
-                        checked={senderImportOptions.postalCode} 
-                        onChange={handleSenderImportOptionChange} 
-                        name="postalCode" 
-                      />
-                    } 
-                    label="Kod pocztowy" 
-                  />
-                  <FormControlLabel 
-                    control={
-                      <Checkbox 
-                        checked={senderImportOptions.city} 
-                        onChange={handleSenderImportOptionChange} 
-                        name="city" 
-                      />
-                    } 
-                    label="Miasto" 
-                  />
-                  <FormControlLabel 
-                    control={
-                      <Checkbox 
-                        checked={senderImportOptions.country} 
-                        onChange={handleSenderImportOptionChange} 
-                        name="country" 
-                      />
-                    } 
-                    label="Kraj" 
-                  />
-                </FormGroup>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseSenderDialog}>Anuluj</Button>
-            <Button 
-              onClick={handleImportSenderData} 
-              variant="contained"
-              disabled={isLoadingSenderData}
-            >
-              {isLoadingSenderData ? <CircularProgress size={20} /> : 'Importuj dane'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+        <SenderDataImportDialog
+          open={isSenderDialogOpen}
+          onClose={handleCloseSenderDialog}
+          senderImportOptions={senderImportOptions}
+          onSenderImportOptionChange={handleSenderImportOptionChange}
+          onImportSenderData={handleImportSenderData}
+          isLoadingSenderData={isLoadingSenderData}
+        />
         
         <form onSubmit={handleSubmit} style={{ width: '100%' }}>
           <Grid container spacing={3}>
@@ -2282,428 +2050,42 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
               </Box>
             </Grid>
         
-            {/* Status i podstawowe informacje */}
-        <Grid item xs={12}>
-          <Card>
-            <CardHeader 
-                  title="Podstawowe informacje" 
-              titleTypographyProps={{ variant: 'h6' }}
+            <CmrBasicInfoCard
+              formData={formData}
+              formErrors={formErrors}
+              handleChange={handleChange}
+              handleDateChange={handleDateChange}
+              handleOpenOrderDialog={handleOpenOrderDialog}
+              linkedOrders={linkedOrders}
+              removeLinkedOrder={removeLinkedOrder}
+              t={t}
             />
-            <Divider />
-            <CardContent>
-              <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Numer CMR"
-                        name="cmrNumber"
-                        value={formData.cmrNumber}
-                        onChange={handleChange}
-                        fullWidth
-                        margin="normal"
-                        error={formErrors.cmrNumber}
-                        helperText={formErrors.cmrNumber}
-                      />
-                    </Grid>
-                    
-                    {/* Status ukryty - automatycznie ustawiony na DRAFT */}
-                    
-                    <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth margin="normal">
-                        <InputLabel>{t('common:common.paymentStatus')}</InputLabel>
-                        <Select
-                          name="paymentStatus"
-                          value={formData.paymentStatus}
-                          onChange={handleChange}
-                          label={t('common:common.paymentStatus')}
-                        >
-                          <MenuItem value={CMR_PAYMENT_STATUSES.UNPAID}>
-                            {translatePaymentStatus(CMR_PAYMENT_STATUSES.UNPAID)}
-                          </MenuItem>
-                          <MenuItem value={CMR_PAYMENT_STATUSES.PAID}>
-                            {translatePaymentStatus(CMR_PAYMENT_STATUSES.PAID)}
-                          </MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6}>
-                      <DatePicker
-                        label="Data wystawienia"
-                        value={formData.issueDate}
-                        onChange={(date) => handleDateChange('issueDate', date)}
-                        slots={{
-                          textField: TextField
-                        }}
-                        slotProps={{
-                          textField: {
-                            fullWidth: true,
-                            margin: "normal",
-                            error: !!formErrors.issueDate,
-                            helperText: formErrors.issueDate
-                          }
-                        }}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6}>
-                      <DatePicker
-                        label="Data dostawy"
-                        value={formData.deliveryDate}
-                        onChange={(date) => handleDateChange('deliveryDate', date)}
-                        slots={{
-                          textField: TextField
-                        }}
-                        slotProps={{
-                          textField: {
-                            fullWidth: true,
-                            margin: "normal"
-                          }
-                        }}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth margin="normal">
-                        <InputLabel>Typ transportu</InputLabel>
-                        <Select
-                          name="transportType"
-                          value={formData.transportType}
-                          onChange={handleChange}
-                          label="Typ transportu"
-                        >
-                          {Object.entries(TRANSPORT_TYPES).map(([key, value]) => (
-                            <MenuItem key={key} value={value}>{getTransportTypeLabel(value)}</MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={12}>
-                      <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                        <Button 
-                          variant={formData.linkedOrderId ? "contained" : "outlined"}
-                          color={formData.linkedOrderId ? "success" : "primary"}
-                          size="large" 
-                          onClick={handleOpenOrderDialog}
-                          fullWidth
-                          sx={{ 
-                            py: 1.5,
-                            fontSize: '16px',
-                            fontWeight: 'bold',
-                            border: formErrors.linkedOrderId ? '2px solid #f44336' : undefined
-                          }}
-                        >
-                          {linkedOrders.length > 0 
-                            ? `✓ Powiązano z ${linkedOrders.length} CO` 
-                            : 'Powiąż z CO (wymagane)'
-                          }
-                        </Button>
-                      </Box>
-                      
-                      {/* Sekcja z powiązanymi zamówieniami */}
-                      {linkedOrders.length > 0 && (
-                        <Box sx={{ mt: 2 }}>
-                          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                            Powiązane zamówienia klienta:
-                          </Typography>
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                            {linkedOrders.map((order) => (
-                              <Chip
-                                key={order.id}
-                                label={`CO ${order.orderNumber} - ${order.customer?.name || 'Nieznany klient'}`}
-                                variant="outlined"
-                                color="primary"
-                                onDelete={() => removeLinkedOrder(order.id)}
-                                deleteIcon={<DeleteIcon />}
-                                sx={{ mb: 1 }}
-                              />
-                            ))}
-                          </Box>
-                        </Box>
-                      )}
-                      
-                      {formErrors.linkedOrderId && (
-                        <FormHelperText error sx={{ mt: 0, mb: 1 }}>
-                          {formErrors.linkedOrderId}
-                        </FormHelperText>
-                      )}
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
             
-            {/* Dane nadawcy */}
-            <Grid item xs={12}>
-              <Card>
-                <CardHeader 
-                  title="Dane nadawcy" 
-                  titleTypographyProps={{ variant: 'h6' }}
-                />
-                <Divider />
-                <CardContent>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                  <TextField
-                    label="Nazwa nadawcy"
-                    name="sender"
-                    value={formData.sender}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                        error={formErrors.sender}
-                    helperText={formErrors.sender}
-                  />
-                    </Grid>
-                    
-                    <Grid item xs={12}>
-                  <TextField
-                    label="Adres nadawcy"
-                    name="senderAddress"
-                    value={formData.senderAddress}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                  />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={4}>
-                      <TextField
-                        label="Kod pocztowy nadawcy"
-                        name="senderPostalCode"
-                        value={formData.senderPostalCode}
-                        onChange={handleChange}
-                        fullWidth
-                        margin="normal"
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={4}>
-                      <TextField
-                        label="Miasto nadawcy"
-                        name="senderCity"
-                        value={formData.senderCity}
-                        onChange={handleChange}
-                        fullWidth
-                        margin="normal"
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={4}>
-                  <TextField
-                        label="Kraj nadawcy"
-                    name="senderCountry"
-                    value={formData.senderCountry}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                  />
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-                </Grid>
+            <CmrSenderCard
+              formData={formData}
+              formErrors={formErrors}
+              handleChange={handleChange}
+            />
                 
-            {/* Dane odbiorcy */}
-            <Grid item xs={12}>
-              <Card>
-                <CardHeader 
-                  title="Dane odbiorcy" 
-                  titleTypographyProps={{ variant: 'h6' }}
-                />
-                <Divider />
-                <CardContent>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                  <TextField
-                    label="Nazwa odbiorcy"
-                    name="recipient"
-                    value={formData.recipient}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                        error={formErrors.recipient}
-                    helperText={formErrors.recipient}
-                  />
-                    </Grid>
-                    
-                    <Grid item xs={12}>
-                  <TextField
-                    label="Adres odbiorcy"
-                    name="recipientAddress"
-                    value={formData.recipientAddress}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                    multiline
-                    rows={4}
-                    error={formErrors.recipientAddress}
-                    helperText={formErrors.recipientAddress || "Pełny adres odbiorcy (ulica, kod pocztowy, miasto, kraj)"}
-                    placeholder={t('form.addressPlaceholder')}
-                  />
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-                </Grid>
+            <CmrRecipientCard
+              formData={formData}
+              formErrors={formErrors}
+              handleChange={handleChange}
+              t={t}
+            />
                 
-            {/* Dane przewoźnika */}
-            <Grid item xs={12}>
-              <Card>
-                <CardHeader 
-                  title={t('form.carrierData')} 
-                  titleTypographyProps={{ variant: 'h6' }}
-                />
-                <Divider />
-                <CardContent>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <Autocomplete
-                        value={selectedCarrier}
-                        onChange={handleCarrierSelect}
-                        options={[
-                          { id: 'ADD_NEW', name: 'Dodaj nowego przewoźnika' },
-                          ...carriers
-                        ]}
-                        getOptionLabel={(option) => option?.name || ''}
-                        loading={carriersLoading}
-                        isOptionEqualToValue={(option, value) => option?.id === value?.id}
-                        renderOption={(props, option) => {
-                          const { key, ...otherProps } = props;
-                          if (option.id === 'ADD_NEW') {
-                            return (
-                              <Box
-                                key={key}
-                                component="li"
-                                {...otherProps}
-                                sx={{ 
-                                  fontWeight: 'bold', 
-                                  color: 'primary.main',
-                                  borderBottom: '1px solid',
-                                  borderColor: 'divider'
-                                }}
-                              >
-                                <AddIcon sx={{ mr: 1 }} />
-                                {option.name}
-                              </Box>
-                            );
-                          }
-                          return (
-                            <Box 
-                              key={key} 
-                              component="li" 
-                              {...otherProps}
-                              sx={{ 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'center',
-                                width: '100%'
-                              }}
-                            >
-                              <Box sx={{ flex: 1 }}>
-                                <Typography variant="body1">{option.name}</Typography>
-                                {option.city && (
-                                  <Typography variant="caption" color="text.secondary">
-                                    {option.city}{option.country ? `, ${option.country}` : ''}
-                                  </Typography>
-                                )}
-                              </Box>
-                              <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }}>
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => handleEditCarrier(option, e)}
-                                  sx={{ 
-                                    p: 0.5,
-                                    '&:hover': { color: 'primary.main' }
-                                  }}
-                                >
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => handleOpenDeleteCarrierDialog(option, e)}
-                                  sx={{ 
-                                    p: 0.5,
-                                    '&:hover': { color: 'error.main' }
-                                  }}
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </Box>
-                            </Box>
-                          );
-                        }}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label={t('form.selectCarrier')}
-                            margin="normal"
-                            error={!!formErrors.carrier}
-                            helperText={formErrors.carrier}
-                            InputProps={{
-                              ...params.InputProps,
-                              endAdornment: (
-                                <>
-                                  {carriersLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                                  {params.InputProps.endAdornment}
-                                </>
-                              ),
-                            }}
-                          />
-                        )}
-                        fullWidth
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12}>
-                      <TextField
-                        label={t('form.carrierAddress')}
-                        name="carrierAddress"
-                        value={formData.carrierAddress}
-                        onChange={handleChange}
-                        fullWidth
-                        margin="normal"
-                        error={!!formErrors.carrierAddress}
-                        helperText={formErrors.carrierAddress}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={4}>
-                      <TextField
-                        label={t('form.carrierPostalCode')}
-                        name="carrierPostalCode"
-                        value={formData.carrierPostalCode}
-                        onChange={handleChange}
-                        fullWidth
-                        margin="normal"
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={4}>
-                      <TextField
-                        label={t('form.carrierCity')}
-                        name="carrierCity"
-                        value={formData.carrierCity}
-                        onChange={handleChange}
-                        fullWidth
-                        margin="normal"
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={4}>
-                      <TextField
-                        label={t('form.carrierCountry')}
-                        name="carrierCountry"
-                        value={formData.carrierCountry}
-                        onChange={handleChange}
-                        fullWidth
-                        margin="normal"
-                      />
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
+            <CmrCarrierCard
+              formData={formData}
+              formErrors={formErrors}
+              handleChange={handleChange}
+              selectedCarrier={selectedCarrier}
+              handleCarrierSelect={handleCarrierSelect}
+              carriers={carriers}
+              carriersLoading={carriersLoading}
+              handleEditCarrier={handleEditCarrier}
+              handleOpenDeleteCarrierDialog={handleOpenDeleteCarrierDialog}
+              t={t}
+            />
         
         {/* Miejsce załadunku i rozładunku */}
         <Grid item xs={12}>
@@ -2854,373 +2236,26 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
           </Card>
         </Grid>
         
-        {/* Elementy CMR */}
-        <Grid item xs={12}>
-          <Card>
-            <CardHeader 
-              title="Elementy dokumentu CMR" 
-              titleTypographyProps={{ variant: 'h6' }}
-              action={
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  {linkedOrders.length > 0 && availableOrderItems.length > 0 && (
-                    <Button
-                      startIcon={<LinkIcon />}
-                      onClick={() => setOrderItemsSelectorOpen(true)}
-                      color="secondary"
-                      variant="outlined"
-                    >
-                      Dodaj z zamówienia
-                    </Button>
-                  )}
-                  <Button
-                    startIcon={<AddIcon />}
-                    onClick={addItem}
-                    color="primary"
-                  >
-                    Dodaj pozycję
-                  </Button>
-                </Box>
-              }
-            />
-            <Divider />
-            <CardContent>
-              {formData.items.map((item, index) => (
-                <Box key={index} sx={{ mb: 3, p: 2, borderRadius: 1, bgcolor: 'background.default' }}>
-                  <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                        <Typography variant="subtitle2">
-                          Pozycja {index + 1}
-                        </Typography>
-                        {formData.items.length > 1 && (
-                          <IconButton 
-                            color="error" 
-                            onClick={() => removeItem(index)}
-                            size="small"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        )}
-                      </Box>
-                    </Grid>
-                    
-                    <Grid item xs={12}>
-                      <TextField
-                        label="Opis towaru"
-                        value={item.description}
-                        onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                        fullWidth
-                        error={formErrors.items && formErrors.items[index]?.description}
-                        helperText={formErrors.items && formErrors.items[index]?.description}
-                      />
-                      {/* Informacja o sugerowanej pozycji magazynowej */}
-                      {item.suggestedInventoryItem && item.matchedRecipe && (
-                        <Alert severity="info" sx={{ mt: 1, fontSize: '0.8rem' }}>
-                          🎯 Sugerowana pozycja magazynowa: <strong>{item.suggestedInventoryItem.name}</strong> 
-                          (na podstawie receptury: <em>{item.matchedRecipe.name}</em>)
-                        </Alert>
-                      )}
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6} md={3}>
-                      <TextField
-                        label={t('common:common.quantity')}
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                        fullWidth
-                        type="number"
-                        error={formErrors.items && formErrors.items[index]?.quantity}
-                        helperText={formErrors.items && formErrors.items[index]?.quantity}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6} md={3}>
-                      <TextField
-                        label="Jednostka"
-                        value={item.unit}
-                        onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
-                        fullWidth
-                        error={formErrors.items && formErrors.items[index]?.unit}
-                        helperText={formErrors.items && formErrors.items[index]?.unit}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6} md={3}>
-                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
-                        <TextField
-                          label="Waga (kg)"
-                          value={item.weight}
-                          onChange={(e) => handleItemChange(index, 'weight', e.target.value)}
-                          fullWidth
-                          type="number"
-                          InputProps={{
-                            endAdornment: (
-                              <IconButton
-                                size="small"
-                                onClick={() => handleOpenWeightCalculator(index)}
-                                title={t('form.calculateWeightFromInventory')}
-                                sx={{ 
-                                  color: 'primary.main',
-                                  '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? 'primary.dark' : 'primary.light' }
-                                }}
-                              >
-                                <CalculateIcon fontSize="small" />
-                              </IconButton>
-                            )
-                          }}
-                        />
-                      </Box>
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6} md={2}>
-                      <TextField
-                        label={t('form.palletCount')}
-                        value={item.palletsCount || 0}
-                        disabled
-                        fullWidth
-                        type="number"
-                        InputProps={{
-                          readOnly: true,
-                        }}
-                        helperText="Obliczone automatycznie"
-                        sx={{
-                          '& .MuiInputBase-input.Mui-disabled': {
-                            WebkitTextFillColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
-                          }
-                        }}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6} md={2}>
-                      <TextField
-                        label={t('form.volumeM3')}
-                        value={item.volume}
-                        onChange={(e) => handleItemChange(index, 'volume', e.target.value)}
-                        fullWidth
-                        type="number"
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12}>
-                      <TextField
-                        label="Uwagi"
-                        value={item.notes}
-                        onChange={(e) => handleItemChange(index, 'notes', e.target.value)}
-                        fullWidth
-                        multiline
-                        rows={2}
-                      />
-                    </Grid>
-                        
-                        {/* Powiązanie z partiami magazynowymi */}
-                        <Grid item xs={12}>
-                          <Box sx={{ mt: 2 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                              <Typography variant="subtitle2" color="text.secondary">
-                                Powiązane partie magazynowe
-                              </Typography>
-                              <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  startIcon={<LinkIcon />}
-                                  onClick={() => handleOpenBatchSelector(index)}
-                                >
-                                  Wybierz partie
-                                </Button>
-                                {item.linkedBatches && item.linkedBatches.length > 0 && (
-                                  <Button
-                                    size="small"
-                                    variant="outlined"
-                                    startIcon={<RefreshIcon />}
-                                    onClick={() => handleRefreshInventoryData(index)}
-                                    color="secondary"
-                                    title={t('form.refreshInventoryParams')}
-                                  >
-                                    Odśwież
-                                  </Button>
-                                )}
-                              </Box>
-                            </Box>
-                            
-                            {/* Wyświetlanie powiązanych partii */}
-                            {item.linkedBatches && item.linkedBatches.length > 0 ? (
-                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-                                {item.linkedBatches.map((batch) => (
-                                  <Chip
-                                    key={batch.id}
-                                    label={`${batch.batchNumber || batch.lotNumber || 'Bez numeru'} (${batch.quantity} ${batch.unit || 'szt.'})`}
-                                    variant="outlined"
-                                    size="small"
-                                    onDelete={() => handleRemoveBatch(index, batch.id)}
-                                    color="primary"
-                                  />
-                                ))}
-                              </Box>
-                            ) : (
-                              <Typography 
-                                variant="body2" 
-                                color={formErrors.items && formErrors.items[index]?.linkedBatches ? "error" : "text.secondary"} 
-                                sx={{ fontStyle: 'italic' }}
-                              >
-                                {formErrors.items && formErrors.items[index]?.linkedBatches 
-                                  ? formErrors.items[index].linkedBatches 
-                                  : 'Brak powiązanych partii'
-                                }
-                              </Typography>
-                            )}
-                            
-                            {/* Komunikat błędu dla partii */}
-                            {formErrors.items && formErrors.items[index]?.linkedBatches && (
-                              <FormHelperText error sx={{ mt: 1 }}>
-                                {formErrors.items[index].linkedBatches}
-                              </FormHelperText>
-                            )}
-                          </Box>
-                    </Grid>
-
-                    {/* Podsumowanie wagi i palet dla pozycji */}
-                    <ItemWeightSummary 
-                      item={item}
-                      itemIndex={index}
-                      isCollapsed={collapsedItems.has(index)}
-                      onToggleCollapse={() => toggleItemCollapse(index)}
-                    />
-                  </Grid>
-                </Box>
-              ))}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Podsumowanie ogólne wagi i palet */}
-        {formData.items.length > 0 && (
-          <Grid item xs={12}>
-            <Card>
-              <CardHeader 
-                title={t('form.generalSummary')} 
-                titleTypographyProps={{ variant: 'h6' }}
-              />
-              <Divider />
-              <CardContent>
-                <Grid container spacing={3}>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Box sx={{ 
-                      p: 2, 
-                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'primary.dark' : 'primary.light', 
-                      borderRadius: 1, 
-                      textAlign: 'center' 
-                    }}>
-                      <Typography 
-                        variant="h6" 
-                        sx={{ 
-                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#0d47a1',
-                          fontWeight: 600 
-                        }} 
-                        gutterBottom
-                      >
-                        Całkowita waga
-                      </Typography>
-                      <Typography 
-                        variant="h4" 
-                        sx={{ 
-                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#0d47a1',
-                          fontWeight: 700 
-                        }}
-                      >
-                        {weightSummary.totalWeight} kg
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Box sx={{ 
-                      p: 2, 
-                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'success.dark' : 'success.light', 
-                      borderRadius: 1, 
-                      textAlign: 'center' 
-                    }}>
-                      <Typography 
-                        variant="h6" 
-                        sx={{ 
-                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#1b5e20',
-                          fontWeight: 600 
-                        }} 
-                        gutterBottom
-                      >
-                        Łączna liczba palet
-                      </Typography>
-                      <Typography 
-                        variant="h4" 
-                        sx={{ 
-                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#1b5e20',
-                          fontWeight: 700 
-                        }}
-                      >
-                        {weightSummary.totalPallets}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Box sx={{ 
-                      p: 2, 
-                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'info.dark' : 'info.light', 
-                      borderRadius: 1, 
-                      textAlign: 'center' 
-                    }}>
-                      <Typography 
-                        variant="h6" 
-                        sx={{ 
-                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#01579b',
-                          fontWeight: 600 
-                        }} 
-                        gutterBottom
-                      >
-                        Liczba pozycji
-                      </Typography>
-                      <Typography 
-                        variant="h4" 
-                        sx={{ 
-                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#01579b',
-                          fontWeight: 700 
-                        }}
-                      >
-                        {formData.items.length}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Box sx={{ 
-                      p: 2, 
-                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'warning.dark' : 'warning.light', 
-                      borderRadius: 1, 
-                      textAlign: 'center' 
-                    }}>
-                      <Typography 
-                        variant="h6" 
-                        sx={{ 
-                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#e65100',
-                          fontWeight: 600 
-                        }} 
-                        gutterBottom
-                      >
-                        Pozycje z danymi
-                      </Typography>
-                      <Typography 
-                        variant="h4" 
-                        sx={{ 
-                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#e65100',
-                          fontWeight: 700 
-                        }}
-                      >
-                        {weightSummary.itemsWeightBreakdown.filter(item => item.hasDetailedData).length}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
+        <CmrItemsSection
+          formData={formData}
+          formErrors={formErrors}
+          handleItemChange={handleItemChange}
+          addItem={addItem}
+          removeItem={removeItem}
+          handleOpenBatchSelector={handleOpenBatchSelector}
+          handleRefreshInventoryData={handleRefreshInventoryData}
+          handleRemoveBatch={handleRemoveBatch}
+          handleOpenWeightCalculator={handleOpenWeightCalculator}
+          linkedOrders={linkedOrders}
+          availableOrderItems={availableOrderItems}
+          onOpenOrderItemsSelector={() => setOrderItemsSelectorOpen(true)}
+          collapsedItems={collapsedItems}
+          toggleItemCollapse={toggleItemCollapse}
+          weightSummary={weightSummary}
+          mode={mode}
+          t={t}
+          ItemWeightSummary={ItemWeightSummary}
+        />
         
         {/* Opłaty i płatności */}
         <Grid item xs={12}>
@@ -3369,128 +2404,17 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
       </Grid>
     </form>
         
-        {/* Dialog wyboru pozycji z zamówienia */}
-        <Dialog open={orderItemsSelectorOpen} onClose={() => setOrderItemsSelectorOpen(false)} maxWidth="md" fullWidth>
-          <DialogTitle>
-            Dodaj pozycje z powiązanych zamówień
-            {linkedOrders.length > 0 && (
-              <Typography variant="subtitle2" color="text.secondary">
-                Powiązane CO: {linkedOrders.map(order => order.orderNumber).join(', ')}
-              </Typography>
-            )}
-          </DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Wybierz pozycje z zamówień klienta, które chcesz dodać do dokumentu CMR:
-            </Typography>
-            
-            {/* Pole wyszukiwania */}
-            <TextField
-              fullWidth
-              placeholder="Wyszukaj pozycje..."
-              value={orderItemsSearchQuery}
-              onChange={(e) => setOrderItemsSearchQuery(e.target.value)}
-              InputProps={{
-                startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
-              }}
-              sx={{ mb: 2 }}
-            />
-            
-            <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
-              {availableOrderItems.filter(orderItem => {
-                if (!orderItemsSearchQuery.trim()) return true;
-                const searchTerm = orderItemsSearchQuery.toLowerCase();
-                return (
-                  (orderItem.name || '').toLowerCase().includes(searchTerm) ||
-                  (orderItem.description || '').toLowerCase().includes(searchTerm) ||
-                  (orderItem.orderNumber || '').toLowerCase().includes(searchTerm) ||
-                  (orderItem.unit || '').toLowerCase().includes(searchTerm)
-                );
-              }).map((orderItem, index) => (
-                <Box 
-                  key={index}
-                  sx={{ 
-                    p: 2, 
-                    border: (theme) => `1px solid ${theme.palette.divider}`, 
-                    borderRadius: 1, 
-                    mb: 1,
-                    bgcolor: mode === 'dark' ? 'background.default' : 'background.paper'
-                  }}
-                >
-                                     <Grid container spacing={2} alignItems="center">
-                     <Grid item xs={12} sm={5}>
-                       <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                         {orderItem.name || 'Bez nazwy'}
-                       </Typography>
-                       <Typography variant="body2" color="text.secondary">
-                         Ilość: {orderItem.quantity} {orderItem.unit || 'szt.'}
-                       </Typography>
-                       <Typography variant="caption" color="primary" sx={{ fontWeight: 500 }}>
-                         CO: {orderItem.orderNumber}
-                       </Typography>
-                     </Grid>
-                     <Grid item xs={12} sm={5}>
-                       {orderItem.description && (
-                         <Typography variant="caption" color="text.secondary">
-                           {orderItem.description}
-                         </Typography>
-                       )}
-                     </Grid>
-                    <Grid item xs={12} sm={2}>
-                      <Button
-                        variant="contained"
-                        size="small"
-                                                  onClick={() => {
-                            addItemFromOrder(orderItem).catch(error => {
-                              console.error('Błąd podczas dodawania pozycji z zamówienia:', error);
-                              showMessage('Błąd podczas dodawania pozycji z zamówienia', 'error');
-                            });
-                          }}
-                        sx={{ width: '100%' }}
-                      >
-                        Dodaj
-                      </Button>
-                    </Grid>
-                  </Grid>
-                </Box>
-              ))}
-              
-              {availableOrderItems.filter(orderItem => {
-                if (!orderItemsSearchQuery.trim()) return true;
-                const searchTerm = orderItemsSearchQuery.toLowerCase();
-                return (
-                  (orderItem.name || '').toLowerCase().includes(searchTerm) ||
-                  (orderItem.description || '').toLowerCase().includes(searchTerm) ||
-                  (orderItem.orderNumber || '').toLowerCase().includes(searchTerm) ||
-                  (orderItem.unit || '').toLowerCase().includes(searchTerm)
-                );
-              }).length === 0 && (
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                  {orderItemsSearchQuery.trim() 
-                    ? `Brak pozycji pasujących do wyszukiwania "${orderItemsSearchQuery}"`
-                    : 'Brak dostępnych pozycji w zamówieniu'
-                  }
-                </Typography>
-              )}
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            {orderItemsSearchQuery.trim() && (
-              <Button 
-                onClick={() => setOrderItemsSearchQuery('')}
-                color="inherit"
-              >
-                Wyczyść wyszukiwanie
-              </Button>
-            )}
-            <Button onClick={() => {
-              setOrderItemsSearchQuery('');
-              setOrderItemsSelectorOpen(false);
-            }}>
-              Zamknij
-            </Button>
-          </DialogActions>
-        </Dialog>
+        <OrderItemsSelectorDialog
+          open={orderItemsSelectorOpen}
+          onClose={() => setOrderItemsSelectorOpen(false)}
+          linkedOrders={linkedOrders}
+          orderItemsSearchQuery={orderItemsSearchQuery}
+          onOrderItemsSearchQueryChange={setOrderItemsSearchQuery}
+          availableOrderItems={availableOrderItems}
+          onAddItemFromOrder={addItemFromOrder}
+          showMessage={showMessage}
+          mode={mode}
+        />
 
         {/* Dialog wyboru partii magazynowych */}
         <BatchSelector
@@ -3525,143 +2449,24 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
           </Alert>
         </Snackbar>
 
-        {/* Dialog dodawania/edycji przewoźnika */}
-        <Dialog 
-          open={carrierDialogOpen} 
+        <CarrierFormDialog
+          open={carrierDialogOpen}
           onClose={handleCloseCarrierDialog}
-          maxWidth="sm"
-          fullWidth
-        >
-          <DialogTitle>
-            {carrierDialogMode === 'edit' ? 'Edytuj przewoźnika' : 'Dodaj nowego przewoźnika'}
-          </DialogTitle>
-          <DialogContent>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
-                <TextField
-                  label={t('form.carrierName')}
-                  name="name"
-                  value={newCarrierData.name}
-                  onChange={handleNewCarrierChange}
-                  fullWidth
-                  autoFocus
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Adres"
-                  name="address"
-                  value={newCarrierData.address}
-                  onChange={handleNewCarrierChange}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Kod pocztowy"
-                  name="postalCode"
-                  value={newCarrierData.postalCode}
-                  onChange={handleNewCarrierChange}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Miasto"
-                  name="city"
-                  value={newCarrierData.city}
-                  onChange={handleNewCarrierChange}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Kraj"
-                  name="country"
-                  value={newCarrierData.country}
-                  onChange={handleNewCarrierChange}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="NIP"
-                  name="nip"
-                  value={newCarrierData.nip}
-                  onChange={handleNewCarrierChange}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Telefon"
-                  name="phone"
-                  value={newCarrierData.phone}
-                  onChange={handleNewCarrierChange}
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Email"
-                  name="email"
-                  value={newCarrierData.email}
-                  onChange={handleNewCarrierChange}
-                  fullWidth
-                  type="email"
-                />
-              </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseCarrierDialog} disabled={savingCarrier}>
-              Anuluj
-            </Button>
-            <Button 
-              onClick={handleSaveCarrier} 
-              variant="contained" 
-              disabled={savingCarrier || !newCarrierData.name.trim()}
-              startIcon={savingCarrier ? <CircularProgress size={20} /> : null}
-            >
-              {savingCarrier ? 'Zapisywanie...' : (carrierDialogMode === 'edit' ? 'Zapisz zmiany' : 'Zapisz przewoźnika')}
-            </Button>
-          </DialogActions>
-        </Dialog>
+          carrierDialogMode={carrierDialogMode}
+          newCarrierData={newCarrierData}
+          onNewCarrierChange={handleNewCarrierChange}
+          onSaveCarrier={handleSaveCarrier}
+          savingCarrier={savingCarrier}
+          t={t}
+        />
 
-        {/* Dialog potwierdzenia usunięcia przewoźnika */}
-        <Dialog
+        <DeleteCarrierDialog
           open={deleteCarrierDialogOpen}
           onClose={() => setDeleteCarrierDialogOpen(false)}
-          maxWidth="xs"
-          fullWidth
-        >
-          <DialogTitle>Potwierdź usunięcie</DialogTitle>
-          <DialogContent>
-            <Typography>
-              Czy na pewno chcesz usunąć przewoźnika <strong>{carrierToDelete?.name}</strong>?
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Ta operacja jest nieodwracalna.
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button 
-              onClick={() => setDeleteCarrierDialogOpen(false)} 
-              disabled={deletingCarrier}
-            >
-              Anuluj
-            </Button>
-            <Button 
-              onClick={handleConfirmDeleteCarrier} 
-              variant="contained" 
-              color="error"
-              disabled={deletingCarrier}
-              startIcon={deletingCarrier ? <CircularProgress size={20} /> : <DeleteIcon />}
-            >
-              {deletingCarrier ? 'Usuwanie...' : 'Usuń'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+          carrierToDelete={carrierToDelete}
+          onConfirmDelete={handleConfirmDeleteCarrier}
+          deletingCarrier={deletingCarrier}
+        />
       </Grid>
     </LocalizationProvider>
   );

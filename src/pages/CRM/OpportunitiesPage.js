@@ -58,7 +58,44 @@ const OpportunitiesPage = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
+    let cancelled = false;
+    const fetchOpportunities = async () => {
+      try {
+        setLoading(true);
+        const allOpportunities = await getAllOpportunities();
+        if (cancelled) return;
+        setOpportunities(allOpportunities);
+        setFilteredOpportunities(allOpportunities);
+        
+        // Pobieranie nazw kontaktów
+        const contactIds = [...new Set(allOpportunities.map(opp => opp.contactId).filter(Boolean))];
+        const contactNamesObj = {};
+        
+        for (const contactId of contactIds) {
+          try {
+            const contact = await getContactById(contactId);
+            if (cancelled) return;
+            contactNamesObj[contactId] = `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || contact.company || 'Nieznany kontakt';
+          } catch (error) {
+            console.error(`Błąd podczas pobierania kontaktu ${contactId}:`, error);
+            contactNamesObj[contactId] = 'Nieznany kontakt';
+          }
+        }
+        
+        if (cancelled) return;
+        setContactNames(contactNamesObj);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania szans sprzedaży:', error);
+        showError('Nie udało się pobrać szans sprzedaży: ' + error.message);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
     fetchOpportunities();
+    return () => { cancelled = true; };
   }, []);
   
   useEffect(() => {
@@ -78,36 +115,6 @@ const OpportunitiesPage = () => {
       );
     }
   }, [searchTerm, opportunities, contactNames]);
-  
-  const fetchOpportunities = async () => {
-    try {
-      setLoading(true);
-      const allOpportunities = await getAllOpportunities();
-      setOpportunities(allOpportunities);
-      setFilteredOpportunities(allOpportunities);
-      
-      // Pobieranie nazw kontaktów
-      const contactIds = [...new Set(allOpportunities.map(opp => opp.contactId).filter(Boolean))];
-      const contactNamesObj = {};
-      
-      for (const contactId of contactIds) {
-        try {
-          const contact = await getContactById(contactId);
-          contactNamesObj[contactId] = `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || contact.company || 'Nieznany kontakt';
-        } catch (error) {
-          console.error(`Błąd podczas pobierania kontaktu ${contactId}:`, error);
-          contactNamesObj[contactId] = 'Nieznany kontakt';
-        }
-      }
-      
-      setContactNames(contactNamesObj);
-    } catch (error) {
-      console.error('Błąd podczas pobierania szans sprzedaży:', error);
-      showError('Nie udało się pobrać szans sprzedaży: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
   
   const handleChangePage = (event, newPage) => {
     setPage(newPage);

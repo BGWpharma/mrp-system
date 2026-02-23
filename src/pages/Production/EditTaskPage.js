@@ -12,21 +12,26 @@ const EditTaskPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchTask = async () => {
       try {
         setLoading(true);
-        // Sprawdzam, czy zadanie istnieje
         await getTaskById(id);
+        if (cancelled) return;
       } catch (error) {
+        if (cancelled) return;
         showError('Błąd podczas pobierania zadania: ' + error.message);
         console.error('Error fetching task:', error);
         navigate('/production');
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     
     fetchTask();
+    return () => { cancelled = true; };
   }, [id, navigate, showError]);
 
   if (loading) {

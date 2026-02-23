@@ -70,7 +70,70 @@ const MOConsumptionPage = () => {
   const [expandedMo, setExpandedMo] = useState(null); // taskId of expanded MO
 
   useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [fetchedTasks, fetchedOrders, fetchedCustomers] = await Promise.all([
+          getAllTasks(),
+          getAllOrders(),
+          getAllCustomers()
+        ]);
+        if (cancelled) return;
+        
+        setTasks(fetchedTasks);
+        setOrders(fetchedOrders);
+        setCustomers(fetchedCustomers);
+        
+        const materials = [];
+        const materialSet = new Set();
+        fetchedTasks.forEach(task => {
+          if (task.consumedMaterials && task.consumedMaterials.length > 0) {
+            task.consumedMaterials.forEach(consumed => {
+              const materialId = consumed.materialId;
+              const material = task.materials?.find(m => 
+                (m.inventoryItemId || m.id) === materialId
+              );
+              const materialName = material?.name || consumed.materialName || t('moConsumptionReport.unknownMaterial');
+              
+              if (!materialSet.has(materialId)) {
+                materialSet.add(materialId);
+                materials.push({ id: materialId, name: materialName });
+              }
+            });
+          }
+        });
+        setMaterialsList(materials.sort((a, b) => a.name.localeCompare(b.name)));
+        
+        const ordersSet = new Set();
+        const ordersData = [];
+        fetchedTasks.forEach(task => {
+          if (task.consumedMaterials && task.consumedMaterials.length > 0 && task.orderId && task.orderNumber) {
+            const orderKey = `${task.orderId}_${task.orderNumber}`;
+            if (!ordersSet.has(orderKey)) {
+              ordersSet.add(orderKey);
+              ordersData.push({
+                id: task.orderId,
+                number: task.orderNumber,
+                customer: task.customer
+              });
+            }
+          }
+        });
+        setOrdersList(ordersData.sort((a, b) => a.number.localeCompare(b.number)));
+        
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania danych:', error);
+        showError(t('common.errors.fetchData'));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
     fetchData();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -78,66 +141,6 @@ const MOConsumptionPage = () => {
       processConsumptionData();
     }
   }, [tasks, startDate, endDate, selectedMaterial, selectedOrder, sortField, sortDirection]);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [fetchedTasks, fetchedOrders, fetchedCustomers] = await Promise.all([
-        getAllTasks(),
-        getAllOrders(),
-        getAllCustomers()
-      ]);
-      
-      setTasks(fetchedTasks);
-      setOrders(fetchedOrders);
-      setCustomers(fetchedCustomers);
-      
-      // Wyciągnij listę materiałów
-      const materials = [];
-      const materialSet = new Set();
-      fetchedTasks.forEach(task => {
-        if (task.consumedMaterials && task.consumedMaterials.length > 0) {
-          task.consumedMaterials.forEach(consumed => {
-            const materialId = consumed.materialId;
-            const material = task.materials?.find(m => 
-              (m.inventoryItemId || m.id) === materialId
-            );
-            const materialName = material?.name || consumed.materialName || t('moConsumptionReport.unknownMaterial');
-            
-            if (!materialSet.has(materialId)) {
-              materialSet.add(materialId);
-              materials.push({ id: materialId, name: materialName });
-            }
-          });
-        }
-      });
-      setMaterialsList(materials.sort((a, b) => a.name.localeCompare(b.name)));
-      
-      // Wyciągnij listę zamówień
-      const ordersSet = new Set();
-      const ordersData = [];
-      fetchedTasks.forEach(task => {
-        if (task.consumedMaterials && task.consumedMaterials.length > 0 && task.orderId && task.orderNumber) {
-          const orderKey = `${task.orderId}_${task.orderNumber}`;
-          if (!ordersSet.has(orderKey)) {
-            ordersSet.add(orderKey);
-            ordersData.push({
-              id: task.orderId,
-              number: task.orderNumber,
-              customer: task.customer
-            });
-          }
-        }
-      });
-      setOrdersList(ordersData.sort((a, b) => a.number.localeCompare(b.number)));
-      
-    } catch (error) {
-      console.error('Błąd podczas pobierania danych:', error);
-      showError(t('common.errors.fetchData'));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const processConsumptionData = () => {
     const aggregatedData = [];

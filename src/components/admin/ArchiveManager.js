@@ -197,8 +197,13 @@ const ArchiveManager = () => {
   }, [showError]);
 
   useEffect(() => {
-    fetchArchivedItems();
-    fetchArchiveLogs();
+    let cancelled = false;
+    (async () => {
+      await fetchArchivedItems();
+      if (cancelled) return;
+      await fetchArchiveLogs();
+    })();
+    return () => { cancelled = true; };
   }, [fetchArchivedItems, fetchArchiveLogs]);
 
   const handleUnarchive = async (item) => {

@@ -16,24 +16,30 @@ const ReceiveInventoryForm = () => {
 
   // Generuj numer LOT automatycznie przy inicjalizacji komponentu
   useEffect(() => {
-    generateLOT();
-  }, []);
+    let cancelled = false;
 
-  const generateLOT = async () => {
-    try {
-      const { generateLOTNumber } = await import('../../utils/numberGenerators');
-      const lotNumber = await generateLOTNumber();
-      console.log('Wygenerowano nowy numer LOT:', lotNumber);
-      setTransactionData(prev => ({
-        ...prev,
-        lotNumber,
-        batchNumber: prev.batchNumber || lotNumber
-      }));
-    } catch (error) {
-      console.error('Błąd podczas generowania numeru LOT:', error);
-      showError('Nie udało się wygenerować numeru LOT');
-    }
-  };
+    const loadLOT = async () => {
+      try {
+        const { generateLOTNumber } = await import('../../utils/numberGenerators');
+        const lotNumber = await generateLOTNumber();
+        if (cancelled) return;
+        console.log('Wygenerowano nowy numer LOT:', lotNumber);
+        setTransactionData(prev => ({
+          ...prev,
+          lotNumber,
+          batchNumber: prev.batchNumber || lotNumber
+        }));
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas generowania numeru LOT:', error);
+        showError('Nie udało się wygenerować numeru LOT');
+      }
+    };
+
+    loadLOT();
+
+    return () => { cancelled = true; };
+  }, []);
 
   const handleTransactionChange = (event) => {
     const { name, value } = event.target;

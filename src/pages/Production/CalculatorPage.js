@@ -92,12 +92,11 @@ const CalculatorPage = () => {
   
   // Wyszukiwanie receptur z debounce
   useEffect(() => {
+    let cancelled = false;
     const searchRecipes = async () => {
-      // Nie wyszukuj jeśli fraza jest taka sama jak poprzednia
       if (debouncedRecipeSearch === lastRecipeSearchRef.current) return;
       lastRecipeSearchRef.current = debouncedRecipeSearch;
       
-      // Minimalna długość frazy do wyszukiwania
       if (!debouncedRecipeSearch || debouncedRecipeSearch.length < 2) {
         setRecipeOptions([]);
         return;
@@ -106,34 +105,38 @@ const CalculatorPage = () => {
       try {
         setRecipeLoading(true);
         const result = await getRecipesWithPagination(
-          1,           // page
-          15,          // limit - pobieramy max 15 wyników
-          'name',      // sortField
-          'asc',       // sortOrder
-          null,        // customerId
-          debouncedRecipeSearch // searchTerm
+          1,
+          15,
+          'name',
+          'asc',
+          null,
+          debouncedRecipeSearch
         );
         
+        if (cancelled) return;
         setRecipeOptions(result.data || []);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas wyszukiwania receptur:', error);
         setRecipeOptions([]);
       } finally {
-        setRecipeLoading(false);
+        if (!cancelled) {
+          setRecipeLoading(false);
+        }
       }
     };
     
     searchRecipes();
+    return () => { cancelled = true; };
   }, [debouncedRecipeSearch]);
   
   // Wyszukiwanie MO z debounce
   useEffect(() => {
+    let cancelled = false;
     const searchMO = async () => {
-      // Nie wyszukuj jeśli fraza jest taka sama jak poprzednia
       if (debouncedMoSearch === lastMoSearchRef.current) return;
       lastMoSearchRef.current = debouncedMoSearch;
       
-      // Minimalna długość frazy do wyszukiwania
       if (!debouncedMoSearch || debouncedMoSearch.length < 2) {
         setMoOptions([]);
         return;
@@ -142,26 +145,31 @@ const CalculatorPage = () => {
       try {
         setMoLoading(true);
         const result = await getTasksWithPagination(
-          1,           // page
-          15,          // limit - pobieramy max 15 wyników
-          'moNumber',  // sortField
-          'desc',      // sortOrder
+          1,
+          15,
+          'moNumber',
+          'desc',
           {
             searchTerm: debouncedMoSearch,
             statuses: ['Zaplanowane', 'W trakcie', 'Wstrzymane']
           }
         );
         
+        if (cancelled) return;
         setMoOptions(result.data || []);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas wyszukiwania MO:', error);
         setMoOptions([]);
       } finally {
-        setMoLoading(false);
+        if (!cancelled) {
+          setMoLoading(false);
+        }
       }
     };
     
     searchMO();
+    return () => { cancelled = true; };
   }, [debouncedMoSearch]);
   
   // Funkcja do obsługi wyboru receptury
@@ -189,36 +197,85 @@ const CalculatorPage = () => {
     }
   };
   
-  // Automatyczne generowanie planu po wybraniu zadania produkcyjnego (MO)
   useEffect(() => {
-    if (selectedTaskId) {
-      generatePlanFromMO();
-    }
+    if (!selectedTaskId) return;
+    let cancelled = false;
+    const loadFromMO = async () => {
+      try {
+        setLoading(true);
+        const { getTaskById } = await import('../../services/productionService');
+        if (cancelled) return;
+        
+        const task = await getTaskById(selectedTaskId);
+        if (cancelled) return;
+        
+        if (!task) {
+          showError(t('calculator.errors.fetchTaskDetailsFailed'));
+          return;
+        }
+        
+        if (!task.recipeId) {
+          showError(t('calculator.errors.taskNoRecipe'));
+          return;
+        }
+        
+        const recipeDoc = await getRecipeById(task.recipeId);
+        if (cancelled) return;
+        
+        if (!recipeDoc) {
+          showError(t('calculator.errors.fetchTaskRecipeFailed'));
+          return;
+        }
+        
+        setSelectedRecipe(recipeDoc);
+        setSelectedRecipeId(recipeDoc.id);
+        setRecipeSearchQuery(recipeDoc.name || '');
+        setTargetAmount(task.quantity);
+        
+        showSuccess(t('calculator.success.planGeneratedFromMo', { moNumber: task.moNumber }));
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas generowania planu mieszań z MO:', error);
+        showError(t('calculator.errors.generateFromMoFailed'));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    loadFromMO();
+    return () => { cancelled = true; };
   }, [selectedTaskId]);
   
-  // Sprawdzenie czy wybrana receptura i jej dane są dostępne
   useEffect(() => {
-    if (selectedRecipeId) {
-      setLoading(true);
-      getRecipeById(selectedRecipeId)
-        .then(recipeData => {
-          if (recipeData && recipeData.ingredients && recipeData.ingredients.length > 0) {
-            // A już mamy zmienną selectedRecipe w stanie, więc używamy jej
-            setSelectedRecipe(recipeData);
-          } else {
-            setSelectedRecipe(null);
-            showError(t('calculator.errors.selectedRecipeNoIngredients'));
-          }
-          setLoading(false);
-        })
-        .catch(error => {
-          console.error('Błąd podczas pobierania receptury:', error);
-          showError(t('calculator.errors.fetchRecipeDetailsFailed'));
-          setLoading(false);
-        });
-    } else {
+    if (!selectedRecipeId) {
       setSelectedRecipe(null);
+      return;
     }
+    let cancelled = false;
+    const loadRecipe = async () => {
+      try {
+        setLoading(true);
+        const recipeData = await getRecipeById(selectedRecipeId);
+        if (cancelled) return;
+        if (recipeData && recipeData.ingredients && recipeData.ingredients.length > 0) {
+          setSelectedRecipe(recipeData);
+        } else {
+          setSelectedRecipe(null);
+          showError(t('calculator.errors.selectedRecipeNoIngredients'));
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania receptury:', error);
+        showError(t('calculator.errors.fetchRecipeDetailsFailed'));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    loadRecipe();
+    return () => { cancelled = true; };
   }, [selectedRecipeId, showError]);
   
   // Funkcja pomocnicza do obliczania planu mieszań w standardowym trybie (sztuki)
@@ -964,57 +1021,6 @@ const CalculatorPage = () => {
     setCalculationResult(null);
     setMixings([]);
     showInfo(t('calculator.success.calculatorReset'));
-  };
-
-  // Funkcja do generowania planu mieszań na podstawie MO
-  const generatePlanFromMO = async () => {
-    if (!selectedTaskId) {
-      showError(t('calculator.errors.selectTaskBeforeGenerate'));
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      // Importujemy funkcję do pobierania szczegółów zadania
-      const { getTaskById } = await import('../../services/productionService');
-      
-      // Pobieramy szczegóły wybranego zadania
-      const task = await getTaskById(selectedTaskId);
-      
-      if (!task) {
-        showError(t('calculator.errors.fetchTaskDetailsFailed'));
-        return;
-      }
-      
-      // Sprawdzamy czy zadanie ma przypisaną recepturę
-      if (!task.recipeId) {
-        showError(t('calculator.errors.taskNoRecipe'));
-        return;
-      }
-      
-      // Pobieramy recepturę
-      const recipeDoc = await getRecipeById(task.recipeId);
-      
-      if (!recipeDoc) {
-        showError(t('calculator.errors.fetchTaskRecipeFailed'));
-        return;
-      }
-      
-      // Ustawiamy wybraną recepturę
-      setSelectedRecipe(recipeDoc);
-      setSelectedRecipeId(recipeDoc.id);
-      setRecipeSearchQuery(recipeDoc.name || ''); // Ustaw nazwę receptury w polu wyszukiwania
-      
-      // Ustawiamy ilość docelową na podstawie ilości z zadania produkcyjnego
-      setTargetAmount(task.quantity);
-      
-      showSuccess(t('calculator.success.planGeneratedFromMo', { moNumber: task.moNumber }));
-    } catch (error) {
-      console.error('Błąd podczas generowania planu mieszań z MO:', error);
-      showError(t('calculator.errors.generateFromMoFailed'));
-    } finally {
-      setLoading(false);
-    }
   };
 
   // Funkcja do zapisywania planu mieszań jako checklisty w zadaniu produkcyjnym (MO)

@@ -196,98 +196,111 @@ const BatchSelector = ({
 
   // Ładowanie pozycji magazynowych przy otwarciu dialogu
   useEffect(() => {
+    let cancelled = false;
+
     if (open) {
-      loadInventoryItems();
-      loadRecipes();
-      loadWarehouses();
-      // Ustawienie wybranych partii
+      const doLoadData = async () => {
+        try {
+          setLoading(true);
+          const items = await getAllInventoryItems();
+          if (cancelled) return;
+          setInventoryItems(items);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Błąd podczas ładowania pozycji magazynowych:', error);
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
+      };
+
+      const doLoadRecipes = async () => {
+        try {
+          const recipesData = await getAllRecipes();
+          if (cancelled) return;
+          setRecipes(recipesData);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Błąd podczas ładowania receptur:', error);
+        }
+      };
+
+      const doLoadWarehouses = async () => {
+        try {
+          const warehousesData = await getAllWarehouses();
+          if (cancelled) return;
+          setWarehouses(warehousesData);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Błąd podczas ładowania magazynów:', error);
+        }
+      };
+
+      doLoadData();
+      doLoadRecipes();
+      doLoadWarehouses();
       setSelectedBatchIds(selectedBatches.map(batch => batch.id) || []);
     }
+
+    return () => { cancelled = true; };
   }, [open, selectedBatches]);
 
-  // Automatyczne wyszukiwanie po załadowaniu danych
   useEffect(() => {
     if (open && inventoryItems.length > 0 && !autoSearchPerformedRef.current) {
       autoSearchItem();
     }
   }, [open, inventoryItems, autoSearchItem]);
 
-  // Ładowanie partii po wyborze pozycji magazynowej lub załadowaniu magazynów
   useEffect(() => {
+    let cancelled = false;
+
     if (selectedItem && warehouses.length > 0) {
-      loadBatches(selectedItem.id);
+      const doLoadBatches = async (itemId) => {
+        try {
+          setLoadingBatches(true);
+          const batchesData = await getItemBatches(itemId);
+          if (cancelled) return;
+          
+          const isFinishedProduct = selectedItem && (
+            selectedItem.category === 'Gotowe produkty' ||
+            selectedItem.category === 'Produkty gotowe' ||
+            selectedItem.type === 'finished' ||
+            selectedItem.id?.startsWith('FIN') ||
+            selectedItem.id?.startsWith('BWS')
+          );
+          
+          const availableBatches = isFinishedProduct 
+            ? batchesData
+            : batchesData.filter(batch => batch.quantity > 0);
+          
+          const enhancedBatches = availableBatches.map(batch => {
+            const warehouse = warehouses.find(w => w.id === batch.warehouseId);
+            return {
+              ...batch,
+              warehouseName: warehouse?.name || 'Magazyn podstawowy',
+              warehouseAddress: warehouse?.address || '',
+            };
+          });
+          
+          setBatches(enhancedBatches);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Błąd podczas ładowania partii:', error);
+          setBatches([]);
+        } finally {
+          if (!cancelled) {
+            setLoadingBatches(false);
+          }
+        }
+      };
+      doLoadBatches(selectedItem.id);
     } else {
       setBatches([]);
     }
+
+    return () => { cancelled = true; };
   }, [selectedItem, warehouses]);
-
-  const loadInventoryItems = async () => {
-    try {
-      setLoading(true);
-      const items = await getAllInventoryItems();
-      setInventoryItems(items);
-    } catch (error) {
-      console.error('Błąd podczas ładowania pozycji magazynowych:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadRecipes = async () => {
-    try {
-      const recipesData = await getAllRecipes();
-      setRecipes(recipesData);
-    } catch (error) {
-      console.error('Błąd podczas ładowania receptur:', error);
-    }
-  };
-
-  const loadWarehouses = async () => {
-    try {
-      const warehousesData = await getAllWarehouses();
-      setWarehouses(warehousesData);
-    } catch (error) {
-      console.error('Błąd podczas ładowania magazynów:', error);
-    }
-  };
-
-  const loadBatches = async (itemId) => {
-    try {
-      setLoadingBatches(true);
-      const batchesData = await getItemBatches(itemId);
-      
-      // Sprawdź czy wybrany produkt to gotowy produkt
-      const isFinishedProduct = selectedItem && (
-        selectedItem.category === 'Gotowe produkty' ||
-        selectedItem.category === 'Produkty gotowe' ||
-        selectedItem.type === 'finished' ||
-        selectedItem.id?.startsWith('FIN') ||
-        selectedItem.id?.startsWith('BWS')
-      );
-      
-      // Filtruj partie w zależności od typu produktu
-      const availableBatches = isFinishedProduct 
-        ? batchesData // Dla gotowych produktów - pokaż wszystkie partie (w tym puste)
-        : batchesData.filter(batch => batch.quantity > 0); // Dla innych produktów - tylko niepuste
-      
-      // Dodaj informacje o lokalizacji magazynu do każdej partii
-      const enhancedBatches = availableBatches.map(batch => {
-        const warehouse = warehouses.find(w => w.id === batch.warehouseId);
-        return {
-          ...batch,
-          warehouseName: warehouse?.name || 'Magazyn podstawowy',
-          warehouseAddress: warehouse?.address || '',
-        };
-      });
-      
-      setBatches(enhancedBatches);
-    } catch (error) {
-      console.error('Błąd podczas ładowania partii:', error);
-      setBatches([]);
-    } finally {
-      setLoadingBatches(false);
-    }
-  };
 
   const handleBatchToggle = (batchId) => {
     setSelectedBatchIds(prev => {

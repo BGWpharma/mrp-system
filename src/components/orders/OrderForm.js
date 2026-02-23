@@ -709,12 +709,14 @@ const OrderForm = ({ orderId }) => {
   };
 
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
       try {
         setLoading(true);
         
         if (orderId) {
           const fetchedOrder = await getOrderById(orderId);
+          if (cancelled) return;
           
           console.log("Ładowanie danych zamówienia o ID:", orderId);
           
@@ -930,6 +932,7 @@ const OrderForm = ({ orderId }) => {
             }
           }
           
+          if (cancelled) return;
           setOrderData({
             ...fetchedOrder,
             orderDate: ensureDateInputFormat(orderDate),
@@ -941,6 +944,7 @@ const OrderForm = ({ orderId }) => {
           
           // Zweryfikuj, czy powiązane zadania produkcyjne istnieją
           const verifiedOrder = await verifyProductionTasks(fetchedOrder);
+          if (cancelled) return;
           
           setOrderData(verifiedOrder);
         }
@@ -954,6 +958,7 @@ const OrderForm = ({ orderId }) => {
           getAllRecipes(),
           getAllSuppliers()
         ]);
+        if (cancelled) return;
         
         // Ustaw pobrane dane
         setCustomers(fetchedCustomers);
@@ -979,14 +984,18 @@ const OrderForm = ({ orderId }) => {
           }));
         }
       } catch (error) {
+        if (cancelled) return;
         showError('Błąd podczas ładowania danych: ' + error.message);
         console.error('Error fetching data:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     
     fetchData();
+    return () => { cancelled = true; };
   }, [orderId, showError, fromPO, poId, poNumber, showInfo]);
 
   // Funkcja do automatycznego odświeżenia kosztów produkcji przed zapisaniem
@@ -1667,73 +1676,6 @@ const OrderForm = ({ orderId }) => {
     }, 0);
   };
 
-  // Funkcja do pobierania kursów walut
-  const fetchExchangeRates = async () => {
-    try {
-      setLoadingRates(true);
-      // Pobierz wczorajszy kurs dla głównych walut
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      
-      const currencies = ['EUR', 'PLN', 'USD', 'GBP', 'CHF'];
-      const baseCurrency = orderData.currency; // Waluta bazowa zamówienia
-      
-      // Sprawdź, czy baseCurrency jest jedną z obsługiwanych walut
-      if (!currencies.includes(baseCurrency)) {
-        console.warn(`Nieobsługiwana waluta bazowa: ${baseCurrency}. Używam domyślnej waluty EUR.`);
-        setOrderData(prev => ({ ...prev, currency: 'EUR' }));
-        return; // Funkcja zostanie ponownie wywołana przez useEffect po zmianie currency
-      }
-      
-      const rates = {};
-      // Dodaj kurs 1 dla waluty bazowej
-      rates[baseCurrency] = 1;
-      
-      // Pobierz kursy dla pozostałych walut
-      const fetchPromises = currencies
-        .filter(currency => currency !== baseCurrency)
-        .map(async currency => {
-          try {
-            const rate = await getExchangeRate(currency, baseCurrency, yesterday);
-            if (rate > 0) {
-              rates[currency] = rate;
-            } else {
-              console.error(`Otrzymano nieprawidłowy kurs dla ${currency}/${baseCurrency}: ${rate}`);
-              // Nie ustawiamy domyślnego kursu
-            }
-          } catch (err) {
-            console.error(`Błąd podczas pobierania kursu ${currency}/${baseCurrency}:`, err);
-            // Nie ustawiamy domyślnego kursu
-          }
-        });
-      
-      await Promise.all(fetchPromises);
-      
-      // Sprawdź, czy mamy kursy dla wszystkich walut, jeśli nie, pokaż komunikat
-      const missingCurrencies = currencies
-        .filter(currency => currency !== baseCurrency && !rates[currency]);
-      
-      if (missingCurrencies.length > 0) {
-        console.warn(`Brak kursów dla walut: ${missingCurrencies.join(', ')}`);
-        showInfo('Nie udało się pobrać kursów dla niektórych walut. Przeliczanie między walutami będzie możliwe po wprowadzeniu daty faktury.');
-      }
-      
-      console.log('Pobrano kursy walut:', rates);
-      setExchangeRates(rates);
-      
-    } catch (error) {
-      console.error('Błąd podczas pobierania kursów walut:', error);
-      showError('Nie udało się pobrać kursów walut. Przeliczanie między walutami będzie możliwe po wprowadzeniu daty faktury.');
-      
-      // W przypadku błędu ustawiamy tylko kurs dla waluty bazowej
-      const rates = {};
-      rates[orderData.currency || 'EUR'] = 1;
-      setExchangeRates(rates);
-    } finally {
-      setLoadingRates(false);
-    }
-  };
-  
   // Pomocnicza funkcja do pobierania domyślnego kursu
   const getDefaultRate = (fromCurrency, toCurrency) => {
     // Zawsze zwracamy 1, ponieważ kursy pobieramy dynamicznie z API
@@ -1742,7 +1684,72 @@ const OrderForm = ({ orderId }) => {
   
   // Pobierz kursy walut przy starcie
   useEffect(() => {
-    fetchExchangeRates();
+    let cancelled = false;
+    const doFetchRates = async () => {
+      try {
+        setLoadingRates(true);
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        const currencies = ['EUR', 'PLN', 'USD', 'GBP', 'CHF'];
+        const baseCurrency = orderData.currency;
+        
+        if (!currencies.includes(baseCurrency)) {
+          console.warn(`Nieobsługiwana waluta bazowa: ${baseCurrency}. Używam domyślnej waluty EUR.`);
+          if (!cancelled) {
+            setOrderData(prev => ({ ...prev, currency: 'EUR' }));
+          }
+          return;
+        }
+        
+        const rates = {};
+        rates[baseCurrency] = 1;
+        
+        const fetchPromises = currencies
+          .filter(currency => currency !== baseCurrency)
+          .map(async currency => {
+            try {
+              const rate = await getExchangeRate(currency, baseCurrency, yesterday);
+              if (rate > 0) {
+                rates[currency] = rate;
+              } else {
+                console.error(`Otrzymano nieprawidłowy kurs dla ${currency}/${baseCurrency}: ${rate}`);
+              }
+            } catch (err) {
+              console.error(`Błąd podczas pobierania kursu ${currency}/${baseCurrency}:`, err);
+            }
+          });
+        
+        await Promise.all(fetchPromises);
+        if (cancelled) return;
+        
+        const missingCurrencies = currencies
+          .filter(currency => currency !== baseCurrency && !rates[currency]);
+        
+        if (missingCurrencies.length > 0) {
+          console.warn(`Brak kursów dla walut: ${missingCurrencies.join(', ')}`);
+          showInfo('Nie udało się pobrać kursów dla niektórych walut. Przeliczanie między walutami będzie możliwe po wprowadzeniu daty faktury.');
+        }
+        
+        console.log('Pobrano kursy walut:', rates);
+        setExchangeRates(rates);
+        
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania kursów walut:', error);
+        showError('Nie udało się pobrać kursów walut. Przeliczanie między walutami będzie możliwe po wprowadzeniu daty faktury.');
+        
+        const rates = {};
+        rates[orderData.currency || 'EUR'] = 1;
+        setExchangeRates(rates);
+      } finally {
+        if (!cancelled) {
+          setLoadingRates(false);
+        }
+      }
+    };
+    doFetchRates();
+    return () => { cancelled = true; };
   }, []);
   
   // Funkcja do przeliczania wartości między walutami

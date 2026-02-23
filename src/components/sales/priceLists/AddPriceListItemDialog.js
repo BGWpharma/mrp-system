@@ -41,24 +41,41 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
   const { t } = useTranslation('priceLists');
   
   useEffect(() => {
-    if (open) {
-      fetchData();
-      resetForm();
-    }
+    if (!open) return;
+    let cancelled = false;
+    resetForm();
+    (async () => {
+      try {
+        setFetchingData(true);
+        const [recipesData, servicesData] = await Promise.all([
+          getAllRecipes(),
+          getInventoryItemsByCategory('Inne')
+        ]);
+        if (cancelled) return;
+        setRecipes(recipesData);
+        const itemsArray = servicesData?.items || servicesData || [];
+        setInventoryItems(itemsArray);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania danych:', error);
+        showNotification(t('priceLists.dialogs.add.fetchRecipesError') || 'Błąd podczas pobierania danych', 'error');
+      } finally {
+        if (!cancelled) {
+          setFetchingData(false);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
   }, [open]);
-  
 
-  
   const fetchData = async () => {
     try {
       setFetchingData(true);
       const [recipesData, servicesData] = await Promise.all([
         getAllRecipes(),
-        getInventoryItemsByCategory('Inne') // Pobierz tylko usługi z kategorii "Inne"
+        getInventoryItemsByCategory('Inne')
       ]);
-      
       setRecipes(recipesData);
-      // servicesData może być obiektem z polem items lub bezpośrednio tablicą
       const itemsArray = servicesData?.items || servicesData || [];
       setInventoryItems(itemsArray);
     } catch (error) {

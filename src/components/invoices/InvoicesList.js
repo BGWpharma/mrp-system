@@ -118,8 +118,10 @@ const InvoicesList = () => {
   const tableSort = listState.tableSort;
 
   useEffect(() => {
-    fetchInvoices();
-    fetchOrders();
+    let cancelled = false;
+    fetchInvoices().then(() => { if (cancelled) return; });
+    fetchOrders().then(() => { if (cancelled) return; });
+    return () => { cancelled = true; };
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Automatycznie zastosuj zapisane wyszukiwanie i filtry po załadowaniu faktur

@@ -57,7 +57,25 @@ const ContactsPage = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
-    fetchContacts();
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        const allContacts = await getAllContacts();
+        if (cancelled) return;
+        setContacts(allContacts);
+        setFilteredContacts(allContacts);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania kontaktów:', error);
+        showError('Nie udało się pobrać kontaktów: ' + error.message);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
   
   useEffect(() => {

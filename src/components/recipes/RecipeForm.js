@@ -620,24 +620,24 @@ const RecipeForm = ({ recipeId }) => {
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     if (recipeId) {
       const fetchRecipe = async () => {
         try {
           const recipe = await getRecipeById(recipeId);
+          if (cancelled) return;
           
-          // Upewnij się, że micronutrients istnieje jako tablica i dodaj ID jeśli nie istnieje
           const micronutrientsWithIds = (recipe.micronutrients || []).map((micronutrient, index) => ({
             ...micronutrient,
             id: micronutrient.id || `existing-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
           }));
           
-          // Upewnij się, że ingredients mają _sortId do drag-and-drop
           const ingredientsWithSortIds = (recipe.ingredients || []).map((ingredient, index) => ({
             ...ingredient,
             _sortId: ingredient._sortId || generateIngredientId()
           }));
           
-          // Upewnij się, że certifications istnieje z domyślnymi wartościami
           const certifications = recipe.certifications || {
             halal: false,
             eco: false,
@@ -654,11 +654,7 @@ const RecipeForm = ({ recipeId }) => {
           };
           
           setRecipeData(recipeWithMicronutrients);
-          
-          // Zapisz oryginalną nazwę dla wykrywania zmian
           setOriginalRecipeName(recipe.name);
-          
-          // Ustawiamy domyślne dane produktu na podstawie receptury
           setProductData(prev => ({
             ...prev,
             name: recipe.name,
@@ -667,48 +663,49 @@ const RecipeForm = ({ recipeId }) => {
             unit: recipe.yield?.unit || 'szt.',
             recipeId: recipeId
           }));
-          
-          // Ustaw załączniki designu jeśli istnieją
           setDesignAttachments(recipe.designAttachments || []);
-          // Ustaw załączniki zasad jeśli istnieją
           setRulesAttachments(recipe.rulesAttachments || []);
           
-          // Sprawdź czy mamy otworzyć okno dodawania produktu
           if (location.state?.openProductDialog) {
             setCreateProductDialogOpen(true);
           }
         } catch (error) {
+          if (cancelled) return;
           showError(t('recipes.messages.fetchRecipeError', { error: error.message }));
           console.error('Error fetching recipe:', error);
         } finally {
-          setLoading(false);
+          if (!cancelled) {
+            setLoading(false);
+          }
         }
       };
       
       fetchRecipe();
     }
 
-    // Pobierz składniki z magazynu
     const fetchInventoryItems = async () => {
       try {
         setLoadingInventory(true);
         const items = await getAllInventoryItems();
+        if (cancelled) return;
         setInventoryItems(items);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania składników z magazynu:', error);
         showError(t('recipes.messages.fetchInventoryError'));
       } finally {
-        setLoadingInventory(false);
+        if (!cancelled) {
+          setLoadingInventory(false);
+        }
       }
     };
     
-    // Pobierz lokalizacje
     const fetchWarehouses = async () => {
       try {
         const warehousesData = await getAllWarehouses();
+        if (cancelled) return;
         setWarehouses(warehousesData);
         
-        // Ustaw domyślną lokalizację, jeśli istnieje
         if (warehousesData.length > 0) {
           setProductData(prev => ({
             ...prev,
@@ -716,35 +713,42 @@ const RecipeForm = ({ recipeId }) => {
           }));
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania lokalizacji:', error);
       }
     };
 
-    // Pobierz listę klientów
     const fetchCustomers = async () => {
       try {
         setLoadingCustomers(true);
         const customersData = await getAllCustomers();
+        if (cancelled) return;
         setCustomers(customersData);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania klientów:', error);
         showError(t('recipes.messages.fetchCustomersError'));
       } finally {
-        setLoadingCustomers(false);
+        if (!cancelled) {
+          setLoadingCustomers(false);
+        }
       }
     };
     
-    // Pobierz listę stanowisk produkcyjnych
     const fetchWorkstations = async () => {
       try {
         setLoadingWorkstations(true);
         const workstationsData = await getAllWorkstations();
+        if (cancelled) return;
         setWorkstations(workstationsData);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania stanowisk produkcyjnych:', error);
         showError(t('recipes.messages.fetchWorkstationsError'));
       } finally {
-        setLoadingWorkstations(false);
+        if (!cancelled) {
+          setLoadingWorkstations(false);
+        }
       }
     };
     
@@ -752,6 +756,7 @@ const RecipeForm = ({ recipeId }) => {
     fetchWarehouses();
     fetchCustomers();
     fetchWorkstations();
+    return () => { cancelled = true; };
   }, [recipeId, showError, location.state]);
 
   // Funkcja do pobierania list cenowych
@@ -1317,18 +1322,18 @@ const RecipeForm = ({ recipeId }) => {
   
   // Ładuj pozycje przy otwarciu dialogu
   useEffect(() => {
+    let cancelled = false;
     if (linkInventoryDialogOpen) {
-      linkDialogAllItems.current = null; // Wyczyść cache przy każdym otwarciu
+      linkDialogAllItems.current = null;
       fetchLinkDialogItems('');
     } else {
-      // Wyczyść przy zamknięciu
       setLinkDialogItems([]);
       setLinkDialogTotalCount(0);
       linkDialogAllItems.current = null;
     }
     
-    // Cleanup timer
     return () => {
+      cancelled = true;
       if (linkDialogSearchTimer.current) {
         clearTimeout(linkDialogSearchTimer.current);
       }

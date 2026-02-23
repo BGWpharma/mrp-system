@@ -158,17 +158,36 @@ class PurchaseOrderPdfGenerator {
   }
 
   /**
-   * Funkcja do konwersji polskich znaków
+   * Konwersja znaków diakrytycznych na ASCII (PL, LT, CZ, SK, HU, RO, DE, FR, NO/DK/SE, TR, LV, ES, PT)
    */
-  convertPolishChars(text) {
+  convertSpecialChars(text) {
     if (!text) return '';
-    return text
-      .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e')
-      .replace(/ł/g, 'l').replace(/ń/g, 'n').replace(/ó/g, 'o')
-      .replace(/ś/g, 's').replace(/ź/g, 'z').replace(/ż/g, 'z')
-      .replace(/Ą/g, 'A').replace(/Ć/g, 'C').replace(/Ę/g, 'E')
-      .replace(/Ł/g, 'L').replace(/Ń/g, 'N').replace(/Ó/g, 'O')
-      .replace(/Ś/g, 'S').replace(/Ź/g, 'Z').replace(/Ż/g, 'Z');
+    const charMap = {
+      'ą':'a','ć':'c','ę':'e','ł':'l','ń':'n','ó':'o','ś':'s','ź':'z','ż':'z',
+      'Ą':'A','Ć':'C','Ę':'E','Ł':'L','Ń':'N','Ó':'O','Ś':'S','Ź':'Z','Ż':'Z',
+      'č':'c','ė':'e','į':'i','š':'s','ų':'u','ū':'u','ž':'z',
+      'Č':'C','Ė':'E','Į':'I','Š':'S','Ų':'U','Ū':'U','Ž':'Z',
+      'ď':'d','ě':'e','ň':'n','ř':'r','ť':'t','ů':'u','ý':'y','ľ':'l',
+      'Ď':'D','Ě':'E','Ň':'N','Ř':'R','Ť':'T','Ů':'U','Ý':'Y','Ľ':'L',
+      'á':'a','é':'e','í':'i','ú':'u','ö':'o','ü':'u','ő':'o','ű':'u',
+      'Á':'A','É':'E','Í':'I','Ú':'U','Ö':'O','Ü':'U','Ő':'O','Ű':'U',
+      'ă':'a','â':'a','î':'i','ș':'s','ț':'t',
+      'Ă':'A','Â':'A','Î':'I','Ș':'S','Ț':'T',
+      'ä':'a','ß':'ss',
+      'Ä':'A',
+      'à':'a','ç':'c','è':'e','ê':'e','ë':'e','ï':'i','ô':'o','ù':'u','û':'u','ÿ':'y',
+      'À':'A','Ç':'C','È':'E','Ê':'E','Ë':'E','Ï':'I','Ô':'O','Ù':'U','Û':'U',
+      'å':'a','æ':'ae','ø':'o',
+      'Å':'A','Æ':'AE','Ø':'O',
+      'ğ':'g','ı':'i','ş':'s',
+      'Ğ':'G','İ':'I','Ş':'S',
+      'ā':'a','ē':'e','ģ':'g','ī':'i','ķ':'k','ļ':'l','ņ':'n',
+      'Ā':'A','Ē':'E','Ģ':'G','Ī':'I','Ķ':'K','Ļ':'L','Ņ':'N',
+      'ñ':'n','Ñ':'N',
+      'ã':'a','õ':'o',
+      'Ã':'A','Õ':'O',
+    };
+    return text.replace(/[^\x00-\x7F]/g, ch => charMap[ch] ?? ch);
   }
 
   /**
@@ -325,12 +344,12 @@ class PurchaseOrderPdfGenerator {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(0, 0, 0);
-    doc.text(this.convertPolishChars(`Order: ${this.purchaseOrder.number || ''}`), leftMargin, 35, { align: 'left' });
+    doc.text(this.convertSpecialChars(`Order: ${this.purchaseOrder.number || ''}`), leftMargin, 35, { align: 'left' });
 
     // Data zamówienia
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(this.convertPolishChars(`Date: ${this.purchaseOrder.orderDate ? new Date(this.purchaseOrder.orderDate).toLocaleDateString('en-GB') : ''}`), leftMargin, 42, { align: 'left' });
+    doc.text(this.convertSpecialChars(`Date: ${this.purchaseOrder.orderDate ? new Date(this.purchaseOrder.orderDate).toLocaleDateString('en-GB') : ''}`), leftMargin, 42, { align: 'left' });
 
     // Dane dostawcy (lewa strona)
     currentY = this.addSupplierSection(doc, 60, leftMargin);
@@ -366,7 +385,7 @@ class PurchaseOrderPdfGenerator {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
-    doc.text(this.convertPolishChars('SUPPLIER:'), leftMargin, currentY);
+    doc.text(this.convertSpecialChars('SUPPLIER:'), leftMargin, currentY);
     
     currentY += 6;
     doc.setFont('helvetica', 'normal');
@@ -375,7 +394,7 @@ class PurchaseOrderPdfGenerator {
     if (this.purchaseOrder.supplier) {
       // Nazwa dostawcy
       doc.setFont('helvetica', 'bold');
-      doc.text(this.convertPolishChars(this.purchaseOrder.supplier.name || ''), leftMargin, currentY);
+      doc.text(this.convertSpecialChars(this.purchaseOrder.supplier.name || ''), leftMargin, currentY);
       currentY += 6;
       
       doc.setFont('helvetica', 'normal');
@@ -383,21 +402,21 @@ class PurchaseOrderPdfGenerator {
       const supplierAddress = this.getSupplierMainAddress(this.purchaseOrder.supplier);
       if (supplierAddress) {
         const addressFormatted = this.formatAddress(supplierAddress);
-        const addressLines = doc.splitTextToSize(this.convertPolishChars(addressFormatted), 80);
+        const addressLines = doc.splitTextToSize(this.convertSpecialChars(addressFormatted), 80);
         addressLines.forEach(line => {
-          doc.text(this.convertPolishChars(line), leftMargin, currentY);
+          doc.text(this.convertSpecialChars(line), leftMargin, currentY);
           currentY += 5;
         });
       }
       
       // Kontakt
       if (this.purchaseOrder.supplier.email) {
-        doc.text(this.convertPolishChars(`Email: ${this.purchaseOrder.supplier.email}`), leftMargin, currentY);
+        doc.text(this.convertSpecialChars(`Email: ${this.purchaseOrder.supplier.email}`), leftMargin, currentY);
         currentY += 5;
       }
       
       if (this.purchaseOrder.supplier.phone) {
-        doc.text(this.convertPolishChars(`Phone: ${this.purchaseOrder.supplier.phone}`), leftMargin, currentY);
+        doc.text(this.convertSpecialChars(`Phone: ${this.purchaseOrder.supplier.phone}`), leftMargin, currentY);
         currentY += 5;
       }
     }
@@ -414,14 +433,14 @@ class PurchaseOrderPdfGenerator {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
-    doc.text(this.convertPolishChars('ORDER DETAILS:'), leftMargin, currentY);
+    doc.text(this.convertSpecialChars('ORDER DETAILS:'), leftMargin, currentY);
     
     currentY += 6;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     
     if (this.purchaseOrder.expectedDeliveryDate) {
-      doc.text(this.convertPolishChars(`Expected delivery: ${new Date(this.purchaseOrder.expectedDeliveryDate).toLocaleDateString('en-GB')}`), leftMargin, currentY);
+      doc.text(this.convertSpecialChars(`Expected delivery: ${new Date(this.purchaseOrder.expectedDeliveryDate).toLocaleDateString('en-GB')}`), leftMargin, currentY);
       currentY += 6;
     }
 
@@ -439,7 +458,7 @@ class PurchaseOrderPdfGenerator {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
-    doc.text(this.convertPolishChars('BUYER:'), rightColumnX, rightY);
+    doc.text(this.convertSpecialChars('BUYER:'), rightColumnX, rightY);
     
     rightY += 6;
     doc.setFont('helvetica', 'normal');
@@ -449,38 +468,38 @@ class PurchaseOrderPdfGenerator {
       // Nazwa firmy
       if (companyData.name) {
         doc.setFont('helvetica', 'bold');
-        doc.text(this.convertPolishChars(companyData.name), rightColumnX, rightY);
+        doc.text(this.convertSpecialChars(companyData.name), rightColumnX, rightY);
         rightY += 6;
         doc.setFont('helvetica', 'normal');
       }
       
       // Adres firmy
       if (companyData.address) {
-        doc.text(this.convertPolishChars(companyData.address), rightColumnX, rightY);
+        doc.text(this.convertSpecialChars(companyData.address), rightColumnX, rightY);
         rightY += 5;
       }
       
       // Miasto
       if (companyData.city) {
-        doc.text(this.convertPolishChars(companyData.city), rightColumnX, rightY);
+        doc.text(this.convertSpecialChars(companyData.city), rightColumnX, rightY);
         rightY += 5;
       }
       
       // VAT-UE
       if (companyData.vatEu) {
-        doc.text(this.convertPolishChars(`VAT-EU: ${companyData.vatEu}`), rightColumnX, rightY);
+        doc.text(this.convertSpecialChars(`VAT-EU: ${companyData.vatEu}`), rightColumnX, rightY);
         rightY += 5;
       }
       
       // Email
       if (companyData.email) {
-        doc.text(this.convertPolishChars(`Email: ${companyData.email}`), rightColumnX, rightY);
+        doc.text(this.convertSpecialChars(`Email: ${companyData.email}`), rightColumnX, rightY);
         rightY += 5;
       }
       
       // Telefon
       if (companyData.phone) {
-        doc.text(this.convertPolishChars(`Phone: ${companyData.phone}`), rightColumnX, rightY);
+        doc.text(this.convertSpecialChars(`Phone: ${companyData.phone}`), rightColumnX, rightY);
         rightY += 5;
       }
     }
@@ -490,7 +509,7 @@ class PurchaseOrderPdfGenerator {
       rightY += 8;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
-      doc.text(this.convertPolishChars('DELIVERY ADDRESS:'), rightColumnX, rightY);
+      doc.text(this.convertSpecialChars('DELIVERY ADDRESS:'), rightColumnX, rightY);
       rightY += 6;
       
       doc.setFont('helvetica', 'normal');
@@ -498,15 +517,15 @@ class PurchaseOrderPdfGenerator {
       
       // Nazwa magazynu
       if (targetWarehouse.name) {
-        doc.text(this.convertPolishChars(targetWarehouse.name), rightColumnX, rightY);
+        doc.text(this.convertSpecialChars(targetWarehouse.name), rightColumnX, rightY);
         rightY += 5;
       }
       
       // Adres magazynu
       if (targetWarehouse.address) {
-        const addressLines = doc.splitTextToSize(this.convertPolishChars(targetWarehouse.address), 80);
+        const addressLines = doc.splitTextToSize(this.convertSpecialChars(targetWarehouse.address), 80);
         addressLines.forEach(line => {
-          doc.text(this.convertPolishChars(line), rightColumnX, rightY);
+          doc.text(this.convertSpecialChars(line), rightColumnX, rightY);
           rightY += 5;
         });
       }
@@ -521,7 +540,7 @@ class PurchaseOrderPdfGenerator {
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
-    doc.text(this.convertPolishChars('ORDER ITEMS:'), leftMargin, currentY);
+    doc.text(this.convertSpecialChars('ORDER ITEMS:'), leftMargin, currentY);
     currentY += 7;
 
     // Nagłówki tabeli - dostosuj kolumny w zależności od opcji hidePricing
@@ -543,7 +562,7 @@ class PurchaseOrderPdfGenerator {
     doc.rect(startX, currentY, colWidths.reduce((a, b) => a + b, 0), 7, 'F');
     
     headers.forEach((header, index) => {
-      doc.text(this.convertPolishChars(header), currentX + 2, currentY + 5);
+      doc.text(this.convertSpecialChars(header), currentX + 2, currentY + 5);
       currentX += colWidths[index];
     });
     
@@ -560,7 +579,7 @@ class PurchaseOrderPdfGenerator {
         currentX = startX;
         
         // Nazwa produktu (może być długa, dzielimy na linie)
-        const nameLines = doc.splitTextToSize(this.convertPolishChars(item.name || ''), colWidths[0] - 4);
+        const nameLines = doc.splitTextToSize(this.convertSpecialChars(item.name || ''), colWidths[0] - 4);
         const lineHeight = Math.max(5, nameLines.length * 3.5);
         
         // Tło wiersza
@@ -576,11 +595,11 @@ class PurchaseOrderPdfGenerator {
         currentX += colWidths[0];
         
         // Ilość
-        doc.text(this.convertPolishChars((item.quantity || '').toString()), currentX + 2, currentY + 3.5);
+        doc.text(this.convertSpecialChars((item.quantity || '').toString()), currentX + 2, currentY + 3.5);
         currentX += colWidths[1];
         
         // Jednostka
-        doc.text(this.convertPolishChars(item.unit || ''), currentX + 2, currentY + 3.5);
+        doc.text(this.convertSpecialChars(item.unit || ''), currentX + 2, currentY + 3.5);
         currentX += colWidths[2];
         
         if (!this.options.hidePricing) {
@@ -642,7 +661,7 @@ class PurchaseOrderPdfGenerator {
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
-    doc.text(this.convertPolishChars('SUMMARY:'), leftMargin, currentY);
+    doc.text(this.convertSpecialChars('SUMMARY:'), leftMargin, currentY);
     currentY += 7;
     
     doc.setFont('helvetica', 'normal');
@@ -670,16 +689,16 @@ class PurchaseOrderPdfGenerator {
           
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(11);
-          doc.text(this.convertPolishChars(`${currency}:`), currentX, targetY);
+          doc.text(this.convertSpecialChars(`${currency}:`), currentX, targetY);
           
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(9);
-          doc.text(this.convertPolishChars(`Net: ${this.formatCurrencyForPdf(values.net, currency)}`), currentX, targetY + 5);
-          doc.text(this.convertPolishChars(`VAT: ${this.formatCurrencyForPdf(values.vat, currency)}`), currentX, targetY + 9);
+          doc.text(this.convertSpecialChars(`Net: ${this.formatCurrencyForPdf(values.net, currency)}`), currentX, targetY + 5);
+          doc.text(this.convertSpecialChars(`VAT: ${this.formatCurrencyForPdf(values.vat, currency)}`), currentX, targetY + 9);
           
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(10);
-          doc.text(this.convertPolishChars(`Gross: ${this.formatCurrencyForPdf(values.gross, currency)}`), currentX, targetY + 13);
+          doc.text(this.convertSpecialChars(`Gross: ${this.formatCurrencyForPdf(values.gross, currency)}`), currentX, targetY + 13);
           
           if (isRightColumn) {
             rightY += 20;
@@ -696,19 +715,19 @@ class PurchaseOrderPdfGenerator {
         Object.entries(currencySummary).forEach(([currency, values]) => {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(11);
-          doc.text(this.convertPolishChars(`${currency}:`), summaryX, currentY);
+          doc.text(this.convertSpecialChars(`${currency}:`), summaryX, currentY);
           currentY += 7;
           
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(10);
-          doc.text(this.convertPolishChars(`Net value: ${this.formatCurrencyForPdf(values.net, currency)}`), summaryX, currentY);
+          doc.text(this.convertSpecialChars(`Net value: ${this.formatCurrencyForPdf(values.net, currency)}`), summaryX, currentY);
           currentY += 6;
-          doc.text(this.convertPolishChars(`VAT: ${this.formatCurrencyForPdf(values.vat, currency)}`), summaryX, currentY);
+          doc.text(this.convertSpecialChars(`VAT: ${this.formatCurrencyForPdf(values.vat, currency)}`), summaryX, currentY);
           currentY += 6;
           
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(11);
-          doc.text(this.convertPolishChars(`Gross: ${this.formatCurrencyForPdf(values.gross, currency)}`), summaryX, currentY);
+          doc.text(this.convertSpecialChars(`Gross: ${this.formatCurrencyForPdf(values.gross, currency)}`), summaryX, currentY);
           currentY += 10;
         });
       }
@@ -717,14 +736,14 @@ class PurchaseOrderPdfGenerator {
       const vatValues = this.calculateVATValues(this.purchaseOrder.items);
       const summaryX = pageWidth - 90;
       
-      doc.text(this.convertPolishChars(`Net value: ${this.formatCurrencyForPdf(vatValues.totalNet, this.purchaseOrder.currency)}`), summaryX, currentY);
+      doc.text(this.convertSpecialChars(`Net value: ${this.formatCurrencyForPdf(vatValues.totalNet, this.purchaseOrder.currency)}`), summaryX, currentY);
       currentY += 6;
-      doc.text(this.convertPolishChars(`VAT: ${this.formatCurrencyForPdf(vatValues.totalVat, this.purchaseOrder.currency)}`), summaryX, currentY);
+      doc.text(this.convertSpecialChars(`VAT: ${this.formatCurrencyForPdf(vatValues.totalVat, this.purchaseOrder.currency)}`), summaryX, currentY);
       currentY += 6;
       
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
-      doc.text(this.convertPolishChars(`TOTAL GROSS: ${this.formatCurrencyForPdf(vatValues.totalGross, this.purchaseOrder.currency)}`), summaryX, currentY);
+      doc.text(this.convertSpecialChars(`TOTAL GROSS: ${this.formatCurrencyForPdf(vatValues.totalGross, this.purchaseOrder.currency)}`), summaryX, currentY);
     }
 
     return currentY;
@@ -742,15 +761,15 @@ class PurchaseOrderPdfGenerator {
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    doc.text(this.convertPolishChars('NOTES:'), leftMargin, currentY);
+    doc.text(this.convertSpecialChars('NOTES:'), leftMargin, currentY);
     currentY += 6;
     
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    const notesLines = doc.splitTextToSize(this.convertPolishChars(this.purchaseOrder.notes), pageWidth - 40);
+    const notesLines = doc.splitTextToSize(this.convertSpecialChars(this.purchaseOrder.notes), pageWidth - 40);
     notesLines.forEach(line => {
       currentY = this.checkPageBreak(doc, currentY, 5, pageHeight, template, pageWidth);
-      doc.text(this.convertPolishChars(line), leftMargin, currentY);
+      doc.text(this.convertSpecialChars(line), leftMargin, currentY);
       currentY += 5;
     });
 
@@ -925,7 +944,7 @@ class PurchaseOrderPdfGenerator {
       doc.setFontSize(8);
       doc.setTextColor(150, 150, 150);
       doc.text(
-        this.convertPolishChars(`Generated: ${new Date().toLocaleString('en-GB')} | Page ${i} of ${pageCount}`),
+        this.convertSpecialChars(`Generated: ${new Date().toLocaleString('en-GB')} | Page ${i} of ${pageCount}`),
         pageWidth / 2,
         pageHeight - 10,
         { align: 'center' }

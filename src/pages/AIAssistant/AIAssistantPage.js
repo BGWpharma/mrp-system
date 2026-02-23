@@ -112,48 +112,54 @@ import APIQuotaAlert from './APIQuotaAlert';
 
   // Pobierz historię konwersacji użytkownika
   useEffect(() => {
+    let cancelled = false;
     const fetchConversations = async () => {
       if (!currentUser?.uid) return;
       
       try {
         setLoadingConversations(true);
         const conversations = await getUserConversations(currentUser.uid);
+        if (cancelled) return;
         setConversationHistory(conversations);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania historii konwersacji:', error);
         showError('Nie udało się pobrać historii konwersacji');
       } finally {
-        setLoadingConversations(false);
+        if (!cancelled) setLoadingConversations(false);
       }
     };
 
     fetchConversations();
+    return () => { cancelled = true; };
   }, [currentUser, showError]);
 
   // Sprawdź czy użytkownik ma skonfigurowany klucz API
   useEffect(() => {
+    let cancelled = false;
     const checkApiKey = async () => {
       if (!currentUser?.uid) return;
       
       try {
-        // Sprawdź ustawienia systemowe
         const systemSettings = await getSystemSettings();
+        if (cancelled) return;
         setUseGlobalApiKey(systemSettings.useGlobalApiKey || false);
         
-        // Pobierz klucz API (funkcja getOpenAIApiKey już sprawdza zarówno globalny jak i indywidualny klucz)
         const apiKey = await getOpenAIApiKey(currentUser.uid);
+        if (cancelled) return;
         setHasApiKey(!!apiKey);
         
-        // Jeśli nie ma klucza API i nie korzystamy z globalnego klucza, pokaż alert
         if (!apiKey && !systemSettings.useGlobalApiKey) {
           setOpenAlert(true);
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas sprawdzania klucza API:', error);
       }
     };
     
     checkApiKey();
+    return () => { cancelled = true; };
   }, [currentUser]);
 
   // Automatyczne przewijanie do najnowszej wiadomości
@@ -168,23 +174,29 @@ import APIQuotaAlert from './APIQuotaAlert';
 
   // Załaduj wiadomości z wybranej konwersacji
   useEffect(() => {
+    let cancelled = false;
     const loadConversationMessages = async () => {
       if (!currentConversationId) return;
       
       try {
         setLoading(true);
         const messages = await getConversationMessages(currentConversationId);
+        if (cancelled) return;
         setMessages(messages);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania wiadomości konwersacji:', error);
         showError('Nie udało się pobrać wiadomości z wybranej konwersacji');
       } finally {
-        setLoading(false);
-        setStatusMessage('');
+        if (!cancelled) {
+          setLoading(false);
+          setStatusMessage('');
+        }
       }
     };
 
     loadConversationMessages();
+    return () => { cancelled = true; };
   }, [currentConversationId, showError]);
 
   const handleInputChange = (e) => {
@@ -699,13 +711,14 @@ import APIQuotaAlert from './APIQuotaAlert';
 
   // Dodaj brakujący kod do renderowania interfejsu - linijka przed zwracaniem głównego kontenera JSX
   useEffect(() => {
+    let cancelled = false;
     const checkMessageQuota = async () => {
       if (!currentUser?.uid) return;
       
       try {
-        // Pobierz aktualny stan limitu bez zwiększania licznika
         const userRef = doc(db, 'users', currentUser.uid);
         const userDoc = await getDoc(userRef);
+        if (cancelled) return;
         
         if (userDoc.exists()) {
           const userData = userDoc.data();
@@ -721,11 +734,13 @@ import APIQuotaAlert from './APIQuotaAlert';
           });
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas sprawdzania limitu wiadomości:', error);
       }
     };
     
     checkMessageQuota();
+    return () => { cancelled = true; };
   }, [currentUser]);
 
   return (

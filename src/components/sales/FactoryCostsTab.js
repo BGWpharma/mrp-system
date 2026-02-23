@@ -106,7 +106,23 @@ const FactoryCostsTab = () => {
 
   // Pobieranie danych początkowych
   useEffect(() => {
-    fetchData();
+    let cancelled = false;
+    const doFetch = async () => {
+      try {
+        setLoading(true);
+        const fetchedCosts = await getFactoryCostsWithAnalysis();
+        if (cancelled) return;
+        setCosts(fetchedCosts);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania danych:', error);
+        showError(t('factoryCosts.errors.fetchData', 'Błąd podczas pobierania danych'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    doFetch();
+    return () => { cancelled = true; };
   }, []);
 
   const fetchData = async () => {

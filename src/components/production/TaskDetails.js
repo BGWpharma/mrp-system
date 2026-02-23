@@ -76,14 +76,16 @@ const TaskDetails = ({ task }) => {
     [task?.consumedMaterials]
   );
   
-  // Ładuj dane stanowiska produkcyjnego, jeśli zadanie ma przypisane ID stanowiska
   useEffect(() => {
+    let cancelled = false;
     const fetchWorkstation = async () => {
       if (task?.workstationId) {
         try {
           const workstationData = await getWorkstationById(task.workstationId);
+          if (cancelled) return;
           setWorkstation(workstationData);
         } catch (error) {
+          if (cancelled) return;
           console.error('Błąd podczas pobierania stanowiska produkcyjnego:', error);
           showError('Nie udało się pobrać informacji o stanowisku produkcyjnym');
         }
@@ -91,10 +93,11 @@ const TaskDetails = ({ task }) => {
     };
     
     fetchWorkstation();
+    return () => { cancelled = true; };
   }, [task?.workstationId, showError]);
   
-  // Pobierz LOTy powiązane z tym MO i ich powiązania z PO (zoptymalizowane)
   useEffect(() => {
+    let cancelled = false;
     const fetchRelatedBatches = async () => {
       if (!task?.moNumber) return;
       
@@ -103,10 +106,8 @@ const TaskDetails = ({ task }) => {
         
         const batchesWithPO = [];
         
-        // Krok 1: Zbierz wszystkie batchId z różnych źródeł
-        const batchInfoMap = new Map(); // Mapa: batchId -> { batchInfo, source }
+        const batchInfoMap = new Map();
         
-        // 1.1. Z materialBatches (partie zarezerwowane)
         if (task.materialBatches) {
           for (const [materialId, batches] of Object.entries(task.materialBatches)) {
             for (const batchInfo of batches) {
@@ -120,7 +121,6 @@ const TaskDetails = ({ task }) => {
           }
         }
         
-        // 1.2. Z consumedMaterials (partie skonsumowane)
         if (task.consumedMaterials && task.consumedMaterials.length > 0) {
           for (const consumed of task.consumedMaterials) {
             if (consumed.batchId && !batchInfoMap.has(consumed.batchId)) {
@@ -132,14 +132,11 @@ const TaskDetails = ({ task }) => {
           }
         }
         
-        // Krok 2: Pobierz wszystkie partie jednocześnie (batch requests)
         const batchIds = Array.from(batchInfoMap.keys());
         
         if (batchIds.length > 0) {
-          // Podziel na chunki po 10 (limit Firestore dla 'in')
           const batchChunks = chunkArray(batchIds, 10);
           
-          // Wykonaj równoległe zapytania dla każdego chunku
           const batchPromises = batchChunks.map(async (chunkIds) => {
             const batchQuery = query(
               collection(db, 'inventoryBatches'),
@@ -153,9 +150,9 @@ const TaskDetails = ({ task }) => {
           });
           
           const batchResults = await Promise.all(batchPromises);
+          if (cancelled) return;
           const allBatches = batchResults.flat();
           
-          // Krok 3: Przetwórz pobrane partie
           for (const batchData of allBatches) {
             if (batchData.purchaseOrderDetails) {
               const batchMeta = batchInfoMap.get(batchData.id);
@@ -173,19 +170,18 @@ const TaskDetails = ({ task }) => {
           }
         }
         
-        // Krok 4: Pobierz partie związane z tym MO (produkty końcowe)
         const moQuery = query(
           collection(db, 'inventoryBatches'),
           where('moNumber', '==', task.moNumber)
         );
         
         const moSnapshot = await getDocs(moQuery);
+        if (cancelled) return;
         const moBatches = moSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         
-        // Dodaj partie produktów końcowych z powiązaniami PO
         for (const batch of moBatches) {
           if (batch.purchaseOrderDetails && !batchesWithPO.find(b => b.id === batch.id)) {
             batchesWithPO.push(batch);
@@ -195,6 +191,7 @@ const TaskDetails = ({ task }) => {
         setRelatedBatches(batchesWithPO);
         setLoading(false);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania danych o partiach:', error);
         showError('Nie udało się pobrać informacji o partiach produktów');
         setLoading(false);
@@ -202,6 +199,7 @@ const TaskDetails = ({ task }) => {
     };
     
     fetchRelatedBatches();
+    return () => { cancelled = true; };
   }, [task?.moNumber, materialBatchesKey, consumedMaterialsKey, showError]);
   
   // Styl dla nagłówka sekcji z ikoną zwijania/rozwijania

@@ -157,7 +157,61 @@ const ReportsPage = () => {
   
   // Pobieranie danych
   useEffect(() => {
-    fetchReportsData();
+    let cancelled = false;
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        
+        const reports = await getProductionReports(startDate, endDate);
+        if (cancelled) return;
+        setReportsData(reports || []);
+        
+        const stats = await getCompletedTasksStats(startDate, endDate);
+        if (cancelled) return;
+        
+        const defaultStats = {
+          completedTasks: 0,
+          producedItems: 0,
+          avgProductionTime: 0,
+          productivityByCategory: {},
+          dailyOutput: {},
+          materialsUsage: []
+        };
+        
+        setStatsData(stats || defaultStats);
+        
+        const costsData = await getTasksWithCosts(startDate, endDate, 'completed', selectedProduct);
+        if (cancelled) return;
+        setCostReportData(costsData);
+        
+        const costStatistics = calculateCostStatistics(costsData);
+        setCostStats(costStatistics);
+        
+        const uniqueProducts = [...new Set(costsData.map(t => t.productName).filter(Boolean))];
+        setProductsList(uniqueProducts.sort());
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania danych raportów:', error);
+        showError('Nie udało się pobrać danych raportów');
+        setReportsData([]);
+        setStatsData({
+          completedTasks: 0,
+          producedItems: 0,
+          avgProductionTime: 0,
+          productivityByCategory: {},
+          dailyOutput: {},
+          materialsUsage: []
+        });
+        setCostReportData([]);
+        setCostStats(null);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    loadData();
+    return () => { cancelled = true; };
   }, [startDate, endDate]);
   
   const fetchReportsData = async () => {

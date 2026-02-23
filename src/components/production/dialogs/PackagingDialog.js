@@ -1,20 +1,13 @@
-/**
- * Dialog do dodawania opakowań do zadania produkcyjnego
- * Wydzielony z TaskDetailsPage.js dla lepszej organizacji kodu
- */
-
-import React, { useState, useCallback, useEffect, memo } from 'react';
+import React, { memo } from 'react';
 import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   Button,
   Box,
-  Alert,
   TextField,
-  Typography,
-  CircularProgress,
   Table,
   TableBody,
   TableCell,
@@ -22,235 +15,170 @@ import {
   TableHead,
   TableRow,
   Checkbox,
-  Paper,
-  InputAdornment,
+  CircularProgress,
   FormControlLabel,
-  Switch
+  Switch,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  InputAdornment
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
+import { formatDate } from '../../../utils/formatters';
 
 const PackagingDialog = memo(({
   open,
   onClose,
   onSubmit,
-  packagingItems = [],
+  items = [],
+  filteredItems = [],
+  searchValue = '',
+  onSearchChange,
+  consumeImmediately = true,
+  onConsumeImmediatelyChange,
   loading = false,
-  loadingItems = false,
+  onItemSelection,
+  onBatchSelection,
+  onBatchQuantityChange,
   t = (key) => key
 }) => {
-  const [search, setSearch] = useState('');
-  const [selectedItems, setSelectedItems] = useState({});
-  const [quantities, setQuantities] = useState({});
-  const [consumeImmediately, setConsumeImmediately] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Reset state when dialog opens
-  useEffect(() => {
-    if (open) {
-      setSearch('');
-      setSelectedItems({});
-      setQuantities({});
-      setConsumeImmediately(true);
-      setError(null);
-    }
-  }, [open]);
-
-  const handleSelectionChange = useCallback((id, selected) => {
-    setSelectedItems(prev => ({
-      ...prev,
-      [id]: selected
-    }));
-  }, []);
-
-  const handleQuantityChange = useCallback((id, value) => {
-    setQuantities(prev => ({
-      ...prev,
-      [id]: value
-    }));
-  }, []);
-
-  const handleSubmit = useCallback(async () => {
-    const selectedItemsList = Object.entries(selectedItems)
-      .filter(([_, selected]) => selected)
-      .map(([id]) => {
-        const item = packagingItems.find(p => p.id === id);
-        return {
-          ...item,
-          quantity: parseFloat(quantities[id]) || 1
-        };
-      });
-
-    if (selectedItemsList.length === 0) {
-      setError('Wybierz przynajmniej jedno opakowanie');
-      return;
-    }
-
-    setError(null);
-    
-    const result = await onSubmit({
-      items: selectedItemsList,
-      consumeImmediately
-    });
-    
-    if (result?.success) {
-      onClose();
-    } else if (result?.error) {
-      setError(result.error.message || 'Wystąpił błąd');
-    }
-  }, [selectedItems, quantities, consumeImmediately, packagingItems, onSubmit, onClose]);
-
-  const handleClose = useCallback(() => {
-    setError(null);
-    onClose();
-  }, [onClose]);
-
-  // Filtruj opakowania
-  const filteredItems = React.useMemo(() => {
-    if (!search.trim()) return packagingItems;
-    
-    const searchLower = search.toLowerCase();
-    return packagingItems.filter(item => 
-      item.name?.toLowerCase().includes(searchLower) ||
-      item.sku?.toLowerCase().includes(searchLower)
-    );
-  }, [packagingItems, search]);
-
-  const selectedCount = Object.values(selectedItems).filter(Boolean).length;
-
   return (
     <Dialog
       open={open}
-      onClose={handleClose}
+      onClose={onClose}
       maxWidth="md"
       fullWidth
     >
-      <DialogTitle>
-        Dodaj opakowania do zadania
-        {selectedCount > 0 && (
-          <Typography variant="body2" color="primary" component="span" sx={{ ml: 2 }}>
-            (wybrano: {selectedCount})
-          </Typography>
-        )}
-      </DialogTitle>
+      <DialogTitle>Dodaj opakowania do zadania</DialogTitle>
       <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+        <DialogContentText sx={{ mb: 2 }}>
+          Wybierz opakowania, które chcesz dodać do zadania produkcyjnego.
+        </DialogContentText>
 
-        <Box sx={{ mb: 2 }}>
-          <TextField
-            fullWidth
-            placeholder="Szukaj opakowań..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              )
-            }}
-            size="small"
-          />
-        </Box>
+        <TextField
+          fullWidth
+          margin="normal"
+          label="Wyszukaj opakowanie"
+          variant="outlined"
+          value={searchValue}
+          onChange={(e) => onSearchChange(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
+          sx={{ mb: 2 }}
+        />
 
         <FormControlLabel
           control={
             <Switch
               checked={consumeImmediately}
-              onChange={(e) => setConsumeImmediately(e.target.checked)}
+              onChange={(e) => onConsumeImmediatelyChange(e.target.checked)}
+              color="primary"
             />
           }
-          label="Automatycznie konsumuj opakowania po dodaniu"
+          label="Konsumuj opakowania natychmiast z wybranych partii"
           sx={{ mb: 2 }}
         />
 
-        {loadingItems ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
             <CircularProgress />
           </Box>
-        ) : filteredItems.length === 0 ? (
-          <Alert severity="info">
-            {search.trim() 
-              ? 'Nie znaleziono opakowań pasujących do wyszukiwania'
-              : 'Brak dostępnych opakowań'}
-          </Alert>
         ) : (
-          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
-            <Table stickyHeader size="small">
+          <TableContainer>
+            <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      indeterminate={selectedCount > 0 && selectedCount < filteredItems.length}
-                      checked={selectedCount === filteredItems.length && filteredItems.length > 0}
-                      onChange={(e) => {
-                        const newSelection = {};
-                        filteredItems.forEach(item => {
-                          newSelection[item.id] = e.target.checked;
-                        });
-                        setSelectedItems(newSelection);
-                      }}
-                    />
-                  </TableCell>
+                  <TableCell padding="checkbox">Wybierz</TableCell>
                   <TableCell>Nazwa</TableCell>
-                  <TableCell>SKU</TableCell>
-                  <TableCell>Dostępna ilość</TableCell>
-                  <TableCell>Ilość do dodania</TableCell>
+                  <TableCell>Kategoria</TableCell>
+                  <TableCell>Dostępne partie</TableCell>
+                  <TableCell>Wybrana partia</TableCell>
+                  <TableCell>{t('consumption.quantityToAdd')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredItems.map((item) => (
-                  <TableRow 
-                    key={item.id}
-                    hover
-                    selected={selectedItems[item.id]}
-                    onClick={() => handleSelectionChange(item.id, !selectedItems[item.id])}
-                    sx={{ cursor: 'pointer' }}
-                  >
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={selectedItems[item.id] || false}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleSelectionChange(item.id, e.target.checked)}
-                      />
-                    </TableCell>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell>{item.sku || '—'}</TableCell>
-                    <TableCell>{item.quantity} {item.unit}</TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={quantities[item.id] || ''}
-                        onChange={(e) => handleQuantityChange(item.id, e.target.value)}
-                        placeholder="1"
-                        inputProps={{ min: 0, step: 1 }}
-                        disabled={!selectedItems[item.id]}
-                        sx={{ width: 100 }}
-                      />
+                {filteredItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">
+                      {items.length === 0
+                        ? "Brak dostępnych opakowań"
+                        : "Brak wyników dla podanego wyszukiwania"}
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredItems.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={item.selected}
+                          onChange={(e) => onItemSelection(item.id, e.target.checked)}
+                        />
+                      </TableCell>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{item.category}</TableCell>
+                      <TableCell>
+                        {item.batches && item.batches.length > 0
+                          ? `${item.batches.length} partii dostępnych`
+                          : 'Brak dostępnych partii'}
+                      </TableCell>
+                      <TableCell>
+                        <FormControl fullWidth size="small" disabled={!item.selected}>
+                          <InputLabel>{t('common:common.selectBatch')}</InputLabel>
+                          <Select
+                            value={item.selectedBatch?.id || ''}
+                            onChange={(e) => onBatchSelection(item.id, e.target.value)}
+                            label={t('common:common.selectBatch')}
+                          >
+                            {item.batches && item.batches.map((batch) => (
+                              <MenuItem key={batch.id} value={batch.id}>
+                                {`LOT: ${batch.lotNumber || batch.batchNumber || 'Brak numeru'} - ${batch.quantity} ${item.unit}${batch.expiryDate ? ` (Ważne do: ${formatDate(batch.expiryDate)})` : ''}`}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          type="number"
+                          value={item.batchQuantity || ''}
+                          onChange={(e) => onBatchQuantityChange(item.id, e.target.value)}
+                          onWheel={(e) => e.target.blur()}
+                          disabled={!item.selected || !item.selectedBatch}
+                          inputProps={{
+                            min: 0,
+                            max: item.selectedBatch ? item.selectedBatch.quantity : 0,
+                            step: 'any'
+                          }}
+                          size="small"
+                          sx={{ width: 130 }}
+                          placeholder={item.selectedBatch ? `Max: ${item.selectedBatch.quantity}` : '0'}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
+        <Button onClick={onClose}>
           Anuluj
         </Button>
-        <Button 
-          onClick={handleSubmit} 
+        <Button
+          onClick={onSubmit}
           variant="contained"
           color="primary"
-          disabled={loading || selectedCount === 0}
-          startIcon={loading ? <CircularProgress size={20} /> : null}
+          disabled={loading || items.filter(item => item.selected && item.selectedBatch && item.batchQuantity > 0).length === 0}
         >
-          {loading ? 'Dodawanie...' : `Dodaj (${selectedCount})`}
+          {loading ? <CircularProgress size={24} /> : 'Dodaj wybrane opakowania'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -260,4 +188,3 @@ const PackagingDialog = memo(({
 PackagingDialog.displayName = 'PackagingDialog';
 
 export default PackagingDialog;
-

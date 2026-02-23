@@ -65,12 +65,13 @@ const OpportunityFormPage = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
+    let cancelled = false;
     const fetchContacts = async () => {
       try {
         const allContacts = await getAllContacts();
+        if (cancelled) return;
         setContacts(allContacts);
         
-        // Jeśli jest contactId z query, znajdź i ustaw wybrany kontakt
         if (contactIdFromQuery) {
           const contact = allContacts.find(c => c.id === contactIdFromQuery);
           if (contact) {
@@ -82,10 +83,13 @@ const OpportunityFormPage = () => {
           }
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania kontaktów:', error);
         showError('Nie udało się pobrać listy kontaktów: ' + error.message);
       } finally {
-        setContactsLoading(false);
+        if (!cancelled) {
+          setContactsLoading(false);
+        }
       }
     };
     
@@ -95,9 +99,9 @@ const OpportunityFormPage = () => {
       const fetchOpportunity = async () => {
         try {
           const opportunityData = await getOpportunityById(opportunityId);
+          if (cancelled) return;
           setFormData(opportunityData);
           
-          // Znajdź kontakt, jeśli istnieje
           if (opportunityData.contactId) {
             const contact = contacts.find(c => c.id === opportunityData.contactId);
             if (contact) {
@@ -105,15 +109,19 @@ const OpportunityFormPage = () => {
             }
           }
         } catch (error) {
+          if (cancelled) return;
           console.error('Błąd podczas pobierania szansy sprzedaży:', error);
           showError('Nie udało się pobrać danych szansy sprzedaży: ' + error.message);
         } finally {
-          setLoading(false);
+          if (!cancelled) {
+            setLoading(false);
+          }
         }
       };
       
       fetchOpportunity();
     }
+    return () => { cancelled = true; };
   }, [opportunityId, contactIdFromQuery, isEditMode, showError]);
   
   const validateForm = () => {

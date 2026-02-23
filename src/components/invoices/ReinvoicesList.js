@@ -86,8 +86,28 @@ const ReinvoicesList = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    let cancelled = false;
+
     fetchInvoices();
-    fetchCustomers();
+
+    const loadCustomers = async () => {
+      try {
+        setCustomersLoading(true);
+        const customersData = await getAllCustomers();
+        if (cancelled) return;
+        setCustomers(customersData);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Error fetching customers:', error);
+      } finally {
+        if (!cancelled) {
+          setCustomersLoading(false);
+        }
+      }
+    };
+    loadCustomers();
+
+    return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

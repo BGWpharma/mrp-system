@@ -100,21 +100,24 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
 
   // Pobierz listę wszystkich aktywnych użytkowników
   useEffect(() => {
-    const fetchUsers = async () => {
-      if (!open) return;
-      
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
       setLoadingUsers(true);
       try {
         const users = await getAllActiveUsers();
+        if (cancelled) return;
         setAllUsers(users);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd podczas pobierania użytkowników:', error);
       } finally {
-        setLoadingUsers(false);
+        if (!cancelled) {
+          setLoadingUsers(false);
+        }
       }
-    };
-
-    fetchUsers();
+    })();
+    return () => { cancelled = true; };
   }, [open]);
 
   useEffect(() => {

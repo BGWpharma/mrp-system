@@ -62,31 +62,37 @@ const InteractionDetailsPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchInteractionData();
-  }, [interactionId]);
+    let cancelled = false;
+    const fetchInteractionData = async () => {
+      try {
+        setLoading(true);
+        const interactionData = await getInteractionById(interactionId);
+        if (cancelled) return;
+        setInteraction(interactionData);
 
-  const fetchInteractionData = async () => {
-    try {
-      setLoading(true);
-      const interactionData = await getInteractionById(interactionId);
-      setInteraction(interactionData);
-
-      if (interactionData.contactId) {
-        try {
-          const supplierData = await getSupplierById(interactionData.contactId);
-          setSupplier(supplierData);
-        } catch (error) {
-          console.error('Błąd podczas pobierania dostawcy:', error);
-          // Nie wyświetlaj błędu użytkownikowi - po prostu kontynuuj bez danych dostawcy
+        if (interactionData.contactId) {
+          try {
+            const supplierData = await getSupplierById(interactionData.contactId);
+            if (cancelled) return;
+            setSupplier(supplierData);
+          } catch (error) {
+            if (cancelled) return;
+            console.error('Błąd podczas pobierania dostawcy:', error);
+          }
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania danych interakcji:', error);
+        showError(t('purchaseInteractions.notifications.loadFailed') + ': ' + error.message);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
       }
-    } catch (error) {
-      console.error('Błąd podczas pobierania danych interakcji:', error);
-      showError(t('purchaseInteractions.notifications.loadFailed') + ': ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    fetchInteractionData();
+    return () => { cancelled = true; };
+  }, [interactionId]);
 
   const handleDeleteClick = () => {
     setDeleteDialogOpen(true);

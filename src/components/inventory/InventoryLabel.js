@@ -151,6 +151,8 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     if (item) {
       setLabelData(prev => ({
         ...prev,
@@ -159,36 +161,36 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
         showAddress: !!address
       }));
       
-      // Pobierz grupy, do których należy produkt
-      fetchProductGroups();
+      const loadProductGroups = async () => {
+        if (!item || !item.id) return;
+        
+        try {
+          const groupsCollection = collection(db, 'itemGroups');
+          const groupsSnapshot = await getDocs(groupsCollection);
+          if (cancelled) return;
+          
+          const allGroups = groupsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          setGroups(allGroups);
+          
+          const productGroups = allGroups.filter(group => 
+            group.items && Array.isArray(group.items) && group.items.includes(item.id)
+          );
+          
+          setItemGroups(productGroups);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Error fetching groups:', error);
+        }
+      };
+      loadProductGroups();
     }
-  }, [item, address, boxQuantity]);
 
-  // Funkcja do pobierania grup, do których należy produkt
-  const fetchProductGroups = async () => {
-    if (!item || !item.id) return;
-    
-    try {
-      const groupsCollection = collection(db, 'itemGroups');
-      const groupsSnapshot = await getDocs(groupsCollection);
-      
-      const allGroups = groupsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      setGroups(allGroups);
-      
-      // Sprawdź, do których grup należy produkt
-      const productGroups = allGroups.filter(group => 
-        group.items && Array.isArray(group.items) && group.items.includes(item.id)
-      );
-      
-      setItemGroups(productGroups);
-    } catch (error) {
-      console.error('Error fetching groups:', error);
-    }
-  };
+    return () => { cancelled = true; };
+  }, [item, address, boxQuantity]);
 
   // Funkcja do drukowania etykiety
   const handlePrint = async () => {

@@ -308,7 +308,9 @@ const PurchaseOrderList = () => {
   
   // Wywołujemy fetchPurchaseOrdersOptimized przy zmianach parametrów
   useEffect(() => {
+    let cancelled = false;
     fetchPurchaseOrdersOptimized();
+    return () => { cancelled = true; };
   }, [fetchPurchaseOrdersOptimized]);
   
   // Obsługa debounce dla wyszukiwania
@@ -330,16 +332,20 @@ const PurchaseOrderList = () => {
   
   // Pobieranie liczby alertów o niezamówionych materiałach
   useEffect(() => {
+    let cancelled = false;
     const fetchAlertsCount = async () => {
       try {
         const count = await getUnorderedMaterialAlertsCount();
+        if (cancelled) return;
         setAlertsCount(count);
       } catch (error) {
+        if (cancelled) return;
         console.error('Błąd pobierania liczby alertów:', error);
       }
     };
     
     fetchAlertsCount();
+    return () => { cancelled = true; };
   }, []);
   
   // Funkcja obsługująca kliknięcie w nagłówek kolumny

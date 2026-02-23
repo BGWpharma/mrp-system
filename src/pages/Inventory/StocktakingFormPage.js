@@ -55,45 +55,43 @@ const StocktakingFormPage = () => {
   const [warehouses, setWarehouses] = useState([]);
 
   useEffect(() => {
-    fetchWarehouses();
-    
+    let cancelled = false;
+    (async () => {
+      try {
+        const warehousesData = await getAllWarehouses();
+        if (cancelled) return;
+        setWarehouses(warehousesData);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Błąd podczas pobierania magazynów:', error);
+        showError(t('stocktaking.warehousesLoadError'));
+      }
+    })();
     if (id && id !== 'new') {
-      fetchStocktaking();
+      (async () => {
+        try {
+          setLoading(true);
+          const stocktakingData = await getStocktakingById(id);
+          if (cancelled) return;
+          if (stocktakingData.status === 'Zakończona') {
+            showError(t('stocktaking.cannotEditCompleted'));
+            navigate('/inventory/stocktaking');
+            return;
+          }
+          setStocktaking(stocktakingData);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('Błąd podczas pobierania danych inwentaryzacji:', error);
+          setError(t('stocktaking.loadError'));
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
     } else {
       setLoading(false);
     }
+    return () => { cancelled = true; };
   }, [id]);
-
-  const fetchWarehouses = async () => {
-    try {
-      const warehousesData = await getAllWarehouses();
-      setWarehouses(warehousesData);
-    } catch (error) {
-      console.error('Błąd podczas pobierania magazynów:', error);
-      showError(t('stocktaking.warehousesLoadError'));
-    }
-  };
-
-  const fetchStocktaking = async () => {
-    try {
-      setLoading(true);
-      const stocktakingData = await getStocktakingById(id);
-      
-      // Sprawdź, czy można edytować inwentaryzację
-      if (stocktakingData.status === 'Zakończona') {
-        showError(t('stocktaking.cannotEditCompleted'));
-        navigate('/inventory/stocktaking');
-        return;
-      }
-      
-      setStocktaking(stocktakingData);
-    } catch (error) {
-      console.error('Błąd podczas pobierania danych inwentaryzacji:', error);
-      setError(t('stocktaking.loadError'));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;

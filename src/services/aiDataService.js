@@ -18,25 +18,20 @@ import { getOrdersStats } from './orderService';
 import { getAllInventoryItems, getExpiredBatches, getExpiringBatches, getInventoryTransactionsPaginated } from './inventory';
 import { getAllTasks, getTasksByStatus } from './productionService';
 import { getAllTests } from './qualityService';
+import { ServiceCacheManager } from './cache/serviceCacheManager';
 
-// Dodajemy buforowanie danych
-let dataCache = {
-  inventory: { data: null, timestamp: null },
-  orders: { data: null, timestamp: null },
-  productionTasks: { data: null, timestamp: null },
-  recipes: { data: null, timestamp: null },
-  suppliers: { data: null, timestamp: null },
-  purchaseOrders: { data: null, timestamp: null },
-  materialBatches: { data: null, timestamp: null },
-  batchReservations: { data: null, timestamp: null },
-  inventoryBatches: { data: null, timestamp: null } // Dodajemy buforowanie dla inventoryBatches
-};
+const AI_CACHE_PREFIX = 'ai:';
+const AI_CACHE_TTL = 30 * 60 * 1000; // 30 minut
+const AI_RECIPES_TTL = 1 * 60 * 1000; // 1 minuta
 
-// Czas ważności bufora w milisekundach (30 minut - zoptymalizowano dla lepszej wydajności)
-const CACHE_EXPIRY = 30 * 60 * 1000;
+const AI_CACHE_KEYS = [
+  'inventory', 'orders', 'productionTasks', 'recipes',
+  'suppliers', 'purchaseOrders', 'materialBatches',
+  'batchReservations', 'inventoryBatches'
+];
 
-// Czas ważności bufora receptur w milisekundach (1 minuta)
-const RECIPES_CACHE_EXPIRY = 1 * 60 * 1000;
+const getTtlForKey = (cacheKey) =>
+  cacheKey === 'recipes' ? AI_RECIPES_TTL : AI_CACHE_TTL;
 
 /**
  * Pobiera dane z wielu kolekcji w jednym zapytaniu, aby zmniejszyć liczbę operacji odczytu
@@ -47,52 +42,33 @@ export const batchGetData = async (collectionsConfig = []) => {
   try {
     console.log(`Pobieranie danych wsadowych dla ${collectionsConfig.length} kolekcji...`);
     
-    // Przygotuj wyniki
     const results = {};
-    const now = new Date().getTime();
-    
-    // Najpierw sprawdź, czy dane są w cache
     const cachedCollections = [];
     const collectionsToFetch = [];
     
-    // Przygotuj listę kolekcji do pobrania
     for (const config of collectionsConfig) {
       const { name, options = {} } = config;
+      const fullKey = `${AI_CACHE_PREFIX}${name}`;
+      const cached = ServiceCacheManager.get(fullKey);
       
-      // Wybierz odpowiedni czas ważności cache'u w zależności od typu danych
-      const cacheExpiry = name === 'recipes' ? RECIPES_CACHE_EXPIRY : CACHE_EXPIRY;
-      
-      // Sprawdź, czy dane są w buforze i czy nie są przeterminowane
-      if (dataCache[name] && dataCache[name].data && dataCache[name].timestamp && 
-          (now - dataCache[name].timestamp < cacheExpiry)) {
-        // Dane są w cache
-        console.log(`Używam zbuforowanych danych dla ${name} (wiek: ${Math.round((now - dataCache[name].timestamp) / 1000)}s)`);
-        results[name] = dataCache[name].data;
+      if (cached) {
+        results[name] = cached;
         cachedCollections.push(name);
       } else {
-        // Dane nie są w cache lub są przeterminowane
         collectionsToFetch.push({ name, options });
       }
     }
     
-    // Zgłoś, które kolekcje są pobierane z cache
     console.log(`Kolekcje pobrane z cache: ${cachedCollections.join(', ') || 'brak'}`);
     
-    // Pobierz dane z bazy dla pozostałych kolekcji - równolegle
     if (collectionsToFetch.length > 0) {
       console.log(`Pobieranie danych z bazy dla kolekcji: ${collectionsToFetch.map(c => c.name).join(', ')}`);
       
-      // Uruchom wszystkie zapytania równolegle dla lepszej wydajności
       const promises = collectionsToFetch.map(async ({ name, options }) => {
         try {
           const result = await getCollectionData(name, options);
-          
-          // Zapisz do cache i zwróć dane
-          dataCache[name] = {
-            data: result.data,
-            timestamp: now
-          };
-          
+          const ttl = getTtlForKey(name);
+          ServiceCacheManager.set(`${AI_CACHE_PREFIX}${name}`, result.data, ttl);
           return { name, data: result.data };
         } catch (error) {
           console.error(`Błąd podczas pobierania danych dla kolekcji ${name}:`, error);
@@ -100,10 +76,7 @@ export const batchGetData = async (collectionsConfig = []) => {
         }
       });
       
-      // Czekaj na wszystkie zapytania
       const fetchedResults = await Promise.all(promises);
-      
-      // Zapisz wyniki
       fetchedResults.forEach(({ name, data }) => {
         results[name] = data;
       });
@@ -124,58 +97,23 @@ export const batchGetData = async (collectionsConfig = []) => {
  * @returns {Promise<Array>} - Dane z bufora lub bazy
  */
 export const getDataWithCache = async (cacheKey, fetchFunction, options = {}) => {
-  const now = new Date().getTime();
-  const cache = dataCache[cacheKey];
-  
-  // Wybierz odpowiedni czas ważności cache'u w zależności od typu danych
-  const cacheExpiry = cacheKey === 'recipes' ? RECIPES_CACHE_EXPIRY : CACHE_EXPIRY;
-  
-  // Sprawdź czy dane są w buforze i czy nie są przeterminowane
-  if (cache.data && cache.timestamp && (now - cache.timestamp < cacheExpiry)) {
-    console.log(`Używam zbuforowanych danych dla ${cacheKey} (wiek: ${Math.round((now - cache.timestamp) / 1000)}s)`);
-    
-    // Jeśli są filtry, musimy filtrować dane z bufora
-    if (cacheKey === 'productionTasks' && options.filters) {
-      const filteredData = filterCachedData(cache.data, options.filters);
-      console.log(`Filtrowanie danych z bufora dla ${cacheKey}: ${filteredData.length} elementów`);
-      return filteredData;
-    }
-    
-    return cache.data;
-  }
-  
-  // Jeśli nie ma w buforze, pobierz z bazy
-  console.log(`Pobieram dane z bazy dla ${cacheKey}`);
-  
-  // Wywołaj odpowiednią funkcję z odpowiednimi parametrami - bez domyślnych limitów
-  let data;
+  const fullKey = `${AI_CACHE_PREFIX}${cacheKey}`;
+  const ttl = getTtlForKey(cacheKey);
+
   if (cacheKey === 'productionTasks' && options.filters) {
-    data = await fetchFunction(options.limit, options.filters);
-  } else {
-    data = await fetchFunction(options.limit);
+    const allData = await ServiceCacheManager.getOrFetch(
+      fullKey,
+      () => fetchFunction(options.limit),
+      ttl
+    );
+    return filterCachedData(allData, options.filters);
   }
-  
-  // Zapisz do bufora tylko jeśli nie ma filtrów
-  // W przypadku filtrów przechowujemy surowe dane
-  if (cacheKey === 'productionTasks' && options.filters) {
-    // Jeśli mamy już dane w buforze, nie aktualizujemy ich
-    if (!cache.data) {
-      // Pobierz wszystkie dane bez filtrów do bufora - bez limitów
-      const allData = await fetchFunction(options.limit);
-      dataCache[cacheKey] = {
-        data: allData,
-        timestamp: now
-      };
-    }
-  } else {
-    // Zapisz do bufora
-    dataCache[cacheKey] = {
-      data,
-      timestamp: now
-    };
-  }
-  
-  return data;
+
+  return ServiceCacheManager.getOrFetch(
+    fullKey,
+    () => fetchFunction(options.limit),
+    ttl
+  );
 };
 
 /**
@@ -226,14 +164,12 @@ const filterCachedData = (data, filters) => {
  * @param {string} cacheKey - Opcjonalny klucz bufora do wyczyszczenia. Jeśli nie podano, czyści cały bufor.
  */
 export const clearCache = (cacheKey = null) => {
-  if (cacheKey && dataCache[cacheKey]) {
+  if (cacheKey) {
     console.log(`Czyszczę bufor dla ${cacheKey}`);
-    dataCache[cacheKey] = { data: null, timestamp: null };
+    ServiceCacheManager.invalidate(`${AI_CACHE_PREFIX}${cacheKey}`);
   } else {
     console.log('Czyszczę cały bufor danych');
-    Object.keys(dataCache).forEach(key => {
-      dataCache[key] = { data: null, timestamp: null };
-    });
+    ServiceCacheManager.invalidateByPrefix(AI_CACHE_PREFIX);
   }
 };
 

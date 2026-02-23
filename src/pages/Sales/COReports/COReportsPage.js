@@ -173,19 +173,18 @@ const COReportsPage = () => {
   
   // Pobieranie danych - zoptymalizowane dla zakresu dat
   useEffect(() => {
-    // Debugging - sprawdź faktyczne daty
+    let cancelled = false;
     console.log('🔍 Faktyczne daty w fetchData:', {
       startDate: startDate?.toISOString().split('T')[0],
       endDate: endDate?.toISOString().split('T')[0],
       selectedCustomer
     });
     
-    // Opóźnij ładowanie aby state dates były ustawione
     const timeoutId = setTimeout(() => {
-      fetchData();
+      if (!cancelled) fetchData();
     }, 100);
     
-    return () => clearTimeout(timeoutId);
+    return () => { cancelled = true; clearTimeout(timeoutId); };
   }, []);
   
   // Filtrowanie danych po zmianie filtrów - z inteligentną invalidacją cache
@@ -197,16 +196,16 @@ const COReportsPage = () => {
 
   // Invalidacja cache przy zmianie dat lub klienta - z debouncing
   useEffect(() => {
+    let cancelled = false;
     const timeoutId = setTimeout(() => {
+      if (cancelled) return;
       const dateKey = `${startDate.getTime()}_${endDate.getTime()}`;
       
-      // Sprawdź czy cache trzeba invalidować
       if (ordersCache.dateRange && ordersCache.dateRange !== dateKey) {
         console.log('📅 Zmiana dat - invalidacja cache zamówień');
         ordersCache.data = null;
         ordersCache.timestamp = null;
         
-        // Automatycznie pobierz nowe dane
         fetchData();
       }
       
@@ -215,23 +214,24 @@ const COReportsPage = () => {
         ordersCache.data = null;
         ordersCache.timestamp = null;
         
-        // Automatycznie pobierz nowe dane  
         fetchData();
       }
-    }, 300); // 300ms debounce
+    }, 300);
     
-    return () => clearTimeout(timeoutId);
+    return () => { cancelled = true; clearTimeout(timeoutId); };
   }, [startDate, endDate, selectedCustomer]);
   
   // NOWE: Odświeżaj zadania produkcyjne gdy zmienią się filtry (tylko dla zakładki Koszty produkcji)
   useEffect(() => {
-    if (selectedTab === 0 && !loading) { // Tylko dla zakładki Koszty produkcji i po załadowaniu
+    let cancelled = false;
+    if (selectedTab === 0 && !loading) {
       const timeoutId = setTimeout(() => {
+        if (cancelled) return;
         console.log('🔄 Odświeżanie zadań produkcyjnych po zmianie filtrów...');
         fetchProductionTasks();
-      }, 500); // Debounce 500ms
+      }, 500);
       
-      return () => clearTimeout(timeoutId);
+      return () => { cancelled = true; clearTimeout(timeoutId); };
     }
   }, [startDate, endDate, selectedTab]);
   

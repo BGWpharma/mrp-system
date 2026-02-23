@@ -85,39 +85,41 @@ const InventoryItemForm = ({ itemId }) => {
   });
 
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
       try {
-        // Pobierz pozycje magazynowe kategorii "Opakowania zbiorcze" i klientów równolegle
         const [allItems, allCustomers] = await Promise.all([
           getAllInventoryItems(),
           getAllCustomers()
         ]);
+        if (cancelled) return;
         const packages = allItems.filter(item => item.category === 'Opakowania zbiorcze');
         setPackageItems(packages);
         setCustomers(allCustomers);
 
         if (itemId) {
           const item = await getInventoryItemById(itemId);
-          // Usuwamy pola, które nie chcemy edytować bezpośrednio
+          if (cancelled) return;
           const { quantity, bookedQuantity, notes, ...restItem } = item;
           setItemData(restItem);
           setOriginalName(restItem.name || '');
           
-          // Znajdź wybrany karton jeśli istnieje
           if (restItem.parentPackageItemId) {
             const selectedPackage = packages.find(pkg => pkg.id === restItem.parentPackageItemId);
             setSelectedPackageItem(selectedPackage || null);
           }
         }
       } catch (error) {
+        if (cancelled) return;
         showError('Błąd podczas pobierania danych: ' + error.message);
         console.error('Error fetching data:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     
     fetchData();
+    return () => { cancelled = true; };
   }, [itemId, showError]);
 
   const performSave = async (skipRecipeUpdates = false) => {

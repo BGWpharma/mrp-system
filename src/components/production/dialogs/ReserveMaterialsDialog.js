@@ -1,13 +1,9 @@
-/**
- * Dialog do rezerwacji materiałów dla zadania produkcyjnego
- * Wydzielony z TaskDetailsPage.js dla lepszej organizacji kodu
- */
-
-import React, { useState, useCallback, useEffect, memo } from 'react';
+import React, { memo } from 'react';
 import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   Button,
   Box,
@@ -17,170 +13,98 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
+  Checkbox,
   Typography,
-  CircularProgress,
-  Divider,
-  Switch
+  CircularProgress
 } from '@mui/material';
 
 const ReserveMaterialsDialog = memo(({
   open,
   onClose,
   onReserve,
-  task,
-  materials = [],
+  reservationMethod = 'automatic',
+  onReservationMethodChange,
+  autoCreatePOReservations = true,
+  onAutoCreatePOReservationsChange,
   loading = false,
-  singleMaterialId = null, // Jeśli ustawione, rezerwuj tylko ten materiał
+  renderManualBatchSelection,
   t = (key) => key
 }) => {
-  const [reservationMethod, setReservationMethod] = useState('automatic');
-  const [autoCreatePOReservations, setAutoCreatePOReservations] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Reset state when dialog opens
-  useEffect(() => {
-    if (open) {
-      setReservationMethod('automatic');
-      setAutoCreatePOReservations(true);
-      setError(null);
-    }
-  }, [open]);
-
-  const handleSubmit = useCallback(async () => {
-    setError(null);
-    
-    const result = await onReserve({
-      method: reservationMethod,
-      autoCreatePOReservations,
-      singleMaterialId
-    });
-    
-    if (result?.success) {
-      onClose();
-    } else if (result?.error) {
-      setError(result.error.message || 'Wystąpił błąd podczas rezerwacji');
-    }
-  }, [reservationMethod, autoCreatePOReservations, singleMaterialId, onReserve, onClose]);
-
-  const handleClose = useCallback(() => {
-    setError(null);
-    onClose();
-  }, [onClose]);
-
-  // Oblicz statystyki materiałów
-  const materialStats = React.useMemo(() => {
-    const targetMaterials = singleMaterialId 
-      ? materials.filter(m => m.id === singleMaterialId || m.inventoryItemId === singleMaterialId)
-      : materials;
-    
-    return {
-      total: targetMaterials.length,
-      withBatches: targetMaterials.filter(m => {
-        const materialId = m.inventoryItemId || m.id;
-        return task?.materialBatches?.[materialId]?.length > 0;
-      }).length
-    };
-  }, [materials, singleMaterialId, task?.materialBatches]);
-
   return (
     <Dialog
       open={open}
-      onClose={handleClose}
-      maxWidth="sm"
+      onClose={onClose}
+      maxWidth="lg"
       fullWidth
     >
-      <DialogTitle>
-        {singleMaterialId ? 'Rezerwuj materiał' : 'Rezerwuj materiały'}
-      </DialogTitle>
+      <DialogTitle>Rezerwacja surowców</DialogTitle>
       <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+        <DialogContentText sx={{ mb: 2 }}>
+          Wybierz partie materiałów, które chcesz zarezerwować dla tego zadania produkcyjnego.
+        </DialogContentText>
 
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-            {singleMaterialId 
-              ? 'Wybierz metodę rezerwacji dla wybranego materiału.'
-              : `Wybierz metodę rezerwacji dla ${materialStats.total} materiałów.`
-            }
-          </Typography>
-
-          {materialStats.withBatches > 0 && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              {materialStats.withBatches} z {materialStats.total} materiałów ma już przypisane partie.
-              Rezerwacja zostanie uzupełniona dla brakujących ilości.
-            </Alert>
-          )}
-        </Box>
-
-        <FormControl component="fieldset" sx={{ width: '100%' }}>
+        <FormControl component="fieldset" sx={{ mb: 2 }}>
           <FormLabel component="legend">Metoda rezerwacji</FormLabel>
           <RadioGroup
+            row
             value={reservationMethod}
-            onChange={(e) => setReservationMethod(e.target.value)}
+            onChange={onReservationMethodChange}
           >
-            <FormControlLabel 
-              value="automatic" 
-              control={<Radio />} 
-              label={
-                <Box>
-                  <Typography variant="body1">Automatyczna (FEFO)</Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    System automatycznie wybierze partie z najkrótszą datą ważności
-                  </Typography>
-                </Box>
-              }
+            <FormControlLabel
+              value="automatic"
+              control={<Radio />}
+              label="Automatyczna (FIFO)"
             />
-            <FormControlLabel 
-              value="manual" 
-              control={<Radio />} 
-              label={
-                <Box>
-                  <Typography variant="body1">Manualna</Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    Wybierz partie ręcznie w zakładce Materiały i Koszty
-                  </Typography>
-                </Box>
-              }
+            <FormControlLabel
+              value="manual"
+              control={<Radio />}
+              label={t('consumption.manualBatchSelection')}
             />
           </RadioGroup>
         </FormControl>
 
-        <Divider sx={{ my: 2 }} />
+        {reservationMethod === 'manual' && renderManualBatchSelection && renderManualBatchSelection()}
 
-        <FormControlLabel
-          control={
-            <Switch
-              checked={autoCreatePOReservations}
-              onChange={(e) => setAutoCreatePOReservations(e.target.checked)}
+        {reservationMethod === 'automatic' && (
+          <>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
+            </Alert>
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={autoCreatePOReservations}
+                  onChange={(e) => onAutoCreatePOReservationsChange(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    Automatycznie twórz rezerwacje z zamówień zakupu (PO)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Jeśli braknie partii magazynowych, system automatycznie zarezerwuje brakującą ilość z otwartych zamówień zakupowych
+                  </Typography>
+                </Box>
+              }
+              sx={{ mb: 2, alignItems: 'flex-start' }}
             />
-          }
-          label={
-            <Box>
-              <Typography variant="body2">
-                Automatycznie twórz rezerwacje z zamówień zakupu (PO)
-              </Typography>
-              <Typography variant="caption" color="textSecondary">
-                Gdy brakuje partii magazynowych, system zarezerwuje ilości z oczekujących dostaw
-              </Typography>
-            </Box>
-          }
-        />
+          </>
+        )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
+        <Button onClick={onClose}>
           Anuluj
         </Button>
-        <Button 
-          onClick={handleSubmit} 
+        <Button
+          onClick={onReserve}
           variant="contained"
           color="primary"
           disabled={loading}
-          startIcon={loading ? <CircularProgress size={20} /> : null}
         >
-          {loading ? 'Rezerwowanie...' : 'Zarezerwuj'}
+          {loading ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -190,4 +114,3 @@ const ReserveMaterialsDialog = memo(({
 ReserveMaterialsDialog.displayName = 'ReserveMaterialsDialog';
 
 export default ReserveMaterialsDialog;
-

@@ -78,26 +78,29 @@ const ExpiryDatesPage = () => {
   );
 
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
       try {
         setLoading(true);
         
-        // Pobierz partie z krótkim terminem ważności
         const expiringData = await getExpiringBatches(debouncedDaysThreshold);
+        if (cancelled) return;
         setExpiringBatches(expiringData);
         
-        // Pobierz przeterminowane partie
         const expiredData = await getExpiredBatches();
+        if (cancelled) return;
         setExpiredBatches(expiredData);
       } catch (error) {
+        if (cancelled) return;
         showError(t('expiryDates.errors.fetchData', { message: error.message }));
         console.error('Error fetching expiry data:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchData();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedDaysThreshold]);
 
