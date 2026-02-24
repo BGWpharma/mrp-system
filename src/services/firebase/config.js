@@ -1,6 +1,6 @@
 // src/services/firebase/config.js
 import { initializeApp } from 'firebase/app';
-import { getFirestore, initializeFirestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import { getDatabase, connectDatabaseEmulator, goOnline, goOffline, ref, onValue } from 'firebase/database';
@@ -20,10 +20,20 @@ const firebaseConfig = {
 // Inicjalizacja Firebase
 const app = initializeApp(firebaseConfig);
 
-// Inicjalizacja Firestore z włączoną obsługą cache
-const db = initializeFirestore(app, {
-  cacheSizeBytes: CACHE_SIZE_UNLIMITED,
-});
+// Inicjalizacja Firestore z trwałym cache w IndexedDB (współdzielonym między kartami)
+let db;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  });
+} catch (error) {
+  console.warn('Nie udało się włączyć trwałego cache Firestore, fallback na pamięć:', error.message);
+  db = initializeFirestore(app, {
+    localCache: memoryLocalCache()
+  });
+}
 
 const auth = getAuth(app);
 const storage = getStorage(app);

@@ -550,8 +550,6 @@ export const useTaskMaterialFetcher = ({
   };
 
   // 🔒 POPRAWKA: Funkcja do pobierania oczekiwanych zamówień dla materiałów
-  // Przyjmuje taskData jako parametr zamiast używać task z closure aby uniknąć stałych danych
-  // ⚡ OPTYMALIZACJA: Równoległe pobieranie zamiast sekwencyjnej pętli (10x szybciej!)
   const fetchAwaitingOrdersForMaterials = async (taskData = task, forceRefresh = false) => {
     const startTime = performance.now();
     console.log('🔵 [TaskDetails] fetchAwaitingOrdersForMaterials START', {
@@ -566,7 +564,6 @@ export const useTaskMaterialFetcher = ({
       }
       setAwaitingOrdersLoading(true);
       
-      // ⚡ OPTYMALIZACJA: Sprawdź cache
       const now = Date.now();
       const cached = parallelDataCache.current.awaitingOrders;
       const materialsHash = taskData.materials.map(m => m.inventoryItemId || m.id).sort().join(',');
@@ -581,54 +578,28 @@ export const useTaskMaterialFetcher = ({
         return;
       }
       
-      // Import funkcji raz, zamiast w każdej iteracji pętli
       const importStartTime = performance.now();
-      const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventory');
+      const { getAwaitingOrdersForMultipleItems } = await import('../../services/inventory');
       console.log('✅ [TaskDetails] inventory service zaimportowany', {
         duration: `${(performance.now() - importStartTime).toFixed(2)}ms`
       });
       
-      // ⚡ OPTYMALIZACJA: Utwórz tablicę promise dla równoległego wykonania
-      const promisesStartTime = performance.now();
-      const promises = taskData.materials.map(async (material) => {
-        const materialId = material.inventoryItemId || material.id;
-        if (!materialId) return { materialId: null, orders: [] };
-        
-        try {
-          const materialOrders = await getAwaitingOrdersForInventoryItem(materialId);
-          return { 
-            materialId, 
-            orders: materialOrders.length > 0 ? materialOrders : [] 
-          };
-        } catch (error) {
-          console.error(`❌ [TaskDetails] Błąd pobierania zamówień dla materiału ${materialId}:`, error);
-          return { materialId, orders: [] };
-        }
-      });
-      
-      console.log('🔄 [TaskDetails] Równoległe pobieranie zamówień dla materiałów', {
-        promisesCount: promises.length
-      });
-      
-      // Poczekaj na wszystkie zapytania równolegle (zamiast sekwencyjnie)
-      const results = await Promise.all(promises);
-      
-      console.log('✅ [TaskDetails] Wszystkie zamówienia pobrane', {
-        duration: `${(performance.now() - promisesStartTime).toFixed(2)}ms`,
-        materialsProcessed: results.length
-      });
-      
-      // Przekształć wyniki w obiekt
-      const ordersData = {};
+      const materialIds = taskData.materials
+        .map(m => m.inventoryItemId || m.id)
+        .filter(Boolean);
+
+      const fetchStartTime = performance.now();
+      const ordersData = await getAwaitingOrdersForMultipleItems(materialIds);
+
       let totalOrders = 0;
-      results.forEach(({ materialId, orders }) => {
-        if (materialId) {
-          ordersData[materialId] = orders;
-          totalOrders += orders.length;
-        }
+      Object.values(ordersData).forEach(orders => { totalOrders += orders.length; });
+
+      console.log('✅ [TaskDetails] Wszystkie zamówienia pobrane (batch)', {
+        duration: `${(performance.now() - fetchStartTime).toFixed(2)}ms`,
+        materialsProcessed: materialIds.length,
+        totalOrders
       });
       
-      // Zapisz w cache
       parallelDataCache.current.awaitingOrders = {
         data: ordersData,
         timestamp: now,
@@ -753,69 +724,80 @@ export const useTaskMaterialFetcher = ({
       return consumedMaterials;
     }
 
-    const enrichedMaterials = await Promise.all(
-      consumedMaterials.map(async (consumed) => {
-        let enrichedConsumed = { ...consumed };
+    try {
+      const { getBatchesByIds } = await import('../../services/inventory');
 
-        // 🔒 POPRAWKA: ZAWSZE pobierz dane z partii jeśli mamy batchId
-        // Problem: consumed.batchNumber może być ID zamiast numeru LOT, więc musimy zawsze sprawdzić
-        if (consumed.batchId) {
+      // 1. Batch-fetch wszystkich partii naraz
+      const batchIds = consumedMaterials.map(c => c.batchId).filter(Boolean);
+      const batchesMap = await getBatchesByIds(batchIds);
+
+      // 2. Zbierz unikalne inventoryItemId z partii, dla których brakuje nazwy/jednostki
+      const neededItemIds = new Set();
+      consumedMaterials.forEach(consumed => {
+        if (!consumed.batchId) return;
+        const batchData = batchesMap.get(consumed.batchId);
+        if (batchData?.inventoryItemId && (!consumed.materialName || !consumed.unit)) {
+          neededItemIds.add(batchData.inventoryItemId);
+        }
+      });
+
+      // 3. Batch-fetch pozycji magazynowych (Firestore 'in' query, batche po 10)
+      const inventoryItemsMap = new Map();
+      if (neededItemIds.size > 0) {
+        const idsArray = Array.from(neededItemIds);
+        const { db: dbRef } = await import('../../services/firebase/config');
+        const { collection: col, query: q, where: w, getDocs: gd } = await import('firebase/firestore');
+        
+        for (let i = 0; i < idsArray.length; i += 10) {
+          const chunk = idsArray.slice(i, i + 10);
           try {
-            const { getInventoryBatch } = await import('../../services/inventory');
-            const batchData = await getInventoryBatch(consumed.batchId);
-            
-            if (batchData) {
-              // Dodaj datę ważności jeśli nie ma
-              if (!enrichedConsumed.expiryDate && batchData.expiryDate) {
-                enrichedConsumed.expiryDate = batchData.expiryDate;
-              }
-
-              // 🔒 POPRAWKA: Dodaj cenę jednostkową partii jeśli nie ma
-              if (!enrichedConsumed.unitPrice && batchData.unitPrice) {
-                enrichedConsumed.unitPrice = batchData.unitPrice;
-              }
-
-              // 🔒 POPRAWKA: ZAWSZE nadpisuj batchNumber/lotNumber danymi z Firestore
-              // Problem: consumed.batchNumber może zawierać ID zamiast numeru LOT jako fallback
-              if (batchData.lotNumber || batchData.batchNumber) {
-                const correctBatchNumber = batchData.lotNumber || batchData.batchNumber;
-                
-                // Nadpisz tylko jeśli wartość się różni (żeby nie nadpisywać dobrego numeru)
-                if (enrichedConsumed.batchNumber !== correctBatchNumber) {
-                  enrichedConsumed.batchNumber = correctBatchNumber;
-                  enrichedConsumed.lotNumber = batchData.lotNumber || batchData.batchNumber;
-                }
-              }
-
-              // Pobierz nazwę materiału i jednostkę z pozycji magazynowej
-              if (batchData.inventoryItemId && (!enrichedConsumed.materialName || !enrichedConsumed.unit)) {
-                try {
-                  const { getInventoryItemById } = await import('../../services/inventory');
-                  const inventoryItem = await getInventoryItemById(batchData.inventoryItemId);
-                  
-                  if (inventoryItem) {
-                    if (!enrichedConsumed.materialName) {
-                      enrichedConsumed.materialName = inventoryItem.name;
-                    }
-                    if (!enrichedConsumed.unit) {
-                      enrichedConsumed.unit = inventoryItem.unit;
-                    }
-                  }
-                } catch (error) {
-                  console.warn(`Nie udało się pobrać danych pozycji magazynowej ${batchData.inventoryItemId}:`, error);
-                }
-              }
-            }
+            const snapshot = await gd(q(col(dbRef, 'inventory'), w('__name__', 'in', chunk)));
+            snapshot.forEach(docSnap => {
+              inventoryItemsMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
+            });
           } catch (error) {
-            console.warn(`Nie udało się pobrać danych partii ${consumed.batchId}:`, error);
+            console.warn('Błąd batch-fetch inventory items w enrichConsumedMaterialsData:', error);
+          }
+        }
+      }
+
+      // 4. Wzbogać consumed materials korzystając z pobranych danych
+      return consumedMaterials.map(consumed => {
+        let enriched = { ...consumed };
+        if (!consumed.batchId) return enriched;
+
+        const batchData = batchesMap.get(consumed.batchId);
+        if (!batchData) return enriched;
+
+        if (!enriched.expiryDate && batchData.expiryDate) {
+          enriched.expiryDate = batchData.expiryDate;
+        }
+        if (!enriched.unitPrice && batchData.unitPrice) {
+          enriched.unitPrice = batchData.unitPrice;
+        }
+
+        if (batchData.lotNumber || batchData.batchNumber) {
+          const correctBatchNumber = batchData.lotNumber || batchData.batchNumber;
+          if (enriched.batchNumber !== correctBatchNumber) {
+            enriched.batchNumber = correctBatchNumber;
+            enriched.lotNumber = batchData.lotNumber || batchData.batchNumber;
           }
         }
 
-        return enrichedConsumed;
-      })
-    );
+        if (batchData.inventoryItemId) {
+          const inventoryItem = inventoryItemsMap.get(batchData.inventoryItemId);
+          if (inventoryItem) {
+            if (!enriched.materialName) enriched.materialName = inventoryItem.name;
+            if (!enriched.unit) enriched.unit = inventoryItem.unit;
+          }
+        }
 
-    return enrichedMaterials;
+        return enriched;
+      });
+    } catch (error) {
+      console.warn('Błąd w enrichConsumedMaterialsData (batch):', error);
+      return consumedMaterials;
+    }
   };
 
   return {

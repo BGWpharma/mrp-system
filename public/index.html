@@ -12,9 +12,15 @@
   <meta http-equiv="Expires" content="0" />
   <link rel="apple-touch-icon" href="%PUBLIC_URL%/BGWPharma_Logo_LightTheme.png" />
 
-  <!-- ✅ OPTYMALIZACJA 6: Preconnect dla szybszego ładowania fontów -->
+  <!-- Preconnect - fonty Google -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <!-- Preconnect - Firebase (Firestore, Auth, RTDB, Storage) -->
+  <link rel="preconnect" href="https://firestore.googleapis.com" />
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" />
+  <link rel="preconnect" href="https://bgw-mrp-system-default-rtdb.europe-west1.firebasedatabase.app" />
+  <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
 
   <!-- Inter font - czysty, nowoczesny design + Roboto jako fallback -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -38,16 +44,11 @@
     -->
   <title>BGW-MRP</title>
 
-  <!-- PDF.js dla podglądu miniaturek PDF -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    if (typeof window.pdfjsLib !== 'undefined') {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-  </script>
+  <!-- PDF.js - ładowany asynchronicznie, nie blokuje parsowania HTML -->
+  <script async src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
   <script>
-    const newVersion = '1.0.290';
+    const newVersion = '1.0.291';
 
     // Funkcja do dodawania parametru wersji do zasobów
     function addVersionToResources() {

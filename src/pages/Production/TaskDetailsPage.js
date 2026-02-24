@@ -681,6 +681,9 @@ const TaskDetailsPage = () => {
     [handlePrintMODetails, handlePrintMaterialsAndLots, isMobile, t]
   );
 
+  // Ref dla late-bound fetchWarehouses (definiowany po useTaskFetcher)
+  const fetchWarehousesRef = useRef(null);
+
   // ✅ Selective Data Loading - funkcje ładowania danych dla konkretnych zakładek
   // ⚡ OPTYMALIZACJA: Lazy loading - ładuj tylko gdy zakładka jest aktywna
   const loadProductionPlanData = useCallback(async () => {
@@ -713,13 +716,17 @@ const TaskDetailsPage = () => {
         });
       }
       
-      // Dostępne maszyny (jeśli nie zostały załadowane)
+      const secondaryPromises = [];
+
       if (availableMachines.length === 0) {
-        const machinesStart = performance.now();
-        await fetchAvailableMachines();
-        console.log('✅ [TaskDetails] Dostępne maszyny pobrane', {
-          duration: `${(performance.now() - machinesStart).toFixed(2)}ms`
-        });
+        secondaryPromises.push(fetchAvailableMachines());
+      }
+      if (fetchWarehousesRef.current) {
+        secondaryPromises.push(fetchWarehousesRef.current());
+      }
+
+      if (secondaryPromises.length > 0) {
+        await Promise.all(secondaryPromises);
       }
       
       setLoadedTabs(prev => ({ ...prev, productionPlan: true }));
@@ -942,6 +949,8 @@ const TaskDetailsPage = () => {
     fetchUserNames,
   });
 
+  fetchWarehousesRef.current = fetchWarehouses;
+
   // ✅ REFAKTORYZACJA: Hook do pobierania danych materiałowych
   const {
     fetchBatchesForMaterialsOptimized,
@@ -1011,15 +1020,7 @@ const TaskDetailsPage = () => {
 
   // ✅ FAZA 1.3: Real-time listener przeniesiony do useTaskRealTimeSync
 
-  // Zachowujemy osobne useEffect dla magazynów (ładowane niezależnie)
-  useEffect(() => {
-    fetchWarehouses();
-  }, []);
-
-  // Pobieranie dostępnych maszyn
-  useEffect(() => {
-    fetchAvailableMachines();
-  }, []);
+  // Magazyny i maszyny ładowane lazy w loadProductionPlanData (przy otwarciu zakładki)
 
   // Wzbogacanie historii produkcji o dane z maszyn
   useEffect(() => {

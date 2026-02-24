@@ -95,6 +95,7 @@ export const useTaskRealTimeSync = (id, callbacks, loadedTabs) => {
 
   const taskRef = useRef(null);
   const debounceTimerRef = useRef(null);
+  const isFirstLoadRef = useRef(true);
   const callbacksRef = useRef(callbacks);
   const loadedTabsRef = useRef(loadedTabs);
 
@@ -295,6 +296,9 @@ export const useTaskRealTimeSync = (id, callbacks, loadedTabs) => {
           clearTimeout(debounceTimerRef.current);
         }
         
+        const delay = isFirstLoadRef.current ? 0 : 300;
+        isFirstLoadRef.current = false;
+
         debounceTimerRef.current = setTimeout(async () => {
           if (!isMounted) return;
           
@@ -320,7 +324,7 @@ export const useTaskRealTimeSync = (id, callbacks, loadedTabs) => {
           if (isMounted) {
             setLoading(false);
           }
-        }, 300);
+        }, delay);
       },
       (error) => {
         console.error('❌ [RealTimeSync] Listener error:', error);

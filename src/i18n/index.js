@@ -1,9 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import HttpApi from 'i18next-http-backend';
 
-// Importujemy pliki tłumaczeń - namespace'y
 // Polskie tłumaczenia
 import commonPL from './locales/pl/common.json';
 import navigationPL from './locales/pl/navigation.json';
@@ -78,7 +76,6 @@ import workTimeEN from './locales/en/workTime.json';
 import scheduleEN from './locales/en/schedule.json';
 import usersEN from './locales/en/users.json';
 
-// Konfiguracja zasobów tłumaczeń z namespace'ami
 const resources = {
   pl: {
     common: commonPL,
@@ -159,83 +156,46 @@ const resources = {
 // Zabezpieczenie przed wielokrotną inicjalizacją (np. przez React.StrictMode)
 if (!i18n.isInitialized) {
   i18n
-    // Wykrywanie języka z przeglądarki/localStorage
     .use(LanguageDetector)
-    // Możliwość ładowania tłumaczeń z plików (w przyszłości)
-    .use(HttpApi)
-    // Integracja z React
     .use(initReactI18next)
-    // Inicjalizacja
     .init({
     resources,
     
-    // Język domyślny
     fallbackLng: 'pl',
-    
-    // Język początkowy będzie wykrywany automatycznie przez LanguageDetector z localStorage
-    // Nie ustawiamy 'lng' aby nie wymuszać języka i pozwolić na persystencję wyboru użytkownika
-    
-    // Namespace domyślny
     defaultNS: 'common',
     
-    // Lista wszystkich namespace'ów
     ns: [
-      'common', 'navigation', 'auth', 'dashboard', 
-      'inventory', 'production', 'orders', 'invoices', 
+      'common', 'navigation', 'auth', 'dashboard',
+      'inventory', 'production', 'orders', 'invoices',
       'customers', 'suppliers', 'recipes', 'reports',
       'machines', 'purchaseOrders', 'cmr', 'forms',
-      'calculator', 'priceLists', 'aiAssistant', 
+      'calculator', 'priceLists', 'aiAssistant',
       'environmentalConditions', 'expiryDates', 'stocktaking',
-      'interactions', 'sidebar', 'taskDetails', 'analytics', 
+      'interactions', 'sidebar', 'taskDetails', 'analytics',
       'financialReport', 'cashflow', 'faq', 'operationalCosts', 'taskboard', 'ecoReport',
       'workTime', 'schedule', 'users'
     ],
     
-    // Konfiguracja wykrywania języka
     detection: {
-      // Kolejność metod wykrywania języka
       order: ['localStorage', 'navigator', 'htmlTag'],
-      
-      // Klucz w localStorage
       lookupLocalStorage: 'i18nextLng',
-      
-      // Cache w localStorage
       caches: ['localStorage'],
-      
-      // Sprawdź tylko główne kody języków (pl, en zamiast pl-PL, en-US)
       checkWhitelist: true,
-      
-      // Walidacja wykrytego języka - zabezpieczenie przed nieprawidłowymi wartościami
       convertDetectedLanguage: (lng) => {
-        // Akceptuj tylko pl lub en
         if (lng === 'pl' || lng === 'en') return lng;
-        // Konwertuj pl-PL na pl, en-US na en, en-GB na en, etc.
         if (lng && lng.startsWith('pl')) return 'pl';
         if (lng && lng.startsWith('en')) return 'en';
-        // Dla nieprawidłowych wartości (null, undefined, inne języki) zwróć domyślny
         console.warn(`[i18n] Nieprawidłowy kod języka: ${lng}, używam domyślnego: pl`);
         return 'pl';
       }
     },
     
-    // Konfiguracja dla HttpApi (do przyszłego użycia)
-    backend: {
-      loadPath: '/locales/{{lng}}/{{ns}}.json',
-    },
-    
-    // Opcje interpolacji
     interpolation: {
-      // React już zabezpiecza przed XSS
       escapeValue: false,
     },
     
-    // Nie włączamy returnObjects - używamy bezpośrednich kluczy
-    // returnObjects: true,
-    
-    // Opcje debugowania (wyłącz w produkcji)
     debug: process.env.NODE_ENV === 'development',
     
-    // Obsługa brakujących kluczy
     saveMissing: process.env.NODE_ENV === 'development',
     missingKeyHandler: (lng, ns, key) => {
       const message = `Missing translation key: ${ns}:${key} for language: ${lng}`;
@@ -244,40 +204,25 @@ if (!i18n.isInitialized) {
         console.warn(`[i18n] ${message}`);
       }
       
-      // Wyślij do Sentry również w produkcji (jako warning, nie error)
       if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
         try {
-          // Dynamiczny import Sentry aby uniknąć circular dependencies
           import('@sentry/react').then(Sentry => {
             Sentry.captureMessage(message, {
               level: 'warning',
-              tags: {
-                type: 'i18n',
-                language: lng,
-                namespace: ns
-              },
-              extra: {
-                key: key,
-                fullKey: `${ns}:${key}`
-              }
+              tags: { type: 'i18n', language: lng, namespace: ns },
+              extra: { key: key, fullKey: `${ns}:${key}` }
             });
-          }).catch(() => {
-            // Sentry nie jest dostępny, ignoruj
-          });
+          }).catch(() => {});
         } catch (error) {
-          // Ignoruj błędy Sentry aby nie zakłócać działania aplikacji
+          // Ignoruj błędy Sentry
         }
       }
     },
     
-    // Konfiguracja dla React
     react: {
-      // Użyj React.Suspense
       useSuspense: false,
-      // Bind events do re-render
       bindI18n: 'languageChanged',
       bindI18nStore: '',
-      // Transform i18n key w przypadku błędów
       transEmptyNodeValue: '',
       transSupportBasicHtmlNodes: true,
       transKeepBasicHtmlNodesFor: ['br', 'strong', 'i', 'em', 'b', 'span'],
@@ -285,4 +230,4 @@ if (!i18n.isInitialized) {
   });
 }
 
-export default i18n; 
+export default i18n;

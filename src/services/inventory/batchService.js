@@ -1064,6 +1064,37 @@ export const deleteBatchCertificate = async (batchId, userId) => {
 };
 
 /**
+ * Pobiera wiele partii po ich ID w grupowych zapytaniach (zamiast N osobnych getDoc).
+ * @param {Array<string>} batchIds - Lista ID partii do pobrania
+ * @returns {Promise<Map<string, Object>>} Mapa batchId -> batchData
+ */
+export const getBatchesByIds = async (batchIds) => {
+  const resultMap = new Map();
+  if (!batchIds || batchIds.length === 0) return resultMap;
+
+  const uniqueIds = [...new Set(batchIds.filter(Boolean))];
+  const batchSize = FIREBASE_LIMITS.BATCH_SIZE;
+
+  for (let i = 0; i < uniqueIds.length; i += batchSize) {
+    const chunk = uniqueIds.slice(i, i + batchSize);
+    try {
+      const q = query(
+        collection(db, COLLECTIONS.INVENTORY_BATCHES),
+        where('__name__', 'in', chunk)
+      );
+      const snapshot = await getDocs(q);
+      snapshot.forEach(docSnap => {
+        resultMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
+      });
+    } catch (error) {
+      console.error(`Błąd podczas grupowego pobierania partii (batch ${i}-${i + batchSize}):`, error);
+    }
+  }
+
+  return resultMap;
+};
+
+/**
  * Pobiera pojedynczą partię z magazynu
  * @param {string} batchId - ID partii
  * @returns {Promise<Object|null>} - Dane partii lub null jeśli nie istnieje

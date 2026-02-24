@@ -1076,6 +1076,136 @@ export const getAwaitingOrdersForInventoryItem = async (inventoryItemId) => {
   }
 };
 
+let activePOCache = { data: null, timestamp: 0 };
+const ACTIVE_PO_CACHE_TTL = 60000;
+
+export const invalidateActivePOCache = () => {
+  activePOCache = { data: null, timestamp: 0 };
+};
+
+/**
+ * Pobiera aktywne zamówienia zakupowe dla wielu pozycji magazynowych w jednym zapytaniu.
+ * Zamiast N osobnych zapytań (getAwaitingOrdersForInventoryItem x N), wykonuje 1 zapytanie
+ * na kolekcji purchaseOrders i filtruje wyniki dla wszystkich materialów naraz.
+ *
+ * @param {Array<string>} inventoryItemIds - Lista ID pozycji magazynowych
+ * @returns {Promise<Object>} Mapa { materialId: purchaseOrders[] }
+ */
+export const getAwaitingOrdersForMultipleItems = async (inventoryItemIds) => {
+  try {
+    if (!inventoryItemIds || inventoryItemIds.length === 0) return {};
+
+    const validatedIds = new Set(inventoryItemIds.filter(Boolean));
+    if (validatedIds.size === 0) return {};
+
+    const now = Date.now();
+    let querySnapshot;
+
+    if (activePOCache.data && (now - activePOCache.timestamp) < ACTIVE_PO_CACHE_TTL) {
+      querySnapshot = activePOCache.data;
+    } else {
+      const purchaseOrdersRef = collection(db, 'purchaseOrders');
+      const q = query(
+        purchaseOrdersRef,
+        where('status', 'not-in', ['completed', 'cancelled'])
+      );
+      querySnapshot = await getDocs(q);
+      activePOCache = { data: querySnapshot, timestamp: now };
+    }
+
+    const resultMap = {};
+    validatedIds.forEach(id => { resultMap[id] = []; });
+
+    const uniqueSupplierIds = new Set();
+    const posWithMatchingItems = [];
+
+    for (const docRef of querySnapshot.docs) {
+      const poData = docRef.data();
+      if (!poData.items || !Array.isArray(poData.items)) continue;
+
+      const matchesByMaterial = new Map();
+
+      for (const item of poData.items) {
+        if (item.inventoryItemId && validatedIds.has(item.inventoryItemId)) {
+          if (!matchesByMaterial.has(item.inventoryItemId)) {
+            matchesByMaterial.set(item.inventoryItemId, []);
+          }
+          matchesByMaterial.get(item.inventoryItemId).push(item);
+        }
+      }
+
+      if (matchesByMaterial.size > 0) {
+        posWithMatchingItems.push({ docRef, poData, matchesByMaterial });
+        if (poData.supplierId) {
+          uniqueSupplierIds.add(poData.supplierId);
+        }
+      }
+    }
+
+    const supplierNamesMap = {};
+    if (uniqueSupplierIds.size > 0) {
+      const supplierPromises = Array.from(uniqueSupplierIds).map(async (supplierId) => {
+        try {
+          const supplierDoc = await getDoc(doc(db, 'suppliers', supplierId));
+          return {
+            supplierId,
+            name: supplierDoc.exists() ? supplierDoc.data().name : null
+          };
+        } catch (error) {
+          return { supplierId, name: null };
+        }
+      });
+
+      const supplierResults = await Promise.all(supplierPromises);
+      supplierResults.forEach(({ supplierId, name }) => {
+        supplierNamesMap[supplierId] = name;
+      });
+    }
+
+    for (const { docRef, poData, matchesByMaterial } of posWithMatchingItems) {
+      for (const [materialId, matchingItems] of matchesByMaterial) {
+        const orderedItems = matchingItems.map(item => {
+          const quantityOrdered = parseFloat(item.quantity) || 0;
+          const quantityReceived = parseFloat(item.received) || 0;
+          const quantityRemaining = Math.max(0, quantityOrdered - quantityReceived);
+
+          return {
+            ...item,
+            quantityOrdered,
+            quantityReceived,
+            quantityRemaining,
+            expectedDeliveryDate: convertTimestampToDate(item.plannedDeliveryDate || poData.expectedDeliveryDate),
+            poNumber: poData.number || 'Brak numeru'
+          };
+        });
+
+        const relevantItems = orderedItems.filter(item => item.quantityRemaining > 0);
+
+        if (relevantItems.length > 0) {
+          resultMap[materialId].push({
+            id: docRef.id,
+            number: poData.number,
+            status: poData.status,
+            expectedDeliveryDate: convertTimestampToDate(poData.expectedDeliveryDate),
+            orderDate: convertTimestampToDate(poData.orderDate),
+            supplierId: poData.supplierId,
+            supplierName: poData.supplierId ? supplierNamesMap[poData.supplierId] : null,
+            items: relevantItems
+          });
+        }
+      }
+    }
+
+    return resultMap;
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    console.error('Błąd podczas grupowego pobierania oczekiwanych zamówień:', error);
+    return {};
+  }
+};
+
 /**
  * Pobiera unikalne kategorie produktów z magazynu
  * @param {string} warehouseId - ID magazynu (opcjonalne)

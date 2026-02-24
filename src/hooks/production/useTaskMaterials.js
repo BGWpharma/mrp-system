@@ -143,7 +143,6 @@ export const useTaskMaterials = (task) => {
     }
   }, []);
   
-  // ✅ Pobieranie oczekujących zamówień dla materiałów
   const fetchAwaitingOrders = useCallback(async (materialsList) => {
     if (!materialsList || materialsList.length === 0) {
       setAwaitingOrders({});
@@ -151,30 +150,13 @@ export const useTaskMaterials = (task) => {
     }
     
     try {
-      const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventory');
+      const { getAwaitingOrdersForMultipleItems } = await import('../../services/inventory');
       
-      // Pobierz awaitujące zamówienia równolegle dla wszystkich materiałów
-      const ordersPromises = materialsList.map(async (material) => {
-        if (!material.inventoryItemId) return null;
-        
-        try {
-          const orders = await getAwaitingOrdersForInventoryItem(material.inventoryItemId);
-          return { materialId: material.inventoryItemId, orders };
-        } catch (error) {
-          console.error(`Błąd pobierania zamówień dla ${material.name}:`, error);
-          return null;
-        }
-      });
-      
-      const ordersResults = await Promise.all(ordersPromises);
-      
-      const ordersMap = {};
-      ordersResults.forEach(result => {
-        if (result && result.materialId) {
-          ordersMap[result.materialId] = result.orders;
-        }
-      });
-      
+      const materialIds = materialsList
+        .map(m => m.inventoryItemId)
+        .filter(Boolean);
+
+      const ordersMap = await getAwaitingOrdersForMultipleItems(materialIds);
       setAwaitingOrders(ordersMap);
       
     } catch (error) {

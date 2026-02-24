@@ -169,6 +169,19 @@ const getStatusColorMemo = (status) => {
  * Memoizowany komponent pojedynczego wiersza tabeli zadań
  * Props są porównywane shallow - zmiana jednego propa = re-render tylko tego wiersza
  */
+const prefetchTask = (() => {
+  const prefetched = new Set();
+  return (taskId) => {
+    if (prefetched.has(taskId)) return;
+    prefetched.add(taskId);
+    import('../../services/firebase/config').then(({ db }) => {
+      import('firebase/firestore').then(({ doc, getDoc }) => {
+        getDoc(doc(db, 'productionTasks', taskId));
+      });
+    });
+  };
+})();
+
 const TaskTableRow = memo(({ 
   task, 
   visibleColumns,
@@ -180,6 +193,8 @@ const TaskTableRow = memo(({
   navigate,
   t
 }) => {
+  const handlePrefetch = useCallback(() => prefetchTask(task.id), [task.id]);
+
   // Obliczenia lokalne dla tego wiersza
   const totalCompletedQuantity = task.totalCompletedQuantity || 0;
   const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
@@ -277,7 +292,7 @@ const TaskTableRow = memo(({
     <TableRow key={task.id} sx={{ opacity: task.archived ? 0.5 : 1 }}>
       {visibleColumns.name && (
         <TableCell sx={{ maxWidth: 200 }}>
-          <Link to={`/production/tasks/${task.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link to={`/production/tasks/${task.id}`} style={{ textDecoration: 'none', color: 'inherit' }} onMouseEnter={handlePrefetch}>
             <Typography 
               variant="body2" 
               color="primary"
@@ -400,6 +415,7 @@ const TaskTableRow = memo(({
                 component={Link}
                 to={`/production/tasks/${task.id}`}
                 color="primary"
+                onMouseEnter={handlePrefetch}
               >
                 <InfoIcon fontSize="small" />
               </IconButton>
@@ -1916,7 +1932,7 @@ const TaskList = () => {
         <CardContent sx={{ pb: 1, pt: 1.5, px: 1.5 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Typography variant="subtitle1" component={Link} to={`/production/tasks/${task.id}`} sx={{ 
+              <Typography variant="subtitle1" component={Link} to={`/production/tasks/${task.id}`} onMouseEnter={() => prefetchTask(task.id)} sx={{ 
                 textDecoration: 'none',
                 color: 'primary.main',
                 fontWeight: 'medium',
@@ -2018,6 +2034,7 @@ const TaskList = () => {
               component={Link}
               to={`/production/tasks/${task.id}`}
               color="primary"
+              onMouseEnter={() => prefetchTask(task.id)}
             >
               <InfoIcon fontSize="small" />
             </IconButton>

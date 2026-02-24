@@ -28,11 +28,15 @@ const PdfMiniaturePreview = ({ pdfUrl, fileName, onClick }) => {
         setLoading(true);
         setError(false);
 
-                 // Sprawdź czy PDF.js jest dostępny
         if (typeof window.pdfjsLib === 'undefined') {
           console.warn('PDF.js not available, falling back to iframe preview');
           setError(true);
           return;
+        }
+
+        if (!window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
 
         // Załaduj dokument PDF z ustawieniami CORS
