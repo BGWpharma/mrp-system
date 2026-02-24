@@ -21,7 +21,7 @@ export const useProductionHistory = (taskId) => {
   const [selectedMachineId, setSelectedMachineId] = useState('');
   
   const { showSuccess, showError } = useNotification();
-  const { userNames, fetchUserNames } = useUserNames();
+  const { fetchUserNames } = useUserNames();
   
   // ✅ Pobieranie historii produkcji
   const fetchHistory = useCallback(async () => {
@@ -53,7 +53,7 @@ export const useProductionHistory = (taskId) => {
   // ✅ Pobieranie dostępnych maszyn
   const fetchMachines = useCallback(async () => {
     try {
-      const { getAvailableMachines } = await import('../../services/machineService');
+      const { getAvailableMachines } = await import('../../services/machineDataService');
       const machines = await getAvailableMachines();
       setAvailableMachines(machines);
       return machines;
@@ -71,7 +71,7 @@ export const useProductionHistory = (taskId) => {
     }
     
     try {
-      const { getProductionDataForHistory } = await import('../../services/machineService');
+      const { getProductionDataForHistory } = await import('../../services/machineDataService');
       const enriched = await getProductionDataForHistory(selectedMachineId, productionHistory);
       setEnrichedHistory(enriched);
     } catch (error) {

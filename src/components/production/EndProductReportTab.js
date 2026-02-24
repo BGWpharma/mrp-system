@@ -16,7 +16,8 @@ import {
   Chip,
   IconButton,
   Tooltip,
-  Autocomplete
+  Autocomplete,
+  useTheme
 } from '@mui/material';
 import {
   CloudUpload as CloudUploadIcon,
@@ -56,8 +57,18 @@ import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatDateTime } from '../../utils/formatters';
+import { getAdaptiveBackgroundStyle, getClinicalFileIcon, formatClinicalFileSize } from '../../utils/taskFormatters';
+import { sortIngredientsByQuantity } from '../../services/recipeService';
 import { generateEndProductReportPDF, generateAndSaveEndProductReport } from '../../services/endProductReportService';
+import { useAttachmentsState, useTaskReportState } from '../../hooks/production';
+import { useFileHandlers } from '../../hooks/production/useFileHandlers';
+import { useTaskReportFetcher } from '../../hooks/production/useTaskReportFetcher';
 import SaveIcon from '@mui/icons-material/Save';
+
+const AVAILABLE_ALLERGENS = [
+  'Gluten', 'Crustaceans', 'Eggs', 'Fish', 'Peanuts', 'Soybeans', 'Milk', 'Nuts',
+  'Celery', 'Mustard', 'Sesame seeds', 'Sulphur dioxide and sulphites', 'Lupin', 'Molluscs'
+];
 
 // Helper function to format quantity with specified precision
 const formatQuantityPrecision = (value, precision = 3) => {
@@ -76,48 +87,107 @@ const formatQuantityPrecision = (value, precision = 3) => {
 
 const EndProductReportTab = ({ 
   task, 
+  setTask,
   materials, 
   productionHistory, 
   formResponses, 
-  companyData, 
-  workstationData, 
-  clinicalAttachments, 
-  setClinicalAttachments, 
-  additionalAttachments, 
-  setAdditionalAttachments, 
-  ingredientAttachments, 
-  selectedAllergens, 
-  setSelectedAllergens, 
-  availableAllergens,
-  onFixRecipeData,
-  fixingRecipeData,
-  uploadingClinical,
-  uploadingAdditional,
-  onClinicalFileSelect,
-  onAdditionalFileSelect,
-  onDownloadClinicalFile,
-  onDeleteClinicalFile,
-  onDownloadAdditionalFile,
-  onDeleteAdditionalFile,
-  getClinicalFileIcon,
-  formatClinicalFileSize,
-  getAdaptiveBackgroundStyle,
-  sortIngredientsByQuantity,
-  ingredientBatchAttachments,
-  onRefreshBatchAttachments,
-  refreshingBatchAttachments,
-  loadingReportAttachments
+  currentUser: currentUserProp, 
+  t: tProp 
 }) => {
-  const { showSuccess, showError, showInfo } = useNotification();
-  const [generatingPDF, setGeneratingPDF] = useState(false);
-  const [savingReport, setSavingReport] = useState(false);
-  const { currentUser } = useAuth();
-  const { t } = useTranslation('taskDetails');
+  const { showSuccess, showError, showInfo, showWarning } = useNotification();
+  const { currentUser: currentUserAuth } = useAuth();
+  const { t: tFromHook } = useTranslation('taskDetails');
+  const theme = useTheme();
+  const currentUser = currentUserProp ?? currentUserAuth;
+  const t = tProp ?? tFromHook;
 
-  // Funkcja do obsługi zmiany alergenów
-  const handleAllergenChange = (event, newValue) => {
-    setSelectedAllergens(newValue);
-  };
+  // Report-specific state - wywoływane tylko gdy zakładka jest aktywna
+  const {
+    clinicalAttachments,
+    additionalAttachments,
+    ingredientBatchAttachments,
+    uploadingClinical,
+    uploadingAdditional,
+    loadingReportAttachments,
+    refreshingBatchAttachments,
+    setClinicalAttachments,
+    setAdditionalAttachments,
+    setIngredientAttachments,
+    setIngredientBatchAttachments,
+    setUploadingClinical,
+    setUploadingAdditional,
+    setRefreshingBatchAttachments,
+    setLoadingReportAttachments,
+  } = useAttachmentsState();
+
+  const {
+    companyData,
+    workstationData,
+    selectedAllergens,
+    setSelectedAllergens,
+    fixingRecipeData,
+    syncingNamesWithRecipe,
+    generatingPDF,
+    setGeneratingPDF,
+    setCompanyData,
+    setWorkstationData,
+    setFixingRecipeData,
+    setSyncingNamesWithRecipe,
+  } = useTaskReportState();
+
+  const {
+    handleClinicalFileSelect,
+    handleDeleteClinicalFile,
+    handleDownloadClinicalFile,
+    handleAdditionalFileSelect,
+    handleDeleteAdditionalFile,
+    handleDownloadAdditionalFile,
+    handleRefreshBatchAttachments,
+    fetchClinicalAttachments,
+    fetchAdditionalAttachments,
+    fetchIngredientAttachments,
+    fetchIngredientBatchAttachments,
+  } = useFileHandlers({
+    task, materials, currentUser,
+    clinicalAttachments, additionalAttachments,
+    setClinicalAttachments, setAdditionalAttachments,
+    setUploadingClinical, setUploadingAdditional,
+    setIngredientAttachments, setIngredientBatchAttachments,
+    setRefreshingBatchAttachments,
+    showSuccess, showError,
+  });
+
+  const {
+    handleFixRecipeData,
+    handleSyncNamesWithRecipe,
+  } = useTaskReportFetcher({
+    task, id: task?.id, currentUser, t,
+    setTask, setCompanyData, setWorkstationData,
+    setFixingRecipeData, setSyncingNamesWithRecipe,
+    setGeneratingPDF, setSelectedAllergens, setLoadingReportAttachments,
+    companyData, workstationData,
+    clinicalAttachments, additionalAttachments, ingredientBatchAttachments,
+    formResponses, productionHistory, materials, selectedAllergens,
+    showError, showInfo, showSuccess, showWarning,
+    fetchClinicalAttachments, fetchAdditionalAttachments,
+    fetchIngredientAttachments, fetchIngredientBatchAttachments,
+  });
+
+  const [savingReport, setSavingReport] = useState(false);
+
+  const availableAllergens = AVAILABLE_ALLERGENS;
+  const adaptiveBackgroundStyleFn = useCallback(
+    (paletteColor, opacity) => getAdaptiveBackgroundStyle(theme, paletteColor, opacity),
+    [theme]
+  );
+
+  const handleAllergenChange = useCallback((event, newValue) => {
+    const filtered = newValue
+      .map(v => typeof v === 'string' ? v.trim() : v)
+      .filter(v => v && v.length > 0)
+      .filter((v, i, arr) => arr.indexOf(v) === i);
+    setSelectedAllergens(filtered);
+  }, [setSelectedAllergens]);
 
   // Grupowanie konsumpcji według materiału i numeru partii (LOT)
   const groupedConsumptions = useMemo(() => {
@@ -641,7 +711,7 @@ const EndProductReportTab = ({
                 color="primary"
                 size="small"
                 startIcon={fixingRecipeData ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
-                onClick={onFixRecipeData}
+                onClick={handleFixRecipeData}
                 disabled={fixingRecipeData || !task?.recipeId}
               >
                 {fixingRecipeData ? 'Odświeżanie...' : 'Odśwież składniki'}
@@ -698,7 +768,7 @@ const EndProductReportTab = ({
                     </Table>
                   </TableContainer>
                 ) : (
-                  <Paper sx={{ p: 2, ...getAdaptiveBackgroundStyle('warning', 0.7), border: 1, borderColor: 'warning.main', borderStyle: 'dashed' }}>
+                  <Paper sx={{ p: 2, ...adaptiveBackgroundStyleFn('warning', 0.7), border: 1, borderColor: 'warning.main', borderStyle: 'dashed' }}>
                     <Typography variant="body2" color="text.secondary" align="center" sx={mb1}>
                       Brak danych o mikroelementach w recepturze
                     </Typography>
@@ -781,7 +851,7 @@ const EndProductReportTab = ({
                 color="secondary"
                 size="small"
                 startIcon={fixingRecipeData ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
-                onClick={onFixRecipeData}
+                onClick={handleFixRecipeData}
                 disabled={fixingRecipeData || !task?.recipeId}
               >
                 {fixingRecipeData ? 'Odświeżanie...' : 'Odśwież składniki'}
@@ -941,7 +1011,7 @@ const EndProductReportTab = ({
                 id="clinical-file-upload"
                 multiple
                 type="file"
-                onChange={(e) => onClinicalFileSelect(Array.from(e.target.files))}
+                onChange={(e) => handleClinicalFileSelect(Array.from(e.target.files))}
                 disabled={uploadingClinical}
               />
               <label htmlFor="clinical-file-upload">
@@ -1003,7 +1073,7 @@ const EndProductReportTab = ({
                             <Tooltip title="Pobierz">
                               <IconButton
                                 size="small"
-                                onClick={() => onDownloadClinicalFile(attachment)}
+                                onClick={() => handleDownloadClinicalFile(attachment)}
                                 sx={{ mr: 0.5 }}
                               >
                                 <DownloadIcon fontSize="small" />
@@ -1012,7 +1082,7 @@ const EndProductReportTab = ({
                             <Tooltip title="Usuń">
                               <IconButton
                                 size="small"
-                                onClick={() => onDeleteClinicalFile(attachment)}
+                                onClick={() => handleDeleteClinicalFile(attachment)}
                                 color="error"
                               >
                                 <DeleteIcon fontSize="small" />
@@ -1054,7 +1124,7 @@ const EndProductReportTab = ({
                 variant="outlined"
                 size="small"
                 startIcon={<RefreshIcon />}
-                onClick={onRefreshBatchAttachments}
+                onClick={handleRefreshBatchAttachments}
                 disabled={refreshingBatchAttachments}
                 sx={{ minWidth: 'auto' }}
               >
@@ -1220,7 +1290,7 @@ const EndProductReportTab = ({
               <Button 
                 variant="contained" 
                 color="warning"
-                onClick={onFixRecipeData}
+                onClick={handleFixRecipeData}
                 disabled={fixingRecipeData}
                 startIcon={fixingRecipeData ? <CircularProgress size={20} color="inherit" /> : null}
                 sx={mt1}
@@ -1470,7 +1540,7 @@ const EndProductReportTab = ({
                   <Grid item xs={12} key={index}>
                     <Paper sx={{ 
                       p: 3, 
-                      ...getAdaptiveBackgroundStyle('info', 0.8),
+                      ...adaptiveBackgroundStyleFn('info', 0.8),
                       border: 1, 
                       borderColor: 'info.main'
                     }}>
@@ -1588,7 +1658,7 @@ const EndProductReportTab = ({
             ) : (
               <Paper sx={{ 
                 p: 3, 
-                ...getAdaptiveBackgroundStyle('warning', 0.7),
+                ...adaptiveBackgroundStyleFn('warning', 0.7),
                 border: 1, 
                 borderColor: 'warning.main', 
                 borderStyle: 'dashed'
@@ -1615,7 +1685,7 @@ const EndProductReportTab = ({
                   <Grid item xs={12} key={index}>
                     <Paper sx={{ 
                       p: 3, 
-                      ...getAdaptiveBackgroundStyle('success', 0.8),
+                      ...adaptiveBackgroundStyleFn('success', 0.8),
                       border: 1, 
                       borderColor: 'success.main'
                     }}>
@@ -2154,7 +2224,7 @@ const EndProductReportTab = ({
                 id="additional-file-upload"
                 multiple
                 type="file"
-                onChange={(e) => onAdditionalFileSelect(Array.from(e.target.files))}
+                onChange={(e) => handleAdditionalFileSelect(Array.from(e.target.files))}
                 disabled={uploadingAdditional}
               />
               <label htmlFor="additional-file-upload">
@@ -2216,7 +2286,7 @@ const EndProductReportTab = ({
                             <Tooltip title="Pobierz">
                               <IconButton
                                 size="small"
-                                onClick={() => onDownloadAdditionalFile(attachment)}
+                                onClick={() => handleDownloadAdditionalFile(attachment)}
                                 sx={{ mr: 0.5 }}
                               >
                                 <DownloadIcon fontSize="small" />
@@ -2225,7 +2295,7 @@ const EndProductReportTab = ({
                             <Tooltip title="Usuń">
                               <IconButton
                                 size="small"
-                                onClick={() => onDeleteAdditionalFile(attachment)}
+                                onClick={() => handleDeleteAdditionalFile(attachment)}
                                 color="error"
                               >
                                 <DeleteIcon fontSize="small" />

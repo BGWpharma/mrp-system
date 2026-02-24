@@ -63,7 +63,40 @@ export { useConsumptionHandlers } from './useConsumptionHandlers';
 // Handlery rezerwacji materiałów
 export { useReservationHandlers } from './useReservationHandlers';
 
+// Handlery kontroli produkcji (status, start/stop, przyjęcie, drukowanie)
+export { useProductionControlHandlers } from './useProductionControlHandlers';
+
+// Handlery plików i załączników
+export { useFileHandlers } from './useFileHandlers';
+
+// Handlery dodatkowych kosztów MO
+export { useAdditionalCostHandlers } from './useAdditionalCostHandlers';
+
 // ===== FAZA 1.3: Rozszerzone hooki kosztów i synchronizacji =====
 
 // Synchronizacja real-time (Firestore onSnapshot)
 export { useTaskRealTimeSync } from './useTaskRealTimeSync';
+
+// ===== FAZA B: Ekstrakcja fetcherów danych =====
+
+// Pobieranie danych zadania (fetchTask, fetchAllTaskData, fetchPOReservations, etc.)
+export { useTaskFetcher } from './useTaskFetcher';
+
+// ===== FAZA 2+: Ekstrakcja report/fetcher =====
+
+// Pobieranie danych raportu, alergeny, generowanie PDF
+export { useTaskReportFetcher } from './useTaskReportFetcher';
+
+// Pobieranie materiałów, partii, cen i zamówień oczekujących
+export { useTaskMaterialFetcher } from './useTaskMaterialFetcher';
+
+// ===== FAZA 1+: Kolejna konsolidacja stanów useState =====
+
+// Stan raportu (firma, stanowisko, alergeny, PDF, naprawa receptury)
+export { useTaskReportState } from './useTaskReportState';
+
+// Stan debugowania spójności partii
+export { useTaskDebugState } from './useTaskDebugState';
+
+// Stan UI materiałów (zakładki, oczekujące zamówienia, ładowanie partii, koszty)
+export { useTaskMaterialUIState } from './useTaskMaterialUIState';

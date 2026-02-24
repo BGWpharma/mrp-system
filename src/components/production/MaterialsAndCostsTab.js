@@ -3,7 +3,7 @@
  * Wydzielony z TaskDetailsPage.js w celu lepszej organizacji kodu
  */
 
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Typography,
@@ -965,4 +965,4 @@ const MaterialsAndCostsTab = ({
   );
 };
 
-export default MaterialsAndCostsTab;
+export default memo(MaterialsAndCostsTab);

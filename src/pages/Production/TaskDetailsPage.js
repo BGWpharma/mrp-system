@@ -68,54 +68,25 @@ import {
   Chip,
   Box,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
   CircularProgress,
   IconButton,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormControlLabel,
-  Checkbox,
-  FormLabel,
-  RadioGroup,
-  Radio,
   Alert,
   Tooltip,
   Divider,
-  List,
-  ListItem,
-  ListItemText,
-  Card,
-  CardContent,
   Tabs,
   Tab,
-  Stack,
-  Avatar,
   Container,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  AlertTitle,
-  InputAdornment,
   useMediaQuery,
   useTheme,
-  Switch,
   Badge,
   styled,
   Skeleton,
 } from '@mui/material';
+// ✅ REFAKTORYZACJA: Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
+// Table*, FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox, FormLabel,
+// RadioGroup, Radio, Card, CardContent, Accordion*, InputAdornment, Switch, AlertTitle,
+// List, ListItem, ListItemText, Stack, Avatar, TextField
+// przeniesione do TaskDialogsContainer / ManualBatchSelection / MaterialCostsSummary
 // ✅ REFAKTORYZACJA: Usunięto nieużywane importy: Drawer, Autocomplete, ListItemButton, ListItemIcon, CardActions, Collapse
 import {
   Edit as EditIcon,
@@ -128,7 +99,7 @@ import {
   Inventory as InventoryIcon,
   PlayArrow as PlayArrowIcon,
   Stop as StopIcon,
-  Print as PrintIcon,
+  // ✅ Print przeniesione do utils/taskFormatters
   Business as BusinessIcon,
   Schedule as ScheduleIcon,
   History as HistoryIcon,
@@ -138,50 +109,55 @@ import {
   Check as CheckIcon,
   Inventory2 as PackagingIcon,
   BookmarkAdd as BookmarkAddIcon,
-  ExpandMore as ExpandMoreIcon,
-  Search as SearchIcon,
+  // ✅ REFAKTORYZACJA: ExpandMore, Search, ArrowForward, BuildCircle, Refresh, Calculate, Close
+  // przeniesione do ManualBatchSelection / TaskDialogsContainer
   Visibility as VisibilityIcon,
   Info as InfoIcon,
   Science as RawMaterialsIcon,
-  BuildCircle as BuildCircleIcon,
   Assessment as AssessmentIcon,
   AttachFile as AttachFileIcon,
   CloudUpload as CloudUploadIcon,
-  Description as DescriptionIcon,
-  Image as ImageIcon,
-  PictureAsPdf as PdfIcon,
+  // ✅ Description, Image, PictureAsPdf przeniesione do utils/taskFormatters
   Download as DownloadIcon,
-  ArrowForward as ArrowForwardIcon,
   Storage as StorageIcon,
   Inventory2 as Materials2Icon,
   Factory as ProductionIcon,
   Assignment as FormIcon,
-  Refresh as RefreshIcon,
-  Calculate as CalculateIcon,
-  Close as CloseIcon,
   BugReport as BugReportIcon
 } from '@mui/icons-material';
-import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession, addTaskComment, deleteTaskComment, markTaskCommentsAsRead } from '../../services/productionService';
-import { getProductionDataForHistory, getAvailableMachines } from '../../services/machineDataService';
-import { getRecipeVersion, sortIngredientsByQuantity } from '../../services/recipeService';
-import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch, updateBatch } from '../../services/inventory';
+import { getTaskById, deleteTask, updateActualMaterialUsage, getProductionHistory, addTaskComment, deleteTaskComment, markTaskCommentsAsRead } from '../../services/productionService';
+// ✅ REFAKTORYZACJA: getProductionDataForHistory, getAvailableMachines przeniesione do useTaskFetcher
+import { sortIngredientsByQuantity } from '../../services/recipeService';
+import { bookInventoryForTask, cancelBooking, getBatchReservations, getInventoryBatch, updateBatch } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDate, formatCurrency, formatDateTime } from '../../utils/formatters';
+// ✅ REFAKTORYZACJA: formatDate przeniesione do ManualBatchSelection / TaskDialogsContainer
+import {
+  formatQuantityPrecision,
+  formatDateToLocal,
+  formatDateTime,
+  toLocalDateTimeString,
+  fromLocalDateTimeString,
+  getStatusColor,
+  getStatusActions,
+} from '../../utils/taskFormatters';
+import {
+  validateQuantities as validateQuantitiesPure,
+  validateManualBatchSelection as validateManualBatchSelectionPure,
+  validateManualBatchSelectionForMaterial as validateManualBatchSelectionForMaterialPure,
+  validateConsumeQuantities as validateConsumeQuantitiesPure,
+  getRequiredQuantityForReservation as getRequiredQuantityForReservationPure,
+} from '../../utils/taskValidators';
 import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants';
 import { format, parseISO } from 'date-fns';
 import TaskDetails from '../../components/production/TaskDetails';
 import { db } from '../../services/firebase/config';
 import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query, where, getDocs, limit, orderBy, onSnapshot, runTransaction, writeBatch } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '../../services/firebase/config';
+// ✅ FAZA A: firebase/storage imports przeniesione do useFileHandlers
 import { getUsersDisplayNames } from '../../services/userService';
-import { getCompanyData } from '../../services/companyService';
-import { getWorkstationById } from '../../services/workstationService';
-import { generateEndProductReportPDF } from '../../services/endProductReportService';
-import ProductionControlFormDialog from '../../components/production/ProductionControlFormDialog';
-import CompletedMOFormDialog from '../../components/production/CompletedMOFormDialog';
-import ProductionShiftFormDialog from '../../components/production/ProductionShiftFormDialog';
+// ✅ FAZA 2+: generateEndProductReportPDF przeniesione do useTaskReportFetcher
+// ✅ REFAKTORYZACJA: ProductionControlFormDialog, CompletedMOFormDialog, ProductionShiftFormDialog
+// przeniesione do TaskDialogsContainer
 import POReservationManager from '../../components/production/POReservationManager';
 import { useTranslation } from '../../hooks/useTranslation';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -190,7 +166,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl, enUS } from 'date-fns/locale';
 import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial, isConsumptionExceedingIssued, calculateConsumptionExcess } from '../../utils/productionUtils';
 import { preciseMultiply } from '../../utils/mathUtils';
-import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
+// ✅ REFAKTORYZACJA: getIngredientReservationLinks przeniesione do useTaskFetcher
 import { useUserNames } from '../../hooks/useUserNames';
 
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI (eliminuje tworzenie obiektów sx przy każdym renderze)
@@ -213,7 +189,6 @@ import {
   p3,
   boxP2,
   textRight,
-  mobileButton,
   captionWithMargin,
   skeletonStyle,
   flexEndMt2,
@@ -221,8 +196,6 @@ import {
   width130,
   width140,
   borderBottom,
-  iconPrimary,
-  iconError,
   textSecondary,
   fontMedium
 } from '../../styles/muiCommonStyles';
@@ -239,16 +212,33 @@ import {
   useReservationState,
   useConsumptionState,
   useProductionHistoryState,
-  useAttachmentsState
+  useTaskDebugState,
+  useTaskMaterialUIState,
 } from '../../hooks/production';
 
 // ✅ FAZA 1.3: Import hooków kosztów i synchronizacji real-time
 import { useTaskCosts } from '../../hooks/production/useTaskCosts';
 import { useTaskRealTimeSync } from '../../hooks/production/useTaskRealTimeSync';
 
+// ✅ FAZA A: Import hooków handlerów
+import { useMaterialHandlers } from '../../hooks/production/useMaterialHandlers';
+import { useConsumptionHandlers } from '../../hooks/production/useConsumptionHandlers';
+import { useReservationHandlers } from '../../hooks/production/useReservationHandlers';
+import { useHistoryHandlers } from '../../hooks/production/useHistoryHandlers';
+import { useFormHandlers } from '../../hooks/production/useFormHandlers';
+import { useProductionControlHandlers } from '../../hooks/production/useProductionControlHandlers';
+import { useAdditionalCostHandlers } from '../../hooks/production/useAdditionalCostHandlers';
+import { useTaskFetcher } from '../../hooks/production/useTaskFetcher';
+import { useTaskMaterialFetcher } from '../../hooks/production/useTaskMaterialFetcher';
+
 // ✅ Import komponentów dialogów refaktoryzowanych
 import { StartProductionDialog, AddHistoryDialog, DeleteConfirmDialog, RawMaterialsDialog, AdditionalCostDialog } from '../../components/production/dialogs';
 import { CommentsDrawer } from '../../components/production/shared';
+
+// ✅ REFAKTORYZACJA: Wydzielone komponenty renderujące
+import ManualBatchSelection from '../../components/production/ManualBatchSelection';
+import MaterialCostsSummary from '../../components/production/MaterialCostsSummary';
+import TaskDialogsContainer from '../../components/production/TaskDialogsContainer';
 
 // ✅ Dodatkowy styl mt4 (nie ma w common styles)
 const mt4 = { mt: 4 };
@@ -398,25 +388,7 @@ const TaskDetailsPage = () => {
     setDeletingConsumption   // ✅ POPRAWKA: dodane z hooka
   } = useConsumptionState();
   
-  // ✅ FAZA 1: Hook konsolidujący stany załączników (8 stanów → 1 hook)
-  const {
-    ingredientAttachments,
-    ingredientBatchAttachments,
-    clinicalAttachments,
-    additionalAttachments,
-    uploadingClinical,
-    uploadingAdditional,
-    loadingReportAttachments,
-    refreshingBatchAttachments,
-    setIngredientAttachments,
-    setIngredientBatchAttachments,
-    setClinicalAttachments,
-    setAdditionalAttachments,
-    setUploadingClinical,
-    setUploadingAdditional,
-    setLoadingReportAttachments,
-    setRefreshingBatchAttachments
-  } = useAttachmentsState();
+  // ✅ FAZA 1: useAttachmentsState przeniesiony do EndProductReportTab (tylko zakładka raportu)
   
   // ✅ POPRAWKA: Hook konsolidujący stany historii produkcji (12 stanów → 1 hook)
   const {
@@ -455,17 +427,32 @@ const TaskDetailsPage = () => {
   // selectedMachineId, enrichedProductionHistory, addHistoryDialogOpen, deleteHistoryItem,
   // deleteHistoryDialogOpen przeniesione do useProductionHistoryState
   
-  const [materialBatchesLoading, setMaterialBatchesLoading] = useState(false);
-  const [includeInCosts, setIncludeInCosts] = useState({});
+  // ✅ FAZA 1+: Hook konsolidujący stany UI materiałów (8 stanów → 1 hook)
+  const {
+    materialTab,
+    materialAwaitingOrders,
+    awaitingOrders,
+    awaitingOrdersLoading,
+    materialBatchesLoading,
+    includeInCosts,
+    consumedBatchPrices,
+    consumedIncludeInCosts,
+    setMaterialTab,
+    setMaterialAwaitingOrders,
+    setAwaitingOrders,
+    setAwaitingOrdersLoading,
+    setMaterialBatchesLoading,
+    setIncludeInCosts,
+    setConsumedBatchPrices,
+    setConsumedIncludeInCosts,
+  } = useTaskMaterialUIState();
 
   // Stany dla komentarzy
   const [commentsDrawerOpen, setCommentsDrawerOpen] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [addingComment, setAddingComment] = useState(false);
 
-  // Stan dla przechowywania oczekiwanych zamówień
-  const [awaitingOrders, setAwaitingOrders] = useState({});
-  const [awaitingOrdersLoading, setAwaitingOrdersLoading] = useState(false);
+  // ✅ FAZA 1+: awaitingOrders, awaitingOrdersLoading przeniesione do useTaskMaterialUIState
   
   // Stan dla rezerwacji PO
   const [poReservations, setPOReservations] = useState([]);
@@ -493,9 +480,7 @@ const TaskDetailsPage = () => {
   const [errorMessage, setErrorMessage] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
 
-  // Dodaję brakującą zmienną stanu materialTab i materialAwaitingOrders
-  const [materialTab, setMaterialTab] = useState(0);
-  const [materialAwaitingOrders, setMaterialAwaitingOrders] = useState({});
+  // ✅ FAZA 1+: materialTab, materialAwaitingOrders przeniesione do useTaskMaterialUIState
 
   // Dodaję stan dla odpowiedzi formularzy produkcyjnych
   const [formResponses, setFormResponses] = useState({
@@ -511,10 +496,15 @@ const TaskDetailsPage = () => {
   const [productionShiftDialogOpen, setProductionShiftDialogOpen] = useState(false);
   const [formTab, setFormTab] = useState(0);
 
-  // 🔍 DEBUG: Stan dla dialogu debugowania spójności partii
-  const [debugBatchDialogOpen, setDebugBatchDialogOpen] = useState(false);
-  const [debugResults, setDebugResults] = useState([]);
-  const [debugLoading, setDebugLoading] = useState(false);
+  // ✅ FAZA 1+: Hook konsolidujący stany debugowania (3 stany → 1 hook)
+  const {
+    debugBatchDialogOpen,
+    debugResults,
+    debugLoading,
+    setDebugBatchDialogOpen,
+    setDebugResults,
+    setDebugLoading,
+  } = useTaskDebugState();
 
   // ✅ REFAKTORYZACJA: startProductionDialog przeniesiony do useTaskDialogs
   // Stan startProductionDialogOpen zastąpiony przez: dialogs.startProduction
@@ -535,9 +525,7 @@ const TaskDetailsPage = () => {
 
   // ✅ FAZA 1: Stany surowców przeniesione do useRawMaterialsState
 
-  // Stany dla sekcji 5. Production w raporcie
-  const [companyData, setCompanyData] = useState(null);
-  const [workstationData, setWorkstationData] = useState(null);
+  // ✅ FAZA 1+: useTaskReportState przeniesiony do EndProductReportTab (tylko zakładka raportu)
 
   // Nowe stany dla funkcjonalności usuwania materiałów
   const [deleteMaterialDialogOpen, setDeleteMaterialDialogOpen] = useState(false);
@@ -553,88 +541,145 @@ const TaskDetailsPage = () => {
   // ✅ FAZA 1: Stany konsumpcji przeniesione do useConsumptionState
   // ✅ POPRAWKA: restoreReservation i deletingConsumption teraz z hooka useConsumptionState
   
-  // Pozostałe stany konsumpcji (specyficzne dla TaskDetailsPage - ceny partii)
-  const [consumedBatchPrices, setConsumedBatchPrices] = useState({});
-  const [consumedIncludeInCosts, setConsumedIncludeInCosts] = useState({});
-  const [fixingRecipeData, setFixingRecipeData] = useState(false);
-  const [syncingNamesWithRecipe, setSyncingNamesWithRecipe] = useState(false);
+  // ✅ FAZA 1+: consumedBatchPrices, consumedIncludeInCosts przeniesione do useTaskMaterialUIState
+  // ✅ FAZA 1+: fixingRecipeData, syncingNamesWithRecipe przeniesione do useTaskReportState
   
   // ✅ FAZA 1: Stany załączników (clinicalAttachments, additionalAttachments, uploading*, loading*) przeniesione do useAttachmentsState
   
   // Stan dla powiązań składników z rezerwacjami w planie mieszań
   const [ingredientReservationLinks, setIngredientReservationLinks] = useState({});
 
-  // Stan dla generowania raportu PDF
-  const [generatingPDF, setGeneratingPDF] = useState(false);
+  // ✅ FAZA 1+: generatingPDF przeniesione do useTaskReportState
 
-  // Stan dla sekcji alergenów w raporcie gotowego produktu
-  const [selectedAllergens, setSelectedAllergens] = useState([]);
+  // ✅ FAZA 1+: selectedAllergens przeniesione do useTaskReportState
+
+  // ✅ FAZA A: Invokacje hooków handlerów
+  const {
+    handleQuantityChange,
+    handleDeleteMaterial,
+    handleConfirmDeleteMaterial,
+    handleIncludeInCostsChange,
+    handlePackagingSelection,
+    handlePackagingBatchSelection,
+    handlePackagingBatchQuantityChange,
+    handleAddPackagingToTask,
+    fetchAvailableRawMaterials,
+    handleOpenRawMaterialsDialog,
+    handleRawMaterialsQuantityChange,
+    handleRawMaterialsSelection,
+    handleAddRawMaterialsSubmit
+  } = useMaterialHandlers({
+    task, id, currentUser, materials, errors, setErrors, setLoading,
+    setMaterialQuantities, setIncludeInCosts, setMaterialToDelete,
+    setDeleteMaterialDialogOpen, materialToDelete, invalidateCostsCache,
+    packagingItems, consumePackagingImmediately, setPackagingItems,
+    setLoadingPackaging, setPackagingDialogOpen,
+    materialCategoryTab, setMaterialCategoryTab, setSearchRawMaterials,
+    setRawMaterialsItems, setLoadingRawMaterials, setRawMaterialsDialogOpen,
+    showSuccess, showError
+  });
+
+  const {
+    handleConsumeQuantityChange,
+    handleBatchToConsumeSelection,
+    handleOpenConsumeMaterialsDialog
+  } = useConsumptionHandlers({
+    task, materials, setConsumedMaterials, setConsumeQuantities,
+    setSelectedBatchesToConsume, setConsumeErrors, setConsumeMaterialsDialogOpen
+  });
+
+  // useReservationHandlers, useHistoryHandlers, useFormHandlers przeniesione po useTaskFetcher/useTaskMaterialFetcher
+  // (zależności od fetchBatchesForMaterials, fetchProductionHistory, fetchFormResponses)
+
+  const {
+    handleStatusChange,
+    handleConfirmConsumption,
+    handleReceiveClick,
+    handleReceiveItem,
+    handleAddToInventory,
+    handleStartProduction,
+    handleStartProductionWithExpiry,
+    handleStopProduction,
+    handlePrintMaterialsAndLots,
+    handlePrintMODetails
+  } = useProductionControlHandlers({
+    id, task, setTask, setLoading, currentUser, navigate,
+    productionData, materials, materialQuantities, includeInCosts,
+    userNames, fetchUserNames, openDialog, invalidateCostsCache,
+    calculateWeightedUnitPrice, showSuccess, showError, showInfo, showWarning
+  });
+
+  const {
+    handleAddAdditionalCost,
+    handleEditAdditionalCost,
+    handleDeleteAdditionalCost,
+    handleSaveAdditionalCost,
+    handleConfirmDeleteAdditionalCost
+  } = useAdditionalCostHandlers({
+    id, task, setTask, currentUser,
+    editingAdditionalCost, setEditingAdditionalCost,
+    setAdditionalCostDialogOpen, setAdditionalCostToDelete,
+    setDeleteAdditionalCostDialogOpen, additionalCostToDelete,
+    setSavingAdditionalCost, showSuccess, showError
+  });
+
+  // ✅ useFileHandlers przeniesiony do EndProductReportTab (tylko zakładka raportu)
+
+  // Stan dla głównej zakładki
+  const [mainTab, setMainTab] = useState(() => {
+    return location.state?.activeTab ?? 0;
+  });
+
+  const [loadedTabs, setLoadedTabs] = useState({
+    productionPlan: false,
+    forms: false,
+    endProductReport: false
+  });
+
+  // ✅ useTaskReportFetcher przeniesiony do EndProductReportTab (tylko zakładka raportu)
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Funkcja pomocnicza dla responsive kolory tła Paper
-  const getAdaptiveBackgroundStyle = (paletteColor, opacity = 0.8) => ({
-    backgroundColor: theme.palette.mode === 'dark' 
-      ? `rgba(${
-          paletteColor === 'info' ? '33, 150, 243' :
-          paletteColor === 'success' ? '76, 175, 80' :
-          paletteColor === 'warning' ? '255, 152, 0' :
-          paletteColor === 'secondary' ? '156, 39, 176' :
-          '33, 150, 243'
-        }, 0.15)` 
-      : `${paletteColor}.light`,
-    opacity: theme.palette.mode === 'dark' ? 1 : opacity
-  });
+  // Checklist mixing plan - używane przez ProductionPlanTab (NIE EndProductReportTab)
+  const handleChecklistItemUpdate = useCallback(async (itemId, completed) => {
+    if (!task?.id || !task?.mixingPlanChecklist) return;
+    try {
+      const taskRef = doc(db, 'productionTasks', task.id);
+      const updatedChecklist = task.mixingPlanChecklist.map(checkItem => {
+        if (checkItem.id === itemId) {
+          return {
+            ...checkItem,
+            completed: completed,
+            completedAt: completed ? new Date().toISOString() : null,
+            completedBy: completed ? currentUser.uid : null
+          };
+        }
+        return checkItem;
+      });
+      await updateDoc(taskRef, {
+        mixingPlanChecklist: updatedChecklist,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+      setTask(prevTask => ({ ...prevTask, mixingPlanChecklist: updatedChecklist }));
+      showSuccess('Zaktualizowano stan zadania');
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji stanu checklisty:', error);
+      showError('Nie udało się zaktualizować stanu zadania');
+    }
+  }, [task?.id, task?.mixingPlanChecklist, currentUser?.uid, setTask, showSuccess, showError]);
 
-  // Funkcja pomocnicza do formatowania wartości liczbowych z precyzją
-  const formatQuantityPrecision = (value, precision = 3) => {
-    if (typeof value !== 'number' || isNaN(value)) return 0;
-    return Math.round(value * Math.pow(10, precision)) / Math.pow(10, precision);
-  };
+  const handleAddHistoryItem = useCallback((editedItem, historyData) => {
+    setEditedHistoryItem(editedItem);
+    setHistoryInventoryData(historyData);
+    setAddHistoryDialogOpen(true);
+  }, []);
 
-  // Lista dostępnych alergenów
-  const availableAllergens = [
-    'Gluten',
-    'Crustaceans',
-    'Eggs',
-    'Fish',
-    'Peanuts',
-    'Soybeans',
-    'Milk',
-    'Nuts',
-    'Celery',
-    'Mustard',
-    'Sesame seeds',
-    'Sulphur dioxide and sulphites',
-    'Lupin',
-    'Molluscs'
-  ];
-
-  // Funkcja do obsługi zmiany alergenów
-  const handleAllergenChange = (event, newValue) => {
-    // Filtruj puste wartości i duplikaty
-    const filteredValue = newValue
-      .map(value => typeof value === 'string' ? value.trim() : value)
-      .filter(value => value && value.length > 0)
-      .filter((value, index, array) => array.indexOf(value) === index);
-    
-    setSelectedAllergens(filteredValue);
-  };
-
-  // Stan dla głównej zakładki (obsługa nawigacji z parametrem activeTab)
-  const [mainTab, setMainTab] = useState(() => {
-    return location.state?.activeTab ?? 0;
-  });
-  
-  // ✅ FAZA 1: showExhaustedBatches przeniesione do useReservationState
-
-  // ✅ Selective Data Loading - tracking załadowanych danych dla każdej zakładki
-  const [loadedTabs, setLoadedTabs] = useState({
-    productionPlan: false,     // Historia produkcji, plan mieszań
-    forms: false,              // Formularze produkcyjne
-    endProductReport: false    // Raport gotowego produktu
-  });
+  const statusActionsGetter = useCallback(
+    () => getStatusActions({ handlePrintMODetails, handlePrintMaterialsAndLots, isMobile, t }),
+    [handlePrintMODetails, handlePrintMaterialsAndLots, isMobile, t]
+  );
 
   // ✅ Selective Data Loading - funkcje ładowania danych dla konkretnych zakładek
   // ⚡ OPTYMALIZACJA: Lazy loading - ładuj tylko gdy zakładka jest aktywna
@@ -726,21 +771,9 @@ const TaskDetailsPage = () => {
     try {
       const loadPromises = [];
       
-      // Dane firmy (jeśli nie zostały załadowane)
-      if (!companyData) {
-        loadPromises.push(
-          getCompanyData().then(company => setCompanyData(company))
-        );
-      }
+      // companyData, workstationData - ładowane wewnątrz EndProductReportTab przez useTaskReportFetcher
       
-      // Dane stanowiska pracy (jeśli nie zostały załadowane)
-      if (!workstationData && task?.workstationId) {
-        loadPromises.push(
-          getWorkstationById(task.workstationId).then(workstation => setWorkstationData(workstation))
-        );
-      }
-      
-      // ✅ Prefetch historii produkcji (potrzebne do raportu)
+      // ✅ Prefetch historii produkcji (potrzebne do raportu, współdzielone z ProductionPlanTab)
       if (!loadedTabs.productionPlan && task?.id) {
         loadPromises.push(
           getProductionHistory(task.id).then(async (history) => {
@@ -819,7 +852,7 @@ const TaskDetailsPage = () => {
     } catch (error) {
       console.error('❌ Error loading End Product Report data:', error);
     }
-  }, [loadedTabs.endProductReport, loadedTabs.productionPlan, loadedTabs.forms, companyData, workstationData, task?.workstationId, task?.id, task?.moNumber, fetchUserNames]);
+  }, [loadedTabs.endProductReport, loadedTabs.productionPlan, loadedTabs.forms, task?.id, task?.moNumber, fetchUserNames]);
 
   // Funkcja do zmiany głównej zakładki z selective loading
   const handleMainTabChange = (event, newValue) => {
@@ -866,12 +899,115 @@ const TaskDetailsPage = () => {
   // ✅ FAZA 1.3: debounceTimerRef przeniesiony do useTaskRealTimeSync
 
   // ⚡ OPTYMALIZACJA: Cache dla danych równoległych operacji (rezerwacje, formularze, zamówienia)
-  const parallelDataCache = useRef({
-    poReservations: { data: null, timestamp: 0 },
-    formResponses: { data: null, timestamp: 0, moNumber: null },
-    awaitingOrders: { data: null, timestamp: 0, materialsHash: null }
+  // ✅ REFAKTORYZACJA: Hook do pobierania danych zadania
+  const {
+    fetchFormResponsesOptimized,
+    fetchAllTaskData,
+    fetchTask,
+    refreshTaskReservations,
+    fetchPOReservations,
+    fetchIngredientReservationLinks,
+    fetchTaskBasicData,
+    fetchProductionHistory,
+    fetchWarehouses,
+    fetchAvailableMachines,
+    enrichProductionHistoryWithMachineData,
+    fetchFormResponses,
+    parallelDataCache,
+    setLateDeps,
+  } = useTaskFetcher({
+    id,
+    task,
+    productionHistory,
+    selectedMachineId,
+    setLoading,
+    setTask,
+    setMaterials,
+    setMaterialQuantities,
+    setIncludeInCosts,
+    setPOReservations,
+    setPoRefreshTrigger,
+    setIngredientReservationLinks,
+    setProductionHistory,
+    setEnrichedProductionHistory,
+    setWarehousesLoading,
+    setWarehouses,
+    setHistoryInventoryData,
+    setAvailableMachines,
+    setSelectedMachineId,
+    setFormResponses,
+    setLoadingFormResponses,
+    showError,
+    navigate,
+    fetchUserNames,
   });
-  const CACHE_TTL = 30000; // 30 sekund
+
+  // ✅ REFAKTORYZACJA: Hook do pobierania danych materiałowych
+  const {
+    fetchBatchesForMaterialsOptimized,
+    fetchBatchesForMaterials,
+    fetchAvailablePackaging,
+    fetchAwaitingOrdersForMaterials,
+    updateMaterialPricesFromBatches,
+    updateConsumedMaterialPricesFromBatches,
+    fetchConsumedBatchPrices,
+    enrichConsumedMaterialsData,
+    updateRelatedCustomerOrders,
+  } = useTaskMaterialFetcher({
+    task,
+    id,
+    currentUser,
+    materials,
+    materialQuantities,
+    includeInCosts,
+    consumedBatchPrices,
+    setMaterialBatchesLoading,
+    setBatches,
+    setSelectedBatches,
+    setLoadingPackaging,
+    setPackagingItems,
+    setMaterials,
+    setTask,
+    setAwaitingOrdersLoading,
+    setAwaitingOrders,
+    setConsumedBatchPrices,
+    showSuccess,
+    showError,
+    showInfo,
+    calculateWeightedUnitPrice,
+    parallelDataCache,
+  });
+
+  // useReservationHandlers — po useTaskMaterialFetcher, bo potrzebuje fetchBatchesForMaterials
+  const {
+    handleReservationMethodChange,
+    handleBatchSelection
+  } = useReservationHandlers({
+    batches, setReservationMethod, setManualBatchSelectionActive,
+    setSelectedBatches, fetchBatchesForMaterials, fetchAwaitingOrdersForMaterials
+  });
+
+  const {
+    handleEditHistoryItem,
+    handleCancelHistoryItemEdit,
+    handleSaveHistoryItemEdit,
+    handleDeleteHistoryItem,
+    handleConfirmDeleteHistoryItem,
+    handleAddHistorySubmit
+  } = useHistoryHandlers({
+    task, currentUser, setLoading,
+    setEditingHistoryItem, setEditedHistoryItem, editedHistoryItem,
+    deleteHistoryItem, setDeleteHistoryItem, setDeleteHistoryDialogOpen,
+    fetchProductionHistory, showSuccess, showError
+  });
+
+  const {
+    handleProductionControlFormSuccess,
+    handleCompletedMOFormSuccess,
+    handleProductionShiftFormSuccess
+  } = useFormHandlers({
+    task, showSuccess, fetchFormResponses
+  });
 
   // ✅ FAZA 1.3: Real-time listener przeniesiony do useTaskRealTimeSync
 
@@ -916,522 +1052,23 @@ const TaskDetailsPage = () => {
   // ❌ useEffect(() => { if (task?.id && task?.materials?.length > 0) fetchAwaitingOrdersForMaterials(); }, [task?.id, task?.materials?.length]);
   // ❌ useEffect(() => { if (task?.consumedMaterials && task.consumedMaterials.length > 0) fetchConsumedBatchPrices(); }, [task?.consumedMaterials]);
 
-  // ✅ ZOPTYMALIZOWANA funkcja pobierania odpowiedzi formularzy (Promise.all)
-  const fetchFormResponsesOptimized = async (moNumber, forceRefresh = false) => {
-    const startTime = performance.now();
-    console.log('🔵 [TaskDetails] fetchFormResponsesOptimized START', {
-      moNumber,
-      forceRefresh
-    });
-    
-    if (!moNumber) {
-      console.log('⏭️ [TaskDetails] fetchFormResponsesOptimized: brak MO number');
-      return { completedMO: [], productionControl: [], productionShift: [] };
-    }
-    
-    try {
-      // ⚡ OPTYMALIZACJA: Sprawdź cache
-      const now = Date.now();
-      const cached = parallelDataCache.current.formResponses;
-      
-      if (!forceRefresh && cached.data && cached.moNumber === moNumber && (now - cached.timestamp) < CACHE_TTL) {
-        console.log('✅ [TaskDetails] Cache hit: formResponses', {
-          age: `${((now - cached.timestamp) / 1000).toFixed(1)}s`,
-          duration: `${(performance.now() - startTime).toFixed(2)}ms`
-        });
-        return cached.data;
-      }
-      
-      // ✅ OPTYMALIZACJA: Równoległe pobieranie z limitami i sortowaniem
-      const queriesStartTime = performance.now();
-      const [completedMOSnapshot, controlSnapshot, shiftSnapshot] = await Promise.all([
-        getDocs(query(
-          collection(db, 'Forms/SkonczoneMO/Odpowiedzi'), 
-          where('moNumber', '==', moNumber),
-          orderBy('date', 'desc'), // Sortowanie od najnowszych
-          limit(50) // Limit ostatnich 50 odpowiedzi
-        )),
-        getDocs(query(
-          collection(db, 'Forms/KontrolaProdukcji/Odpowiedzi'), 
-          where('manufacturingOrder', '==', moNumber),
-          orderBy('fillDate', 'desc'), // Sortowanie od najnowszych
-          limit(50) // Limit ostatnich 50 odpowiedzi
-        )),
-        getDocs(query(
-          collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi'), 
-          where('moNumber', '==', moNumber),
-          orderBy('fillDate', 'desc'), // Sortowanie od najnowszych
-          limit(50) // Limit ostatnich 50 odpowiedzi
-        ))
-      ]);
-      
-      console.log('✅ [TaskDetails] Formularze pobrane z Firestore', {
-        duration: `${(performance.now() - queriesStartTime).toFixed(2)}ms`,
-        completedMO: completedMOSnapshot.size,
-        control: controlSnapshot.size,
-        shift: shiftSnapshot.size
-      });
-
-      const mappingStartTime = performance.now();
-      const completedMOData = completedMOSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date?.toDate(),
-        formType: 'completedMO'
-      }));
-
-      const controlData = controlSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        fillDate: doc.data().fillDate?.toDate(),
-        productionStartDate: doc.data().productionStartDate?.toDate(),
-        productionEndDate: doc.data().productionEndDate?.toDate(),
-        readingDate: doc.data().readingDate?.toDate(),
-        formType: 'productionControl'
-      }));
-
-      const shiftData = shiftSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        fillDate: doc.data().fillDate?.toDate(),
-        formType: 'productionShift'
-      }));
-
-      console.log('✅ [TaskDetails] Formularze zmapowane', {
-        duration: `${(performance.now() - mappingStartTime).toFixed(2)}ms`
-      });
-      
-      // ✅ OPTYMALIZACJA: Sortowanie już wykonane w zapytaniu Firebase
-      // Nie trzeba dodatkowo sortować po stronie klienta
-      
-      const result = {
-        completedMO: completedMOData,
-        productionControl: controlData,
-        productionShift: shiftData
-      };
-      
-      // Zapisz w cache
-      parallelDataCache.current.formResponses = {
-        data: result,
-        timestamp: now,
-        moNumber
-      };
-      
-      console.log('✅ [TaskDetails] fetchFormResponsesOptimized COMPLETED', {
-        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`,
-        totalForms: completedMOData.length + controlData.length + shiftData.length,
-        cached: false
-      });
-      
-      return result;
-    } catch (error) {
-      console.error('❌ [TaskDetails] fetchFormResponsesOptimized błąd', {
-        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
-        error
-      });
-      throw error;
-    }
-  };
+  // ✅ REFAKTORYZACJA: fetchFormResponsesOptimized przeniesione do useTaskFetcher
 
   // ✅ FAZA 1.3: areMaterialsChanged, areConsumedMaterialsChanged, processTaskUpdate,
   // processMaterialsUpdate, processConsumedMaterialsUpdate, taskRef
   // => przeniesione do useTaskRealTimeSync
 
-  // ✅ ETAP 2 OPTYMALIZACJI: Połączona funkcja ładowania wszystkich danych zadania
-  // ⚠️ PRZESTARZAŁE - używane tylko jako fallback, real-time listener zastępuje to
-  const fetchAllTaskData = async () => {
-    const startTime = performance.now();
-    console.log('🔵 [TaskDetails] fetchAllTaskData START (FALLBACK)', {
-      taskId: id,
-      timestamp: new Date().toISOString()
-    });
-    
-    try {
-      setLoading(true);
-      
-      // KROK 1: Pobierz podstawowe dane zadania (musi być pierwsze)
-      const step1Start = performance.now();
-      const fetchedTask = await getTaskById(id);
-      console.log('✅ [TaskDetails] KROK 1: getTaskById', {
-        duration: `${(performance.now() - step1Start).toFixed(2)}ms`,
-        taskId: fetchedTask.id
-      });
-      
-      setTask(fetchedTask);
-      
-      // KROK 2: Przetwórz materiały z grupowym pobieraniem pozycji magazynowych (z Etapu 1)
-      const step2Start = performance.now();
-      if (fetchedTask?.materials?.length > 0) {
-        console.log('🔵 [TaskDetails] KROK 2: Przetwarzanie materiałów', {
-          materialsCount: fetchedTask.materials.length
-        });
-        
-        // ✅ OPTYMALIZACJA ETAP 1: Grupowe pobieranie pozycji magazynowych zamiast N+1 zapytań
-        
-        // Zbierz wszystkie ID pozycji magazynowych z materiałów
-        const inventoryItemIds = fetchedTask.materials
-          .map(material => material.inventoryItemId)
-          .filter(Boolean); // Usuń undefined/null wartości
-        
-        let inventoryItemsMap = new Map();
-        
-        if (inventoryItemIds.length > 0) {
-          // Firebase "in" operator obsługuje maksymalnie 10 elementów na zapytanie
-          const batchSize = 10;
-          
-          for (let i = 0; i < inventoryItemIds.length; i += batchSize) {
-            const batch = inventoryItemIds.slice(i, i + batchSize);
-            
-            try {
-              // Grupowe pobieranie pozycji magazynowych dla batcha
-              const itemsQuery = query(
-                collection(db, 'inventory'),
-                where('__name__', 'in', batch)
-              );
-              
-              const itemsSnapshot = await getDocs(itemsQuery);
-              
-              // Dodaj pobrane pozycje do mapy
-              itemsSnapshot.forEach(doc => {
-                inventoryItemsMap.set(doc.id, {
-                  id: doc.id,
-                  ...doc.data()
-                });
-              });
-            } catch (error) {
-              console.error(`Błąd podczas grupowego pobierania pozycji magazynowych (batch ${i}-${i+batchSize}):`, error);
-              // Kontynuuj z następnym batchem, nie przerywaj całego procesu
-            }
-          }
-          
+  // ✅ REFAKTORYZACJA: fetchAllTaskData i fetchTask przeniesione do useTaskFetcher
 
-        }
-        
-        // Przygotuj listę materiałów z aktualnymi cenami
-        const materialsList = fetchedTask.materials.map(material => {
-          let updatedMaterial = { ...material };
-          
-          // Jeśli materiał ma powiązanie z pozycją magazynową, użyj danych z mapy
-          if (material.inventoryItemId && inventoryItemsMap.has(material.inventoryItemId)) {
-            const inventoryItem = inventoryItemsMap.get(material.inventoryItemId);
-            updatedMaterial.unitPrice = inventoryItem.unitPrice || inventoryItem.price || 0;
-          }
-          
-          return {
-            ...updatedMaterial,
-            plannedQuantity: preciseMultiply(updatedMaterial.quantity || 0, fetchedTask.quantity || 1)
-          };
-        });
-        
-        setMaterials(materialsList);
-        
-        // Inicjalizacja rzeczywistych ilości
-        const quantities = {};
-        materialsList.forEach(material => {
-          // Pobierz actualQuantity z danych zadania lub użyj plannedQuantity jako wartości domyślnej
-          const actualQuantity = fetchedTask.actualMaterialUsage && fetchedTask.actualMaterialUsage[material.id] !== undefined
-            ? fetchedTask.actualMaterialUsage[material.id]
-            : material.quantity;
-          
-          quantities[material.id] = actualQuantity;
-        });
-        
-        setMaterialQuantities(quantities);
-        
-        // Inicjalizacja stanu includeInCosts - domyślnie wszystkie materiały są wliczane do kosztów
-        const costsInclude = {};
-        materialsList.forEach(material => {
-          costsInclude[material.id] = fetchedTask.materialInCosts && fetchedTask.materialInCosts[material.id] !== undefined
-            ? fetchedTask.materialInCosts[material.id]
-            : true;
-        });
-        
-        setIncludeInCosts(costsInclude);
-        
-        console.log('✅ [TaskDetails] KROK 2: Materiały przetworzone', {
-          duration: `${(performance.now() - step2Start).toFixed(2)}ms`,
-          materialsCount: fetchedTask.materials.length
-        });
-      }
-      
-      // KROK 2.5: ✅ Wzbogać dane skonsumowanych materiałów o informacje z partii magazynowych
-      if (fetchedTask?.consumedMaterials?.length > 0) {
-        const step25Start = performance.now();
-        console.log('🔵 [TaskDetails] KROK 2.5: Wzbogacanie consumed materials', {
-          consumedCount: fetchedTask.consumedMaterials.length
-        });
-        
-        try {
-          const enrichedConsumedMaterials = await enrichConsumedMaterialsData(fetchedTask.consumedMaterials);
-          fetchedTask.consumedMaterials = enrichedConsumedMaterials;
-          setTask(prevTask => ({
-            ...prevTask,
-            consumedMaterials: enrichedConsumedMaterials
-          }));
-          
-          console.log('✅ [TaskDetails] KROK 2.5: Consumed materials wzbogacone', {
-            duration: `${(performance.now() - step25Start).toFixed(2)}ms`
-          });
-        } catch (error) {
-          console.warn('⚠️ Nie udało się wzbogacić danych skonsumowanych materiałów:', error);
-        }
-      }
-      
-      // KROK 3: ✅ OPTYMALIZACJA ETAP 3: Ładowanie tylko podstawowych danych (Selective Data Loading)
-      const step3Start = performance.now();
-      console.log('🔵 [TaskDetails] KROK 3: Równoległe ładowanie dodatkowych danych');
-      
-      const dataLoadingPromises = [];
-      
-      // Rezerwacje PO - zawsze potrzebne dla zakładki materiałów
-      if (fetchedTask?.id) {
-        dataLoadingPromises.push(
-          import('../../services/poReservationService')
-            .then(module => module.getPOReservationsForTask(fetchedTask.id))
-            .then(reservations => ({ type: 'poReservations', data: reservations || [] }))
-            .catch(error => {
-              console.error('Błąd podczas pobierania rezerwacji PO:', error);
-              return { type: 'poReservations', data: [] };
-            })
-        );
-      }
-      
-      // Dane wersji receptury - potrzebne dla podstawowych informacji
-      if (fetchedTask?.recipeId && fetchedTask?.recipeVersion) {
-        dataLoadingPromises.push(
-          getRecipeVersion(fetchedTask.recipeId, fetchedTask.recipeVersion)
-            .then(recipeVersion => ({ type: 'recipeVersion', data: recipeVersion }))
-            .catch(error => {
-              console.error('Błąd podczas pobierania wersji receptury:', error);
-              return { type: 'recipeVersion', data: null };
-            })
-        );
-      }
-      
-      // Oczekujące zamówienia dla materiałów - potrzebne dla zakładki materiałów
-      if (fetchedTask?.materials?.length > 0) {
-        dataLoadingPromises.push(
-          fetchAwaitingOrdersForMaterials()
-            .then(() => ({ type: 'awaitingOrders', data: 'loaded' }))
-            .catch(error => {
-              console.error('Błąd podczas pobierania oczekujących zamówień:', error);
-              return { type: 'awaitingOrders', data: 'error' };
-            })
-        );
-      }
-      
-      // Wykonaj wszystkie zapytania równolegle
-      if (dataLoadingPromises.length > 0) {
-        console.log('🔄 [TaskDetails] Wykonywanie równoległych zapytań', {
-          promisesCount: dataLoadingPromises.length
-        });
-        
-        const results = await Promise.all(dataLoadingPromises);
-        
-        console.log('✅ [TaskDetails] KROK 3: Równoległe ładowanie zakończone', {
-          duration: `${(performance.now() - step3Start).toFixed(2)}ms`,
-          resultsCount: results.length
-        });
-        
-        // Przetwórz wyniki i ustaw stany (tylko podstawowe dane)
-        results.forEach(result => {
-          switch (result.type) {
-            case 'recipeVersion':
-              if (result.data && result.data.data) {
-                // Dodaj dane wersji receptury do obiektu task
-                setTask(prevTask => ({
-                  ...prevTask,
-                  recipe: result.data.data // result.data.data zawiera pełne dane receptury z tej wersji
-                }));
-              }
-              break;
-            case 'awaitingOrders':
-              // Oczekujące zamówienia są już ustawione w funkcji fetchAwaitingOrdersForMaterials
-              break;
-            case 'poReservations':
-              setPOReservations(result.data);
-              break;
-          }
-        });
-      } else {
-        console.log('⏭️ [TaskDetails] KROK 3: Brak dodatkowych danych do załadowania');
-      }
-      
-      // ⚡ OPTYMALIZACJA: KROK 4 - Pobierz tylko podstawowe nazwy użytkowników (bez historii produkcji)
-      // Historia produkcji będzie ładowana lazy load gdy zakładka jest aktywna
-      if (fetchedTask?.id) {
-        try {
-          // Zbierz ID użytkowników z podstawowych źródeł (bez historii produkcji)
-          const basicUserIds = new Set();
-          
-          // Dodaj użytkowników z historii statusów
-          fetchedTask.statusHistory?.forEach(change => {
-            if (change.changedBy) basicUserIds.add(change.changedBy);
-          });
-          
-          // Dodaj użytkowników z materiałów skonsumowanych
-          fetchedTask.consumedMaterials?.forEach(consumed => {
-            if (consumed.userId) basicUserIds.add(consumed.userId);
-            if (consumed.createdBy) basicUserIds.add(consumed.createdBy);
-          });
-          
-          // Dodaj użytkowników z historii kosztów
-          fetchedTask.costHistory?.forEach(costChange => {
-            if (costChange.userId) basicUserIds.add(costChange.userId);
-          });
-          
-          // Pobierz podstawowe nazwy użytkowników (bez historii produkcji - załadowane później)
-          if (basicUserIds.size > 0) {
-            await fetchUserNames([...basicUserIds]);
-          }
-        } catch (error) {
-          console.error('Błąd podczas pobierania podstawowych nazw użytkowników:', error);
-        }
-      }
-      
-      // ⚡ OPTYMALIZACJA: FAZA 2 - Ważne dane (opóźnione o 100ms dla lepszego UX)
-      setTimeout(async () => {
-        try {
-          const importantPromises = [];
-          
-          // Rezerwacje PO - już załadowane w KROK 3, ale możemy dodać tutaj inne ważne dane
-          // jeśli potrzebne
-          
-          await Promise.allSettled(importantPromises);
-        } catch (error) {
-          console.error('Błąd podczas ładowania ważnych danych:', error);
-        }
-      }, 100);
-      
-      console.log('✅ [TaskDetails] fetchAllTaskData COMPLETED', {
-        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`
-      });
-    } catch (error) {
-      console.error('❌ [TaskDetails] fetchAllTaskData błąd', {
-        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
-        error
-      });
-      showError('Nie udało się pobrać danych zadania: ' + error.message);
-      navigate('/production');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ✅ REFAKTORYZACJA: refreshTaskReservations przeniesione do useTaskFetcher
 
-  // Zachowujemy funkcje kompatybilności wstecznej (używane w innych miejscach kodu)
-  const fetchTask = async () => {
-    // Przekierowanie do nowej zoptymalizowanej funkcji
-    await fetchAllTaskData();
-  };
-
-  // ✅ NOWA FUNKCJA: Selektywne odświeżanie tylko rezerwacji i konsumpcji
-  const refreshTaskReservations = async () => {
-    try {
-      // Pobierz tylko podstawowe dane zadania (bez cache, bezpośrednio z serwera)
-      const taskRef = doc(db, 'productionTasks', id);
-      const taskSnapshot = await getDoc(taskRef);
-      
-      if (!taskSnapshot.exists()) {
-        throw new Error('Zadanie nie istnieje');
-      }
-      
-      const freshTaskData = {
-        id: taskSnapshot.id,
-        ...taskSnapshot.data()
-      };
-      
-      // Aktualizuj tylko kluczowe pola związane z rezerwacjami i konsumpcją
-      setTask(prevTask => ({
-        ...prevTask,
-        materialBatches: freshTaskData.materialBatches || {},
-        consumedMaterials: freshTaskData.consumedMaterials || [],
-        materialsReserved: freshTaskData.materialsReserved || false,
-        updatedAt: freshTaskData.updatedAt,
-        // Zachowaj inne pola bez zmian
-        updatedBy: freshTaskData.updatedBy
-      }));
-      
-    } catch (error) {
-      console.error('❌ Błąd podczas selektywnego odświeżania:', error);
-      showError('Nie udało się odświeżyć danych rezerwacji: ' + error.message);
-      // Fallback do pełnego odświeżenia tylko w przypadku krytycznego błędu
-      // await fetchAllTaskData();
-    }
-  };
-
-  // Funkcja do pobierania rezerwacji PO
-  const fetchPOReservations = async (forceRefresh = false) => {
-    const startTime = performance.now();
-    console.log('🔵 [TaskDetails] fetchPOReservations START', {
-      taskId: id,
-      forceRefresh
-    });
-    
-    try {
-      // ⚡ OPTYMALIZACJA: Sprawdź cache
-      const now = Date.now();
-      const cached = parallelDataCache.current.poReservations;
-      
-      if (!forceRefresh && cached.data && (now - cached.timestamp) < CACHE_TTL) {
-        console.log('✅ [TaskDetails] Cache hit: poReservations', {
-          age: `${((now - cached.timestamp) / 1000).toFixed(1)}s`,
-          duration: `${(performance.now() - startTime).toFixed(2)}ms`
-        });
-        setPOReservations(cached.data);
-        setPoRefreshTrigger(prev => prev + 1);
-        return;
-      }
-      
-      const importStartTime = performance.now();
-      const { getPOReservationsForTask } = await import('../../services/poReservationService');
-      console.log('✅ [TaskDetails] poReservationService zaimportowany', {
-        duration: `${(performance.now() - importStartTime).toFixed(2)}ms`
-      });
-      
-      const fetchStartTime = performance.now();
-      const reservations = await getPOReservationsForTask(id);
-      console.log('✅ [TaskDetails] Rezerwacje PO pobrane z serwera', {
-        duration: `${(performance.now() - fetchStartTime).toFixed(2)}ms`,
-        count: reservations?.length || 0
-      });
-      
-      // Zapisz w cache
-      parallelDataCache.current.poReservations = {
-        data: reservations,
-        timestamp: now
-      };
-      
-      setPOReservations(reservations);
-      setPoRefreshTrigger(prev => prev + 1); // Zwiększ trigger aby wymusić odświeżenie POReservationManager
-      
-      console.log('✅ [TaskDetails] fetchPOReservations COMPLETED', {
-        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`,
-        cached: false
-      });
-    } catch (error) {
-      console.error('❌ [TaskDetails] fetchPOReservations błąd', {
-        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
-        error
-      });
-      // Nie pokazujemy błędu użytkownikowi - to nie jest krytyczne
-    }
-  };
+  // ✅ REFAKTORYZACJA: fetchPOReservations przeniesione do useTaskFetcher
 
 
   // FAZA 1.3: getPOReservationsForMaterial, calculateWeightedUnitPrice, isEstimatedPrice,
   // getPriceBreakdownTooltip, calculateMaterialReservationCoverage => przeniesione do useTaskCosts
 
-  // Funkcja do pobierania powiązań składników z rezerwacjami
-  const fetchIngredientReservationLinks = async () => {
-    if (!task?.id) return;
-    
-    try {
-      const links = await getIngredientReservationLinks(task.id);
-      setIngredientReservationLinks(links);
-    } catch (error) {
-      console.error('Błąd podczas pobierania powiązań składników:', error);
-    }
-  };
+  // ✅ REFAKTORYZACJA: fetchIngredientReservationLinks przeniesione do useTaskFetcher
 
   // Memoizowana mapa ilości wydanych dla wszystkich materiałów (indeksowana po materialId)
   const issuedQuantitiesMap = useMemo(() => {
@@ -1468,46 +1105,9 @@ const TaskDetailsPage = () => {
     return issuedQuantitiesMap[materialId] || 0;
   }, [issuedQuantitiesMap]);
 
-  // Funkcja do odświeżania tylko podstawowych danych zadania (dla POReservationManager)
-  const fetchTaskBasicData = async () => {
-    try {
-      // Pobierz tylko podstawowe dane zadania bez pokazywania wskaźnika ładowania
-      const fetchedTask = await getTaskById(id);
-      setTask(fetchedTask);
-      
-      // Jeśli zadanie ma materiały, odśwież tylko dane materiałów
-      if (fetchedTask?.materials?.length > 0) {
-        await fetchBatchesForMaterialsOptimized();
-      }
-      
-      // Odśwież również rezerwacje PO
-      await fetchPOReservations();
-    } catch (error) {
-      console.error('Błąd podczas odświeżania podstawowych danych zadania:', error);
-      showError('Nie udało się odświeżyć danych zadania: ' + error.message);
-    }
-  };
+  // ✅ REFAKTORYZACJA: fetchTaskBasicData przeniesione do useTaskFetcher
   
-  // 🔒 POPRAWKA: Funkcja do pobierania historii produkcji
-  // Przyjmuje taskId jako parametr zamiast używać task z closure aby uniknąć stałych danych
-  const fetchProductionHistory = async (taskId = task?.id) => {
-    if (!taskId) {
-      return; // Zabezpieczenie przed błędami null/undefined
-    }
-    try {
-      const history = await getProductionHistory(taskId);
-      setProductionHistory(history || []);
-      
-      // Pobierz nazwy użytkowników z historii produkcji
-      const userIds = history?.map(session => session.userId).filter(Boolean) || [];
-      if (userIds.length > 0) {
-        await fetchUserNames(userIds);
-      }
-    } catch (error) {
-      console.error('Błąd podczas pobierania historii produkcji:', error);
-      setProductionHistory([]);
-    }
-  };
+  // ✅ REFAKTORYZACJA: fetchProductionHistory przeniesione do useTaskFetcher
 
   // ❌ USUNIĘTE - duplikaty obsługiwane przez real-time listener w processTaskUpdate:
   // useEffect(() => { if (task?.moNumber) fetchFormResponses(task.moNumber); }, [task?.moNumber]);
@@ -1587,92 +1187,18 @@ const TaskDetailsPage = () => {
   //   }
   // }, [task?.id]);
 
-  // Pobieranie alergenów z receptury przy załadowaniu zadania
-  useEffect(() => {
-    if (task?.recipe?.allergens && task.recipe.allergens.length > 0) {
-      setSelectedAllergens(task.recipe.allergens);
-    } else if (task?.recipeId && !task?.recipe?.allergens) {
-      // Jeśli zadanie ma recipeId ale nie ma załadowanych danych receptury, pobierz je
-      const fetchRecipeAllergens = async () => {
-        try {
-          const { getRecipeById } = await import('../../services/recipeService');
-          const recipe = await getRecipeById(task.recipeId);
-          if (recipe?.allergens && recipe.allergens.length > 0) {
-            setSelectedAllergens(recipe.allergens);
-          }
-        } catch (error) {
-          console.error('Błąd podczas pobierania alergenów z receptury:', error);
-        }
-      };
-      fetchRecipeAllergens();
-    }
-  }, [task?.recipe?.allergens, task?.recipeId]);
+  // ✅ FAZA 2+: useEffect pobierania alergenów z receptury przeniesiony do useTaskReportFetcher
 
 
   // FAZA 1.3: taskCostDependencies, cost sync useEffect, BroadcastChannel useEffect
   // => przeniesione do useTaskCosts
 
 
-  // Funkcja do pobierania magazynów
-  const fetchWarehouses = async () => {
-    try {
-      setWarehousesLoading(true);
-      const { getAllWarehouses } = await import('../../services/inventory');
-      const warehousesList = await getAllWarehouses();
-      setWarehouses(warehousesList);
-      
-      // Jeśli jest przynajmniej jeden magazyn, ustaw go jako domyślny
-      if (warehousesList.length > 0) {
-        setHistoryInventoryData(prev => ({
-          ...prev,
-          warehouseId: warehousesList[0].id
-        }));
-      }
-    } catch (error) {
-      console.error('Błąd podczas pobierania magazynów:', error);
-    } finally {
-      setWarehousesLoading(false);
-    }
-  };
+  // ✅ REFAKTORYZACJA: fetchWarehouses przeniesione do useTaskFetcher
 
-  // Funkcja do pobierania dostępnych maszyn
-  const fetchAvailableMachines = async () => {
-    try {
-      const machines = await getAvailableMachines();
-      setAvailableMachines(machines);
-      
-      // Jeśli zadanie ma workstationId, spróbuj znaleźć odpowiadającą maszynę
-      if (task?.workstationId && machines.length > 0) {
-        // Możemy użyć workstationId jako machineId lub znaleźć maszynę na podstawie nazwy
-        const machineForWorkstation = machines.find(machine => 
-          machine.id === task.workstationId || 
-          machine.name.toLowerCase().includes(task.workstationId.toLowerCase())
-        );
-        
-        if (machineForWorkstation) {
-          setSelectedMachineId(machineForWorkstation.id);
-        }
-      }
-    } catch (error) {
-      console.error('Błąd podczas pobierania maszyn:', error);
-    }
-  };
+  // ✅ REFAKTORYZACJA: fetchAvailableMachines przeniesione do useTaskFetcher
 
-  // Funkcja do wzbogacania historii produkcji o dane z maszyn
-  const enrichProductionHistoryWithMachineData = async () => {
-    if (!selectedMachineId || !productionHistory || productionHistory.length === 0) {
-      setEnrichedProductionHistory(productionHistory || []);
-      return;
-    }
-
-    try {
-      const enrichedHistory = await getProductionDataForHistory(selectedMachineId, productionHistory);
-      setEnrichedProductionHistory(enrichedHistory);
-    } catch (error) {
-      console.error('Błąd podczas wzbogacania historii produkcji:', error);
-      setEnrichedProductionHistory(productionHistory || []);
-    }
-  };
+  // ✅ REFAKTORYZACJA: enrichProductionHistoryWithMachineData przeniesione do useTaskFetcher
 
   // Synchronizacja ilości wyprodukowanej z ilością końcową w formularzu magazynu dla dialogu historii
   useEffect(() => {
@@ -1685,86 +1211,14 @@ const TaskDetailsPage = () => {
   }, [editedHistoryItem.quantity, addToInventoryOnHistory]);
 
 
-  const handleStatusChange = async (newStatus) => {
-    try {
-      // ✅ REFAKTORYZACJA: Sprawdzenie konsumpcji materiałów - wyświetl ostrzeżenie zamiast dialogu
-      if (newStatus === 'Zakończone' && !task.materialConsumptionConfirmed && task.materials && task.materials.length > 0) {
-        showWarning('Przed zakończeniem zadania potwierdź zużycie materiałów w zakładce "Materiały i koszty"');
-        return;
-      }
-
-      setLoading(true);
-      await updateTaskStatus(id, newStatus, currentUser.uid);
-      
-      // Ponowne pobranie danych zadania
-      const updatedTask = await getTaskById(id);
-      setTask(updatedTask);
-      
-      // Aktualizacja danych użytkowników
-      if (updatedTask.statusHistory && updatedTask.statusHistory.length > 0) {
-        const userIds = updatedTask.statusHistory.map(change => change.changedBy).filter(id => id);
-        const uniqueUserIds = [...new Set(userIds)];
-        const missingUserIds = uniqueUserIds.filter(id => !userNames[id]);
-        
-        if (missingUserIds.length > 0) {
-          await fetchUserNames(missingUserIds);
-        }
-      }
-      
-      // Wyświetl powiadomienie
-      showSuccess(`Status zadania zmieniony na: ${newStatus}`);
-    } catch (error) {
-      console.error('Błąd podczas zmiany statusu:', error);
-      showError('Nie udało się zmienić statusu zadania: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Funkcje obsługujące zarządzanie materiałami
-  const handleQuantityChange = (materialId, value) => {
-    // Konwertuj wartość na liczbę tylko jeśli nie jest pusta
-    const numValue = value === '' ? '' : parseFloat(value);
-    
-    // Zapisz wartość tylko jeśli jest pusta, lub jest poprawną liczbą
-    if (value === '' || (!isNaN(numValue))) {
-      setMaterialQuantities(prev => ({
-        ...prev,
-        [materialId]: numValue
-      }));
-      
-      // Resetuj błędy
-      if (errors[materialId]) {
-        setErrors(prev => {
-          const newErrors = { ...prev };
-          delete newErrors[materialId];
-          return newErrors;
-        });
-      }
-    }
-  };
+  // ✅ FAZA A: handleStatusChange przeniesione do useProductionControlHandlers
+  // ✅ FAZA A: handleQuantityChange przeniesione do useMaterialHandlers
   
+  // ✅ REFAKTORYZACJA: validateQuantities przeniesione do utils/taskValidators
   const validateQuantities = () => {
-    const newErrors = {};
-    let isValid = true;
-    
-    materials.forEach(material => {
-      const quantity = materialQuantities[material.id];
-      
-      // Sprawdź czy quantity jest liczbą
-      if (isNaN(quantity)) {
-        newErrors[material.id] = 'Ilość musi być liczbą';
-        isValid = false;
-      }
-      // Sprawdź czy quantity nie jest ujemne
-      else if (quantity < 0) {
-        newErrors[material.id] = 'Ilość nie może być ujemna';
-        isValid = false;
-      }
-    });
-    
-    setErrors(newErrors);
-    return isValid;
+    const result = validateQuantitiesPure(materials, materialQuantities);
+    setErrors(result.errors);
+    return result.isValid;
   };
   
   const handleSaveChanges = async () => {
@@ -1804,23 +1258,7 @@ const TaskDetailsPage = () => {
     }
   };
   
-  // ✅ REFAKTORYZACJA: Funkcja potwierdzania konsumpcji - usunięto nieużywane odniesienia do dialogów
-  const handleConfirmConsumption = async () => {
-    try {
-      await confirmMaterialConsumption(id);
-      showSuccess('Zużycie materiałów potwierdzone. Stany magazynowe zostały zaktualizowane.');
-      
-      // ⚡ Invaliduj cache kosztów po konsumpcji (ceny mogły się zmienić)
-      invalidateCostsCache();
-      
-      // Odśwież dane zadania
-      const updatedTask = await getTaskById(id);
-      setTask(updatedTask);
-    } catch (error) {
-      console.error('Błąd podczas potwierdzania zużycia:', error);
-      showError('Nie udało się potwierdzić zużycia materiałów: ' + error.message);
-    }
-  };
+  // ✅ FAZA A: handleConfirmConsumption przeniesione do useProductionControlHandlers
 
   // ✅ REFAKTORYZACJA: Callback dla DeleteConfirmDialog
   const handleDelete = useCallback(async () => {
@@ -1908,604 +1346,22 @@ const TaskDetailsPage = () => {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Zaplanowane':
-        return '#1976d2'; // oryginalny niebieski
-      case 'W trakcie':
-        return '#ff9800'; // oryginalny pomarańczowy
-      case 'Potwierdzenie zużycia':
-        return '#2196f3'; // oryginalny jasnoniebieski
-      case 'Zakończone':
-        return '#4caf50'; // oryginalny zielony
-      case 'Anulowane':
-        return '#f44336'; // oryginalny czerwony
-      case 'Wstrzymane':
-        return '#757575'; // oryginalny szary
-      default:
-        return '#757575'; // oryginalny szary
-    }
-  };
+  // ✅ REFAKTORYZACJA: getStatusColor, getStatusActions przeniesione do utils/taskFormatters
 
-  const getStatusActions = () => {
-    // Przygotuj przyciski akcji w zależności od statusu zadania
-    const actions = [];
+  // ✅ FAZA A: handleReceiveClick, handleReceiveItem, handleAddToInventory, handleStartProduction,
+  // handleStartProductionWithExpiry, handleStopProduction, handleConfirmConsumption
+  // przeniesione do useProductionControlHandlers
 
-    // Przycisk do wydruku szczegółów MO
-    actions.push(
-      <Button
-        key="print-mo"
-        variant="outlined"
-        startIcon={<PrintIcon />}
-        onClick={handlePrintMODetails}
-        sx={mobileButton(isMobile)}
-      >
-        {t('buttons.printMO')}
-      </Button>
-    );
-
-    // Przycisk do wydruku raportu materiałów i LOT-ów
-    actions.push(
-      <Button
-        key="print-materials"
-        variant="outlined"
-        startIcon={<PrintIcon />}
-        onClick={handlePrintMaterialsAndLots}
-        sx={mobileButton(isMobile)}
-      >
-        {t('buttons.materialReport')}
-      </Button>
-    );
-
-    // ... pozostałe przyciski akcji ...
-
-    // Zwróć kontener z przyciskami, zastosuj flexbox dla lepszego układu na mobilnych
-    return (
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: isMobile ? 'column' : 'row',
-        alignItems: isMobile ? 'stretch' : 'center',
-        gap: 1
-      }}>
-        {actions}
-      </Box>
-    );
-  };
-
-  // ✅ REFAKTORYZACJA: Funkcja otwierająca dodawanie do magazynu - bezpośrednio wywołuje handleReceiveItem
-  const handleReceiveClick = () => {
-    handleReceiveItem();
-  };
+  // ✅ REFAKTORYZACJA: fetchBatchesForMaterialsOptimized, fetchBatchesForMaterials
+  // przeniesione do useTaskMaterialFetcher
   
-  // Funkcja obsługująca dodanie produktu do magazynu
-  const handleReceiveItem = async () => {
-    try {
-      setLoading(true);
-      
-      // Sprawdź czy zadanie ma pozycję magazynową, jeśli nie - spróbuj znaleźć przez recepturę
-      let inventoryProductId = task.inventoryProductId;
-      
-      if (!inventoryProductId && task.recipeId) {
-        try {
-          const { getInventoryItemByRecipeId } = await import('../../services/inventory');
-          const recipeInventoryItem = await getInventoryItemByRecipeId(task.recipeId);
-          
-          if (recipeInventoryItem) {
-            inventoryProductId = recipeInventoryItem.id;
-            
-            // Zaktualizuj zadanie z pozycją magazynową z receptury
-            const { updateTask } = await import('../../services/productionService');
-            await updateTask(id, {
-              inventoryProductId: inventoryProductId
-            }, currentUser.uid);
-            
-            // Odśwież dane zadania z nową pozycją magazynową
-            const updatedTask = await getTaskById(id);
-            setTask(updatedTask);
-          }
-        } catch (error) {
-          console.error('Błąd podczas pobierania pozycji magazynowej z receptury:', error);
-        }
-      }
-      
-      // Jeśli produkt jest powiązany z pozycją w magazynie, przenieś do formularza przyjęcia
-      if (inventoryProductId) {
-        // Przekieruj do strony przyjęcia towaru z parametrami
-        const unitPrice = task.costs && task.quantity ? 
-          Number(task.costs.totalCost / task.quantity) : 0;
-        
-        // Użyj LOT z zadania produkcyjnego, jeśli jest dostępny,
-        // w przeciwnym przypadku wygeneruj na podstawie numeru MO
-        const lotNumber = task.lotNumber || 
-                         (task.moNumber ? `SN${task.moNumber.replace('MO', '')}` : `LOT-PROD-${id.substring(0, 6)}`);
-          
-        // Przygotuj dodatkowe informacje o pochodzeniu produktu
-        const sourceInfo = new URLSearchParams();
-        sourceInfo.append('poNumber', `PROD-${id.substring(0, 6)}`);
-        sourceInfo.append('quantity', task.quantity);
-        sourceInfo.append('unitPrice', unitPrice);
-        sourceInfo.append('reason', 'production');
-        sourceInfo.append('lotNumber', lotNumber);
-        sourceInfo.append('source', 'production');
-        sourceInfo.append('sourceId', id);
-        
-        // Dodaj datę ważności, jeśli została zdefiniowana w zadaniu
-        if (task.expiryDate) {
-          // Konwertuj różne formaty daty do ISO string
-          let expiryDateStr;
-          if (task.expiryDate instanceof Date) {
-            expiryDateStr = task.expiryDate.toISOString();
-          } else if (task.expiryDate.toDate && typeof task.expiryDate.toDate === 'function') {
-            // Firebase Timestamp
-            expiryDateStr = task.expiryDate.toDate().toISOString();
-          } else if (task.expiryDate.seconds) {
-            // Timestamp z sekundami
-            expiryDateStr = new Date(task.expiryDate.seconds * 1000).toISOString();
-          } else if (typeof task.expiryDate === 'string') {
-            // String z datą - upewnij się, że to poprawny format ISO
-            try {
-              expiryDateStr = new Date(task.expiryDate).toISOString();
-            } catch (e) {
-              console.error('Błąd podczas konwersji daty ważności:', e);
-            }
-          }
-          
-          if (expiryDateStr) {
-            sourceInfo.append('expiryDate', expiryDateStr);
-          }
-        }
-        
-        // Dodaj informacje o MO i CO
-        if (task.moNumber) {
-          sourceInfo.append('moNumber', task.moNumber);
-        }
-        
-        if (task.orderNumber) {
-          sourceInfo.append('orderNumber', task.orderNumber);
-        }
-        
-        if (task.orderId) {
-          sourceInfo.append('orderId', task.orderId);
-        }
-        
-        // Przygotuj opis dla partii
-        let notes = `Partia z zadania produkcyjnego: ${task.name || ''}`;
-        if (task.moNumber) {
-          notes += ` (MO: ${task.moNumber})`;
-        }
-        if (task.orderNumber) {
-          notes += ` (CO: ${task.orderNumber})`;
-        }
-        sourceInfo.append('notes', notes);
-        
-        navigate(`/inventory/${inventoryProductId}/receive?${sourceInfo.toString()}`);
-      } else {
-        // Jeśli nie ma powiązanej pozycji magazynowej, użyj standardowej funkcji
-        await addTaskProductToInventory(id, currentUser.uid);
-        
-        // ✅ REFAKTORYZACJA: Używamy showSuccess zamiast setAlert
-        showSuccess('Produkt został pomyślnie dodany do magazynu jako partia');
-        
-        // Odśwież dane zadania
-        const updatedTask = await getTaskById(id);
-        setTask(updatedTask);
-      }
-    } catch (error) {
-      console.error('Błąd podczas dodawania produktu do magazynu:', error);
-      // ✅ REFAKTORYZACJA: Używamy showError zamiast setAlert
-      showError(`Błąd podczas dodawania produktu do magazynu: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Funkcja obsługująca dodanie produktu do magazynu
-  const handleAddToInventory = () => {
-    handleReceiveClick();
-  };
-
-  const handleStartProduction = async () => {
-    try {
-      // Sprawdź czy zadanie ma już ustawioną datę ważności
-      if (!task?.expiryDate) {
-        // ✅ REFAKTORYZACJA: Używamy hooka useTaskDialogs
-        openDialog('startProduction');
-        return;
-      }
-      
-      // Jeśli ma datę ważności, rozpocznij produkcję
-      const result = await startProduction(id, currentUser.uid);
-      
-      // Wyświetl komunikat na podstawie wyniku tworzenia partii
-      if (result.batchResult) {
-        if (result.batchResult.message === 'Partia już istnieje') {
-          showSuccess('Produkcja wznowiona - używa istniejącą partię produktu');
-        } else if (result.batchResult.isNewBatch === false) {
-          showSuccess('Produkcja wznowiona - dodano do istniejącej partii produktu');
-        } else {
-          showSuccess('Produkcja rozpoczęta - utworzono nową pustą partię produktu');
-        }
-      } else {
-        showSuccess('Produkcja rozpoczęta');
-      }
-      
-      const updatedTask = await getTaskById(id);
-      setTask(updatedTask);
-    } catch (error) {
-      showError('Błąd podczas rozpoczynania produkcji: ' + error.message);
-    }
-  };
-
-  // ✅ REFAKTORYZACJA: Callback dla komponentu StartProductionDialog
-  const handleStartProductionWithExpiry = useCallback(async (expiryDate) => {
-    try {
-      // Rozpocznij produkcję z datą ważności
-      const result = await startProduction(id, currentUser.uid, expiryDate);
-      
-      // Wyświetl komunikat na podstawie wyniku tworzenia partii
-      if (result.batchResult) {
-        if (result.batchResult.message === 'Partia już istnieje') {
-          showSuccess('Produkcja wznowiona - używa istniejącą partię produktu');
-        } else if (result.batchResult.isNewBatch === false) {
-          showSuccess('Produkcja wznowiona - dodano do istniejącej partii produktu');
-        } else {
-          showSuccess('Produkcja rozpoczęta - utworzono nową pustą partię produktu');
-        }
-      } else {
-        showSuccess('Produkcja rozpoczęta');
-      }
-      
-      // Odśwież dane zadania
-      const updatedTask = await getTaskById(id);
-      setTask(updatedTask);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error starting production:', error);
-      return { success: false, error };
-    }
-  }, [id, currentUser?.uid, showSuccess]);
-
-  const handleStopProduction = async () => {
-    if (!productionData.completedQuantity) {
-      showError('Podaj ilość wyprodukowaną');
-      return;
-    }
-    
-    const quantity = parseFloat(productionData.completedQuantity);
-    
-    if (isNaN(quantity) || quantity <= 0) {
-      showError('Ilość wyprodukowana musi być liczbą większą od zera');
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
-      const result = await stopProduction(
-        id, 
-        quantity, 
-        productionData.timeSpent || 0,
-        currentUser.uid,
-        // Przekaż informacje o czasie
-        {
-          startTime: productionData.startTime.toISOString(),
-          endTime: productionData.endTime.toISOString()
-        }
-      );
-      
-      // ✅ REFAKTORYZACJA: Usunięto setStopProductionDialogOpen - nieużywany
-      
-      if (result.isCompleted) {
-        showSuccess('Zadanie zostało zakończone');
-        showInfo('Rezerwacje materiałów pozostają aktywne do momentu potwierdzenia zużycia materiałów. Przejdź do zakładki "Zużycie materiałów", aby je potwierdzić.');
-      } else {
-        showSuccess('Produkcja została wstrzymana');
-      }
-      
-      // ✅ OPTYMALIZACJA: Usunięto bezpośrednie wywołanie updateTaskCostsAutomatically
-      // Koszty zostaną zaktualizowane przez:
-      // 1. Periodic sync (useEffect z compareCostsWithDatabase) jako fallback
-      // 2. Cloud Functions (backend) przy zmianach cen partii
-      // 3. Ręcznie przez użytkownika (przycisk "Aktualizuj koszty")
-      
-      // ✅ Real-time listener automatycznie odświeży dane zadania
-    } catch (error) {
-      console.error('Error stopping production:', error);
-      showError('Błąd podczas zatrzymywania produkcji: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ✅ SUPER OPTYMALIZACJA: Nowa funkcja do grupowego pobierania partii dla materiałów
-  const fetchBatchesForMaterialsOptimized = async () => {
-    try {
-      setMaterialBatchesLoading(true);
-      if (!task || !task.materials) return;
-      
-      const batchesData = {};
-      const initialSelectedBatches = {};
-      
-      // KROK 1: Pobierz wszystkie magazyny na początku (już zoptymalizowane)
-      const { getAllWarehouses, getBatchesForMultipleItems, getReservationsForMultipleBatches } = await import('../../services/inventory');
-      const allWarehouses = await getAllWarehouses();
-      // Stwórz mapę magazynów dla szybkiego dostępu po ID
-      const warehousesMap = {};
-      allWarehouses.forEach(warehouse => {
-        warehousesMap[warehouse.id] = warehouse.name;
-      });
-      
-      // KROK 2: ✅ SUPER OPTYMALIZACJA - Grupowe pobieranie partii dla wszystkich materiałów JEDNOCZEŚNIE
-      const materialIds = task.materials
-        .map(material => material.inventoryItemId || material.id)
-        .filter(Boolean);
-      
-      if (materialIds.length === 0) {
-        setBatches(batchesData);
-        setSelectedBatches(initialSelectedBatches);
-        return;
-      }
-      
-      // POJEDYNCZE GRUPOWE ZAPYTANIE dla wszystkich partii materiałów
-      const materialBatchesMap = await getBatchesForMultipleItems(materialIds);
-      
-      // Zbierz wszystkie ID partii dla grupowego pobierania rezerwacji
-      const allBatchIds = [];
-      Object.values(materialBatchesMap).forEach(batches => {
-        batches.forEach(batch => {
-          if (batch.id && !allBatchIds.includes(batch.id)) {
-            allBatchIds.push(batch.id);
-          }
-        });
-      });
-      
-
-      
-      // KROK 3: ✅ SUPER OPTYMALIZACJA - Grupowe pobieranie rezerwacji dla wszystkich partii JEDNOCZEŚNIE
-      let allBatchReservationsMap = {};
-      
-      if (allBatchIds.length > 0) {
-        // POJEDYNCZE GRUPOWE ZAPYTANIE dla wszystkich rezerwacji partii
-        allBatchReservationsMap = await getReservationsForMultipleBatches(allBatchIds);
-        
-
-      }
-      
-      // KROK 4: Przetwórz dane i stwórz finalne struktury
-      for (const material of task.materials) {
-        const materialId = material.inventoryItemId || material.id;
-        if (!materialId) continue;
-        
-        const batches = materialBatchesMap[materialId] || [];
-        
-        if (batches.length > 0) {
-          // Dla każdej partii wzbogać o informacje o rezerwacjach i magazynie
-          const batchesWithReservations = batches.map((batch) => {
-            const reservations = allBatchReservationsMap[batch.id] || [];
-            
-            // Oblicz ilość zarezerwowaną przez inne zadania (z wyłączeniem bieżącego)
-            const reservedByOthers = reservations.reduce((sum, reservation) => {
-              if (reservation.taskId === id) return sum; // Pomiń rezerwacje bieżącego zadania
-              return sum + (reservation.quantity || 0);
-            }, 0);
-            
-            // Oblicz faktycznie dostępną ilość po uwzględnieniu rezerwacji
-            const effectiveQuantity = Math.max(0, batch.quantity - reservedByOthers);
-            
-            // Przygotuj informacje o magazynie z prawidłową nazwą
-            let warehouseInfo = {
-              id: 'main',
-              name: 'Magazyn główny'
-            };
-            
-            if (batch.warehouseId) {
-              // Pobierz nazwę magazynu z naszej mapy
-              const warehouseName = warehousesMap[batch.warehouseId];
-              warehouseInfo = {
-                id: batch.warehouseId,
-                name: warehouseName || `Magazyn ${batch.warehouseId.substring(0, 6)}`
-              };
-            }
-            
-            return {
-              ...batch,
-              reservedByOthers,
-              effectiveQuantity,
-              warehouseInfo
-            };
-          });
-          
-          batchesData[materialId] = batchesWithReservations;
-          initialSelectedBatches[materialId] = [];
-          
-          // Sprawdź czy materiał ma już zarezerwowane partie w zadaniu
-          const reservedBatches = task.materialBatches && task.materialBatches[materialId] 
-            ? task.materialBatches[materialId] 
-            : [];
-          
-          if (reservedBatches.length > 0) {
-            // Dla każdej zarezerwowanej partii
-            for (const reservedBatch of reservedBatches) {
-              // Znajdź odpowiadającą partię w dostępnych partiach
-              const matchingBatch = batchesWithReservations.find(b => b.id === reservedBatch.batchId);
-              
-              if (matchingBatch) {
-                // Dodaj zarezerwowaną partię do wybranych partii
-                initialSelectedBatches[materialId].push({
-                  batchId: reservedBatch.batchId,
-                  quantity: reservedBatch.quantity,
-                  batchNumber: reservedBatch.batchNumber || matchingBatch.batchNumber || matchingBatch.lotNumber || 'Bez numeru'
-                });
-              }
-            }
-          }
-        } else {
-          batchesData[materialId] = [];
-          initialSelectedBatches[materialId] = [];
-        }
-      }
-      
-      setBatches(batchesData);
-      setSelectedBatches(initialSelectedBatches);
-      
-
-      
-    } catch (error) {
-      console.error('Błąd podczas pobierania partii dla materiałów:', error);
-      showError('Nie udało się pobrać informacji o partiach materiałów');
-    } finally {
-      setMaterialBatchesLoading(false);
-    }
-  };
-
-  // Zachowujemy starą funkcję dla kompatybilności wstecznej
-  const fetchBatchesForMaterials = async () => {
-    // Przekierowanie do nowej zoptymalizowanej funkcji
-    await fetchBatchesForMaterialsOptimized();
-  };
+  // ✅ FAZA A: handleReservationMethodChange, handleBatchSelection przeniesione do useReservationHandlers
   
-  // Obsługa zmiany metody rezerwacji
-  const handleReservationMethodChange = (e) => {
-    const newMethod = e.target.value;
-    setReservationMethod(newMethod);
-    
-    // Jeśli wybrano ręczną metodę, pobierz partie
-    if (newMethod === 'manual') {
-      if (Object.keys(batches).length === 0) {
-        fetchBatchesForMaterials();
-      }
-      // Zawsze pobieraj oczekiwane zamówienia przy wyborze ręcznej metody
-      fetchAwaitingOrdersForMaterials();
-      setManualBatchSelectionActive(true);
-    } else {
-      setManualBatchSelectionActive(false);
-    }
-  };
-  
-  // Obsługa zmiany wybranej partii
-  const handleBatchSelection = (materialId, batchId, quantity) => {
-    // Upewnij się, że quantity jest liczbą
-    const numericQuantity = parseFloat(quantity) || 0;
-    
-    setSelectedBatches(prev => {
-      const materialBatches = [...(prev[materialId] || [])];
-      const existingBatchIndex = materialBatches.findIndex(b => b.batchId === batchId);
-      
-      if (existingBatchIndex >= 0) {
-        // Aktualizuj istniejącą partię
-        if (numericQuantity < 0) {
-          // Usuń partię tylko jeśli ilość jest ujemna (nie gdy jest 0)
-          materialBatches.splice(existingBatchIndex, 1);
-        } else {
-          // Zachowaj partię nawet z quantity = 0 dla dalszej obróbki (usunięcie rezerwacji)
-          materialBatches[existingBatchIndex].quantity = numericQuantity;
-        }
-      } else if (numericQuantity >= 0) {
-        // Dodaj nową partię
-        const batch = batches[materialId].find(b => b.id === batchId);
-        if (batch) {
-          materialBatches.push({
-            batchId: batchId,
-            quantity: numericQuantity,
-            batchNumber: batch.batchNumber || batch.lotNumber || 'Bez numeru'
-          });
-        }
-      }
-      
-      return {
-        ...prev,
-        [materialId]: materialBatches
-      };
-    });
-  };
-  
-  // Walidacja ręcznego wyboru partii
-  const validateManualBatchSelection = () => {
-    if (!task || !task.materials) return { valid: false, error: "Brak materiałów do walidacji" };
-    
-    for (const material of task.materials) {
-      const materialId = material.inventoryItemId || material.id;
-      if (!materialId) continue;
-      
-      // Użyj funkcji uwzględniającej konsumpcję
-      const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
-      
-      // POPRAWKA: Pomiń walidację tylko gdy konsumpcja została potwierdzona i nie ma wymaganej ilości
-      if (task.materialConsumptionConfirmed && requiredQuantity <= 0) {
-        continue;
-      }
-      
-      const materialBatches = selectedBatches[materialId] || [];
-      const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
-      
-      // Usuń walidację wymagającą pełnej ilości - umożliw rezerwację mniejszej ilości
-      // if (totalSelectedQuantity < requiredQuantity) {
-      //   return { 
-      //     valid: false, 
-      //     error: `Niewystarczająca ilość partii wybrana dla materiału ${material.name}. Wybrano: ${totalSelectedQuantity}, wymagane: ${requiredQuantity}`
-      //   };
-      // }
-    }
-    
-    return { valid: true };
-  };
-  
-  // Podobnie zmodyfikujemy funkcję validateManualBatchSelectionForMaterial
-  const validateManualBatchSelectionForMaterial = (materialId) => {
-    const materialBatches = selectedBatches[materialId] || [];
-    const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
-    
-    if (!material) {
-      return { valid: false, error: `Nie znaleziono materiału dla ID: ${materialId}. Sprawdź czy materiał istnieje w zadaniu.` };
-    }
-    
-    // Użyj funkcji uwzględniającej konsumpcję
-    const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
-    
-    // POPRAWKA: Jeśli konsumpcja została potwierdzona i wymagana ilość jest 0, uznaj walidację za poprawną
-    if (task.materialConsumptionConfirmed && requiredQuantity <= 0) {
-      return { valid: true };
-    }
-    
-    const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
-    
-    // Pozwól na rezerwację zerowej ilości - użytkownik może nie chcieć rezerwować tego materiału teraz
-    // if (totalSelectedQuantity === 0) {
-    //   return { valid: false, error: `Nie wybrano żadnych partii dla materiału ${material.name}` };
-    // }
-    
-    // Usuń walidację wymagającą pełnej ilości - umożliw rezerwację mniejszej ilości
-    // if (totalSelectedQuantity < requiredQuantity) {
-    //   return {
-    //     valid: false,
-    //     error: `Wybrana ilość (${totalSelectedQuantity}) jest mniejsza niż wymagana (${requiredQuantity}) dla materiału ${material.name}` 
-    //   };
-    // }
-    
-    return { valid: true };
-  };
-
-  // Funkcja pomocnicza do obliczania wymaganej ilości do rezerwacji (po uwzględnieniu konsumpcji)
-  const getRequiredQuantityForReservation = (material, materialId) => {
-    const baseQuantity = materialQuantities[materialId] !== undefined 
-      ? materialQuantities[materialId] 
-      : material.quantity;
-    
-    const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
-    
-    // POPRAWKA: Nie blokuj rezerwacji gdy materiał jest w pełni skonsumowany
-    // Pozwól na rezerwację dodatkowej ilości - zwróć zawsze przynajmniej bazową ilość
-    // jeśli nie ma jeszcze formalnego potwierdzenia konsumpcji
-    if (!task.materialConsumptionConfirmed) {
-      // Jeśli konsumpcja nie została potwierdzona, pozwól na rezerwację bazowej ilości
-      return baseQuantity;
-    } else {
-      // Jeśli konsumpcja została potwierdzona, oblicz pozostałą ilość
-      const remainingQuantity = Math.max(0, baseQuantity - consumedQuantity);
-      return remainingQuantity;
-    }
-  };
+  // ✅ REFAKTORYZACJA: validateManualBatchSelection, validateManualBatchSelectionForMaterial,
+  // getRequiredQuantityForReservation przeniesione do utils/taskValidators
+  const validateManualBatchSelection = () => validateManualBatchSelectionPure(task, selectedBatches, materialQuantities);
+  const validateManualBatchSelectionForMaterial = (materialId) => validateManualBatchSelectionForMaterialPure(materialId, task, selectedBatches, materialQuantities);
+  const getRequiredQuantityForReservation = (material, materialId) => getRequiredQuantityForReservationPure(material, materialId, materialQuantities, task);
 
   // Funkcja do usuwania pojedynczej rezerwacji partii
   const handleDeleteSingleReservation = async (materialId, batchId, batchNumber) => {
@@ -2604,97 +1460,8 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Handlery dla dodatkowych kosztów MO
-  const handleAddAdditionalCost = () => {
-    setEditingAdditionalCost(null);
-    setAdditionalCostDialogOpen(true);
-  };
-
-  const handleEditAdditionalCost = (item, index) => {
-    setEditingAdditionalCost({ ...item, _editIndex: index });
-    setAdditionalCostDialogOpen(true);
-  };
-
-  const handleDeleteAdditionalCost = (item) => {
-    setAdditionalCostToDelete(item);
-    setDeleteAdditionalCostDialogOpen(true);
-  };
-
-  const handleSaveAdditionalCost = async (data) => {
-    try {
-      setSavingAdditionalCost(true);
-      const { updateTask } = await import('../../services/productionService');
-      const currentAdditionalCosts = Array.isArray(task?.additionalCosts) ? [...task.additionalCosts] : [];
-      let newList;
-      const editIndex = editingAdditionalCost?._editIndex;
-      if (data.id && editIndex >= 0 && editIndex < currentAdditionalCosts.length) {
-        newList = currentAdditionalCosts.map((c, i) =>
-          i === editIndex
-            ? { ...c, id: c.id || data.id, name: data.name, amount: data.amount, currency: data.currency || 'EUR', invoiceDate: data.invoiceDate }
-            : c
-        );
-      } else if (data.id && currentAdditionalCosts.some((c) => c.id === data.id)) {
-        newList = currentAdditionalCosts.map((c) =>
-          c.id === data.id ? { ...c, name: data.name, amount: data.amount, currency: data.currency || 'EUR', invoiceDate: data.invoiceDate } : c
-        );
-      } else {
-        const newItem = {
-          id: data.id || `ac_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-          name: data.name,
-          amount: data.amount,
-          currency: data.currency || 'EUR',
-          invoiceDate: data.invoiceDate
-        };
-        newList = [...currentAdditionalCosts, newItem];
-      }
-      await updateTask(id, { additionalCosts: newList }, currentUser?.uid || 'system');
-      const { updateTaskCostsAutomatically } = await import('../../services/productionService');
-      await updateTaskCostsAutomatically(id, currentUser?.uid || 'system', 'Aktualizacja po zmianie dodatkowych kosztów');
-      const updatedTask = await getTaskById(id);
-      setTask(updatedTask);
-      setAdditionalCostDialogOpen(false);
-      setEditingAdditionalCost(null);
-      showSuccess('Dodatkowy koszt został zapisany');
-      return { success: true };
-    } catch (error) {
-      console.error('Błąd zapisywania dodatkowego kosztu:', error);
-      showError('Błąd zapisywania: ' + (error?.message || error));
-      return { success: false, error: { message: error?.message } };
-    } finally {
-      setSavingAdditionalCost(false);
-    }
-  };
-
-  const handleConfirmDeleteAdditionalCost = async () => {
-    if (!additionalCostToDelete) return { success: false };
-    try {
-      const { updateTask } = await import('../../services/productionService');
-      const currentAdditionalCosts = Array.isArray(task?.additionalCosts) ? task.additionalCosts : [];
-      const itemToMatch = additionalCostToDelete;
-      const invDateStr = itemToMatch.invoiceDate?.toDate
-        ? itemToMatch.invoiceDate.toDate().toISOString().slice(0, 10)
-        : (typeof itemToMatch.invoiceDate === 'string' ? itemToMatch.invoiceDate.slice(0, 10) : '');
-      const newList = currentAdditionalCosts.filter((c) => {
-        if (c.id && itemToMatch.id && c.id === itemToMatch.id) return false;
-        const cDate = c.invoiceDate?.toDate ? c.invoiceDate.toDate().toISOString().slice(0, 10) : (typeof c.invoiceDate === 'string' ? c.invoiceDate.slice(0, 10) : '');
-        if (c.name === itemToMatch.name && Number(c.amount) === Number(itemToMatch.amount) && cDate === invDateStr) return false;
-        return true;
-      });
-      await updateTask(id, { additionalCosts: newList }, currentUser?.uid || 'system');
-      const { updateTaskCostsAutomatically } = await import('../../services/productionService');
-      await updateTaskCostsAutomatically(id, currentUser?.uid || 'system', 'Aktualizacja po usunięciu dodatkowego kosztu');
-      const updatedTask = await getTaskById(id);
-      setTask(updatedTask);
-      setDeleteAdditionalCostDialogOpen(false);
-      setAdditionalCostToDelete(null);
-      showSuccess('Dodatkowy koszt został usunięty');
-      return { success: true };
-    } catch (error) {
-      console.error('Błąd usuwania dodatkowego kosztu:', error);
-      showError('Błąd usuwania: ' + (error?.message || error));
-      return { success: false };
-    }
-  };
+  // ✅ FAZA A: handleAddAdditionalCost, handleEditAdditionalCost, handleDeleteAdditionalCost,
+  // handleSaveAdditionalCost, handleConfirmDeleteAdditionalCost przeniesione do useAdditionalCostHandlers
 
   // Zmodyfikowana funkcja do rezerwacji materiałów z obsługą ręcznego wyboru partii
   const handleReserveMaterials = async (singleMaterialId = null) => {
@@ -2843,717 +1610,12 @@ const TaskDetailsPage = () => {
     }
   };
   
-  // Renderowanie komponentu do ręcznego wyboru partii
-  const renderManualBatchSelection = () => {
-    if (materialBatchesLoading) {
-      return (
-        <Box sx={loadingContainer}>
-          <CircularProgress />
-        </Box>
-      );
-    }
-
-    return (
-      <Box sx={mt2}>
-        <Box sx={sectionHeader}>
-          <Typography variant="subtitle1">
-            Wybierz partie dla każdego materiału:
-          </Typography>
-          <Box sx={actionButtons}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={showExhaustedBatches}
-                  onChange={(e) => setShowExhaustedBatches(e.target.checked)}
-                  size="small"
-                />
-              }
-              label={t('consumption.showDepletedBatches')}
-              sx={{ fontSize: '0.875rem' }}
-            />
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<RefreshIcon />}
-              onClick={fetchBatchesForMaterialsOptimized}
-              disabled={materialBatchesLoading}
-              sx={{ minWidth: 'auto' }}
-            >
-              Odśwież partie
-            </Button>
-          </Box>
-        </Box>
-        <Typography variant="body2" color="text.secondary" sx={mb2}>
-          💡 Możesz zarezerwować mniejszą ilość niż wymagana. Niezarezerwowane materiały można uzupełnić później.
-        </Typography>
-        
-        {task.materials.map((material) => {
-          const materialId = material.inventoryItemId || material.id;
-          if (!materialId) return null;
-          
-          // Oblicz wymaganą ilość do rezerwacji uwzględniając skonsumowane materiały
-          const baseQuantity = materialQuantities[materialId] !== undefined 
-            ? materialQuantities[materialId] 
-            : material.quantity;
-          const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
-          const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
-          
-          let materialBatches = batches[materialId] || [];
-          
-          // NOWE: Filtruj wyczerpane partie jeśli opcja jest wyłączona
-          if (!showExhaustedBatches) {
-            materialBatches = materialBatches.filter(batch => {
-              const effectiveQuantity = batch.effectiveQuantity || 0;
-              const isReservedForTask = task.materialBatches && 
-                                       task.materialBatches[materialId] && 
-                                       task.materialBatches[materialId].some(b => b.batchId === batch.id);
-              
-              // Pokaż partię jeśli:
-              // 1. Ma dostępną ilość (effectiveQuantity > 0), LUB
-              // 2. Jest już zarezerwowana dla tego zadania
-              return effectiveQuantity > 0 || isReservedForTask;
-            });
-          }
-          
-          const selectedMaterialBatches = selectedBatches[materialId] || [];
-          const totalSelectedQuantity = selectedMaterialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
-          // Umożliwi rezerwację częściową - przycisk będzie aktywny nawet gdy nie wszystko jest zarezerwowane
-          const isComplete = true; // Zawsze pozwól na rezerwację (użytkownik może zarezerwować mniej niż wymagane)
-          
-          // Sprawdź, czy materiał jest już zarezerwowany
-          const isAlreadyReserved = task.materialBatches && task.materialBatches[materialId] && task.materialBatches[materialId].length > 0;
-          
-          // Sortuj partie: najpierw zarezerwowane dla zadania, potem wg daty ważności
-          materialBatches = [...materialBatches].sort((a, b) => {
-            // Sprawdź, czy partie są zarezerwowane dla tego zadania
-            const aIsReserved = task.materialBatches && 
-                               task.materialBatches[materialId] && 
-                               task.materialBatches[materialId].some(batch => batch.batchId === a.id);
-            const bIsReserved = task.materialBatches && 
-                               task.materialBatches[materialId] && 
-                               task.materialBatches[materialId].some(batch => batch.batchId === b.id);
-            
-            // Jeśli obie partie są zarezerwowane lub obie nie są, sortuj według daty ważności
-            if (aIsReserved === bIsReserved) {
-              // Sortuj według daty ważności (najkrótszej najpierw)
-              if (!a.expiryDate && !b.expiryDate) return 0;
-              if (!a.expiryDate) return 1; // Partia bez daty ważności na końcu
-              if (!b.expiryDate) return -1; // Partia bez daty ważności na końcu
-              return new Date(a.expiryDate) - new Date(b.expiryDate);
-            }
-            
-            // Partie zarezerwowane na początku
-            return aIsReserved ? -1 : 1;
-          });
-          
-          return (
-            <Accordion 
-              key={materialId}
-              expanded={expandedMaterial === materialId}
-              onChange={() => setExpandedMaterial(expandedMaterial === materialId ? null : materialId)}
-            >
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Box sx={{ ...flexBetween, width: '100%' }}>
-                  <Box>
-                  <Typography>{material.name}</Typography>
-                    {consumedQuantity > 0 && (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Skonsumowano: {consumedQuantity.toFixed(3)} {material.unit} z {baseQuantity.toFixed(3)} {material.unit}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Box sx={flexCenter}>
-                    <Chip
-                      label={`${totalSelectedQuantity.toFixed(3)} / ${parseFloat(requiredQuantity).toFixed(3)} ${material.unit}`}
-                      color={isComplete ? "success" : requiredQuantity > 0 ? "warning" : "default"}
-                      size="small"
-                      sx={mr1}
-                    />
-                    {requiredQuantity <= 0 && task.materialConsumptionConfirmed && (
-                      <Chip
-                        label={t('consumption.fullyConsumed')}
-                        color="success"
-                        size="small"
-                        sx={mr1}
-                      />
-                    )}
-                    {totalSelectedQuantity > 0 && totalSelectedQuantity < requiredQuantity && requiredQuantity > 0 && (
-                      <Chip
-                        label={t('consumption.partialReservation')}
-                        color="warning"
-                        size="small"
-                        sx={mr1}
-                        variant="outlined"
-                      />
-                    )}
-                    {isAlreadyReserved && (
-                      <Chip
-                        label="Zarezerwowany"
-                        color="primary"
-                        size="small"
-                        sx={mr1}
-                      />
-                    )}
-                  </Box>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                {materialBatches.length === 0 ? (
-                  <Typography color="error">
-                    Brak dostępnych partii dla tego materiału
-                  </Typography>
-                ) : (
-                  <>
-                    <Typography variant="subtitle2" gutterBottom>Partie magazynowe:</Typography>
-                    <TableContainer>
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Nr partii</TableCell>
-                            <TableCell>Magazyn</TableCell>
-                            <TableCell>Data ważności</TableCell>
-                            <TableCell>Dostępna ilość</TableCell>
-                            <TableCell>Cena jedn.</TableCell>
-                            <TableCell>Do rezerwacji</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {materialBatches.map((batch) => {
-                            const selectedBatch = selectedMaterialBatches.find(b => b.batchId === batch.id);
-                            const selectedQuantity = selectedBatch ? selectedBatch.quantity : 0;
-                            // Sprawdź czy partia jest już zarezerwowana dla tego zadania
-                            const isReservedForTask = task.materialBatches && 
-                                                     task.materialBatches[materialId] && 
-                                                     task.materialBatches[materialId].some(b => b.batchId === batch.id);
-                            
-                            // Wyświetl informacje o faktycznej dostępności
-                            const effectiveQuantity = batch.effectiveQuantity || 0;
-                            const reservedByOthers = batch.reservedByOthers || 0;
-                            
-                            return (
-                              <TableRow key={batch.id}>
-                                <TableCell>
-                                  {batch.batchNumber || batch.lotNumber || 'Bez numeru'}
-                                  {isReservedForTask && (
-                                    <Chip 
-                                      label="Zarezerwowana" 
-                                      color="primary" 
-                                      size="small" 
-                                      sx={{ ml: 1 }} 
-                                      variant="outlined" 
-                                    />
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  {batch.warehouseInfo ? batch.warehouseInfo.name : 'Magazyn główny'}
-                                </TableCell>
-                                <TableCell>
-                                  {batch.expiryDate ? formatDate(batch.expiryDate) : 'Brak'}
-                                </TableCell>
-                                <TableCell>
-                                  {parseFloat(batch.quantity).toFixed(3)} {material.unit}
-                                  {reservedByOthers > 0 && (
-                                    <Typography variant="caption" color="error" display="block">
-                                      Zarezerwowane: {parseFloat(reservedByOthers).toFixed(3)} {material.unit}
-                                    </Typography>
-                                  )}
-                                  <Typography variant="caption" color={effectiveQuantity > 0 ? "success" : "error"} display="block">
-                                    Dostępne: {parseFloat(effectiveQuantity).toFixed(3)} {material.unit}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  {batch.unitPrice ? `${parseFloat(batch.unitPrice).toFixed(4)} €` : '—'}
-                                </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    type="number"
-                                    value={selectedQuantity}
-                                    onChange={(e) => {
-                                      const value = parseFloat(e.target.value);
-                                      const quantity = isNaN(value) ? 0 : Math.min(value, effectiveQuantity);
-                                      handleBatchSelection(materialId, batch.id, quantity);
-                                    }}
-                                    onFocus={(e) => {
-                                      // Jeśli wartość to 0, wyczyść pole przy focusie
-                                      if (selectedQuantity === 0) {
-                                        e.target.select();
-                                      }
-                                    }}
-                                    onBlur={(e) => {
-                                      // Jeśli pole jest puste po utracie focusu, ustaw 0
-                                      if (e.target.value === '' || e.target.value === null) {
-                                        handleBatchSelection(materialId, batch.id, 0);
-                                      }
-                                    }}
-                                    onWheel={(e) => e.target.blur()} // Wyłącza reakcję na scroll
-                                    inputProps={{ 
-                                      min: 0, 
-                                      max: effectiveQuantity, // Maksymalna wartość to efektywnie dostępna ilość
-                                      step: 'any'
-                                    }}
-                                    size="small"
-                                    sx={width130} // Poszerzony z 100px do 130px
-                                    error={effectiveQuantity <= 0}
-                                    helperText={effectiveQuantity <= 0 ? "Brak dostępnej ilości" : ""}
-                                    disabled={effectiveQuantity <= 0}
-                                  />
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </>
-                )}
-                
-                {/* Sekcja z oczekiwanymi zamówieniami - wydzielona poza warunek sprawdzający partie */}
-                <Box sx={mt3}>
-                  <Typography variant="subtitle2" gutterBottom>Oczekiwane zamówienia:</Typography>
-                  {awaitingOrdersLoading ? (
-                    <Box sx={{ ...loadingContainer, p: 2 }}>
-                      <CircularProgress size={24} />
-                    </Box>
-                  ) : (
-                    <>
-                      {awaitingOrders[materialId] && awaitingOrders[materialId].length > 0 ? (
-                        <TableContainer>
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Nr zamówienia</TableCell>
-                                <TableCell>Status</TableCell>
-                                <TableCell>Zamówione</TableCell>
-                                <TableCell>Otrzymane</TableCell>
-                                <TableCell>Cena jednostkowa</TableCell>
-                                <TableCell>Data zamówienia</TableCell>
-                                <TableCell>Oczekiwana dostawa</TableCell>
-                                <TableCell>Akcje</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {awaitingOrders[materialId].flatMap(order => 
-                                order.items ? order.items.map(item => ({ ...item, orderData: order })) : []
-                              ).map((item, index) => {
-                                const order = item.orderData;
-                                                    const statusText = (() => {
-                      switch(order.status) {
-                        case 'pending': return 'Oczekujące';
-                        case 'approved': return 'Zatwierdzone';
-                        case 'ordered': return 'Zamówione';
-                        case 'partial': return 'Częściowo dostarczone';
-                        case 'confirmed': return 'Potwierdzone';
-                        default: return order.status;
-                      }
-                    })();
-                                
-                                const statusColor = (() => {
-                                  switch(order.status) {
-                                    case 'pending': return '#757575'; // szary - oczekujące
-                                    case 'approved': return '#ffeb3b'; // żółty - zatwierdzone
-                                    case 'ordered': return '#1976d2'; // niebieski - zamówione
-                                    case 'partial': return '#81c784'; // jasno zielony - częściowo dostarczone
-                                    case 'confirmed': return '#4caf50'; // oryginalny zielony
-                                    default: return '#757575'; // oryginalny szary
-                                  }
-                                })();
-                                
-                                // Pomocnicza funkcja do formatowania dat
-                                const formatOrderDate = (dateValue) => {
-                                  if (!dateValue) return '-';
-                                  
-                                  try {
-                                    let date;
-                                    
-                                    // Obsługa Timestamp z Firebase
-                                    if (dateValue.toDate && typeof dateValue.toDate === 'function') {
-                                      date = dateValue.toDate();
-                                    }
-                                    // Obsługa obiektu z seconds (Firebase Timestamp JSON)
-                                    else if (dateValue.seconds) {
-                                      date = new Date(dateValue.seconds * 1000);
-                                    }
-                                    // Obsługa standardowego Date lub string
-                                    else {
-                                      date = new Date(dateValue);
-                                    }
-                                    
-                                    // Sprawdź czy data jest prawidłowa
-                                    if (isNaN(date.getTime())) {
-                                      return '-';
-                                    }
-                                    
-                                    return date.toLocaleDateString('pl-PL');
-                                  } catch (error) {
-                                    console.error('Błąd formatowania daty:', error, dateValue);
-                                    return '-';
-                                  }
-                                };
-
-                                return (
-                                  <TableRow key={`${order.id}-${index}`}>
-                                    <TableCell>{order.number || order.poNumber || '-'}</TableCell>
-                                    <TableCell>
-                                      <Chip 
-                                        label={statusText} 
-                                        size="small"
-                                        sx={{
-                                          backgroundColor: statusColor,
-                                          color: order.status === 'approved' ? 'black' : 'white'
-                                        }}
-                                      />
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      {item.quantityOrdered || item.quantity || '-'} {item.unit || ''}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      {item.quantityReceived || '0'} {item.unit || ''}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      {(() => {
-                                        if (!item.unitPrice) return '-';
-                                        const price = parseFloat(item.unitPrice);
-                                        return !isNaN(price) ? `${price.toFixed(2)} EUR` : '-';
-                                      })()}
-                                    </TableCell>
-                                    <TableCell>
-                                      {formatOrderDate(order.orderDate || order.createdAt)}
-                                    </TableCell>
-                                    <TableCell>
-                                      {formatOrderDate(item.expectedDeliveryDate || order.expectedDeliveryDate) || 'Nie określono'}
-                                    </TableCell>
-                                    <TableCell>
-                                      <IconButton
-                                        component={Link}
-                                        to={`/purchase-orders/${order.id}`}
-                                        size="small"
-                                        color="primary"
-                                        title="Przejdź do zamówienia"
-                                      >
-                                        <ArrowForwardIcon />
-                                      </IconButton>
-                                    </TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      ) : (
-                        <Typography variant="body2" color="textSecondary">
-                          Brak oczekujących zamówień dla tego materiału
-                        </Typography>
-                      )}
-                    </>
-                  )}
-                </Box>
-                    
-                <Box sx={flexEndMt2}>
-                  <Button 
-                    variant="contained" 
-                    color="primary"
-                    size="small"
-                    disabled={!isComplete || reservingMaterials || (isAlreadyReserved && reservationMethod !== 'manual')}
-                    onClick={() => handleReserveMaterials(materialId)}
-                  >
-                    {isAlreadyReserved ? 'Zaktualizuj rezerwację' : 'Rezerwuj ten materiał'}
-                  </Button>
-                </Box>
-              </AccordionDetails>
-            </Accordion>
-          );
-        })}
-      </Box>
-    );
-  };
+  // ✅ REFAKTORYZACJA: renderManualBatchSelection przeniesione do ManualBatchSelection.js
 
 
-  // Dodaj funkcję do generowania i pobierania raportu materiałów i LOT-ów
-  const handlePrintMaterialsAndLots = async () => {
-    if (!task) return;
-    
-    try {
-      const report = await generateMaterialsAndLotsReport(id);
-      
-      // Formatowanie daty dla wydruku
-      const formatDate = (dateString) => {
-        if (!dateString) return 'Nie określono';
-        const date = new Date(dateString);
-        return date.toLocaleDateString('pl-PL', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        });
-      };
-      
-      // HTML do wydruku
-      const printContents = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Rozpiska materiałów - MO ${task.moNumber}</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              margin: 20px;
-              line-height: 1.5;
-            }
-            h1, h2, h3 {
-              margin-top: 20px;
-              margin-bottom: 10px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-bottom: 20px;
-            }
-            th, td {
-              border: 1px solid #ddd;
-              padding: 8px;
-              text-align: left;
-            }
-            th {
-              background-color: #f2f2f2;
-            }
-            .header {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-bottom: 20px;
-            }
-            .section {
-              margin-bottom: 30px;
-            }
-            .footer {
-              margin-top: 50px;
-              text-align: center;
-              font-size: 12px;
-              color: #666;
-            }
-            @media print {
-              button {
-                display: none;
-              }
-            }
-            .reserved {
-              background-color: #e8f5e9;
-            }
-            .not-reserved {
-              background-color: #ffebee;
-            }
-            .excluded {
-              text-decoration: line-through;
-              color: #888;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <h1>Rozpiska materiałów</h1>
-              <h2>MO: ${task.moNumber}</h2>
-            </div>
-            <div>
-              <p><strong>Data:</strong> ${new Date().toLocaleDateString('pl-PL')}</p>
-              <p><strong>Status:</strong> ${task.status}</p>
-            </div>
-          </div>
-          
-          <div class="section">
-            <h3>Szczegóły zadania</h3>
-            <table>
-              <tr><th>Produkt:</th><td>${task.productName}</td></tr>
-              <tr><th>Ilość:</th><td>${task.quantity} ${task.unit}</td></tr>
-              <tr><th>Data rozpoczęcia:</th><td>${formatDate(task.scheduledDate)}</td></tr>
-              <tr><th>Planowane zakończenie:</th><td>${formatDate(task.endDate)}</td></tr>
-            </table>
-          </div>
-          
-          <div class="section">
-            <h3>Lista materiałów</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Nazwa materiału</th>
-                  <th>Ilość potrzebna</th>
-                  <th>Jednostka</th>
-                  <th>Cena jedn.</th>
-                  <th>Koszt</th>
-                  <th>Stan</th>
-                  <th>Wliczany do kosztów</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${report.materials.map(material => {
-                  const isReserved = material.batches && material.batches.length > 0;
-                  const isIncludedInCosts = includeInCosts[material.id] !== undefined ? includeInCosts[material.id] : true;
-                  const rowClass = isReserved ? 'reserved' : 'not-reserved';
-                  const nameClass = !isIncludedInCosts ? 'excluded' : '';
-                  
-                  return `
-                  <tr class="${rowClass}">
-                    <td class="${nameClass}">${material.name}</td>
-                    <td>${material.quantity}</td>
-                    <td>${material.unit || 'szt.'}</td>
-                    <td>${(() => {
-                      const materialId = material.inventoryItemId || material.id;
-                      const unitPrice = calculateWeightedUnitPrice(material, materialId);
-                      return unitPrice > 0 ? `${unitPrice.toFixed(4)} €` : '—';
-                    })()}</td>
-                    <td>${material.cost ? `${material.cost.toFixed(2)} €` : '—'}</td>
-                    <td>${material.available ? 'Dostępny' : 'Brak'}</td>
-                    <td>${isIncludedInCosts ? 'Tak' : 'Nie'}</td>
-                  </tr>
-                  `;
-                }).join('')}
-                
-                <tr>
-                  <th colspan="4" style="text-align: right">Całkowity koszt materiałów:</th>
-                  <th>${report.totalMaterialCost ? `${report.totalMaterialCost.toFixed(2)} €` : '—'}</th>
-                  <th colspan="2"></th>
-                </tr>
-                <tr>
-                  <th colspan="4" style="text-align: right">Koszt materiałów na jednostkę:</th>
-                  <th>${report.unitMaterialCost ? `~${report.unitMaterialCost.toFixed(4)} €/${task.unit}` : '—'}</th>
-                  <th colspan="2"></th>
-                </tr>
-                ${task.processingCostPerUnit > 0 ? `
-                <tr>
-                  <th colspan="4" style="text-align: right">Koszt procesowy na jednostkę:</th>
-                  <th>${parseFloat(task.processingCostPerUnit).toFixed(2)} €/${task.unit}</th>
-                  <th colspan="2"></th>
-                </tr>
-                <tr>
-                  <th colspan="4" style="text-align: right">Całkowity koszt procesowy:</th>
-                  <th>${(parseFloat(task.processingCostPerUnit) * parseFloat(task.quantity)).toFixed(2)} €</th>
-                  <th colspan="2"></th>
-                </tr>
-                ` : ''}
-              </tbody>
-            </table>
-          </div>
-          
-          <div class="section">
-            <h3>Zarezerwowane partie (LOT)</h3>
-            ${Object.keys(report.batches || {}).length === 0 ? 
-              `<p>Brak zarezerwowanych partii</p>` : 
-              `<table>
-                <thead>
-                  <tr>
-                    <th>Materiał</th>
-                    <th>Partia (LOT)</th>
-                    <th>Ilość</th>
-                    <th>Cena jedn.</th>
-                    <th>Koszt</th>
-                    <th>Data ważności</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${Object.entries(report.batches || {}).map(([materialId, batches]) => {
-                    const material = report.materials.find(m => m.id === materialId || m.inventoryItemId === materialId);
-                    
-                    return batches.map(batch => {
-                      const batchCost = (batch.quantity || 0) * (batch.unitPrice || 0);
-                      return `
-                        <tr>
-                          <td>${material ? material.name : 'Nieznany materiał'}</td>
-                          <td>${batch.batchNumber}</td>
-                          <td>${batch.quantity} ${material ? material.unit : 'szt.'}</td>
-                          <td>${batch.unitPrice ? batch.unitPrice.toFixed(4) + ' €' : '—'}</td>
-                          <td>${batchCost ? batchCost.toFixed(2) + ' €' : '—'}</td>
-                          <td>${formatDate(batch.expiryDate)}</td>
-                        </tr>
-                      `;
-                    }).join('');
-                  }).join('')}
-                </tbody>
-              </table>`
-            }
-          </div>
-          
-          <div class="footer">
-            <p>Wygenerowano: ${new Date().toLocaleString('pl-PL')}</p>
-            <p>System MRP</p>
-          </div>
-          
-          <div style="text-align: center; margin-top: 20px;">
-            <button onclick="window.print()" style="padding: 10px 20px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
-              Drukuj raport
-            </button>
-          </div>
-        </body>
-        </html>
-      `;
-      
-      // Otwórz nowe okno z zawartością do wydruku
-      const printWindow = window.open('', '_blank');
-      printWindow.document.open();
-      printWindow.document.write(printContents);
-      printWindow.document.close();
-    } catch (error) {
-      console.error('Błąd podczas generowania raportu materiałów:', error);
-      showError('Wystąpił błąd podczas generowania raportu materiałów');
-    }
-  };
+  // ✅ FAZA A: handlePrintMaterialsAndLots przeniesione do useProductionControlHandlers
 
-  // Funkcja do pobierania dostępnych opakowań
-  const fetchAvailablePackaging = async () => {
-    try {
-      setLoadingPackaging(true);
-      
-      // Pobierz wszystkie pozycje magazynowe z odpowiednią strukturą danych zawierającą stany magazynowe
-      const result = await getAllInventoryItems();
-      
-      // Upewniamy się, że mamy dostęp do właściwych danych
-      const allItems = Array.isArray(result) ? result : result.items || [];
-      
-      // Filtrujemy tylko opakowania zbiorcze
-      const packagingItems = allItems.filter(item => 
-        item.category === 'Opakowania zbiorcze'
-      );
-      
-      // Pobierz partie dla każdego opakowania
-      const packagingWithBatches = await Promise.all(
-        packagingItems.map(async (item) => {
-          try {
-            const batches = await getItemBatches(item.id);
-            // Filtruj tylko partie z dostępną ilością > 0
-            const availableBatches = batches.filter(batch => batch.quantity > 0);
-            
-            return {
-              ...item,
-              selected: false,
-              quantity: 0,
-              availableQuantity: item.currentQuantity || item.quantity || 0,
-              unitPrice: item.unitPrice || item.price || 0,
-              batches: availableBatches,
-              selectedBatch: null,
-              batchQuantity: 0
-            };
-          } catch (error) {
-            console.error(`Błąd podczas pobierania partii dla opakowania ${item.name}:`, error);
-            return {
-              ...item,
-              selected: false,
-              quantity: 0,
-              availableQuantity: item.currentQuantity || item.quantity || 0,
-              unitPrice: item.unitPrice || item.price || 0,
-              batches: [],
-              selectedBatch: null,
-              batchQuantity: 0
-            };
-          }
-        })
-      );
-      
-      setPackagingItems(packagingWithBatches);
-    } catch (error) {
-      console.error('Błąd podczas pobierania opakowań:', error);
-      showError('Nie udało się pobrać listy opakowań: ' + error.message);
-    } finally {
-      setLoadingPackaging(false);
-    }
-  };
+  // ✅ REFAKTORYZACJA: fetchAvailablePackaging przeniesione do useTaskMaterialFetcher
   
   // Obsługa otwierania dialogu opakowań
   const handleOpenPackagingDialog = () => {
@@ -3563,982 +1625,20 @@ const TaskDetailsPage = () => {
   
 
   
-  // Obsługa wyboru/odznaczenia opakowania
-  const handlePackagingSelection = (id, selected) => {
-    setPackagingItems(prev => prev.map(item => 
-      item.id === id ? { ...item, selected, selectedBatch: null, batchQuantity: 0 } : item
-    ));
-  };
-
-  // Obsługa wyboru partii dla opakowania
-  const handlePackagingBatchSelection = (itemId, batchId) => {
-    setPackagingItems(prev => prev.map(item => {
-      if (item.id === itemId) {
-        const selectedBatch = item.batches.find(batch => batch.id === batchId);
-        return { 
-          ...item, 
-          selectedBatch: selectedBatch,
-          batchQuantity: 0 
-        };
-      }
-      return item;
-    }));
-  };
-
-  // Obsługa zmiany ilości dla wybranej partii
-  const handlePackagingBatchQuantityChange = (itemId, value) => {
-    setPackagingItems(prev => prev.map(item => {
-      if (item.id === itemId && item.selectedBatch) {
-        const parsedValue = parseFloat(value) || 0;
-        const limitedValue = Math.min(parsedValue, item.selectedBatch.quantity);
-        
-        return { 
-          ...item, 
-          batchQuantity: limitedValue,
-          quantity: limitedValue // synchronizuj z główną ilością
-        };
-      }
-      return item;
-    }));
-  };
+  // ✅ FAZA A: handlePackagingSelection, handlePackagingBatchSelection,
+  // handlePackagingBatchQuantityChange przeniesione do useMaterialHandlers
   
-  // Dodanie wybranych opakowań do materiałów zadania
-  const handleAddPackagingToTask = async () => {
-    try {
-      setLoadingPackaging(true);
-      
-      // Filtrujemy wybrane opakowania z partią i ilością > 0
-      const packagingToAdd = packagingItems.filter(item => 
-        item.selected && item.selectedBatch && item.batchQuantity > 0
-      );
-      
-      if (packagingToAdd.length === 0) {
-        showError('Nie wybrano żadnych opakowań z partiami do dodania');
-        return;
-      }
-      
-      // Pobierz aktualne zadanie
-      const updatedTask = await getTaskById(id);
-      const currentMaterials = updatedTask.materials || [];
-      
-      // Przygotuj nowe materiały do dodania z informacjami o partii
-      const newMaterials = packagingToAdd.map(item => {
-        const material = {
-          id: item.id,
-          name: item.name || '',
-          quantity: item.batchQuantity || 0,
-          unit: item.unit || '',
-          inventoryItemId: item.id,
-          isPackaging: true,
-          category: item.category || 'Opakowania zbiorcze',
-          unitPrice: item.unitPrice || 0,
-          // Dodaj informacje o wybranej partii
-          selectedBatch: {
-            id: item.selectedBatch.id,
-            quantity: item.batchQuantity || 0
-          }
-        };
+  // ✅ FAZA A: handleAddPackagingToTask, fetchAvailableRawMaterials, handleOpenRawMaterialsDialog,
+  // handleRawMaterialsQuantityChange, handleRawMaterialsSelection, handleAddRawMaterialsSubmit
+  // przeniesione do useMaterialHandlers
 
-        // Dodaj opcjonalne pola tylko jeśli nie są undefined
-        if (item.selectedBatch.lotNumber || item.selectedBatch.batchNumber) {
-          material.selectedBatch.lotNumber = item.selectedBatch.lotNumber || item.selectedBatch.batchNumber;
-        }
+  // ✅ FAZA A: handleEditHistoryItem, handleSaveHistoryItemEdit, handleCancelHistoryItemEdit,
+  // handleAddHistorySubmit przeniesione do useHistoryHandlers
 
-        if (item.selectedBatch.expiryDate) {
-          material.selectedBatch.expiryDate = item.selectedBatch.expiryDate;
-        }
+  // ✅ FAZA A: handlePrintMODetails przeniesione do useProductionControlHandlers
 
-        return material;
-      });
-      
-      // Połącz istniejące materiały z nowymi opakowaniami
-      const updatedMaterials = [...currentMaterials];
-      
-      // Sprawdź czy dane opakowanie już istnieje i aktualizuj ilość lub dodaj nowe
-      newMaterials.forEach(newMaterial => {
-        const existingIndex = updatedMaterials.findIndex(m => 
-          m.id === newMaterial.id
-        );
-        
-        if (existingIndex >= 0) {
-          // Aktualizuj istniejące opakowanie - sumuj ilości niezależnie od partii
-          updatedMaterials[existingIndex].quantity = 
-            (parseFloat(updatedMaterials[existingIndex].quantity) || 0) + 
-            (parseFloat(newMaterial.quantity) || 0);
-          
-          // Zaktualizuj informacje o partii na najnowszą dodawaną
-          if (newMaterial.selectedBatch) {
-            updatedMaterials[existingIndex].selectedBatch = newMaterial.selectedBatch;
-          }
-        } else {
-          // Dodaj nowe opakowanie
-          updatedMaterials.push(newMaterial);
-        }
-      });
-      
-      let consumptionData = [];
-      let successMessage = 'Opakowania zostały dodane do zadania';
-      
-      // Konsumuj ilości z wybranych partii tylko jeśli opcja jest włączona
-      if (consumePackagingImmediately) {
-        for (const item of packagingToAdd) {
-          try {
-            // Pobierz aktualne dane partii
-            const currentBatch = await getInventoryBatch(item.selectedBatch.id);
-            
-            if (currentBatch) {
-              const currentQuantity = Number(currentBatch.quantity) || 0;
-              const consumeQuantity = Number(item.batchQuantity) || 0;
-              const newQuantity = Math.max(0, currentQuantity - consumeQuantity);
-              
-              // Aktualizuj ilość w partii
-              await updateBatch(item.selectedBatch.id, {
-                quantity: newQuantity
-              }, currentUser.uid);
-              
-              // Zapisz informacje o konsumpcji
-              consumptionData.push({
-                materialId: item.id,
-                batchId: item.selectedBatch.id,
-                batchNumber: item.selectedBatch.lotNumber || item.selectedBatch.batchNumber || 'Brak numeru',
-                quantity: consumeQuantity,
-                unitPrice: item.unitPrice || 0,
-                timestamp: new Date().toISOString(),
-                userId: currentUser.uid,
-                userName: currentUser.displayName || currentUser.email,
-                includeInCosts: true
-              });
-            }
-          } catch (error) {
-            console.error(`Błąd podczas konsumpcji partii ${item.selectedBatch.id}:`, error);
-            showError(`Nie udało się skonsumować partii ${item.selectedBatch.lotNumber || item.selectedBatch.batchNumber}: ${error.message}`);
-          }
-        }
-        successMessage = 'Opakowania zostały dodane do zadania i skonsumowane z wybranych partii';
-      }
-
-      // Pobierz aktualne skonsumowane materiały
-      const currentConsumedMaterials = updatedTask.consumedMaterials || [];
-      const newConsumedMaterials = [...currentConsumedMaterials, ...consumptionData];
-
-      // Przygotuj zaktualizowane actualMaterialUsage - synchronizuj z materials.quantity
-      const updatedActualUsage = { ...(updatedTask.actualMaterialUsage || {}) };
-      updatedMaterials.forEach(material => {
-        // Synchronizuj actualMaterialUsage z quantity materiału
-        updatedActualUsage[material.id] = parseFloat(material.quantity) || 0;
-      });
-
-      // Zaktualizuj zadanie w bazie danych - dodaj materiały i informacje o konsumpcji
-      const updateData = {
-        materials: updatedMaterials,
-        actualMaterialUsage: updatedActualUsage,
-        updatedAt: serverTimestamp()
-      };
-      
-      // Dodaj consumedMaterials tylko jeśli konsumujemy natychmiast
-      if (consumePackagingImmediately) {
-        updateData.consumedMaterials = newConsumedMaterials;
-      }
-      
-      await updateDoc(doc(db, 'productionTasks', id), updateData);
-      
-      // ✅ Real-time listener automatycznie odświeży dane
-      
-      showSuccess(successMessage);
-      setPackagingDialogOpen(false);
-    } catch (error) {
-      console.error('Błąd podczas dodawania opakowań:', error);
-      showError('Nie udało się dodać opakowań do zadania: ' + error.message);
-    } finally {
-      setLoadingPackaging(false);
-    }
-  };
-
-  // Funkcja do pobierania dostępnych materiałów dla wybranej kategorii
-  const fetchAvailableRawMaterials = async (category = null) => {
-    try {
-      setLoadingRawMaterials(true);
-      
-      // Określ kategorię do pobrania
-      const targetCategory = category || (materialCategoryTab === 0 ? 'Surowce' : 'Opakowania jednostkowe');
-      
-      // Pobierz wszystkie pozycje magazynowe z odpowiednią strukturą danych zawierającą stany magazynowe
-      const result = await getAllInventoryItems();
-      
-      // Upewniamy się, że mamy dostęp do właściwych danych
-      const allItems = Array.isArray(result) ? result : result.items || [];
-      
-      // Filtrujemy tylko pozycje z wybranej kategorii
-      const rawMaterialsItems = allItems.filter(item => 
-        item.category === targetCategory
-      );
-      
-      setRawMaterialsItems(rawMaterialsItems.map(item => ({
-        ...item,
-        selected: false,
-        quantity: 0,
-        // Używamy aktualnej ilości dostępnej w magazynie, a nie pierwotnej wartości
-        availableQuantity: item.currentQuantity || item.quantity || 0,
-        unitPrice: item.unitPrice || item.price || 0
-      })));
-    } catch (error) {
-      console.error('Błąd podczas pobierania materiałów:', error);
-      showError('Nie udało się pobrać listy materiałów: ' + error.message);
-    } finally {
-      setLoadingRawMaterials(false);
-    }
-  };
-  
-  // Obsługa otwierania dialogu surowców
-  const handleOpenRawMaterialsDialog = () => {
-    setMaterialCategoryTab(0); // Resetuj do pierwszej zakładki
-    setSearchRawMaterials(''); // Wyczyść wyszukiwanie
-    fetchAvailableRawMaterials('Surowce'); // Pobierz surowce jako domyślną kategorię
-    setRawMaterialsDialogOpen(true);
-  };
-  
-  // Obsługa zmiany ilości wybranego surowca
-  const handleRawMaterialsQuantityChange = (id, value) => {
-    setRawMaterialsItems(prev => prev.map(item => {
-      if (item.id === id) {
-        // Pozwalamy na wprowadzenie dowolnej wartości - to tylko planowanie, nie rezerwacja
-        const parsedValue = value === '' ? '' : parseFloat(value);
-        const finalValue = value === '' ? 0 : (isNaN(parsedValue) ? 0 : Math.max(0, parsedValue));
-        
-        return { 
-          ...item, 
-          quantity: finalValue, 
-          selected: finalValue > 0 
-        };
-      }
-      return item;
-    }));
-  };
-  
-  // Obsługa wyboru/odznaczenia surowca
-  const handleRawMaterialsSelection = (id, selected) => {
-    setRawMaterialsItems(prev => prev.map(item => 
-      item.id === id ? { ...item, selected } : item
-    ));
-  };
-  
-  // ✅ REFAKTORYZACJA: Callback dla RawMaterialsDialog
-  const handleAddRawMaterialsSubmit = useCallback(async (formData) => {
-    try {
-      setLoadingRawMaterials(true);
-      
-      const { items } = formData;
-      
-      if (!items || items.length === 0) {
-        showError('Nie wybrano żadnych materiałów do dodania');
-        return { success: false };
-      }
-      
-      // Pobierz aktualne zadanie
-      const updatedTask = await getTaskById(id);
-      const currentMaterials = updatedTask.materials || [];
-      
-      // Przygotuj nowe materiały do dodania
-      const newMaterials = items.map(item => ({
-        id: item.id,
-        name: item.name,
-        quantity: item.quantity,
-        unit: item.unit,
-        inventoryItemId: item.id,
-        isRawMaterial: true,
-        category: item.category || 'Surowce',
-        unitPrice: item.unitPrice || 0
-      }));
-      
-      // Połącz istniejące materiały z nowymi surowcami
-      const updatedMaterials = [...currentMaterials];
-      
-      // Sprawdź czy dany surowiec już istnieje i aktualizuj ilość lub dodaj nowy
-      newMaterials.forEach(newMaterial => {
-        const existingIndex = updatedMaterials.findIndex(m => m.id === newMaterial.id);
-        if (existingIndex >= 0) {
-          // Aktualizuj istniejący surowiec
-          updatedMaterials[existingIndex].quantity = 
-            (parseFloat(updatedMaterials[existingIndex].quantity) || 0) + 
-            (parseFloat(newMaterial.quantity) || 0);
-        } else {
-          // Dodaj nowy surowiec
-          updatedMaterials.push(newMaterial);
-        }
-      });
-      
-      // Przygotuj zaktualizowane actualMaterialUsage - synchronizuj z materials.quantity
-      const updatedActualUsage = { ...(updatedTask.actualMaterialUsage || {}) };
-      updatedMaterials.forEach(material => {
-        // Synchronizuj actualMaterialUsage z quantity materiału
-        updatedActualUsage[material.id] = parseFloat(material.quantity) || 0;
-      });
-      
-      // Zaktualizuj zadanie w bazie danych
-      await updateDoc(doc(db, 'productionTasks', id), {
-        materials: updatedMaterials,
-        actualMaterialUsage: updatedActualUsage,
-        updatedAt: serverTimestamp()
-      });
-      
-      // ✅ Real-time listener automatycznie odświeży dane
-      
-      showSuccess('Materiały zostały dodane do zadania produkcyjnego');
-      return { success: true };
-    } catch (error) {
-      console.error('Błąd podczas dodawania materiałów:', error);
-      showError('Nie udało się dodać materiałów do zadania: ' + error.message);
-      return { success: false, error };
-    } finally {
-      setLoadingRawMaterials(false);
-    }
-  }, [id, showSuccess, showError]);
-
-  // Funkcja obsługująca rozpoczęcie edycji sesji produkcyjnej
-  const handleEditHistoryItem = (item) => {
-    setEditingHistoryItem(item.id);
-    setEditedHistoryItem({
-      quantity: item.quantity || 0,
-      startTime: item.startTime ? new Date(item.startTime) : new Date(),
-      endTime: item.endTime ? new Date(item.endTime) : new Date(),
-    });
-  };
-
-  // Funkcja zapisująca zmiany w sesji produkcyjnej
-  const handleSaveHistoryItemEdit = async (historyItemId) => {
-    try {
-      setLoading(true);
-      
-      if (!historyItemId) {
-        showError('Nie można edytować sesji produkcyjnej: brak identyfikatora');
-        return;
-      }
-      
-      // Walidacja danych
-      if (editedHistoryItem.endTime < editedHistoryItem.startTime) {
-        showError('Czas zakończenia nie może być wcześniejszy niż czas rozpoczęcia');
-        return;
-      }
-      
-      if (isNaN(editedHistoryItem.quantity) || editedHistoryItem.quantity < 0) {
-        showError('Nieprawidłowa ilość');
-        return;
-      }
-      
-      // Obliczenie nowego czasu trwania w minutach
-      const durationMs = editedHistoryItem.endTime.getTime() - editedHistoryItem.startTime.getTime();
-      const durationMinutes = Math.round(durationMs / (1000 * 60));
-      
-      if (durationMinutes <= 0) {
-        showError('Przedział czasowy musi być dłuższy niż 0 minut');
-        return;
-      }
-      
-      // Przygotuj dane do aktualizacji
-      const updateData = {
-        quantity: parseFloat(editedHistoryItem.quantity),
-        timeSpent: durationMinutes,
-        startTime: editedHistoryItem.startTime.toISOString(),
-        endTime: editedHistoryItem.endTime.toISOString()
-      };
-      
-      // Wywołaj funkcję aktualizującą sesję produkcyjną
-      await updateProductionSession(historyItemId, updateData, currentUser.uid);
-      
-      showSuccess('Sesja produkcyjna została zaktualizowana');
-      
-      // Odśwież dane historii produkcji
-      await fetchProductionHistory();
-      
-      // ✅ OPTYMALIZACJA: Usunięto bezpośrednie wywołanie updateTaskCostsAutomatically
-      // Koszty zostaną zaktualizowane przez periodic sync (fallback) lub Cloud Functions
-      
-      // ✅ Real-time listener automatycznie odświeży dane zadania
-      
-      // Zresetuj stan edycji
-      setEditingHistoryItem(null);
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji sesji produkcyjnej:', error);
-      showError('Nie udało się zaktualizować sesji produkcyjnej: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Funkcja anulująca edycję
-  const handleCancelHistoryItemEdit = () => {
-    setEditingHistoryItem(null);
-  };
-
-  // ✅ REFAKTORYZACJA: Callback dla komponentu AddHistoryDialog
-  const handleAddHistorySubmit = useCallback(async (formData) => {
-    try {
-      setLoading(true);
-      
-      const { quantity, startTime, endTime, machineId, note, addToInventory, inventoryData } = formData;
-      
-      // Obliczenie czasu trwania w minutach
-      const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime();
-      const durationMinutes = Math.round(durationMs / (1000 * 60));
-      
-      // Przygotuj dane do zapisania nowej sesji
-      const sessionData = {
-        quantity: parseFloat(quantity),
-        timeSpent: durationMinutes,
-        startTime: new Date(startTime).toISOString(),
-        endTime: new Date(endTime).toISOString(),
-        userId: currentUser.uid,
-        machineId: machineId || null,
-        note: note || ''
-      };
-      
-      // Wywołaj funkcję dodającą nową sesję produkcyjną
-      await addProductionSession(task.id, sessionData, addToInventory);
-      
-      // Jeśli użytkownik wybrał opcję dodania do magazynu, dodaj produkt do magazynu
-      if (addToInventory && inventoryData) {
-        try {
-          const result = await addTaskProductToInventory(task.id, currentUser.uid, {
-            expiryDate: inventoryData.expiryDate instanceof Date 
-              ? inventoryData.expiryDate.toISOString() 
-              : inventoryData.expiryDate,
-            lotNumber: inventoryData.lotNumber,
-            finalQuantity: parseFloat(inventoryData.finalQuantity),
-            warehouseId: inventoryData.warehouseId
-          });
-          
-          showSuccess(`Sesja produkcyjna została dodana i ${result.message}`);
-        } catch (inventoryError) {
-          console.error('Błąd podczas dodawania produktu do magazynu:', inventoryError);
-          showError('Sesja produkcyjna została dodana, ale wystąpił błąd podczas dodawania produktu do magazynu: ' + inventoryError.message);
-          return { success: true }; // Sesja dodana, tylko magazyn nie
-        }
-      } else {
-        showSuccess('Sesja produkcyjna została dodana');
-      }
-      
-      // Odśwież dane historii produkcji
-      await fetchProductionHistory();
-      
-      // ✅ OPTYMALIZACJA: Usunięto bezpośrednie wywołanie updateTaskCostsAutomatically
-      // Koszty zostaną zaktualizowane przez periodic sync (fallback) lub Cloud Functions
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Błąd podczas dodawania sesji produkcyjnej:', error);
-      showError('Nie udało się dodać sesji produkcyjnej: ' + error.message);
-      return { success: false, error };
-    } finally {
-      setLoading(false);
-    }
-  }, [task?.id, currentUser?.uid, fetchProductionHistory, id, showSuccess, showError]);
-
-  // Funkcja do drukowania szczegółów MO
-  const handlePrintMODetails = () => {
-    // Funkcja pomocnicza do formatowania dat
-    const formatDateForPrint = (dateValue) => {
-      if (!dateValue) return 'Nie określono';
-      
-      try {
-        // Spróbuj różne formaty konwersji daty
-        let date;
-        if (dateValue instanceof Date) {
-          date = dateValue;
-        } else if (dateValue.toDate && typeof dateValue.toDate === 'function') {
-          // Timestamp z Firebase
-          date = dateValue.toDate();
-        } else if (dateValue.seconds) {
-          // Obiekt timestamp z sekundami
-          date = new Date(dateValue.seconds * 1000);
-        } else {
-          // String lub inny format
-          date = new Date(dateValue);
-        }
-        
-        // Sprawdź czy data jest prawidłowa
-        if (isNaN(date.getTime())) {
-          return 'Nie określono';
-        }
-        
-        // Formatuj datę do czytelnego formatu
-        return date.toLocaleDateString('pl-PL', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-      } catch (error) {
-        console.error('Błąd konwersji daty:', error);
-        return 'Nie określono';
-      }
-    };
-    
-    // Przygotuj zawartość do wydruku
-    let printContents = `
-      <html>
-      <head>
-        <title>Szczegóły MO: ${task.moNumber || ''}</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 20px; }
-          .header { text-align: center; margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
-          h1 { margin-bottom: 5px; }
-          table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          th { background-color: #f2f2f2; width: 30%; }
-          .section { margin-top: 20px; }
-          .footer { text-align: center; margin-top: 50px; font-size: 0.8em; border-top: 1px solid #ccc; padding-top: 10px; }
-          .highlighted { background-color: #f9f9f9; border-left: 4px solid #2196F3; padding-left: 10px; }
-          @media print {
-            body { -webkit-print-color-adjust: exact; color-adjust: exact; }
-            button { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>Szczegóły zlecenia produkcyjnego</h1>
-          <h2>MO: ${task.moNumber || 'Nie określono'}</h2>
-        </div>
-        
-        <div class="section">
-          <h3>Informacje podstawowe</h3>
-          <table>
-            <tr><th>Nazwa zadania:</th><td>${task.name || 'Nie określono'}</td></tr>
-            <tr><th>Produkt:</th><td>${task.productName || 'Nie określono'}</td></tr>
-            <tr><th>Ilość:</th><td>${task.quantity || '0'} ${task.unit || 'szt.'}</td></tr>
-            <tr><th>Status:</th><td>${task.status || 'Nie określono'}</td></tr>
-
-            ${(task.recipeName || task.recipe?.recipeName) ? `<tr><th>Receptura:</th><td>${task.recipeName || task.recipe?.recipeName}${task.recipeVersion ? ` (wersja ${task.recipeVersion})` : ''}</td></tr>` : ''}
-          </table>
-        </div>
-
-        <div class="section highlighted">
-          <h3>Informacje o partii produktu</h3>
-          <table>
-            <tr><th>Numer LOT:</th><td>${task.lotNumber || 'Nie określono'}</td></tr>
-            <tr><th>Data ważności:</th><td>${task.expiryDate ? formatDateForPrint(task.expiryDate).split(',')[0] : 'Nie określono'}</td></tr>
-          </table>
-        </div>
-
-        <div class="section">
-          <h3>Harmonogram</h3>
-          <table>
-            <tr><th>Planowany start:</th><td>${formatDateForPrint(task.scheduledDate)}</td></tr>
-            <tr><th>Planowane zakończenie:</th><td>${formatDateForPrint(task.endDate)}</td></tr>
-            <tr><th>Szacowany czas produkcji:</th><td>${task.estimatedDuration ? (task.estimatedDuration / 60).toFixed(2) + ' godz.' : 'Nie określono'}</td></tr>
-            <tr><th>Czas na jednostkę:</th><td>${task.productionTimePerUnit ? parseFloat(task.productionTimePerUnit).toFixed(2) + ' min./szt.' : 'Nie określono'}</td></tr>
-          </table>
-        </div>
-
-        <div class="section">
-          <h3>Materiały</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Nazwa</th>
-                <th>Zaplanowana ilość</th>
-                <th>Jednostka</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${materials.map(material => `
-                <tr>
-                  <td>${material.name || 'Nie określono'}</td>
-                  <td>${materialQuantities[material.id] || 0}</td>
-                  <td>${material.unit || 'szt.'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-
-        ${task.notes ? `
-        <div class="section">
-          <h3>Notatki</h3>
-          <p>${task.notes}</p>
-        </div>
-        ` : ''}
-
-        <div class="footer">
-          <p>Data wydruku: ${new Date().toLocaleDateString('pl-PL', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}</p>
-          <p>System MRP</p>
-        </div>
-        
-        <div style="text-align: center; margin-top: 20px;">
-          <button onclick="window.print()" style="padding: 10px 20px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
-            Drukuj dokument
-          </button>
-        </div>
-      </body>
-      </html>
-    `;
-    
-    // Otwórz nowe okno z zawartością do wydruku zamiast modyfikować bieżące dokumentu
-    const printWindow = window.open('', '_blank');
-    printWindow.document.open();
-    printWindow.document.write(printContents);
-    printWindow.document.close();
-  };
-
-  // Funkcja do pobierania aktualnych cen partii i aktualizacji cen materiałów
-  const updateMaterialPricesFromBatches = useCallback(async () => {
-    if (!task || !task.materialBatches) return;
-    
-    try {
-      // Tworzymy kopię materiałów, aby je zaktualizować
-      const updatedMaterials = [...materials];
-      let hasChanges = false;
-      
-      // Dla każdego materiału z przypisanymi partiami, obliczamy aktualną cenę
-      for (const material of updatedMaterials) {
-        const materialId = material.inventoryItemId || material.id;
-        const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-        
-        if (reservedBatches && reservedBatches.length > 0) {
-          let totalCost = 0;
-          let totalQuantity = 0;
-          
-          // Pobierz aktualne dane każdej partii i oblicz średnią ważoną cenę
-          for (const batchReservation of reservedBatches) {
-            try {
-              const batchData = await getInventoryBatch(batchReservation.batchId);
-              if (batchData) {
-                const batchQuantity = parseFloat(batchReservation.quantity) || 0;
-                const batchUnitPrice = parseFloat(batchData.unitPrice) || 0;
-                
-                totalCost += batchQuantity * batchUnitPrice;
-                totalQuantity += batchQuantity;
-                
-                // Batch ${batchData.batchNumber}: ${batchQuantity} × ${batchUnitPrice}€
-              }
-            } catch (error) {
-              console.error(`Błąd podczas pobierania danych partii ${batchReservation.batchId}:`, error);
-            }
-          }
-          
-          // Oblicz średnią ważoną cenę jednostkową
-          if (totalQuantity > 0) {
-            const averagePrice = totalCost / totalQuantity;
-            // Sprawdź czy cena się zmieniła przed aktualizacją
-            if (Math.abs(material.unitPrice - averagePrice) > 0.001) {
-            material.unitPrice = averagePrice;
-              hasChanges = true;
-            }
-          }
-        }
-      }
-      
-      // Aktualizuj stan materiałów tylko jeśli wykryto zmiany
-      if (hasChanges) {
-      setMaterials(updatedMaterials);
-        
-        // Tylko logowanie - NIE zapisujemy automatycznie do bazy danych
-        if (task && updatedMaterials.length > 0) {
-          // Oblicz całkowity koszt materiałów (tylko z flagą "wliczaj")
-          const totalMaterialCost = updatedMaterials.reduce((sum, material) => {
-            // Sprawdź czy dla tego materiału są zarezerwowane partie
-            const materialId = material.inventoryItemId || material.id;
-            const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-            
-            // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie i jest wliczany do kosztów
-            if (reservedBatches && reservedBatches.length > 0 && includeInCosts[material.id]) {
-              const quantity = materialQuantities[material.id] || material.quantity || 0;
-              const materialId = material.inventoryItemId || material.id;
-              const unitPrice = calculateWeightedUnitPrice(material, materialId);
-              return sum + (quantity * unitPrice);
-            }
-            return sum;
-          }, 0);
-          
-          // Oblicz pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
-          const totalFullProductionCost = updatedMaterials.reduce((sum, material) => {
-            // Sprawdź czy dla tego materiału są zarezerwowane partie
-            const materialId = material.inventoryItemId || material.id;
-            const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-            
-            // Uwzględnij koszt wszystkich materiałów z zarezerwowanymi partiami
-            if (reservedBatches && reservedBatches.length > 0) {
-              const quantity = materialQuantities[material.id] || material.quantity || 0;
-              const unitPrice = calculateWeightedUnitPrice(material, materialId);
-              return sum + (quantity * unitPrice);
-            }
-            return sum;
-          }, 0);
-          
-          // Oblicz koszty na jednostkę
-          const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
-          const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
-          
-          // USUNIĘTO: Automatyczne zapisywanie do bazy danych
-          // Użytkownik może ręcznie zaktualizować koszty przyciskiem "Aktualizuj ręcznie"
-        }
-      }
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji cen materiałów:', error);
-    }
-  }, [task, materials, materialQuantities, id, currentUser, showSuccess, showError, includeInCosts, consumedBatchPrices]);
-
-  // Funkcja do pobierania aktualnych cen skonsumowanych partii i aktualizacji cen w konsumpcjach
-  const updateConsumedMaterialPricesFromBatches = useCallback(async () => {
-    if (!task?.consumedMaterials || task.consumedMaterials.length === 0) {
-      showError('Brak skonsumowanych materiałów do aktualizacji');
-      return;
-    }
-    
-    try {
-      const { getInventoryBatch } = await import('../../services/inventory');
-      let hasChanges = false;
-      let updateCount = 0;
-      let errorCount = 0;
-      const updatedConsumedMaterials = [...task.consumedMaterials];
-      const updateDetails = [];
-
-      // Dla każdej konsumpcji, sprawdź aktualną cenę partii
-      for (let i = 0; i < updatedConsumedMaterials.length; i++) {
-        const consumed = updatedConsumedMaterials[i];
-        
-        if (!consumed.batchId) {
-          console.warn(`⚠️ [PRICE-UPDATE] Konsumpcja ${i} nie ma batchId - pomijam`);
-          continue;
-        }
-
-        try {
-          const batchData = await getInventoryBatch(consumed.batchId);
-          if (batchData && batchData.unitPrice !== undefined) {
-            const currentPrice = consumed.unitPrice || 0;
-            const newPrice = parseFloat(batchData.unitPrice) || 0;
-            
-            // Sprawdź czy cena się zmieniła przed aktualizacją (tolerancja 0.0001 = 4 miejsca po przecinku)
-            if (Math.abs(currentPrice - newPrice) > 0.0001) {
-              updatedConsumedMaterials[i] = {
-                ...consumed,
-                unitPrice: newPrice,
-                priceUpdatedAt: new Date().toISOString(),
-                priceUpdatedFrom: 'batch-price-sync'
-              };
-              hasChanges = true;
-              updateCount++;
-              
-              const materialName = consumed.materialName || consumed.materialId || 'Nieznany materiał';
-              const batchNumber = batchData.batchNumber || consumed.batchId;
-              
-              updateDetails.push({
-                material: materialName,
-                batch: batchNumber,
-                oldPrice: currentPrice,
-                newPrice: newPrice,
-                quantity: consumed.quantity || 0
-              });
-            }
-          } else {
-            // 🔴 DIAGNOSTYKA: Szczegółowe info o brakującej partii - WSZYSTKO W JEDNYM LOGU
-            console.warn(`⚠️ [PRICE-UPDATE] Brak ceny w partii ${consumed.batchId} | Materiał: ${consumed.materialName || consumed.materialId} | Ilość: ${consumed.quantity} | Cena w konsumpcji: ${consumed.unitPrice} | batchData:`, batchData, '| pełna konsumpcja:', consumed);
-            errorCount++;
-          }
-        } catch (error) {
-          console.error(`❌ [PRICE-UPDATE] Błąd podczas pobierania partii ${consumed.batchId}:`, error);
-          errorCount++;
-        }
-      }
-
-      // Aktualizuj dane zadania tylko jeśli wykryto zmiany cen
-      if (hasChanges) {
-        await updateDoc(doc(db, 'productionTasks', id), {
-          consumedMaterials: updatedConsumedMaterials,
-          updatedAt: serverTimestamp(),
-          updatedBy: currentUser?.uid || 'system'
-        });
-        
-        // Zaktualizuj lokalny stan
-        setTask(prevTask => ({
-          ...prevTask,
-          consumedMaterials: updatedConsumedMaterials
-        }));
-        
-        // Pokaż szczegółowy raport aktualizacji
-        const successMessage = `Zaktualizowano ceny ${updateCount} konsumpcji. ${errorCount > 0 ? `Błędów: ${errorCount}` : ''}`;
-        console.table(updateDetails);
-        
-        showSuccess(successMessage);
-        
-        // Automatyczna aktualizacja kosztów zostanie wywołana przez useEffect z dependency na task.consumedMaterials
-      } else {
-        const message = `Sprawdzono ${task.consumedMaterials.length} konsumpcji - wszystkie ceny są aktualne. ${errorCount > 0 ? `Błędów: ${errorCount}` : ''}`;
-        showSuccess(message);
-      }
-    } catch (error) {
-      console.error('❌ [PRICE-UPDATE] Błąd podczas aktualizacji cen skonsumowanych partii:', error);
-      showError('Błąd podczas aktualizacji cen konsumpcji: ' + error.message);
-    }
-  }, [task?.consumedMaterials, id, currentUser, showSuccess, showError]);
-  
-  // Aktualizuj ceny materiałów przy każdym załadowaniu zadania lub zmianie zarezerwowanych partii
-  useEffect(() => {
-    if (task && task.materialBatches) {
-      // Używamy referencji do funkcji z pamięcią podręczną useCallback
-      let isMounted = true;
-      const updatePrices = async () => {
-        if (isMounted) {
-          await updateMaterialPricesFromBatches();
-        }
-      };
-      
-      updatePrices();
-      
-      return () => {
-        isMounted = false;
-      };
-    }
-  }, [task?.id, task?.materialBatches ? Object.keys(task.materialBatches).length : 0, updateMaterialPricesFromBatches]); // Uproszczone zależności
-
-  // Aktualizuj ceny skonsumowanych partii przy każdym załadowaniu zadania
-  useEffect(() => {
-    if (task?.consumedMaterials && task.consumedMaterials.length > 0) {
-      // Używamy referencji do funkcji z pamięcią podręczną useCallback
-      let isMounted = true;
-      const updateConsumedPrices = async () => {
-        if (isMounted) {
-          await updateConsumedMaterialPricesFromBatches();
-        }
-      };
-      
-      updateConsumedPrices();
-      
-      return () => {
-        isMounted = false;
-      };
-    }
-  }, [task?.id, task?.consumedMaterials ? task.consumedMaterials.length : 0, updateConsumedMaterialPricesFromBatches]); // Reaguje na zmiany liczby konsumpcji
-
-  // Funkcja do aktualizacji związanych zamówień klientów po zmianie kosztów produkcji
-  const updateRelatedCustomerOrders = async (taskData, totalMaterialCost, totalFullProductionCost, unitMaterialCost, unitFullProductionCost) => {
-    try {
-      if (!taskData || !taskData.id) return;
-      
-      // Importuj funkcje do zarządzania zamówieniami
-      const { getAllOrders, updateOrder } = await import('../../services/orderService');
-      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
-      
-      // Pobierz wszystkie zamówienia
-      const allOrders = await getAllOrders();
-      
-      // Znajdź zamówienia, które mają pozycje powiązane z tym zadaniem produkcyjnym
-      const relatedOrders = allOrders.filter(order => 
-        order.items && order.items.some(item => item.productionTaskId === taskData.id)
-      );
-      
-      if (relatedOrders.length === 0) {
-        console.log('Nie znaleziono zamówień powiązanych z tym zadaniem');
-        return;
-      }
-      
-      // Dla każdego powiązanego zamówienia, zaktualizuj koszty produkcji
-      for (const order of relatedOrders) {
-        let orderUpdated = false;
-        const updatedItems = [...order.items];
-        
-        for (let i = 0; i < updatedItems.length; i++) {
-          const item = updatedItems[i];
-          
-          if (item.productionTaskId === taskData.id) {
-            // Oblicz pełny koszt produkcji na jednostkę z uwzględnieniem logiki listy cenowej
-            const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, totalFullProductionCost);
-            const calculatedProductionUnitCost = calculateProductionUnitCost(item, totalMaterialCost);
-            
-            // Zaktualizuj koszty w pozycji
-            updatedItems[i] = {
-              ...item,
-              productionCost: totalMaterialCost,
-              fullProductionCost: totalFullProductionCost,
-              productionUnitCost: calculatedProductionUnitCost,
-              fullProductionUnitCost: calculatedFullProductionUnitCost
-            };
-            orderUpdated = true;
-          }
-        }
-        
-        if (orderUpdated) {
-          // Przelicz nową wartość zamówienia z uwzględnieniem zmienionych kosztów produkcji
-          const calculateItemTotalValue = (item) => {
-            const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
-            
-            // Jeśli produkt jest z listy cenowej I ma cenę większą od 0, zwracamy tylko wartość pozycji
-            if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
-              return itemValue;
-            }
-            
-            // Jeśli produkt nie jest z listy cenowej LUB ma cenę 0, i ma koszt produkcji, dodajemy go
-            if (item.productionTaskId && item.productionCost !== undefined) {
-              return itemValue + parseFloat(item.productionCost || 0);
-            }
-            
-            return itemValue;
-          };
-
-          // Oblicz nową wartość produktów
-          const subtotal = (updatedItems || []).reduce((sum, item) => {
-            return sum + calculateItemTotalValue(item);
-          }, 0);
-
-          // Zachowaj pozostałe składniki wartości zamówienia
-          const shippingCost = parseFloat(order.shippingCost) || 0;
-          const additionalCosts = order.additionalCostsItems ? 
-            order.additionalCostsItems
-              .filter(cost => parseFloat(cost.value) > 0)
-              .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
-          const discounts = order.additionalCostsItems ? 
-            Math.abs(order.additionalCostsItems
-              .filter(cost => parseFloat(cost.value) < 0)
-              .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
-
-          // Oblicz nową całkowitą wartość zamówienia
-          const newTotalValue = subtotal + shippingCost + additionalCosts - discounts;
-
-          // Zaktualizuj zamówienie w bazie danych - przekaż tylko niezbędne pola
-          const updateData = {
-            items: updatedItems,
-            // Zaktualizowana wartość zamówienia
-            totalValue: newTotalValue,
-            // Zachowaj podstawowe pola wymagane przez walidację
-            orderNumber: order.orderNumber,
-            orderDate: order.orderDate, // Wymagane przez walidację
-            status: order.status,
-            // Inne pola które są bezpieczne
-            customer: order.customer,
-            shippingCost: order.shippingCost,
-            additionalCostsItems: order.additionalCostsItems,
-            productionTasks: order.productionTasks,
-            linkedPurchaseOrders: order.linkedPurchaseOrders
-          };
-          
-          console.log(`Aktualizuję zamówienie ${order.orderNumber} z danymi:`, {
-            ...updateData,
-            orderDate: updateData.orderDate ? 'obecna' : 'brak',
-            itemsCount: updateData.items ? updateData.items.length : 0,
-            oldTotalValue: order.totalValue,
-            newTotalValue: newTotalValue
-          });
-          console.log(`UserID do aktualizacji: ${currentUser?.uid || 'brak'}`);
-          await updateOrder(order.id, updateData, currentUser?.uid || 'system');
-          
-          console.log(`Zaktualizowano zamówienie ${order.orderNumber} - wartość zmieniona z ${order.totalValue}€ na ${newTotalValue}€`);
-        }
-      }
-      
-      showInfo(`Zaktualizowano koszty produkcji w ${relatedOrders.length} powiązanych zamówieniach`);
-      
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji powiązanych zamówień:', error);
-      showError('Nie udało się zaktualizować powiązanych zamówień: ' + error.message);
-    }
-  };
+  // ✅ REFAKTORYZACJA: updateMaterialPricesFromBatches, updateConsumedMaterialPricesFromBatches,
+  // useEffects dla cen materiałów, updateRelatedCustomerOrders przeniesione do useTaskMaterialFetcher
 
   // Funkcja do ręcznej aktualizacji kosztów materiałów w bazie danych
   const updateMaterialCostsManually = async () => {
@@ -4648,338 +1748,30 @@ const TaskDetailsPage = () => {
   // => przeniesione do useTaskCosts hook
 
 
-  const renderMaterialCostsSummary = (options = {}) => {
-    const { hideTitle = false } = options;
-    const {
-      consumed: consumedCosts,
-      reserved: reservedCosts,
-      totalMaterialCost,
-      unitMaterialCost,
-      totalFullProductionCost,
-      unitFullProductionCost,
-      totalAdditionalCosts = 0
-    } = costsSummary;
-    
-    // Pobierz koszty z bazy danych
-    const dbTotalMaterialCost = task.totalMaterialCost || 0;
-    const dbUnitMaterialCost = task.unitMaterialCost || 0;
-    const dbTotalFullProductionCost = task.totalFullProductionCost || 0;
-    const dbUnitFullProductionCost = task.unitFullProductionCost || 0;
-    
-    // Sprawdź czy poszczególne koszty uległy zmianie
-    const totalMaterialCostChanged = Math.abs(dbTotalMaterialCost - totalMaterialCost) > 0.01;
-    const unitMaterialCostChanged = Math.abs(dbUnitMaterialCost - unitMaterialCost) > 0.0001;
-    const totalFullProductionCostChanged = Math.abs(dbTotalFullProductionCost - totalFullProductionCost) > 0.01;
-    const unitFullProductionCostChanged = Math.abs(dbUnitFullProductionCost - unitFullProductionCost) > 0.0001;
-    
-    const costChanged = totalMaterialCostChanged || unitMaterialCostChanged || 
-                        totalFullProductionCostChanged || unitFullProductionCostChanged;
-    
-    const CostCard = ({ label, value, unit, changed, dbValue, color }) => (
-      <Card variant="outlined" sx={{ height: '100%', borderColor: color ? `${color}.main` : 'divider' }}>
-        <CardContent sx={{ pb: '12px !important' }}>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            {label}
-          </Typography>
-          <Typography variant="h6" sx={{ color: color ? `${color}.main` : 'inherit', fontWeight: 600 }}>
-            {value}
-            {unit && (
-              <Typography component="span" variant="body2" sx={{ fontWeight: 400, opacity: 0.9 }}>
-                {' '}/{unit}
-              </Typography>
-            )}
-          </Typography>
-          {changed && dbValue != null && (
-            <Typography variant="caption" sx={{ color: 'warning.main', fontStyle: 'italic', display: 'block' }}>
-              w bazie: {dbValue}
-            </Typography>
-          )}
-        </CardContent>
-      </Card>
-    );
-
-    return (
-      <Box sx={{ ...(hideTitle ? {} : mt2), ...p2, bgcolor: 'transparent', borderRadius: 1 }}>
-        {costChanged && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            {t('materialsSummary.costChanged')}
-          </Alert>
-        )}
-        {(consumedCosts.totalCost > 0 || reservedCosts.totalCost > 0 || totalAdditionalCosts > 0) && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {consumedCosts.totalCost > 0 && `${t('materialsSummary.consumed')}: ${consumedCosts.totalCost.toFixed(2)} €`}
-            {consumedCosts.totalCost > 0 && reservedCosts.totalCost > 0 && ' | '}
-            {reservedCosts.totalCost > 0 && `${t('materialsSummary.reserved')}: ${reservedCosts.totalCost.toFixed(2)} €`}
-            {totalAdditionalCosts > 0 && (consumedCosts.totalCost > 0 || reservedCosts.totalCost > 0 ? ' | ' : '')}
-            {totalAdditionalCosts > 0 && `${t('additionalCosts.title')}: ${totalAdditionalCosts.toFixed(2)} €`}
-          </Typography>
-        )}
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6} md={4}>
-            <CostCard
-              label={t('materialsSummary.totalCost')}
-              value={`${totalMaterialCost.toFixed(2)} €`}
-              changed={totalMaterialCostChanged}
-              dbValue={`${dbTotalMaterialCost.toFixed(2)} €`}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={4}>
-            <CostCard
-              label={t('materialsSummary.unitCost')}
-              value={`~${unitMaterialCost.toFixed(4)} €`}
-              unit={task.unit}
-              changed={unitMaterialCostChanged}
-              dbValue={`~${dbUnitMaterialCost.toFixed(4)} €/${task.unit}`}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={4}>
-            <CostCard
-              label={t('taskDetails:materialsSummary.totalFullProductionCost')}
-              value={`${totalFullProductionCost.toFixed(2)} €`}
-              color="primary"
-              changed={totalFullProductionCostChanged}
-              dbValue={`${dbTotalFullProductionCost.toFixed(2)} €`}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={4}>
-            <CostCard
-              label={t('taskDetails:materialsSummary.unitFullProductionCost')}
-              value={`~${unitFullProductionCost.toFixed(4)} €`}
-              unit={task.unit}
-              color="primary"
-              changed={unitFullProductionCostChanged}
-              dbValue={`~${dbUnitFullProductionCost.toFixed(4)} €/${task.unit}`}
-            />
-          </Grid>
-          {(task.factoryCostPerUnit !== undefined && task.factoryCostPerUnit > 0) && (
-            <>
-              <Grid item xs={12} sm={6} md={4}>
-                <CostCard
-                  label={t('taskDetails:materialsSummary.factoryCostPerUnit', 'Koszt zakładu na jednostkę')}
-                  value={`~${task.factoryCostPerUnit.toFixed(4)} €`}
-                  unit={task.unit}
-                  color="secondary"
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <Card sx={{ height: '100%', bgcolor: 'success.main', color: 'success.contrastText' }}>
-                  <CardContent sx={{ pb: '12px !important' }}>
-                    <Typography variant="body2" sx={{ opacity: 0.95 }} gutterBottom>
-                      {t('taskDetails:materialsSummary.totalUnitCostWithFactory', 'Pełny koszt + zakład')}
-                    </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                      ~{(unitFullProductionCost + (task.factoryCostPerUnit || 0)).toFixed(4)} €/{task.unit}
-                    </Typography>
-                    <Typography variant="caption" sx={{ opacity: 0.85, display: 'block' }}>
-                      {t('taskDetails:materialsSummary.totalLabel', 'Łącznie')}: {(totalFullProductionCost + (task.factoryCostTotal || 0)).toFixed(2)} €
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </>
-          )}
-        </Grid>
-        {costChanged && (
-          <Box sx={{ mt: 2 }}>
-            <Button 
-              variant="outlined" 
-              color="primary" 
-              startIcon={<SaveIcon />}
-              onClick={updateMaterialCostsManually}
-              size="small"
-            >
-              {t('materialsSummary.updateManually')}
-            </Button>
-          </Box>
-        )}
-      </Box>
-    );
-  };
-
-  // Funkcja do usuwania wpisu historii produkcji
-  const handleDeleteHistoryItem = (item) => {
-    setDeleteHistoryItem(item);
-    setDeleteHistoryDialogOpen(true);
-  };
-  
-  // ✅ REFAKTORYZACJA: Callback dla DeleteConfirmDialog
-  const handleConfirmDeleteHistoryItem = useCallback(async () => {
-    try {
-      setLoading(true);
-      
-      if (!deleteHistoryItem || !deleteHistoryItem.id) {
-        showError('Nie można usunąć sesji produkcyjnej: brak identyfikatora');
-        return { success: false };
-      }
-      
-      // Wywołaj funkcję usuwającą sesję produkcyjną
-      await deleteProductionSession(deleteHistoryItem.id, currentUser.uid);
-      
-      showSuccess('Sesja produkcyjna została usunięta');
-      
-      // Odśwież dane historii produkcji
-      await fetchProductionHistory();
-      // ✅ Real-time listener automatycznie odświeży dane zadania
-      
-      setDeleteHistoryItem(null);
-      return { success: true };
-    } catch (error) {
-      console.error('Błąd podczas usuwania sesji produkcyjnej:', error);
-      showError('Nie udało się usunąć sesji produkcyjnej: ' + error.message);
-      return { success: false, error };
-    } finally {
-      setLoading(false);
-    }
-  }, [deleteHistoryItem, currentUser?.uid, fetchProductionHistory, showSuccess, showError]);
-
-  // Funkcja do filtrowania opakowań na podstawie wyszukiwania
-  const filteredPackagingItems = packagingItems.filter(item => 
-    item.name.toLowerCase().includes(searchPackaging.toLowerCase())
+  // ✅ REFAKTORYZACJA: renderMaterialCostsSummary przeniesione do MaterialCostsSummary.js
+  const renderMaterialCostsSummary = (options = {}) => (
+    <MaterialCostsSummary
+      costsSummary={costsSummary}
+      task={task}
+      t={t}
+      updateMaterialCostsManually={updateMaterialCostsManually}
+      hideTitle={options.hideTitle}
+    />
   );
 
-  // Funkcja obsługująca zmianę stanu checkboxa dla wliczania do kosztów
-  const handleIncludeInCostsChange = async (materialId, checked) => {
-    try {
-      // Aktualizujemy stan lokalnie
-      setIncludeInCosts(prev => ({
-        ...prev,
-        [materialId]: checked
-      }));
-      
-      // Aktualizacja w bazie danych
-      if (task?.id) {
-        const taskRef = doc(db, 'productionTasks', task.id);
-        await updateDoc(taskRef, {
-          [`materialInCosts.${materialId}`]: checked
-        });
-        
-        // ⚡ Invaliduj cache kosztów po zmianie ustawienia wliczania
-        invalidateCostsCache();
-        
-        showSuccess('Zaktualizowano ustawienia kosztów');
-        
-        // Automatyczna aktualizacja kosztów zostanie wykonana przez productionService.updateTask
-      }
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji ustawień kosztów:', error);
-      showError('Nie udało się zaktualizować ustawień kosztów');
-    }
-  };
+  // ✅ FAZA A: handleDeleteHistoryItem, handleConfirmDeleteHistoryItem przeniesione do useHistoryHandlers
 
-  // 🔒 POPRAWKA: Funkcja do pobierania oczekiwanych zamówień dla materiałów
-  // Przyjmuje taskData jako parametr zamiast używać task z closure aby uniknąć stałych danych
-  // ⚡ OPTYMALIZACJA: Równoległe pobieranie zamiast sekwencyjnej pętli (10x szybciej!)
-  const fetchAwaitingOrdersForMaterials = async (taskData = task, forceRefresh = false) => {
-    const startTime = performance.now();
-    console.log('🔵 [TaskDetails] fetchAwaitingOrdersForMaterials START', {
-      materialsCount: taskData?.materials?.length || 0,
-      forceRefresh
-    });
-    
-    try {
-      if (!taskData || !taskData.materials) {
-        console.log('⏭️ [TaskDetails] fetchAwaitingOrdersForMaterials: brak materiałów');
-        return;
-      }
-      setAwaitingOrdersLoading(true);
-      
-      // ⚡ OPTYMALIZACJA: Sprawdź cache
-      const now = Date.now();
-      const cached = parallelDataCache.current.awaitingOrders;
-      const materialsHash = taskData.materials.map(m => m.inventoryItemId || m.id).sort().join(',');
-      
-      if (!forceRefresh && cached.data && cached.materialsHash === materialsHash && (now - cached.timestamp) < CACHE_TTL) {
-        console.log('✅ [TaskDetails] Cache hit: awaitingOrders', {
-          age: `${((now - cached.timestamp) / 1000).toFixed(1)}s`,
-          duration: `${(performance.now() - startTime).toFixed(2)}ms`
-        });
-        setAwaitingOrders(cached.data);
-        setAwaitingOrdersLoading(false);
-        return;
-      }
-      
-      // Import funkcji raz, zamiast w każdej iteracji pętli
-      const importStartTime = performance.now();
-      const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventory');
-      console.log('✅ [TaskDetails] inventory service zaimportowany', {
-        duration: `${(performance.now() - importStartTime).toFixed(2)}ms`
-      });
-      
-      // ⚡ OPTYMALIZACJA: Utwórz tablicę promise dla równoległego wykonania
-      const promisesStartTime = performance.now();
-      const promises = taskData.materials.map(async (material) => {
-        const materialId = material.inventoryItemId || material.id;
-        if (!materialId) return { materialId: null, orders: [] };
-        
-        try {
-          const materialOrders = await getAwaitingOrdersForInventoryItem(materialId);
-          return { 
-            materialId, 
-            orders: materialOrders.length > 0 ? materialOrders : [] 
-          };
-        } catch (error) {
-          console.error(`❌ [TaskDetails] Błąd pobierania zamówień dla materiału ${materialId}:`, error);
-          return { materialId, orders: [] };
-        }
-      });
-      
-      console.log('🔄 [TaskDetails] Równoległe pobieranie zamówień dla materiałów', {
-        promisesCount: promises.length
-      });
-      
-      // Poczekaj na wszystkie zapytania równolegle (zamiast sekwencyjnie)
-      const results = await Promise.all(promises);
-      
-      console.log('✅ [TaskDetails] Wszystkie zamówienia pobrane', {
-        duration: `${(performance.now() - promisesStartTime).toFixed(2)}ms`,
-        materialsProcessed: results.length
-      });
-      
-      // Przekształć wyniki w obiekt
-      const ordersData = {};
-      let totalOrders = 0;
-      results.forEach(({ materialId, orders }) => {
-        if (materialId) {
-          ordersData[materialId] = orders;
-          totalOrders += orders.length;
-        }
-      });
-      
-      // Zapisz w cache
-      parallelDataCache.current.awaitingOrders = {
-        data: ordersData,
-        timestamp: now,
-        materialsHash
-      };
-      
-      setAwaitingOrders(ordersData);
-      
-      console.log('✅ [TaskDetails] fetchAwaitingOrdersForMaterials COMPLETED', {
-        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`,
-        totalOrders,
-        cached: false
-      });
-    } catch (error) {
-      console.error('❌ [TaskDetails] fetchAwaitingOrdersForMaterials błąd', {
-        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
-        error
-      });
-      showError('Nie udało się pobrać informacji o oczekiwanych zamówieniach');
-    } finally {
-      setAwaitingOrdersLoading(false);
-    }
-  };
+  const filteredPackagingItems = useMemo(() => 
+    packagingItems.filter(item => 
+      item.name.toLowerCase().includes(searchPackaging.toLowerCase())
+    ), [packagingItems, searchPackaging]);
+
+  // ✅ FAZA A: handleIncludeInCostsChange przeniesione do useMaterialHandlers
+
+  // ✅ REFAKTORYZACJA: fetchAwaitingOrdersForMaterials przeniesione do useTaskMaterialFetcher
 
   // Funkcja pomocnicza do formatowania daty
-  const formatDateToLocal = (dateString) => {
-    if (!dateString) return 'Nie określono';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pl-PL', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
+  // ✅ REFAKTORYZACJA: formatDateToLocal przeniesione do utils/taskFormatters
 
   // Funkcja obsługująca zmianę zakładki materiałów
   const handleMaterialTabChange = (event, newValue) => {
@@ -5000,358 +1792,29 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Funkcja do pobierania odpowiedzi formularzy powiązanych z zadaniem
-  const handleProductionControlFormSuccess = (formData) => {
-    showSuccess('Formularz kontroli produkcji został zapisany pomyślnie!');
-    // Odśwież formularze produkcyjne dla tego zadania
-    if (task?.moNumber) {
-      fetchFormResponses(task.moNumber);
-    }
-  };
+  // ✅ FAZA A: handleProductionControlFormSuccess, handleCompletedMOFormSuccess,
+  // handleProductionShiftFormSuccess przeniesione do useFormHandlers
 
-  const handleCompletedMOFormSuccess = (formData) => {
-    showSuccess('Raport zakończonego MO został zapisany pomyślnie!');
-    // Odśwież formularze produkcyjne dla tego zadania
-    if (task?.moNumber) {
-      fetchFormResponses(task.moNumber);
-    }
-  };
+  // ✅ REFAKTORYZACJA: fetchFormResponses przeniesione do useTaskFetcher
 
-  const handleProductionShiftFormSuccess = (formData) => {
-    showSuccess('Raport zmiany produkcyjnej został zapisany pomyślnie!');
-    // Odśwież formularze produkcyjne dla tego zadania
-    if (task?.moNumber) {
-      fetchFormResponses(task.moNumber);
-    }
-  };
+  // ✅ REFAKTORYZACJA: formatDateTime, toLocalDateTimeString, fromLocalDateTimeString
+  // przeniesione do utils/taskFormatters
 
-  const fetchFormResponses = async (moNumber) => {
-    if (!moNumber) return;
-    
-    setLoadingFormResponses(true);
-    try {
-      // ✅ OPTYMALIZACJA: Równoległe pobieranie z limitami i sortowaniem
-      const [completedMOSnapshot, controlSnapshot, shiftSnapshot] = await Promise.all([
-        getDocs(query(
-          collection(db, 'Forms/SkonczoneMO/Odpowiedzi'), 
-          where('moNumber', '==', moNumber),
-          orderBy('date', 'desc'), // Sortowanie od najnowszych
-          limit(50) // Limit ostatnich 50 odpowiedzi
-        )),
-        getDocs(query(
-          collection(db, 'Forms/KontrolaProdukcji/Odpowiedzi'), 
-          where('manufacturingOrder', '==', moNumber),
-          orderBy('fillDate', 'desc'), // Sortowanie od najnowszych
-          limit(50) // Limit ostatnich 50 odpowiedzi
-        )),
-        getDocs(query(
-          collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi'), 
-          where('moNumber', '==', moNumber),
-          orderBy('fillDate', 'desc'), // Sortowanie od najnowszych
-          limit(50) // Limit ostatnich 50 odpowiedzi
-        ))
-      ]);
+  const filteredRawMaterialsItems = useMemo(() => 
+    rawMaterialsItems.filter(item => 
+      item.name.toLowerCase().includes(searchRawMaterials.toLowerCase())
+    ), [rawMaterialsItems, searchRawMaterials]);
 
-      const completedMOData = completedMOSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date?.toDate(),
-        formType: 'completedMO'
-      }));
+  // ✅ FAZA A: handleDeleteMaterial, handleConfirmDeleteMaterial przeniesione do useMaterialHandlers
 
-      const controlData = controlSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        fillDate: doc.data().fillDate?.toDate(),
-        productionStartDate: doc.data().productionStartDate?.toDate(),
-        productionEndDate: doc.data().productionEndDate?.toDate(),
-        readingDate: doc.data().readingDate?.toDate(),
-        formType: 'productionControl'
-      }));
+  // ✅ FAZA A: handleOpenConsumeMaterialsDialog, handleConsumeQuantityChange,
+  // handleBatchToConsumeSelection przeniesione do useConsumptionHandlers
 
-      const shiftData = shiftSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        fillDate: doc.data().fillDate?.toDate(),
-        formType: 'productionShift'
-      }));
-
-      // ✅ OPTYMALIZACJA: Sortowanie już wykonane w zapytaniu Firebase
-      // Nie trzeba dodatkowo sortować po stronie klienta
-      setFormResponses({
-        completedMO: completedMOData,
-        productionControl: controlData,
-        productionShift: shiftData
-      });
-    } catch (error) {
-      console.error('Błąd podczas pobierania odpowiedzi formularzy:', error);
-    } finally {
-      setLoadingFormResponses(false);
-    }
-  };
-
-  const formatDateTime = (date) => {
-    if (!date) return 'Nie określono';
-    
-    try {
-      // Obsługa różnych formatów daty
-      let dateObj;
-      
-      if (date instanceof Date) {
-        dateObj = date;
-      } else if (typeof date === 'string') {
-        // Jeśli to string ISO, konwertuj na datę
-        dateObj = new Date(date);
-      } else if (date.toDate && typeof date.toDate === 'function') {
-        // Firebase timestamp
-        dateObj = date.toDate();
-      } else if (date.seconds) {
-        // Firebase timestamp object
-        dateObj = new Date(date.seconds * 1000);
-      } else {
-        dateObj = new Date(date);
-      }
-      
-      // Sprawdź czy data jest prawidłowa
-      if (isNaN(dateObj.getTime())) {
-        console.warn('Nieprawidłowa data:', date);
-        return 'Nieprawidłowa data';
-      }
-      
-      return dateObj.toLocaleString('pl-PL', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'Europe/Warsaw'  // Ustaw polską strefę czasową
-      });
-    } catch (error) {
-      console.error('Błąd formatowania daty:', error, date);
-      return 'Błąd formatowania';
-    }
-  };
-
-  // Funkcja pomocnicza do formatowania daty/czasu dla pola datetime-local
-  const toLocalDateTimeString = (date) => {
-    if (!date) return '';
-    
-    try {
-      let dateObj;
-      
-      if (date instanceof Date) {
-        dateObj = date;
-      } else if (typeof date === 'string') {
-        dateObj = new Date(date);
-      } else if (date.toDate && typeof date.toDate === 'function') {
-        dateObj = date.toDate();
-      } else if (date.seconds) {
-        dateObj = new Date(date.seconds * 1000);
-      } else {
-        dateObj = new Date(date);
-      }
-      
-      if (isNaN(dateObj.getTime())) return '';
-      
-      // Format dla datetime-local (YYYY-MM-DDTHH:MM)
-      const year = dateObj.getFullYear();
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      const hours = String(dateObj.getHours()).padStart(2, '0');
-      const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-      
-      return `${year}-${month}-${day}T${hours}:${minutes}`;
-    } catch (error) {
-      console.error('Błąd konwersji daty do datetime-local:', error, date);
-      return '';
-    }
-  };
-
-  // Funkcja pomocnicza do parsowania datetime-local z uwzględnieniem strefy czasowej
-  const fromLocalDateTimeString = (dateTimeString) => {
-    if (!dateTimeString) return new Date();
-    
-    try {
-      // Obsługa formatu ISO z datetime-local (YYYY-MM-DDTHH:MM)
-      if (dateTimeString.includes('T')) {
-        // Interpretuj jako lokalny czas (bez konwersji UTC)
-        return new Date(dateTimeString);
-      }
-      
-      // Obsługa starszego formatu z kropkami i spacją (DD.MM.YYYY HH:MM)
-      if (dateTimeString.includes(' ')) {
-        const [datePart, timePart] = dateTimeString.split(' ');
-        const [day, month, year] = datePart.split('.');
-        const [hours, minutes] = timePart.split(':');
-        
-        return new Date(year, month - 1, day, hours, minutes);
-      }
-      
-      // Fallback - spróbuj parsować jako standardową datę
-      return new Date(dateTimeString);
-    } catch (error) {
-      console.error('Błąd parsowania datetime-local:', error, dateTimeString);
-      return new Date();
-    }
-  };
-
-  // Funkcja do filtrowania materiałów na podstawie wyszukiwania
-  const filteredRawMaterialsItems = rawMaterialsItems.filter(item => 
-    item.name.toLowerCase().includes(searchRawMaterials.toLowerCase())
-  );
-
-  // Funkcja do obsługi usuwania materiału
-  const handleDeleteMaterial = (material) => {
-    setMaterialToDelete(material);
-    setDeleteMaterialDialogOpen(true);
-  };
-
-  // ✅ REFAKTORYZACJA: Callback dla DeleteConfirmDialog
-  const handleConfirmDeleteMaterial = useCallback(async () => {
-    try {
-      setLoading(true);
-      
-      if (!materialToDelete) {
-        showError('Nie wybrano materiału do usunięcia');
-        return { success: false };
-      }
-      
-      // Pobierz aktualne zadanie
-      const updatedTask = await getTaskById(id);
-      const currentMaterials = updatedTask.materials || [];
-      
-      // Usuń materiał z listy
-      const updatedMaterials = currentMaterials.filter(m => m.id !== materialToDelete.id);
-      
-      // Zaktualizuj zadanie w bazie danych
-      await updateDoc(doc(db, 'productionTasks', id), {
-        materials: updatedMaterials,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid
-      });
-      
-      // ✅ Real-time listener automatycznie odświeży dane
-      
-      showSuccess(`Materiał "${materialToDelete.name}" został usunięty z zadania`);
-      setMaterialToDelete(null);
-      return { success: true };
-    } catch (error) {
-      console.error('Błąd podczas usuwania materiału:', error);
-      showError('Nie udało się usunąć materiału: ' + error.message);
-      return { success: false, error };
-    } finally {
-      setLoading(false);
-    }
-  }, [materialToDelete, id, currentUser?.uid, showSuccess, showError]);
-
-  // Funkcje obsługi konsumpcji materiałów
-  const handleOpenConsumeMaterialsDialog = () => {
-    // Przygotuj listę zarezerwowanych materiałów
-    const reservedMaterials = materials.filter(material => {
-      const materialId = material.inventoryItemId || material.id;
-      const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-      return reservedBatches && reservedBatches.length > 0;
-    });
-
-    setConsumedMaterials(reservedMaterials);
-    
-    // Inicjalizuj ilości konsumpcji dla każdego materiału i partii
-    const initialQuantities = {};
-    const initialSelections = {};
-    
-    reservedMaterials.forEach(material => {
-      const materialId = material.inventoryItemId || material.id;
-      const reservedBatches = task.materialBatches[materialId] || [];
-      
-      // Inicjalizuj wybory partii (domyślnie wszystkie odznaczone)
-      initialSelections[materialId] = {};
-      
-      reservedBatches.forEach(batch => {
-        const batchKey = `${materialId}_${batch.batchId}`;
-        initialQuantities[batchKey] = ''; // Domyślnie puste pole
-        initialSelections[materialId][batch.batchId] = false; // Domyślnie odznaczone
-      });
-    });
-    
-    setConsumeQuantities(initialQuantities);
-    setSelectedBatchesToConsume(initialSelections);
-    setConsumeErrors({});
-    setConsumeMaterialsDialogOpen(true);
-  };
-
-  const handleConsumeQuantityChange = (materialId, batchId, value) => {
-    const batchKey = `${materialId}_${batchId}`;
-    const numericValue = parseFloat(value);
-    
-    setConsumeQuantities(prev => ({
-      ...prev,
-      // ✅ PRECYZJA: Normalizuj do 3 miejsc po przecinku przy każdej zmianie
-      [batchKey]: isNaN(numericValue) ? 0 : normalizeQuantity(numericValue)
-    }));
-    
-    // Wyczyść błędy dla tej partii
-    setConsumeErrors(prev => {
-      const newErrors = { ...prev };
-      delete newErrors[batchKey];
-      return newErrors;
-    });
-  };
-
-  const handleBatchToConsumeSelection = (materialId, batchId, selected) => {
-    setSelectedBatchesToConsume(prev => ({
-      ...prev,
-      [materialId]: {
-        ...prev[materialId],
-        [batchId]: selected
-      }
-    }));
-  };
-
+  // ✅ REFAKTORYZACJA: validateConsumeQuantities przeniesione do utils/taskValidators
   const validateConsumeQuantities = () => {
-    const errors = {};
-    let isValid = true;
-
-    Object.entries(selectedBatchesToConsume).forEach(([materialId, batches]) => {
-      Object.entries(batches).forEach(([batchId, isSelected]) => {
-        if (isSelected) {
-          const batchKey = `${materialId}_${batchId}`;
-          const quantity = consumeQuantities[batchKey];
-          
-          if (quantity === '' || quantity === null || quantity === undefined) {
-            errors[batchKey] = 'Podaj ilość do konsumpcji';
-            isValid = false;
-          } else {
-            // ✅ PRECYZJA: Normalizuj wartość wpisaną przez użytkownika
-            const numericQuantity = normalizeQuantity(quantity);
-            
-            if (isNaN(numericQuantity)) {
-              errors[batchKey] = 'Wartość musi być liczbą';
-              isValid = false;
-            } else if (numericQuantity <= 0) {
-              errors[batchKey] = 'Wartość musi być większa od zera';
-              isValid = false;
-            } else {
-              // Sprawdź czy ilość nie przekracza zarezerwowanej ilości
-              const reservedBatches = task.materialBatches[materialId] || [];
-              const batch = reservedBatches.find(b => b.batchId === batchId);
-              
-              if (batch) {
-                // ✅ PRECYZJA: Normalizuj rezerwację do tej samej precyzji przed porównaniem
-                const reservedQuantity = normalizeQuantity(batch.quantity);
-                
-                if (numericQuantity > reservedQuantity) {
-                  errors[batchKey] = `Nie można skonsumować więcej niż zarezerwowano (${reservedQuantity})`;
-                  isValid = false;
-                }
-              }
-            }
-          }
-        }
-      });
-    });
-
-    setConsumeErrors(errors);
-    return isValid;
+    const result = validateConsumeQuantitiesPure(selectedBatchesToConsume, consumeQuantities, task);
+    setConsumeErrors(result.errors);
+    return result.isValid;
   };
 
   // 🔍 DEBUG: Funkcja sprawdzająca spójność partii w zadaniu
@@ -6674,101 +3137,7 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Funkcja do pobierania cen skonsumowanych partii i aktualizacji cen materiałów
-  const fetchConsumedBatchPrices = async () => {
-    if (!task?.consumedMaterials || task.consumedMaterials.length === 0) {
-      return;
-    }
-
-    try {
-      const { getInventoryBatch } = await import('../../services/inventory');
-      const batchPrices = {};
-      let needsTaskUpdate = false;
-      let needsCostUpdate = false;
-      const updatedConsumedMaterials = [...task.consumedMaterials];
-
-      for (let i = 0; i < task.consumedMaterials.length; i++) {
-        const consumed = task.consumedMaterials[i];
-        try {
-          const batch = await getInventoryBatch(consumed.batchId);
-          if (batch) {
-            if (batch.unitPrice) {
-              batchPrices[consumed.batchId] = batch.unitPrice;
-              
-              // Sprawdź czy cena w konsumpcji się zmieniła
-              const currentPrice = consumed.unitPrice || 0;
-              const newPrice = batch.unitPrice;
-              
-              if (Math.abs(currentPrice - newPrice) > 0.001) {
-                console.log(`Aktualizuję cenę dla skonsumowanej partii ${batch.batchNumber || consumed.batchId}: ${currentPrice.toFixed(4)}€ -> ${newPrice.toFixed(4)}€`);
-                updatedConsumedMaterials[i] = {
-                  ...consumed,
-                  unitPrice: newPrice,
-                  priceUpdatedAt: new Date().toISOString(),
-                  priceUpdatedFrom: 'batch-sync'
-                };
-                needsTaskUpdate = true;
-                needsCostUpdate = true;
-              }
-            }
-            
-            // Jeśli konsumpcja nie ma zapisanego numeru partii, zaktualizuj go
-            if (!consumed.batchNumber && (batch.lotNumber || batch.batchNumber)) {
-              const newBatchNumber = batch.lotNumber || batch.batchNumber;
-              console.log(`Aktualizuję numer partii dla konsumpcji ${i}: ${consumed.batchId} -> ${newBatchNumber}`);
-              updatedConsumedMaterials[i] = {
-                ...updatedConsumedMaterials[i], // Zachowaj poprzednie zmiany
-                batchNumber: newBatchNumber
-              };
-              needsTaskUpdate = true;
-            } else if (consumed.batchNumber === consumed.batchId && (batch.lotNumber || batch.batchNumber)) {
-              // Sprawdź czy zapisany batchNumber to w rzeczywistości ID - wtedy też zaktualizuj
-              const newBatchNumber = batch.lotNumber || batch.batchNumber;
-              if (newBatchNumber !== consumed.batchNumber) {
-                console.log(`Naprawiam błędny numer partii (ID jako numer): ${consumed.batchNumber} -> ${newBatchNumber}`);
-                updatedConsumedMaterials[i] = {
-                  ...updatedConsumedMaterials[i], // Zachowaj poprzednie zmiany
-                  batchNumber: newBatchNumber
-                };
-                needsTaskUpdate = true;
-              }
-            }
-          }
-        } catch (error) {
-          console.error(`Błąd podczas pobierania danych partii ${consumed.batchId}:`, error);
-        }
-      }
-
-      setConsumedBatchPrices(batchPrices);
-      
-      // Jeśli trzeba zaktualizować dane zadania
-      if (needsTaskUpdate) {
-        try {
-          await updateDoc(doc(db, 'productionTasks', id), {
-            consumedMaterials: updatedConsumedMaterials,
-            updatedAt: serverTimestamp()
-          });
-          
-          // Zaktualizuj lokalny stan
-          setTask(prevTask => ({
-            ...prevTask,
-            consumedMaterials: updatedConsumedMaterials
-          }));
-          
-          if (needsCostUpdate) {
-            console.log('Wykryto zmiany cen skonsumowanych partii - zaktualizowano dane zadania');
-            // Automatyczna aktualizacja kosztów zostanie wywołana przez useEffect z dependency na task.consumedMaterials
-          } else {
-            console.log('Zaktualizowano numery partii w danych zadania');
-          }
-        } catch (error) {
-          console.error('Błąd podczas aktualizacji danych skonsumowanych partii:', error);
-        }
-      }
-    } catch (error) {
-      console.error('Błąd podczas pobierania cen skonsumowanych partii:', error);
-    }
-  };
+  // ✅ REFAKTORYZACJA: fetchConsumedBatchPrices przeniesione do useTaskMaterialFetcher
 
   // Funkcja do obsługi zmian checkboxów "wliczaj do kosztów" dla skonsumowanych materiałów
   const handleConsumedIncludeInCostsChange = async (consumptionIndex, checked) => {
@@ -6802,78 +3171,14 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Funkcja do wzbogacenia danych skonsumowanych materiałów o informacje z partii
-  // Funkcje pomocnicze zostały zastąpione przez calculateAllCosts()
+  // ✅ REFAKTORYZACJA: enrichConsumedMaterialsData przeniesione do useTaskMaterialFetcher
 
-  const enrichConsumedMaterialsData = async (consumedMaterials) => {
-    if (!consumedMaterials || consumedMaterials.length === 0) {
-      return consumedMaterials;
-    }
-
-    const enrichedMaterials = await Promise.all(
-      consumedMaterials.map(async (consumed) => {
-        let enrichedConsumed = { ...consumed };
-
-        // 🔒 POPRAWKA: ZAWSZE pobierz dane z partii jeśli mamy batchId
-        // Problem: consumed.batchNumber może być ID zamiast numeru LOT, więc musimy zawsze sprawdzić
-        if (consumed.batchId) {
-          try {
-            const { getInventoryBatch } = await import('../../services/inventory');
-            const batchData = await getInventoryBatch(consumed.batchId);
-            
-            if (batchData) {
-              // Dodaj datę ważności jeśli nie ma
-              if (!enrichedConsumed.expiryDate && batchData.expiryDate) {
-                enrichedConsumed.expiryDate = batchData.expiryDate;
-              }
-
-              // 🔒 POPRAWKA: Dodaj cenę jednostkową partii jeśli nie ma
-              if (!enrichedConsumed.unitPrice && batchData.unitPrice) {
-                enrichedConsumed.unitPrice = batchData.unitPrice;
-              }
-
-              // 🔒 POPRAWKA: ZAWSZE nadpisuj batchNumber/lotNumber danymi z Firestore
-              // Problem: consumed.batchNumber może zawierać ID zamiast numeru LOT jako fallback
-              if (batchData.lotNumber || batchData.batchNumber) {
-                const correctBatchNumber = batchData.lotNumber || batchData.batchNumber;
-                
-                // Nadpisz tylko jeśli wartość się różni (żeby nie nadpisywać dobrego numeru)
-                if (enrichedConsumed.batchNumber !== correctBatchNumber) {
-                  enrichedConsumed.batchNumber = correctBatchNumber;
-                  enrichedConsumed.lotNumber = batchData.lotNumber || batchData.batchNumber;
-                }
-              }
-
-              // Pobierz nazwę materiału i jednostkę z pozycji magazynowej
-              if (batchData.inventoryItemId && (!enrichedConsumed.materialName || !enrichedConsumed.unit)) {
-                try {
-                  const { getInventoryItemById } = await import('../../services/inventory');
-                  const inventoryItem = await getInventoryItemById(batchData.inventoryItemId);
-                  
-                  if (inventoryItem) {
-                    if (!enrichedConsumed.materialName) {
-                      enrichedConsumed.materialName = inventoryItem.name;
-                    }
-                    if (!enrichedConsumed.unit) {
-                      enrichedConsumed.unit = inventoryItem.unit;
-                    }
-                  }
-                } catch (error) {
-                  console.warn(`Nie udało się pobrać danych pozycji magazynowej ${batchData.inventoryItemId}:`, error);
-                }
-              }
-            }
-          } catch (error) {
-            console.warn(`Nie udało się pobrać danych partii ${consumed.batchId}:`, error);
-          }
-        }
-
-        return enrichedConsumed;
-      })
-    );
-
-    return enrichedMaterials;
-  };
+  // ✅ REFAKTORYZACJA: Ustawienie late-bound dependencies dla useTaskFetcher
+  setLateDeps({
+    fetchAwaitingOrdersForMaterials,
+    fetchBatchesForMaterialsOptimized,
+    enrichConsumedMaterialsData,
+  });
 
   // ✅ FAZA 1.3: Hook do synchronizacji real-time (onSnapshot, processTaskUpdate, etc.)
   const { updateTaskRef } = useTaskRealTimeSync(id, {
@@ -6897,967 +3202,19 @@ const TaskDetailsPage = () => {
     updateTaskRef(task);
   }, [task, updateTaskRef]);
 
-  // Funkcja do pobierania załączników z PO dla składników
-  const fetchIngredientAttachments = async () => {
-    if (!task?.recipe?.ingredients || task.recipe.ingredients.length === 0) {
-      return;
-    }
-
-    if (!task?.consumedMaterials || task.consumedMaterials.length === 0) {
-      return;
-    }
-
-    try {
-      const attachments = {};
-      
-      // Dla każdego składnika sprawdź czy można znaleźć odpowiadający mu skonsumowany materiał
-      for (const ingredient of task.recipe.ingredients) {
-        const ingredientAttachments = [];
-        
-        // Znajdź skonsumowane materiały o tej samej nazwie co składnik
-        const matchingConsumedMaterials = task.consumedMaterials.filter(consumed => {
-          // Znajdź materiał w liście materiałów zadania
-          const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
-          const materialName = consumed.materialName || material?.name || '';
-          
-          // Sprawdź czy nazwa materiału pasuje do nazwy składnika (case-insensitive)
-          return materialName.toLowerCase().includes(ingredient.name.toLowerCase()) ||
-                 ingredient.name.toLowerCase().includes(materialName.toLowerCase());
-        });
-        
-        // Dla każdego pasującego skonsumowanego materiału pobierz załączniki z PO
-        for (const consumed of matchingConsumedMaterials) {
-          if (consumed.batchId) {
-            try {
-              // Pobierz dane partii magazynowej
-              const { getInventoryBatch } = await import('../../services/inventory');
-              const batchData = await getInventoryBatch(consumed.batchId);
-              
-              if (batchData && batchData.purchaseOrderDetails && batchData.purchaseOrderDetails.id) {
-                // Pobierz pełne dane zamówienia zakupu
-                const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
-                const poData = await getPurchaseOrderById(batchData.purchaseOrderDetails.id);
-                
-                // Pobierz TYLKO certyfikaty CoA z PO (nie wszystkie załączniki)
-                const coaAttachments = poData.coaAttachments || [];
-                
-                if (coaAttachments.length > 0) {
-                  // Dodaj załączniki CoA z informacją o źródle
-                  const poAttachments = coaAttachments.map(attachment => ({
-                    ...attachment,
-                    poNumber: poData.number,
-                    poId: poData.id,
-                    lotNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber,
-                    category: 'CoA'
-                  }));
-                  
-                  ingredientAttachments.push(...poAttachments);
-                }
-              }
-            } catch (error) {
-              console.warn(`Nie udało się pobrać załączników dla partii ${consumed.batchId}:`, error);
-            }
-          }
-        }
-        
-        // Usuń duplikaty załączników (po nazwie pliku)
-        const uniqueAttachments = ingredientAttachments.filter((attachment, index, self) => 
-          index === self.findIndex(a => a.fileName === attachment.fileName)
-        );
-        
-        if (uniqueAttachments.length > 0) {
-          attachments[ingredient.name] = uniqueAttachments;
-        }
-      }
-      
-      setIngredientAttachments(attachments);
-    } catch (error) {
-      console.warn('Błąd podczas pobierania załączników składników:', error);
-    }
-  };
-
-  // Funkcja do pobierania załączników badań klinicznych
-  const fetchClinicalAttachments = async () => {
-    if (!task?.id) return;
-    
-    try {
-      // Pobierz obecne załączniki z zadania
-      const taskRef = doc(db, 'productionTasks', task.id);
-      const taskDoc = await getDoc(taskRef);
-      
-      if (taskDoc.exists()) {
-        const taskData = taskDoc.data();
-        setClinicalAttachments(taskData.clinicalAttachments || []);
-      }
-    } catch (error) {
-      console.warn('Błąd podczas pobierania załączników badań klinicznych:', error);
-    }
-  };
-
-  // Funkcja do przesyłania pliku badań klinicznych
-  const uploadClinicalFile = async (file) => {
-    try {
-      // Walidacja pliku
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (file.size > maxSize) {
-        throw new Error('Plik jest za duży. Maksymalny rozmiar to 10MB.');
-      }
-
-      // Dozwolone typy plików
-      const allowedTypes = [
-        'application/pdf',
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/plain'
-      ];
-      
-      if (!allowedTypes.includes(file.type)) {
-        throw new Error('Nieobsługiwany typ pliku. Dozwolone: PDF, JPG, PNG, GIF, DOC, DOCX, TXT');
-      }
-
-      const timestamp = new Date().getTime();
-      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const fileName = `${timestamp}_${sanitizedFileName}`;
-      const storagePath = `clinical-research-attachments/${task.id}/${fileName}`;
-
-      const fileRef = ref(storage, storagePath);
-      await uploadBytes(fileRef, file);
-      const downloadURL = await getDownloadURL(fileRef);
-
-      return {
-        id: `${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
-        fileName: file.name,
-        storagePath,
-        downloadURL,
-        contentType: file.type,
-        size: file.size,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: currentUser?.uid
-      };
-    } catch (error) {
-      console.error('Błąd podczas przesyłania pliku:', error);
-      throw error;
-    }
-  };
-
-  // Funkcja do obsługi wyboru plików
-  const handleClinicalFileSelect = async (files) => {
-    if (!files || files.length === 0) return;
-
-    setUploadingClinical(true);
-    const newAttachments = [...clinicalAttachments];
-
-    try {
-      for (const file of files) {
-        try {
-          const uploadedFile = await uploadClinicalFile(file);
-          newAttachments.push(uploadedFile);
-          showSuccess(`Plik "${file.name}" został przesłany pomyślnie`);
-        } catch (error) {
-          showError(`Błąd podczas przesyłania pliku "${file.name}": ${error.message}`);
-        }
-      }
-
-      // Zapisz załączniki w bazie danych
-      const taskRef = doc(db, 'productionTasks', task.id);
-      await updateDoc(taskRef, {
-        clinicalAttachments: newAttachments,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid
-      });
-
-      setClinicalAttachments(newAttachments);
-    } finally {
-      setUploadingClinical(false);
-    }
-  };
-
-  // Funkcja do usuwania pliku
-  const handleDeleteClinicalFile = async (attachment) => {
-    try {
-      const fileRef = ref(storage, attachment.storagePath);
-      await deleteObject(fileRef);
-
-      const updatedAttachments = clinicalAttachments.filter(a => a.id !== attachment.id);
-      
-      // Zaktualizuj bazę danych
-      const taskRef = doc(db, 'productionTasks', task.id);
-      await updateDoc(taskRef, {
-        clinicalAttachments: updatedAttachments,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid
-      });
-
-      setClinicalAttachments(updatedAttachments);
-      showSuccess(`Plik "${attachment.fileName}" został usunięty`);
-    } catch (error) {
-      console.error('Błąd podczas usuwania pliku:', error);
-      showError(`Błąd podczas usuwania pliku: ${error.message}`);
-    }
-  };
-
-  // Funkcja do pobierania pliku
-  const handleDownloadClinicalFile = (attachment) => {
-    window.open(attachment.downloadURL, '_blank');
-  };
+  // ✅ FAZA A: fetchIngredientAttachments, fetchClinicalAttachments, handleClinicalFileSelect,
+  // handleDeleteClinicalFile, handleDownloadClinicalFile przeniesione do useFileHandlers
 
   // Funkcja do uzyskania ikony pliku
-  const getClinicalFileIcon = (contentType) => {
-    if (contentType.startsWith('image/')) {
-      return <ImageIcon sx={iconPrimary} />;
-    } else if (contentType === 'application/pdf') {
-      return <PdfIcon sx={iconError} />;
-    } else {
-      return <DescriptionIcon sx={{ color: 'action.active' }} />;
-    }
-  };
+  // ✅ REFAKTORYZACJA: getClinicalFileIcon, formatClinicalFileSize przeniesione do utils/taskFormatters
 
-  // Funkcja do formatowania rozmiaru pliku
-  const formatClinicalFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
+  // ✅ FAZA A: fetchAdditionalAttachments, handleAdditionalFileSelect, handleDeleteAdditionalFile,
+  // handleDownloadAdditionalFile, fetchIngredientBatchAttachments, handleRefreshBatchAttachments
+  // przeniesione do useFileHandlers
 
-  // Funkcje dla dodatkowych załączników
-  const fetchAdditionalAttachments = async () => {
-    if (!task?.id) return;
-    
-    try {
-      const taskRef = doc(db, 'productionTasks', task.id);
-      const taskDoc = await getDoc(taskRef);
-      
-      if (taskDoc.exists()) {
-        const taskData = taskDoc.data();
-        setAdditionalAttachments(taskData.additionalAttachments || []);
-      }
-    } catch (error) {
-      console.warn('Błąd podczas pobierania dodatkowych załączników:', error);
-    }
-  };
-
-  const uploadAdditionalFile = async (file) => {
-    try {
-      const maxSize = 20 * 1024 * 1024; // 20MB dla dodatkowych załączników
-      if (file.size > maxSize) {
-        throw new Error('Plik jest za duży. Maksymalny rozmiar to 20MB.');
-      }
-
-      const allowedTypes = [
-        'application/pdf',
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/plain',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      ];
-      
-      if (!allowedTypes.includes(file.type)) {
-        throw new Error('Nieobsługiwany typ pliku. Dozwolone: PDF, JPG, PNG, GIF, DOC, DOCX, TXT, XLS, XLSX');
-      }
-
-      const timestamp = new Date().getTime();
-      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const fileName = `${timestamp}_${sanitizedFileName}`;
-      const storagePath = `additional-attachments/${task.id}/${fileName}`;
-
-      const fileRef = ref(storage, storagePath);
-      await uploadBytes(fileRef, file);
-      const downloadURL = await getDownloadURL(fileRef);
-
-      return {
-        id: `${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
-        fileName: file.name,
-        storagePath,
-        downloadURL,
-        contentType: file.type,
-        size: file.size,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: currentUser?.uid
-      };
-    } catch (error) {
-      console.error('Błąd podczas przesyłania pliku:', error);
-      throw error;
-    }
-  };
-
-  const handleAdditionalFileSelect = async (files) => {
-    if (!files || files.length === 0) return;
-
-    setUploadingAdditional(true);
-    const newAttachments = [...additionalAttachments];
-
-    try {
-      for (const file of files) {
-        try {
-          const uploadedFile = await uploadAdditionalFile(file);
-          newAttachments.push(uploadedFile);
-          showSuccess(`Plik "${file.name}" został przesłany pomyślnie`);
-        } catch (error) {
-          showError(`Błąd podczas przesyłania pliku "${file.name}": ${error.message}`);
-        }
-      }
-
-      const taskRef = doc(db, 'productionTasks', task.id);
-      await updateDoc(taskRef, {
-        additionalAttachments: newAttachments,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid
-      });
-
-      setAdditionalAttachments(newAttachments);
-    } finally {
-      setUploadingAdditional(false);
-    }
-  };
-
-  const handleDeleteAdditionalFile = async (attachment) => {
-    try {
-      const fileRef = ref(storage, attachment.storagePath);
-      await deleteObject(fileRef);
-
-      const updatedAttachments = additionalAttachments.filter(a => a.id !== attachment.id);
-      
-      const taskRef = doc(db, 'productionTasks', task.id);
-      await updateDoc(taskRef, {
-        additionalAttachments: updatedAttachments,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid
-      });
-
-      setAdditionalAttachments(updatedAttachments);
-      showSuccess(`Plik "${attachment.fileName}" został usunięty`);
-    } catch (error) {
-      console.error('Błąd podczas usuwania pliku:', error);
-      showError(`Błąd podczas usuwania pliku: ${error.message}`);
-    }
-  };
-
-  const handleDownloadAdditionalFile = (attachment) => {
-    window.open(attachment.downloadURL, '_blank');
-  };
-
-  // Funkcja do pobierania załączników z partii składników
-  const fetchIngredientBatchAttachments = async () => {
-    if (!task?.recipe?.ingredients || !task?.consumedMaterials || materials.length === 0) {
-      return;
-    }
-
-    try {
-      const attachments = {};
-
-      // Dla każdego składnika receptury
-      for (const ingredient of task.recipe.ingredients) {
-        const ingredientAttachments = [];
-
-        // Znajdź skonsumowane materiały pasujące do tego składnika
-        const matchingConsumedMaterials = task.consumedMaterials.filter(consumed => {
-          // Znajdź materiał w liście materiałów zadania
-          const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
-          const materialName = consumed.materialName || material?.name || '';
-          
-          // Ulepszona logika dopasowywania
-          const ingredientLower = ingredient.name.toLowerCase().trim();
-          const materialLower = materialName.toLowerCase().trim();
-          
-          // 1. Dokładne dopasowanie
-          const exactMatch = ingredientLower === materialLower;
-          
-          // 2. Dopasowanie zawierające (oryginalna logika)
-          const containsMatch = materialLower.includes(ingredientLower) || ingredientLower.includes(materialLower);
-          
-          // 3. Dopasowanie przez podzielone słowa (np. "PACKCOR MULTIVITAMIN" vs "PACKCOR-MULTIVITAMIN")
-          const ingredientWords = ingredientLower.split(/[\s\-_]+/).filter(w => w.length > 2);
-          const materialWords = materialLower.split(/[\s\-_]+/).filter(w => w.length > 2);
-          const wordMatch = ingredientWords.some(iWord => 
-            materialWords.some(mWord => 
-              iWord.includes(mWord) || mWord.includes(iWord) || 
-              (iWord.length > 3 && mWord.length > 3 && 
-               (iWord.startsWith(mWord.substring(0, 4)) || mWord.startsWith(iWord.substring(0, 4))))
-            )
-          );
-          
-          // 4. Dopasowanie przez usuniecie prefiksów/sufiksów
-          const cleanIngredient = ingredientLower.replace(/^(packcor|bgw|pharma)[\s\-_]*/i, '').replace(/[\s\-_]*(premium|standard|plus)$/i, '');
-          const cleanMaterial = materialLower.replace(/^(packcor|bgw|pharma)[\s\-_]*/i, '').replace(/[\s\-_]*(premium|standard|plus)$/i, '');
-          const cleanMatch = cleanIngredient && cleanMaterial && 
-                             (cleanIngredient.includes(cleanMaterial) || cleanMaterial.includes(cleanIngredient));
-          
-          const matches = exactMatch || containsMatch || wordMatch || cleanMatch;
-          
-          return matches;
-        });
-
-        // Fallback: Jeśli nie ma dopasowań i jest tylko jeden składnik w recepturze, spróbuj wszystkie materiały
-        if (matchingConsumedMaterials.length === 0 && task.recipe.ingredients.length === 1) {
-          matchingConsumedMaterials.push(...task.consumedMaterials);
-        }
-
-        // Dla każdego pasującego skonsumowanego materiału pobierz załączniki z partii
-        for (const consumed of matchingConsumedMaterials) {
-          if (consumed.batchId) {
-            try {
-              // Pobierz dane partii magazynowej
-              const { getInventoryBatch } = await import('../../services/inventory');
-              const batchData = await getInventoryBatch(consumed.batchId);
-              
-              // Sprawdź czy partia ma załączniki lub certyfikat
-              const hasAttachments = (batchData.attachments && batchData.attachments.length > 0);
-              const hasCertificate = (batchData.certificateFileName && batchData.certificateDownloadURL);
-              
-              const batchAttachments = [];
-              
-              if (hasAttachments || hasCertificate) {
-                // Dodaj standardowe załączniki z partii (jeśli istnieją)
-                if (hasAttachments) {
-                  const attachments = batchData.attachments.map(attachment => ({
-                    ...attachment,
-                    batchNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber,
-                    batchId: consumed.batchId,
-                    materialName: consumed.materialName || 'Nieznany materiał',
-                    source: 'batch_attachment'
-                  }));
-                  batchAttachments.push(...attachments);
-                }
-                
-                // Dodaj certyfikat jako załącznik (jeśli istnieje)
-                if (hasCertificate) {
-                  const certificateAttachment = {
-                    id: `cert_${batchData.id}`,
-                    fileName: batchData.certificateFileName,
-                    downloadURL: batchData.certificateDownloadURL,
-                    contentType: batchData.certificateContentType || 'application/octet-stream',
-                    size: 0, // Brak informacji o rozmiarze dla starych certyfikatów
-                    uploadedAt: batchData.certificateUploadedAt?.toDate?.() || new Date(),
-                    batchNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber,
-                    batchId: consumed.batchId,
-                    materialName: consumed.materialName || 'Nieznany materiał',
-                    source: 'batch_certificate'
-                  };
-                  batchAttachments.push(certificateAttachment);
-                }
-              }
-              
-              // Fallback: Jeśli partia nie ma własnych załączników, pobierz CoA z powiązanego PO
-              if (batchAttachments.length === 0 && batchData && batchData.purchaseOrderDetails && batchData.purchaseOrderDetails.id) {
-                try {
-                  const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
-                  const poData = await getPurchaseOrderById(batchData.purchaseOrderDetails.id);
-                  
-                  // Pobierz TYLKO certyfikaty CoA z PO (nie wszystkie załączniki)
-                  const coaAttachments = poData.coaAttachments || [];
-                  
-                  if (coaAttachments.length > 0) {
-                    const poAttachments = coaAttachments.map(attachment => ({
-                      ...attachment,
-                      batchNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber,
-                      batchId: consumed.batchId,
-                      materialName: consumed.materialName || 'Nieznany materiał',
-                      poNumber: poData.number,
-                      poId: poData.id,
-                      source: 'po_coa'
-                    }));
-                    batchAttachments.push(...poAttachments);
-                  }
-                } catch (poError) {
-                  console.warn(`Nie udało się pobrać załączników z PO dla partii ${consumed.batchId}:`, poError);
-                }
-              }
-              
-              if (batchAttachments.length > 0) {
-                ingredientAttachments.push(...batchAttachments);
-              }
-            } catch (error) {
-              console.warn(`Nie udało się pobrać załączników dla partii ${consumed.batchId}:`, error);
-            }
-          }
-        }
-
-        // Usuń duplikaty załączników (po nazwie pliku)
-        const uniqueAttachments = ingredientAttachments.filter((attachment, index, self) => 
-          index === self.findIndex(a => a.fileName === attachment.fileName)
-        );
-
-        if (uniqueAttachments.length > 0) {
-          // Użyj nazwy materiału zamiast nazwy składnika, jeśli dostępna
-          const displayName = uniqueAttachments.length > 0 ? 
-            (uniqueAttachments[0].materialName || ingredient.name) : ingredient.name;
-          
-          attachments[displayName] = uniqueAttachments;
-        }
-      }
-
-      setIngredientBatchAttachments(attachments);
-    } catch (error) {
-      console.error('Błąd podczas pobierania załączników z partii składników:', error);
-    }
-  };
-
-  // Funkcja ręcznego odświeżenia załączników z partii
-  const handleRefreshBatchAttachments = async () => {
-    try {
-      setRefreshingBatchAttachments(true);
-      
-      // Wyczyść aktualne załączniki
-      setIngredientBatchAttachments({});
-      
-      // Ponownie pobierz załączniki
-      await fetchIngredientBatchAttachments();
-      
-      showSuccess('Załączniki z partii zostały odświeżone');
-    } catch (error) {
-      console.error('Błąd podczas odświeżania załączników:', error);
-      showError('Błąd podczas odświeżania załączników z partii');
-    } finally {
-      setRefreshingBatchAttachments(false);
-    }
-  };
-
-  // Funkcja naprawy danych receptury dla starych zadań
-  const handleFixRecipeData = async () => {
-    if (!task?.recipeId) {
-      showError('Brak ID receptury w zadaniu');
-      return;
-    }
-
-    try {
-      setFixingRecipeData(true);
-      showInfo('Pobieranie aktualnych danych receptury...');
-      
-      // Pobierz pełne dane receptury
-      let recipeData = null;
-      
-      if (task.recipeVersion) {
-        // Jeśli mamy wersję, pobierz konkretną wersję receptury
-        try {
-          const recipeVersion = await getRecipeVersion(task.recipeId, task.recipeVersion);
-          recipeData = recipeVersion.data;
-          console.log(`Pobrano dane wersji ${task.recipeVersion} receptury ${task.recipeId}`);
-        } catch (error) {
-          console.warn(`Nie udało się pobrać wersji ${task.recipeVersion}, próbuję pobrać aktualną recepturę:`, error);
-          // Jeśli nie udało się pobrać konkretnej wersji, pobierz aktualną recepturę
-          const { getRecipeById } = await import('../../services/recipeService');
-          recipeData = await getRecipeById(task.recipeId);
-          console.log('Pobrano aktualną wersję receptury');
-        }
-      } else {
-        // Jeśli nie ma wersji, pobierz aktualną recepturę
-        const { getRecipeById } = await import('../../services/recipeService');
-        recipeData = await getRecipeById(task.recipeId);
-        console.log('Pobrano aktualną recepturę (brak wersji w zadaniu)');
-      }
-
-      if (!recipeData) {
-        throw new Error('Nie udało się pobrać danych receptury');
-      }
-
-      // Sprawdź czy są nowe dane do zaktualizowania
-      const hasNewMicronutrients = recipeData.micronutrients && recipeData.micronutrients.length > 0;
-      const hasNewIngredients = recipeData.ingredients && recipeData.ingredients.length > 0;
-      const currentMicronutrients = task.recipe?.micronutrients || [];
-      const currentIngredients = task.recipe?.ingredients || [];
-
-      // Zaktualizuj zadanie w bazie danych z pełnymi danymi receptury
-      const taskRef = doc(db, 'productionTasks', id);
-      await updateDoc(taskRef, {
-        recipe: recipeData,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid
-      });
-
-      // Zaktualizuj lokalny stan
-      setTask(prevTask => ({
-        ...prevTask,
-        recipe: recipeData
-      }));
-
-      // Pokaż szczegółową informację o tym co zostało zaktualizowane
-      let updateDetails = [];
-      if (hasNewMicronutrients && currentMicronutrients.length === 0) {
-        updateDetails.push(`${recipeData.micronutrients.length} mikroelementów`);
-      }
-      if (hasNewIngredients && currentIngredients.length === 0) {
-        updateDetails.push(`${recipeData.ingredients.length} składników`);
-      }
-
-      if (updateDetails.length > 0) {
-        showSuccess(`Dane receptury zostały zaktualizowane! Dodano: ${updateDetails.join(', ')}`);
-      } else {
-        showSuccess('Dane receptury zostały odświeżone!');
-      }
-      
-      console.log('Odświeżono dane receptury dla zadania:', id);
-
-    } catch (error) {
-      console.error('Błąd podczas odświeżania danych receptury:', error);
-      showError('Nie udało się odświeżyć danych receptury: ' + error.message);
-    } finally {
-      setFixingRecipeData(false);
-    }
-  };
-
-  // Funkcja synchronizacji nazw z aktualną recepturą
-  const handleSyncNamesWithRecipe = async () => {
-    if (!task?.recipeId) {
-      showError(t('syncNames.noRecipeId'));
-      return;
-    }
-
-    try {
-      setSyncingNamesWithRecipe(true);
-      showInfo(t('syncNames.syncing'));
-      
-      // Pobierz aktualną recepturę
-      const { getRecipeById } = await import('../../services/recipeService');
-      const recipe = await getRecipeById(task.recipeId);
-      
-      if (!recipe) {
-        throw new Error(t('syncNames.recipeNotFound'));
-      }
-
-      // Pobierz pozycję magazynową powiązaną z recepturą
-      const { getInventoryItemByRecipeId } = await import('../../services/inventory');
-      let inventoryItem = null;
-      try {
-        inventoryItem = await getInventoryItemByRecipeId(task.recipeId);
-      } catch (error) {
-        console.warn('Nie znaleziono pozycji magazynowej dla receptury:', error);
-      }
-
-      // Przygotuj dane do aktualizacji
-      const updateData = {
-        name: recipe.name,
-        productName: recipe.name,
-        recipeName: recipe.name,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid
-      };
-
-      // Jeśli znaleziono pozycję magazynową, zaktualizuj też inventoryProductId
-      if (inventoryItem) {
-        updateData.inventoryProductId = inventoryItem.id;
-      }
-
-      // Zaktualizuj zadanie w bazie
-      const taskRef = doc(db, 'productionTasks', id);
-      await updateDoc(taskRef, updateData);
-
-      // Zaktualizuj lokalny stan
-      setTask(prevTask => ({
-        ...prevTask,
-        name: recipe.name,
-        productName: recipe.name,
-        recipeName: recipe.name,
-        inventoryProductId: inventoryItem?.id || prevTask.inventoryProductId
-      }));
-
-      const inventoryInfo = inventoryItem 
-        ? t('syncNames.successWithInventory', { recipeName: recipe.name, inventoryName: inventoryItem.name })
-        : t('syncNames.success', { recipeName: recipe.name });
-      
-      showSuccess(inventoryInfo);
-      console.log('Zsynchronizowano nazwy z recepturą:', recipe.name);
-
-    } catch (error) {
-      console.error('Błąd podczas synchronizacji nazw z recepturą:', error);
-      showError(t('syncNames.error', { error: error.message }));
-    } finally {
-      setSyncingNamesWithRecipe(false);
-    }
-  };
-
-  // Funkcja do pobierania danych firmy
-  const fetchCompanyData = async () => {
-    try {
-      const data = await getCompanyData();
-      setCompanyData(data);
-    } catch (error) {
-      console.error('Błąd podczas pobierania danych firmy:', error);
-      // Używamy domyślnych wartości przy błędzie
-      setCompanyData({
-        name: 'BGW Pharma Sp. z o.o.',
-        address: 'Szkolna 43B, 84-100 Polchowo'
-      });
-    }
-  };
-
-  // Funkcja do pobierania danych stanowiska
-  const fetchWorkstationData = async () => {
-    try {
-      if (task?.workstationId) {
-        const data = await getWorkstationById(task.workstationId);
-        setWorkstationData(data);
-      } else {
-        // Jeśli nie ma workstationId, ustaw pusty obiekt aby zatrzymać "Ładowanie..."
-        setWorkstationData({});
-      }
-    } catch (error) {
-      console.error('Błąd podczas pobierania danych stanowiska:', error);
-      setWorkstationData(null);
-    }
-  };
-
-  // Funkcja do zapisywania alergenów do receptury
-  const saveAllergensToRecipe = async (recipeId, allergens) => {
-    try {
-      // Pobierz aktualną recepturę
-      const { getRecipeById, updateRecipe } = await import('../../services/recipeService');
-      const currentRecipe = await getRecipeById(recipeId);
-      
-      if (!currentRecipe) {
-        throw new Error(t('errors.recipeNotFound'));
-      }
-      
-      // Sprawdź czy alergeny się zmieniły
-      const currentAllergens = currentRecipe.allergens || [];
-      const sortedCurrentAllergens = [...currentAllergens].sort();
-      const sortedNewAllergens = [...allergens].sort();
-      
-      if (JSON.stringify(sortedCurrentAllergens) === JSON.stringify(sortedNewAllergens)) {
-        console.log('Alergeny są identyczne, pomijam aktualizację receptury');
-        return;
-      }
-      
-      // Zaktualizuj recepturę z nowymi allergenami
-      const updatedRecipeData = {
-        ...currentRecipe,
-        allergens: allergens,
-        updatedAt: new Date()
-      };
-      
-      await updateRecipe(recipeId, updatedRecipeData, currentUser.uid);
-      console.log(`Zaktualizowano alergeny w recepturze ${recipeId}:`, allergens);
-      
-    } catch (error) {
-      console.error('Błąd podczas zapisywania alergenów do receptury:', error);
-      throw error;
-    }
-  };
-
-  // Funkcja do generowania raportu PDF
-  const handleGenerateEndProductReport = async () => {
-    if (!task) {
-      showError(t('errors.noTaskDataForReport'));
-      return;
-    }
-
-    try {
-      setGeneratingPDF(true);
-      showInfo('Generowanie raportu PDF...');
-
-      // Przygotowanie załączników w formacie oczekiwanym przez funkcję PDF
-      const attachments = [];
-      
-      // Dodaj załączniki badań klinicznych
-      if (clinicalAttachments && clinicalAttachments.length > 0) {
-        clinicalAttachments.forEach(attachment => {
-          if (attachment.downloadURL && attachment.fileName) {
-            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
-            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
-            
-            attachments.push({
-              fileName: attachment.fileName,
-              fileType: fileType,
-              fileUrl: attachment.downloadURL
-            });
-          }
-        });
-      }
-      
-      // Dodaj załączniki CoA z partii składników (zamiast z PO)
-      if (ingredientBatchAttachments && Object.keys(ingredientBatchAttachments).length > 0) {
-        Object.values(ingredientBatchAttachments).flat().forEach(attachment => {
-          if ((attachment.downloadURL || attachment.fileUrl) && attachment.fileName) {
-            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
-            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
-            
-            attachments.push({
-              fileName: attachment.fileName,
-              fileType: fileType,
-              fileUrl: attachment.downloadURL || attachment.fileUrl
-            });
-          }
-        });
-      }
-      
-      // Dodaj dodatkowe załączniki
-      if (additionalAttachments && additionalAttachments.length > 0) {
-        additionalAttachments.forEach(attachment => {
-          if (attachment.downloadURL && attachment.fileName) {
-            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
-            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
-            
-            attachments.push({
-              fileName: attachment.fileName,
-              fileType: fileType,
-              fileUrl: attachment.downloadURL
-            });
-          }
-        });
-      }
-      
-      // Dodaj załączniki z raportów CompletedMO
-      if (formResponses?.completedMO && formResponses.completedMO.length > 0) {
-        formResponses.completedMO.forEach((report, index) => {
-          if (report.mixingPlanReportUrl && report.mixingPlanReportName) {
-            const fileExtension = report.mixingPlanReportName.split('.').pop().toLowerCase();
-            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
-            
-            attachments.push({
-              fileName: `CompletedMO_Report_${index + 1}_${report.mixingPlanReportName}`,
-              fileType: fileType,
-              fileUrl: report.mixingPlanReportUrl
-            });
-          }
-        });
-      }
-      
-      // Dodaj załączniki z raportów ProductionControl
-      if (formResponses?.productionControl && formResponses.productionControl.length > 0) {
-        formResponses.productionControl.forEach((report, index) => {
-          // Document scans
-          if (report.documentScansUrl && report.documentScansName) {
-            const fileExtension = report.documentScansName.split('.').pop().toLowerCase();
-            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
-            
-            attachments.push({
-              fileName: `ProductionControl_Report_${index + 1}_${report.documentScansName}`,
-              fileType: fileType,
-              fileUrl: report.documentScansUrl
-            });
-          }
-          
-          // Product photos
-          const photoFields = [
-            { url: report.productPhoto1Url, name: report.productPhoto1Name, label: 'Photo1' },
-            { url: report.productPhoto2Url, name: report.productPhoto2Name, label: 'Photo2' },
-            { url: report.productPhoto3Url, name: report.productPhoto3Name, label: 'Photo3' }
-          ];
-          
-          photoFields.forEach(photo => {
-            if (photo.url && photo.name) {
-              const fileExtension = photo.name.split('.').pop().toLowerCase();
-              const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'jpg';
-              
-              attachments.push({
-                fileName: `ProductionControl_Report_${index + 1}_${photo.label}_${photo.name}`,
-                fileType: fileType,
-                fileUrl: photo.url
-              });
-            }
-          });
-        });
-      }
-
-      // Usunięcie duplikatów załączników na podstawie nazwy pliku
-      const uniqueAttachments = attachments.filter((attachment, index, self) => 
-        index === self.findIndex(a => a.fileName === attachment.fileName)
-      );
-
-      console.log('Załączniki do dodania do raportu:', uniqueAttachments);
-
-      // Przygotowanie danych dodatkowych dla raportu z opcjami optymalizacji PDF
-      const additionalData = {
-        companyData,
-        workstationData,
-        productionHistory,
-        formResponses,
-        clinicalAttachments,
-        additionalAttachments,
-        ingredientBatchAttachments, // Zmienione z ingredientAttachments
-        ingredientBatchAttachments,
-        materials,
-        currentUser,
-        selectedAllergens,
-        attachments: uniqueAttachments, // Dodajemy załączniki w odpowiednim formacie
-        options: {
-          useTemplate: true,           // Użyj szablon tła (można zmienić na false dla oszczędności miejsca)
-          imageQuality: 0.75,          // Jakość kompresji obrazu (0.1-1.0) - zoptymalizowane dla rozmiaru
-          enableCompression: true,     // Włącz kompresję PDF
-          precision: 2,                // Ogranicz precyzję do 2 miejsc po przecinku
-          // Zaawansowane opcje kompresji załączników
-          attachmentCompression: {
-            enabled: true,
-            imageQuality: 0.75,        // Jakość kompresji załączników obrazowych (75% - dobry balans)
-            maxImageWidth: 1200,       // Maksymalna szerokość obrazu w pikselach
-            maxImageHeight: 1600,      // Maksymalna wysokość obrazu w pikselach
-            convertPngToJpeg: true     // Konwertuj PNG na JPEG dla lepszej kompresji
-          }
-        }
-      };
-
-      // Generowanie raportu PDF
-      const result = await generateEndProductReportPDF(task, additionalData);
-      
-      if (result.success) {
-        // Zapisz alergeny do receptury jeśli zostały wybrane i zadanie ma przypisaną recepturę
-        if (selectedAllergens.length > 0 && task.recipeId) {
-          try {
-            await saveAllergensToRecipe(task.recipeId, selectedAllergens);
-            showInfo('Alergeny zostały zapisane do receptury');
-          } catch (allergenError) {
-            console.error('Błąd podczas zapisywania alergenów do receptury:', allergenError);
-            showWarning('Raport został wygenerowany, ale nie udało się zapisać alergenów do receptury');
-          }
-        }
-        
-        if (result.withAttachments) {
-          showSuccess(`Raport PDF został wygenerowany z załącznikami (${uniqueAttachments.length}): ${result.fileName}`);
-        } else {
-          showSuccess(`Raport PDF został wygenerowany: ${result.fileName}${uniqueAttachments.length > 0 ? ' (załączniki nie zostały dodane z powodu błędu)' : ''}`);
-        }
-      } else {
-        showError('Wystąpił błąd podczas generowania raportu PDF');
-      }
-    } catch (error) {
-      console.error('Błąd podczas generowania raportu PDF:', error);
-      showError(`Błąd generowania raportu: ${error.message}`);
-    } finally {
-      setGeneratingPDF(false);
-    }
-  };
-
-  // Funkcja do aktualizacji stanu elementów checklisty planu mieszań
-  const handleChecklistItemUpdate = async (itemId, completed) => {
-    try {
-      const taskRef = doc(db, 'productionTasks', task.id);
-      const updatedChecklist = task.mixingPlanChecklist.map(checkItem => {
-        if (checkItem.id === itemId) {
-          return {
-            ...checkItem,
-            completed: completed,
-            completedAt: completed ? new Date().toISOString() : null,
-            completedBy: completed ? currentUser.uid : null
-          };
-        }
-        return checkItem;
-      });
-
-      await updateDoc(taskRef, {
-        mixingPlanChecklist: updatedChecklist,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid
-      });
-
-      setTask(prevTask => ({
-        ...prevTask,
-        mixingPlanChecklist: updatedChecklist
-      }));
-
-      showSuccess('Zaktualizowano stan zadania');
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji stanu checklisty:', error);
-      showError('Nie udało się zaktualizować stanu zadania');
-    }
-  };
+  // ✅ FAZA 2+: handleFixRecipeData, handleSyncNamesWithRecipe, fetchCompanyData,
+  // fetchWorkstationData, saveAllergensToRecipe, handleGenerateEndProductReport,
+  // handleChecklistItemUpdate — przeniesione do useTaskReportFetcher
 
   // Inicjalizacja stanu checkboxów dla skonsumowanych materiałów
   useEffect(() => {
@@ -7896,52 +3253,7 @@ const TaskDetailsPage = () => {
     }
   }, [task?.consumedMaterials?.length, materials.length, includeInCosts]); // Kontrolowane zależności
 
-  // Pobieranie danych firmy i stanowiska dla raportu
-  useEffect(() => {
-    if (mainTab === 5) { // Tylko gdy jesteśmy w zakładce "Raport gotowego produktu"
-      fetchCompanyData();
-      fetchWorkstationData();
-    }
-  }, [mainTab, task?.workstationId]);
-
-  // Lazy loading załączników - tylko dla zakładki raportu
-  useEffect(() => {
-    const loadReportAttachments = async () => {
-      if (mainTab === 5 && task?.id) {
-        try {
-          setLoadingReportAttachments(true);
-          
-          // Sprawdź czy załączniki zostały już załadowane (cache)
-          const needsClinicalAttachments = clinicalAttachments.length === 0;
-          const needsAdditionalAttachments = additionalAttachments.length === 0;
-          const needsBatchAttachments = Object.keys(ingredientBatchAttachments).length === 0;
-          
-          // Pobierz załączniki zadania (tylko jeśli nie są załadowane)
-          const taskAttachmentsPromises = [];
-          if (needsClinicalAttachments) taskAttachmentsPromises.push(fetchClinicalAttachments());
-          if (needsAdditionalAttachments) taskAttachmentsPromises.push(fetchAdditionalAttachments());
-          
-          if (taskAttachmentsPromises.length > 0) {
-            await Promise.all(taskAttachmentsPromises);
-          }
-          
-          // Pobierz załączniki z partii i PO (jeśli są dostępne dane i nie są załadowane)
-          if (needsBatchAttachments && task?.recipe?.ingredients && task?.consumedMaterials && materials.length > 0) {
-            await Promise.all([
-              fetchIngredientAttachments(), // dla kompatybilności
-              fetchIngredientBatchAttachments()
-            ]);
-          }
-        } catch (error) {
-          console.error('Błąd podczas ładowania załączników raportu:', error);
-        } finally {
-          setLoadingReportAttachments(false);
-        }
-      }
-    };
-    
-    loadReportAttachments();
-  }, [mainTab, task?.id, task?.recipe?.ingredients, task?.consumedMaterials, materials, clinicalAttachments.length, additionalAttachments.length, ingredientBatchAttachments]);
+  // ✅ FAZA 2+: useEffect pobierania danych firmy/stanowiska + lazy loading załączników przeniesione do useTaskReportFetcher
 
   // Renderuj stronę
     // ✅ OPTYMALIZACJA: Style poza renderem - nie tworzone przy każdym renderze
@@ -8072,7 +3384,7 @@ const TaskDetailsPage = () => {
               <BasicDataTab
                 task={task}
                 getStatusColor={getStatusColor}
-                getStatusActions={getStatusActions}
+                getStatusActions={statusActionsGetter}
                 onTabChange={setMainTab}
                 onStatusChange={handleStatusChange}
               />
@@ -8163,11 +3475,7 @@ const TaskDetailsPage = () => {
                 warehouses={warehouses}
                 getUserName={getUserName}
                 fetchAllTaskData={fetchAllTaskData} // ✅ Przekaż funkcję odświeżania
-                onAddHistoryItem={(editedItem, historyData) => {
-                  setEditedHistoryItem(editedItem);
-                  setHistoryInventoryData(historyData);
-                  setAddHistoryDialogOpen(true);
-                }}
+                onAddHistoryItem={handleAddHistoryItem}
                 onEditHistoryItem={handleEditHistoryItem}
                 onSaveHistoryItemEdit={handleSaveHistoryItemEdit}
                 onCancelHistoryItemEdit={handleCancelHistoryItemEdit}
@@ -8210,815 +3518,161 @@ const TaskDetailsPage = () => {
             }>
               <EndProductReportTab
                 task={task}
+                setTask={setTask}
                 materials={materials}
                 productionHistory={productionHistory}
                 formResponses={formResponses}
-                companyData={companyData}
-                workstationData={workstationData}
-                clinicalAttachments={clinicalAttachments}
-                setClinicalAttachments={setClinicalAttachments}
-                additionalAttachments={additionalAttachments}
-                setAdditionalAttachments={setAdditionalAttachments}
-                ingredientAttachments={ingredientBatchAttachments}
-                selectedAllergens={selectedAllergens}
-                setSelectedAllergens={setSelectedAllergens}
-                availableAllergens={availableAllergens}
-                onFixRecipeData={handleFixRecipeData}
-                fixingRecipeData={fixingRecipeData}
-                uploadingClinical={uploadingClinical}
-                uploadingAdditional={uploadingAdditional}
-                onClinicalFileSelect={handleClinicalFileSelect}
-                onAdditionalFileSelect={handleAdditionalFileSelect}
-                onDownloadClinicalFile={handleDownloadClinicalFile}
-                onDeleteClinicalFile={handleDeleteClinicalFile}
-                onDownloadAdditionalFile={handleDownloadAdditionalFile}
-                onDeleteAdditionalFile={handleDeleteAdditionalFile}
-                getClinicalFileIcon={getClinicalFileIcon}
-                formatClinicalFileSize={formatClinicalFileSize}
-                getAdaptiveBackgroundStyle={getAdaptiveBackgroundStyle}
-                sortIngredientsByQuantity={sortIngredientsByQuantity}
-                ingredientBatchAttachments={ingredientBatchAttachments}
-                onRefreshBatchAttachments={handleRefreshBatchAttachments}
-                refreshingBatchAttachments={refreshingBatchAttachments}
-                loadingReportAttachments={loadingReportAttachments}
+                currentUser={currentUser}
+                t={t}
               />
             </Suspense>
           )}
 
-          {/* Wszystkie dialogi */}
-          {/* Dialog usuwania historii */}
-          <DeleteConfirmDialog
-            open={deleteHistoryDialogOpen}
-            onClose={() => setDeleteHistoryDialogOpen(false)}
-            onConfirm={handleConfirmDeleteHistoryItem}
-            title={t('common:common.confirmDeletion')}
-            message="Czy na pewno chcesz usunąć wybrany wpis z historii produkcji? Ta operacja jest nieodwracalna."
-            confirmText="Usuń wpis"
-            loading={loading}
-          />
-          {/* ✅ REFAKTORYZACJA: Dialog usuwania zadania - wydzielony komponent */}
-          <DeleteConfirmDialog
-            open={deleteDialog}
-            onClose={() => setDeleteDialog(false)}
-            onConfirm={handleDelete}
-            title={t('common:common.confirmDeletion')}
-            message={`Czy na pewno chcesz usunąć to zadanie produkcyjne (MO: ${task?.moNumber})? Ta operacja jest nieodwracalna.`}
-            confirmText="Usuń zadanie"
-            loading={loading}
-          />
-          
-          {/* Dialog wyboru opakowań */}
-          <Dialog
-            open={packagingDialogOpen}
-            onClose={() => setPackagingDialogOpen(false)}
-            maxWidth="md"
-            fullWidth
-          >
-            <DialogTitle>Dodaj opakowania do zadania</DialogTitle>
-            <DialogContent>
-              <DialogContentText sx={mb2}>
-                Wybierz opakowania, które chcesz dodać do zadania produkcyjnego.
-              </DialogContentText>
-              
-              {/* Pasek wyszukiwania opakowań */}
-              <TextField
-                fullWidth
-                margin="normal"
-                label="Wyszukaj opakowanie"
-                variant="outlined"
-                value={searchPackaging}
-                onChange={(e) => setSearchPackaging(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={mb2}
-              />
-              
-              {/* Opcja natychmiastowej konsumpcji */}
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={consumePackagingImmediately}
-                    onChange={(e) => setConsumePackagingImmediately(e.target.checked)}
-                    color="primary"
-                  />
-                }
-                label="Konsumuj opakowania natychmiast z wybranych partii"
-                sx={mb2}
-              />
-              
-              {loadingPackaging ? (
-                <Box sx={loadingContainer}>
-                  <CircularProgress />
-                </Box>
-              ) : (
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell padding="checkbox">Wybierz</TableCell>
-                        <TableCell>Nazwa</TableCell>
-                        <TableCell>Kategoria</TableCell>
-                        <TableCell>Dostępne partie</TableCell>
-                        <TableCell>Wybrana partia</TableCell>
-                        <TableCell>{t('consumption.quantityToAdd')}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {filteredPackagingItems.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={6} align="center">
-                            {packagingItems.length === 0 
-                              ? "Brak dostępnych opakowań"
-                              : "Brak wyników dla podanego wyszukiwania"}
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredPackagingItems.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell padding="checkbox">
-                              <Checkbox
-                                checked={item.selected}
-                                onChange={(e) => handlePackagingSelection(item.id, e.target.checked)}
-                              />
-                            </TableCell>
-                            <TableCell>{item.name}</TableCell>
-                            <TableCell>{item.category}</TableCell>
-                            <TableCell>
-                              {item.batches && item.batches.length > 0 
-                                ? `${item.batches.length} partii dostępnych`
-                                : 'Brak dostępnych partii'}
-                            </TableCell>
-                            <TableCell>
-                              <FormControl fullWidth size="small" disabled={!item.selected}>
-                                <InputLabel>{t('common:common.selectBatch')}</InputLabel>
-                                <Select
-                                  value={item.selectedBatch?.id || ''}
-                                  onChange={(e) => handlePackagingBatchSelection(item.id, e.target.value)}
-                                  label={t('common:common.selectBatch')}
-                                >
-                                  {item.batches && item.batches.map((batch) => (
-                                    <MenuItem key={batch.id} value={batch.id}>
-                                      {`LOT: ${batch.lotNumber || batch.batchNumber || 'Brak numeru'} - ${batch.quantity} ${item.unit}${batch.expiryDate ? ` (Ważne do: ${formatDate(batch.expiryDate)})` : ''}`}
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                type="number"
-                                value={item.batchQuantity || ''}
-                                onChange={(e) => handlePackagingBatchQuantityChange(item.id, e.target.value)}
-                                onWheel={(e) => e.target.blur()} // Wyłącza reakcję na scroll
-                                disabled={!item.selected || !item.selectedBatch}
-                                inputProps={{ 
-                                  min: 0, 
-                                  max: item.selectedBatch ? item.selectedBatch.quantity : 0, 
-                                  step: 'any' 
-                                }}
-                                size="small"
-                                sx={width130} // Poszerzony z 100px do 130px
-                                placeholder={item.selectedBatch ? `Max: ${item.selectedBatch.quantity}` : '0'}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setPackagingDialogOpen(false)}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={handleAddPackagingToTask} 
-                variant="contained" 
-                color="primary"
-                disabled={loadingPackaging || packagingItems.filter(item => item.selected && item.selectedBatch && item.batchQuantity > 0).length === 0}
-              >
-                {loadingPackaging ? <CircularProgress size={24} /> : 'Dodaj wybrane opakowania'}
-              </Button>
-            </DialogActions>
-          </Dialog>
-          
-          {/* ✅ USUNIĘTO DUPLIKAT: Dialog rezerwacji surowców - przeniesiony niżej w pliku */}
-          
-          {/* ✅ REFAKTORYZACJA: Dialog dodawania wpisu historii produkcji - wydzielony komponent */}
-          <AddHistoryDialog
-            open={addHistoryDialogOpen}
-            onClose={() => setAddHistoryDialogOpen(false)}
-            onSubmit={handleAddHistorySubmit}
+          {/* ✅ REFAKTORYZACJA: Wszystkie dialogi wydzielone do TaskDialogsContainer */}
+          <TaskDialogsContainer
+            t={t}
             task={task}
-            machines={availableMachines}
+            loading={loading}
+            // Delete history dialog
+            deleteHistoryDialogOpen={deleteHistoryDialogOpen}
+            setDeleteHistoryDialogOpen={setDeleteHistoryDialogOpen}
+            handleConfirmDeleteHistoryItem={handleConfirmDeleteHistoryItem}
+            // Delete task dialog
+            deleteDialog={deleteDialog}
+            setDeleteDialog={setDeleteDialog}
+            handleDelete={handleDelete}
+            // Packaging dialog
+            packagingDialogOpen={packagingDialogOpen}
+            setPackagingDialogOpen={setPackagingDialogOpen}
+            loadingPackaging={loadingPackaging}
+            searchPackaging={searchPackaging}
+            setSearchPackaging={setSearchPackaging}
+            consumePackagingImmediately={consumePackagingImmediately}
+            setConsumePackagingImmediately={setConsumePackagingImmediately}
+            filteredPackagingItems={filteredPackagingItems}
+            packagingItems={packagingItems}
+            handlePackagingSelection={handlePackagingSelection}
+            handlePackagingBatchSelection={handlePackagingBatchSelection}
+            handlePackagingBatchQuantityChange={handlePackagingBatchQuantityChange}
+            handleAddPackagingToTask={handleAddPackagingToTask}
+            // Add history dialog
+            addHistoryDialogOpen={addHistoryDialogOpen}
+            setAddHistoryDialogOpen={setAddHistoryDialogOpen}
+            handleAddHistorySubmit={handleAddHistorySubmit}
+            availableMachines={availableMachines}
             warehouses={warehouses}
-            loading={loading}
-            t={t}
-          />
-          
-          {/* Dialog wyboru surowców */}
-          <Dialog
-            open={rawMaterialsDialogOpen}
-            onClose={() => setRawMaterialsDialogOpen(false)}
-            maxWidth="md"
-            fullWidth
-          >
-            <DialogTitle>Dodaj surowiec do zadania</DialogTitle>
-            <DialogContent>
-              <DialogContentText sx={mb2}>
-                Wybierz surowiec lub opakowanie jednostkowe, które chcesz dodać do zadania produkcyjnego.
-                <br />
-                <strong>Uwaga:</strong> Możesz dodać dowolną ilość - to jest tylko planowanie, nie rezerwacja materiałów.
-              </DialogContentText>
-              
-              {/* Zakładki kategorii materiałów */}
-              <Tabs 
-                value={materialCategoryTab} 
-                onChange={async (e, newValue) => {
-                  setMaterialCategoryTab(newValue);
-                  setSearchRawMaterials(''); // Wyczyść wyszukiwanie przy zmianie zakładki
-                  // Pobierz materiały dla nowej kategorii
-                  const targetCategory = newValue === 0 ? 'Surowce' : 'Opakowania jednostkowe';
-                  await fetchAvailableRawMaterials(targetCategory);
-                }}
-                sx={{ ...mb2, borderBottom: 1, borderColor: 'divider' }}
-              >
-                <Tab label="Surowce" />
-                <Tab label="Opakowania jednostkowe" />
-              </Tabs>
-              
-              {/* Pasek wyszukiwania materiałów */}
-              <TextField
-                fullWidth
-                margin="normal"
-                label={materialCategoryTab === 0 ? "Wyszukaj surowiec" : "Wyszukaj opakowanie jednostkowe"}
-                variant="outlined"
-                value={searchRawMaterials}
-                onChange={(e) => setSearchRawMaterials(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={mb2}
-              />
-              
-              {loadingRawMaterials ? (
-                <Box sx={loadingContainer}>
-                  <CircularProgress />
-                </Box>
-              ) : (
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell padding="checkbox">Wybierz</TableCell>
-                        <TableCell>Nazwa</TableCell>
-                        <TableCell>Dostępna ilość</TableCell>
-                        <TableCell>{t('consumption.quantityToAdd')}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {filteredRawMaterialsItems.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={4} align="center">
-                            {rawMaterialsItems.length === 0 
-                              ? "Brak dostępnych materiałów"
-                              : "Brak wyników dla podanego wyszukiwania"}
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredRawMaterialsItems.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell padding="checkbox">
-                              <Checkbox
-                                checked={item.selected}
-                                onChange={(e) => handleRawMaterialsSelection(item.id, e.target.checked)}
-                              />
-                            </TableCell>
-                            <TableCell>{item.name}</TableCell>
-                            <TableCell>
-                              <Box>
-                                <Typography variant="body2">
-                                  {item.availableQuantity} {item.unit}
-                                </Typography>
-                                {item.selected && item.quantity > item.availableQuantity && (
-                                  <Typography variant="caption" color="warning.main">
-                                    ⚠️ Więcej niż dostępne
-                                  </Typography>
-                                )}
-                              </Box>
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                type="number"
-                                value={item.quantity || ''}
-                                onChange={(e) => handleRawMaterialsQuantityChange(item.id, e.target.value)}
-                                disabled={!item.selected}
-                                inputProps={{ min: 0, step: 'any' }}
-                                size="small"
-                                sx={{ 
-                                  width: '100px',
-                                  '& .MuiOutlinedInput-root': {
-                                    borderColor: item.selected && item.quantity > item.availableQuantity ? 'warning.main' : undefined
-                                  }
-                                }}
-                                placeholder={t('consumption.quantityToAdd')}
-                                color={item.selected && item.quantity > item.availableQuantity ? 'warning' : 'primary'}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setRawMaterialsDialogOpen(false)}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={async () => {
-                  const selectedItems = rawMaterialsItems.filter(item => item.selected && item.quantity > 0);
-                  const result = await handleAddRawMaterialsSubmit({ items: selectedItems });
-                  if (result?.success) {
-                    setRawMaterialsDialogOpen(false);
-                  }
-                }}
-                variant="contained" 
-                color="secondary"
-                disabled={loadingRawMaterials || rawMaterialsItems.filter(item => item.selected && item.quantity > 0).length === 0}
-              >
-                {loadingRawMaterials ? <CircularProgress size={24} /> : 'Dodaj wybrane materiały'}
-              </Button>
-            </DialogActions>
-          </Dialog>
-
-          {/* ✅ REFAKTORYZACJA: Dialog usuwania materiału - wydzielony komponent */}
-          <DeleteConfirmDialog
-            open={deleteMaterialDialogOpen}
-            onClose={() => setDeleteMaterialDialogOpen(false)}
-            onConfirm={handleConfirmDeleteMaterial}
-            title={t('consumption.confirmMaterialDeletion')}
-            message={`Czy na pewno chcesz usunąć materiał "${materialToDelete?.name}" z zadania produkcyjnego? Ta operacja jest nieodwracalna.`}
-            confirmText="Usuń materiał"
-            loading={loading}
-          />
-
-          {/* Dialog dodatkowego kosztu MO */}
-          <AdditionalCostDialog
-            open={additionalCostDialogOpen}
-            onClose={() => {
-              setAdditionalCostDialogOpen(false);
-              setEditingAdditionalCost(null);
-            }}
-            onSave={handleSaveAdditionalCost}
-            initialData={editingAdditionalCost}
-            loading={savingAdditionalCost}
-            t={(key) => t(key)}
-          />
-
-          {/* Dialog potwierdzenia usunięcia dodatkowego kosztu */}
-          <DeleteConfirmDialog
-            open={deleteAdditionalCostDialogOpen}
-            onClose={() => {
-              setDeleteAdditionalCostDialogOpen(false);
-              setAdditionalCostToDelete(null);
-            }}
-            onConfirm={handleConfirmDeleteAdditionalCost}
-            title={t('additionalCosts.title')}
-            message={t('additionalCosts.deleteConfirm')}
-            confirmText={t('deleteTask')}
-            loading={loading}
-          />
-
-          {/* Dialog konsumpcji materiałów */}
-          <Dialog
-            open={consumeMaterialsDialogOpen}
-            onClose={() => setConsumeMaterialsDialogOpen(false)}
-            maxWidth="lg"
-            fullWidth
-          >
-            <DialogTitle>Konsumuj materiały</DialogTitle>
-            <DialogContent>
-              <DialogContentText sx={mb2}>
-                Wybierz partie materiałów i ilości, które chcesz skonsumować. Konsumpcja zmniejszy dostępną ilość w magazynie.
-              </DialogContentText>
-              
-              {consumedMaterials.length === 0 ? (
-                <Alert severity="info">
-                  Brak zarezerwowanych materiałów do konsumpcji.
-                </Alert>
-              ) : (
-                consumedMaterials.map((material) => {
-                  const materialId = material.inventoryItemId || material.id;
-                  const reservedBatches = task.materialBatches[materialId] || [];
-                  
-                  return (
-                    <Box key={materialId} sx={mb3}>
-                      <Typography variant="h6" gutterBottom>
-                        {material.name} ({material.unit})
-                      </Typography>
-                      
-                      <TableContainer>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell padding="checkbox">Konsumuj</TableCell>
-                              <TableCell>Numer partii</TableCell>
-                              <TableCell>Zarezerwowana ilość</TableCell>
-                              <TableCell>Ilość do konsumpcji</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {reservedBatches.map((batch) => {
-                              const batchKey = `${materialId}_${batch.batchId}`;
-                              const isSelected = selectedBatchesToConsume[materialId]?.[batch.batchId] || false;
-                              
-                              return (
-                                <TableRow key={batch.batchId}>
-                                  <TableCell padding="checkbox">
-                                    <Checkbox
-                                      checked={isSelected}
-                                      onChange={(e) => handleBatchToConsumeSelection(materialId, batch.batchId, e.target.checked)}
-                                    />
-                                  </TableCell>
-                                  <TableCell>{batch.batchNumber}</TableCell>
-                                  <TableCell>{batch.quantity} {material.unit}</TableCell>
-                                  <TableCell>
-                                    <TextField
-                                      type="number"
-                                      value={consumeQuantities[batchKey] || 0}
-                                      onChange={(e) => handleConsumeQuantityChange(materialId, batch.batchId, e.target.value)}
-                                      onFocus={(e) => {
-                                        // Jeśli wartość to 0, wyczyść pole przy focusie
-                                        if ((consumeQuantities[batchKey] || 0) === 0) {
-                                          e.target.select();
-                                        }
-                                      }}
-                                      onBlur={(e) => {
-                                        // Jeśli pole jest puste po utracie focusu, ustaw 0
-                                        if (e.target.value === '' || e.target.value === null) {
-                                          handleConsumeQuantityChange(materialId, batch.batchId, 0);
-                                        }
-                                      }}
-                                      onWheel={(e) => e.target.blur()} // Wyłącza reakcję na scroll
-                                      disabled={!isSelected}
-                                      error={Boolean(consumeErrors[batchKey])}
-                                      helperText={consumeErrors[batchKey]}
-                                      inputProps={{ min: 0, max: batch.quantity, step: 'any' }}
-                                      size="small"
-                                      sx={width140} // Poszerzony z 120px do 140px
-                                      InputProps={{
-                                        endAdornment: <Typography variant="caption">{material.unit}</Typography>
-                                      }}
-                                    />
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                    </Box>
-                  );
-                })
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setConsumeMaterialsDialogOpen(false)} disabled={consumingMaterials}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={handleConfirmConsumeMaterials} 
-                variant="contained" 
-                color="warning"
-                disabled={consumingMaterials || consumedMaterials.length === 0}
-                startIcon={consumingMaterials ? <CircularProgress size={20} /> : null}
-              >
-                {consumingMaterials ? 'Konsumowanie...' : 'Konsumuj materiały'}
-              </Button>
-            </DialogActions>
-          </Dialog>
-
-          {/* Dialog rezerwacji surowców */}
-          <Dialog
-            open={reserveDialogOpen}
-            onClose={() => setReserveDialogOpen(false)}
-            maxWidth="lg"
-            fullWidth
-          >
-            <DialogTitle>Rezerwacja surowców</DialogTitle>
-            <DialogContent>
-              <DialogContentText sx={mb2}>
-                Wybierz partie materiałów, które chcesz zarezerwować dla tego zadania produkcyjnego.
-              </DialogContentText>
-              
-              <FormControl component="fieldset" sx={mb2}>
-                <FormLabel component="legend">Metoda rezerwacji</FormLabel>
-                <RadioGroup 
-                  row 
-                  value={reservationMethod} 
-                  onChange={handleReservationMethodChange}
-                >
-                  <FormControlLabel 
-                    value="automatic" 
-                    control={<Radio />} 
-                    label="Automatyczna (FIFO)" 
-                  />
-                  <FormControlLabel 
-                    value="manual" 
-                    control={<Radio />} 
-                    label={t('consumption.manualBatchSelection')} 
-                  />
-                </RadioGroup>
-              </FormControl>
-              
-              {reservationMethod === 'manual' && renderManualBatchSelection()}
-              
-              {reservationMethod === 'automatic' && (
-                <>
-                  <Alert severity="info" sx={mb2}>
-                    System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
-                  </Alert>
-                  
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={autoCreatePOReservations}
-                        onChange={(e) => setAutoCreatePOReservations(e.target.checked)}
-                        color="primary"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          Automatycznie twórz rezerwacje z zamówień zakupu (PO)
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Jeśli braknie partii magazynowych, system automatycznie zarezerwuje brakującą ilość z otwartych zamówień zakupowych
-                        </Typography>
-                      </Box>
-                    }
-                    sx={{ ...mb2, alignItems: 'flex-start' }}
-                  />
-                </>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setReserveDialogOpen(false)}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={handleReserveMaterials} 
-                variant="contained" 
-                color="primary"
-                disabled={reservingMaterials}
-              >
-                {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
-              </Button>
-            </DialogActions>
-          </Dialog>
-
-          {/* Dialog korekty konsumpcji */}
-          <Dialog
-            open={editConsumptionDialogOpen}
-            onClose={() => setEditConsumptionDialogOpen(false)}
-            maxWidth="md"
-            fullWidth
-          >
-            <DialogTitle>Edytuj konsumpcję</DialogTitle>
-            <DialogContent>
-              <DialogContentText>
-                Wprowadź nową ilość konsumpcji dla wybranej partii:
-              </DialogContentText>
-              <TextField
-                label={t('common:common.newQuantity')}
-                type="number"
-                value={editedQuantity}
-                onChange={(e) => setEditedQuantity(e.target.value)}
-                onWheel={(e) => e.target.blur()} // Wyłącza reakcję na scroll
-                fullWidth
-                InputProps={{
-                  endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
-                }}
-              />
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setEditConsumptionDialogOpen(false)}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={handleConfirmEditConsumption} 
-                variant="contained" 
-                color="primary"
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Zapisz zmiany'}
-              </Button>
-            </DialogActions>
-          </Dialog>
-
-          {/* Dialog usuwania konsumpcji */}
-          <Dialog
-            open={deleteConsumptionDialogOpen}
-            onClose={() => setDeleteConsumptionDialogOpen(false)}
-            maxWidth="md"
-            fullWidth
-          >
-            <DialogTitle>{t('consumption.confirmConsumptionDeletion')}</DialogTitle>
-            <DialogContent>
-              <DialogContentText>
-                Czy na pewno chcesz usunąć wybraną konsumpcję? Ta operacja jest nieodwracalna.
-              </DialogContentText>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={restoreReservation}
-                    onChange={(e) => setRestoreReservation(e.target.checked)}
-                    color="primary"
-                  />
-                }
-                label={t('consumption.restoreReservationAfterDeletion')}
-                sx={{ mt: 2, display: 'block' }}
-              />
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setDeleteConsumptionDialogOpen(false)} disabled={deletingConsumption}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={handleConfirmDeleteConsumption} 
-                variant="contained" 
-                color="error"
-                disabled={deletingConsumption}
-                startIcon={deletingConsumption ? <CircularProgress size={20} /> : null}
-              >
-                {deletingConsumption ? 'Usuwanie...' : 'Usuń konsumpcję'}
-              </Button>
-            </DialogActions>
-          </Dialog>
-
-          {/* ✅ REFAKTORYZACJA: Dialog rozpoczęcia produkcji - wydzielony komponent */}
-          <StartProductionDialog
-            open={dialogs.startProduction}
-            onClose={() => closeDialog('startProduction')}
-            onStart={handleStartProductionWithExpiry}
-            loading={loading}
-            t={t}
-          />
-
-          {/* Dialog formularza kontroli produkcji */}
-          <ProductionControlFormDialog
-            open={productionControlDialogOpen}
-            onClose={() => setProductionControlDialogOpen(false)}
-            task={task}
-            onSuccess={handleProductionControlFormSuccess}
-          />
-
-          {/* Dialog formularza zakończonego MO */}
-          <CompletedMOFormDialog
-            open={completedMODialogOpen}
-            onClose={() => setCompletedMODialogOpen(false)}
-            task={task}
-            onSuccess={handleCompletedMOFormSuccess}
-          />
-
-          {/* Dialog formularza zmiany produkcyjnej */}
-          <ProductionShiftFormDialog
-            open={productionShiftDialogOpen}
-            onClose={() => setProductionShiftDialogOpen(false)}
-            task={task}
-            onSuccess={handleProductionShiftFormSuccess}
-          />
-
-          {/* 🔍 DEBUG: Dialog wyników sprawdzania spójności partii */}
-          <Dialog
-            open={debugBatchDialogOpen}
-            onClose={() => setDebugBatchDialogOpen(false)}
-            maxWidth="md"
-            fullWidth
-          >
-            <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <BugReportIcon color="warning" />
-              Debug: Spójność partii w zadaniu
-            </DialogTitle>
-            <DialogContent dividers>
-              {debugLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                  <CircularProgress />
-                </Box>
-              ) : (
-                <Box sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                  {debugResults.map((result, idx) => (
-                    <Box 
-                      key={idx} 
-                      sx={{ 
-                        mb: 1, 
-                        p: result.type === 'header' ? 1 : 0.5,
-                        bgcolor: result.type === 'header' ? 'grey.100' : 'transparent',
-                        borderLeft: result.type === 'error' ? '4px solid red' : 
-                                   result.type === 'warning' ? '4px solid orange' : 
-                                   result.type === 'success' ? '4px solid green' : 
-                                   result.type === 'material' ? '4px solid blue' : 'none',
-                        pl: result.type !== 'header' ? 2 : 1
-                      }}
-                    >
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          fontFamily: 'monospace',
-                          fontWeight: result.type === 'header' || result.type === 'material' ? 'bold' : 'normal',
-                          color: result.type === 'error' ? 'error.main' : 
-                                 result.type === 'warning' ? 'warning.main' : 
-                                 result.type === 'success' ? 'success.main' : 'text.primary'
-                        }}
-                      >
-                        {result.text}
-                      </Typography>
-                      {result.details && (
-                        <Box sx={{ pl: 2, mt: 0.5 }}>
-                          {Object.entries(result.details).map(([key, value]) => (
-                            <Typography key={key} variant="caption" component="div" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-                              <strong>{key}:</strong> {typeof value === 'object' ? JSON.stringify(value) : value}
-                            </Typography>
-                          ))}
-                        </Box>
-                      )}
-                      {/* Przycisk naprawy powiązania */}
-                      {result.canRepair && result.repairData && (
-                        <Box sx={{ mt: 1, pl: 2 }}>
-                          <Button
-                            variant="contained"
-                            color="warning"
-                            size="small"
-                            startIcon={<BuildCircleIcon />}
-                            onClick={() => handleRepairConsumedMaterialBatch(result.repairData)}
-                          >
-                            Napraw powiązanie: {result.repairData.oldBatchId.substring(0, 8)}... → {result.repairData.newBatchId.substring(0, 8)}...
-                          </Button>
-                        </Box>
-                      )}
-                    </Box>
-                  ))}
-                  {debugResults.length === 0 && (
-                    <Typography color="text.secondary">
-                      Kliknij przycisk debugowania żeby sprawdzić spójność partii
-                    </Typography>
-                  )}
-                </Box>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setDebugBatchDialogOpen(false)}>
-                Zamknij
-              </Button>
-              {/* Przycisk naprawy wszystkich powiązań - widoczny tylko gdy są do naprawy */}
-              {debugResults.some(r => r.canRepair && r.repairData) && (
-                <Button 
-                  onClick={handleRepairAllConsumedMaterialBatches}
-                  disabled={debugLoading}
-                  variant="contained"
-                  color="warning"
-                  startIcon={<BuildCircleIcon />}
-                >
-                  Napraw wszystkie ({debugResults.filter(r => r.canRepair).length})
-                </Button>
-              )}
-              <Button 
-                onClick={debugBatchConsistency} 
-                disabled={debugLoading}
-                startIcon={<RefreshIcon />}
-              >
-                Odśwież
-              </Button>
-            </DialogActions>
-          </Dialog>
-
-          {/* ✅ REFAKTORYZACJA: Drawer komentarzy - wydzielony komponent */}
-          <CommentsDrawer
-            open={commentsDrawerOpen}
-            onClose={handleCloseCommentsDrawer}
-            comments={task?.comments || []}
+            // Raw materials dialog
+            rawMaterialsDialogOpen={rawMaterialsDialogOpen}
+            setRawMaterialsDialogOpen={setRawMaterialsDialogOpen}
+            materialCategoryTab={materialCategoryTab}
+            setMaterialCategoryTab={setMaterialCategoryTab}
+            searchRawMaterials={searchRawMaterials}
+            setSearchRawMaterials={setSearchRawMaterials}
+            loadingRawMaterials={loadingRawMaterials}
+            filteredRawMaterialsItems={filteredRawMaterialsItems}
+            rawMaterialsItems={rawMaterialsItems}
+            fetchAvailableRawMaterials={fetchAvailableRawMaterials}
+            handleRawMaterialsSelection={handleRawMaterialsSelection}
+            handleRawMaterialsQuantityChange={handleRawMaterialsQuantityChange}
+            handleAddRawMaterialsSubmit={handleAddRawMaterialsSubmit}
+            // Delete material dialog
+            deleteMaterialDialogOpen={deleteMaterialDialogOpen}
+            setDeleteMaterialDialogOpen={setDeleteMaterialDialogOpen}
+            handleConfirmDeleteMaterial={handleConfirmDeleteMaterial}
+            materialToDelete={materialToDelete}
+            // Additional cost dialog
+            additionalCostDialogOpen={additionalCostDialogOpen}
+            setAdditionalCostDialogOpen={setAdditionalCostDialogOpen}
+            editingAdditionalCost={editingAdditionalCost}
+            setEditingAdditionalCost={setEditingAdditionalCost}
+            handleSaveAdditionalCost={handleSaveAdditionalCost}
+            savingAdditionalCost={savingAdditionalCost}
+            // Delete additional cost dialog
+            deleteAdditionalCostDialogOpen={deleteAdditionalCostDialogOpen}
+            setDeleteAdditionalCostDialogOpen={setDeleteAdditionalCostDialogOpen}
+            additionalCostToDelete={additionalCostToDelete}
+            setAdditionalCostToDelete={setAdditionalCostToDelete}
+            handleConfirmDeleteAdditionalCost={handleConfirmDeleteAdditionalCost}
+            // Consume materials dialog
+            consumeMaterialsDialogOpen={consumeMaterialsDialogOpen}
+            setConsumeMaterialsDialogOpen={setConsumeMaterialsDialogOpen}
+            consumedMaterials={consumedMaterials}
+            selectedBatchesToConsume={selectedBatchesToConsume}
+            consumeQuantities={consumeQuantities}
+            consumeErrors={consumeErrors}
+            consumingMaterials={consumingMaterials}
+            handleBatchToConsumeSelection={handleBatchToConsumeSelection}
+            handleConsumeQuantityChange={handleConsumeQuantityChange}
+            handleConfirmConsumeMaterials={handleConfirmConsumeMaterials}
+            // Reserve dialog
+            reserveDialogOpen={reserveDialogOpen}
+            setReserveDialogOpen={setReserveDialogOpen}
+            reservationMethod={reservationMethod}
+            handleReservationMethodChange={handleReservationMethodChange}
+            autoCreatePOReservations={autoCreatePOReservations}
+            setAutoCreatePOReservations={setAutoCreatePOReservations}
+            reservingMaterials={reservingMaterials}
+            handleReserveMaterials={handleReserveMaterials}
+            // ManualBatchSelection props
+            materialBatchesLoading={materialBatchesLoading}
+            showExhaustedBatches={showExhaustedBatches}
+            setShowExhaustedBatches={setShowExhaustedBatches}
+            fetchBatchesForMaterialsOptimized={fetchBatchesForMaterialsOptimized}
+            materialQuantities={materialQuantities}
+            getRequiredQuantityForReservation={getRequiredQuantityForReservation}
+            batches={batches}
+            selectedBatches={selectedBatches}
+            expandedMaterial={expandedMaterial}
+            setExpandedMaterial={setExpandedMaterial}
+            handleBatchSelection={handleBatchSelection}
+            awaitingOrdersLoading={awaitingOrdersLoading}
+            awaitingOrders={awaitingOrders}
+            // Edit consumption dialog
+            editConsumptionDialogOpen={editConsumptionDialogOpen}
+            setEditConsumptionDialogOpen={setEditConsumptionDialogOpen}
+            editedQuantity={editedQuantity}
+            setEditedQuantity={setEditedQuantity}
+            handleConfirmEditConsumption={handleConfirmEditConsumption}
+            // Delete consumption dialog
+            deleteConsumptionDialogOpen={deleteConsumptionDialogOpen}
+            setDeleteConsumptionDialogOpen={setDeleteConsumptionDialogOpen}
+            restoreReservation={restoreReservation}
+            setRestoreReservation={setRestoreReservation}
+            deletingConsumption={deletingConsumption}
+            handleConfirmDeleteConsumption={handleConfirmDeleteConsumption}
+            // Start production dialog
+            dialogs={dialogs}
+            closeDialog={closeDialog}
+            handleStartProductionWithExpiry={handleStartProductionWithExpiry}
+            // Production control form dialog
+            productionControlDialogOpen={productionControlDialogOpen}
+            setProductionControlDialogOpen={setProductionControlDialogOpen}
+            handleProductionControlFormSuccess={handleProductionControlFormSuccess}
+            // Completed MO form dialog
+            completedMODialogOpen={completedMODialogOpen}
+            setCompletedMODialogOpen={setCompletedMODialogOpen}
+            handleCompletedMOFormSuccess={handleCompletedMOFormSuccess}
+            // Production shift form dialog
+            productionShiftDialogOpen={productionShiftDialogOpen}
+            setProductionShiftDialogOpen={setProductionShiftDialogOpen}
+            handleProductionShiftFormSuccess={handleProductionShiftFormSuccess}
+            // Debug batch dialog
+            debugBatchDialogOpen={debugBatchDialogOpen}
+            setDebugBatchDialogOpen={setDebugBatchDialogOpen}
+            debugLoading={debugLoading}
+            debugResults={debugResults}
+            debugBatchConsistency={debugBatchConsistency}
+            handleRepairConsumedMaterialBatch={handleRepairConsumedMaterialBatch}
+            handleRepairAllConsumedMaterialBatches={handleRepairAllConsumedMaterialBatches}
+            // Comments drawer
+            commentsDrawerOpen={commentsDrawerOpen}
+            handleCloseCommentsDrawer={handleCloseCommentsDrawer}
             newComment={newComment}
-            onNewCommentChange={setNewComment}
-            onAddComment={handleAddComment}
-            onDeleteComment={(comment) => handleDeleteComment(comment.id)}
+            setNewComment={setNewComment}
+            handleAddComment={handleAddComment}
+            handleDeleteComment={handleDeleteComment}
             addingComment={addingComment}
-            currentUserId={currentUser?.uid}
-            isAdmin={currentUser?.role === 'administrator'}
-            t={t}
+            currentUser={currentUser}
           />
         </>
       ) : (
