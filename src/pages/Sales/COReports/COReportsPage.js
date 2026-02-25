@@ -2518,6 +2518,9 @@ const COReportsPage = () => {
           value={selectedTab} 
           onChange={handleTabChange} 
           aria-label={t('coReports.aria.tabs')}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{
             backgroundColor: 'background.paper',
             '& .MuiTab-root': {

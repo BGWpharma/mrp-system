@@ -56,6 +56,9 @@ const RawMaterialsDialog = memo(({
         <Tabs
           value={categoryTab}
           onChange={(e, newValue) => onCategoryTabChange(newValue)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab label="Surowce" />

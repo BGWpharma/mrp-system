@@ -767,7 +767,7 @@ const RecipeDetailsPage = () => {
         </Box>
 
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={handleTabChange} aria-label="recipe tabs">
+          <Tabs value={tabValue} onChange={handleTabChange} aria-label="recipe tabs" variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
             <Tab label={t('recipes.tabs.ingredientsAndInstructions')} id="recipe-tab-0" />
             <Tab label={t('recipes.tabs.designAttachments')} id="recipe-tab-1" />
             <Tab label={t('recipes.tabs.versionHistory')} id="recipe-tab-2" />

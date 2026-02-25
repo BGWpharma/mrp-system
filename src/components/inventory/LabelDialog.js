@@ -244,7 +244,7 @@ const LabelDialog = ({ open, onClose, item, batches = [] }) => {
         Generate Label: {item?.name || 'Product'}
       </DialogTitle>
       <DialogContent>
-        <Tabs value={selectedTab} onChange={handleTabChange} sx={{ mb: 2 }}>
+        <Tabs value={selectedTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 2 }}>
           <Tab label="Box Label" />
           <Tab label="Batch Label" disabled={!batches || batches.length === 0} />
         </Tabs>

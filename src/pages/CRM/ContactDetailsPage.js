@@ -426,6 +426,9 @@ const ContactDetailsPage = () => {
                 value={tabValue} 
                 onChange={handleTabChange} 
                 aria-label="contact tabs"
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
               >
                 <Tab label="Interakcje zakupowe" id="tab-0" />
                 <Tab label="Zadania" id="tab-1" />

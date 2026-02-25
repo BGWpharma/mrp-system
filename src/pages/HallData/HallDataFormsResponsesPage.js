@@ -531,7 +531,9 @@ const HallDataFormsResponsesPage = () => {
         <Tabs 
           value={tabValue} 
           onChange={handleTabChange}
-          variant="fullWidth"
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab label={`Tygodniowy Serwis (${tabCounts.serviceReport !== null ? tabCounts.serviceReport : '...'})`} />

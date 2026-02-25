@@ -857,7 +857,9 @@ const ItemDetailsPage = () => {
             value={tabValue} 
             onChange={handleTabChange} 
             aria-label="item tabs"
-            variant="fullWidth"
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             textColor="primary"
             indicatorColor="primary"
           >

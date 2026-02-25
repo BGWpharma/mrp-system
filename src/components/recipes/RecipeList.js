@@ -2401,7 +2401,9 @@ const RecipeList = () => {
           onChange={handleTabChange} 
           textColor="primary" 
           indicatorColor="primary"
-          variant={isMobile ? "fullWidth" : "standard"}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={isMobile ? {
             '& .MuiTab-root': {
               textTransform: 'none',

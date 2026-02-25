@@ -362,7 +362,7 @@ const PODocumentScanner = ({
       </DialogTitle>
       
       <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
-        <Tabs value={activeTab} onChange={handleTabChange}>
+        <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
           <Tab 
             icon={<DeliveryIcon />} 
             iconPosition="start"

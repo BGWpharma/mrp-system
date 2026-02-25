@@ -2304,6 +2304,9 @@ const InventoryList = () => {
       <Tabs
         value={currentTab}
         onChange={handleTabChange}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
         sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
       >
         <Tab label={t('inventory.states.tabs.states')} />

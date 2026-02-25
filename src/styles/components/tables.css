@@ -354,7 +354,7 @@
    RESPONSIVE TABLES
    ======================================== */
 
-@media (max-width: 768px) {
+@media (max-width: 1100px) {
   .table-container {
     border-radius: var(--radius-lg);
   }

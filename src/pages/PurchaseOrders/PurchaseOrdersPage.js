@@ -21,6 +21,9 @@ const PurchaseOrdersPage = () => {
         <Tabs
           value={currentTab}
           onChange={(e, v) => setCurrentTab(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
         >
           <Tab label={t('purchaseOrders.tabs.orders', 'Zamówienia')} />

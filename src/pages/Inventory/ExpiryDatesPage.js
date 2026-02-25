@@ -434,7 +434,7 @@ const ExpiryDatesPage = () => {
 
       <Paper sx={{ mb: 3 }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={handleTabChange} aria-label="expiry tabs">
+          <Tabs value={tabValue} onChange={handleTabChange} aria-label="expiry tabs" variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
             <Tab 
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>

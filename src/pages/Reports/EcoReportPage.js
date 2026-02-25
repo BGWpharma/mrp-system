@@ -357,6 +357,9 @@ const EcoReportPage = () => {
           <Tabs 
             value={activeTab} 
             onChange={(e, v) => setActiveTab(v)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}
           >
             <Tab 

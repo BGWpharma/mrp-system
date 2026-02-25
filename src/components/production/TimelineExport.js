@@ -25,6 +25,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useTranslation } from '../../hooks/useTranslation';
+import { getTasksByDateRangeOptimizedNew } from '../../services/productionService';
 
 // Funkcja do generowania raportu Timeline w formacie XLSX
 const generateTimelineReport = async (tasks, workstations, customers, startDate, endDate, groupBy, filteredTasks, selectedCustomers, t) => {
@@ -600,12 +601,6 @@ const TimelineExport = ({
 
   const handleExport = async () => {
     try {
-      // Sprawdź czy są dostępne dane
-      if (!filteredTasks || filteredTasks.length === 0) {
-        showError(t('production.timeline.export.noTasks'));
-        return;
-      }
-
       if (!workstations || workstations.length === 0) {
         showError(t('production.timeline.export.noWorkstations'));
         return;
@@ -613,26 +608,26 @@ const TimelineExport = ({
 
       showSuccess(t('production.timeline.export.generating'));
       
-      // Debugowanie przed filtrowaniem
-      console.log('Eksport - Debugowanie przed filtrowaniem:', {
-        filteredTasksLength: filteredTasks.length,
-        exportFiltersStartDate: exportFilters.startDate,
-        exportFiltersEndDate: exportFilters.endDate,
-        selectedCustomers: exportFilters.selectedCustomers,
-        sampleTasks: filteredTasks.slice(0, 3).map(task => ({
-          id: task.id,
-          name: task.name,
-          scheduledDate: task.scheduledDate,
-          customerId: task.customerId
-        }))
-      });
+      const filterStartDate = startOfDay(exportFilters.startDate);
+      const filterEndDate = endOfDay(exportFilters.endDate);
 
-      // Filtruj zadania według wybranego zakresu dat
-      const filteredByDateTasks = filteredTasks.filter(task => {
-        if (!task.scheduledDate) {
-          console.log('Zadanie bez daty rozpoczęcia:', task.id, task.name);
-          return false;
-        }
+      // Pobierz dane bezpośrednio z Firestore dla zakresu eksportu
+      // (niezależnie od viewport timeline — gwarantuje kompletność danych)
+      let exportTasks;
+      try {
+        exportTasks = await getTasksByDateRangeOptimizedNew(
+          filterStartDate.toISOString(),
+          filterEndDate.toISOString(),
+          5000
+        );
+        console.log(`Export: Pobrano ${exportTasks.length} zadań z Firestore dla zakresu eksportu`);
+      } catch (fetchError) {
+        console.warn('Export: Fallback do lokalnych danych:', fetchError.message);
+        exportTasks = filteredTasks;
+      }
+
+      const filteredByDateTasks = exportTasks.filter(task => {
+        if (!task.scheduledDate) return false;
         
         let taskDate;
         try {
@@ -644,39 +639,12 @@ const TimelineExport = ({
             taskDate = new Date(task.scheduledDate);
           }
           
-          if (isNaN(taskDate.getTime())) {
-            console.log('Nieprawidłowa data zadania:', task.id, task.scheduledDate);
-            return false;
-          }
+          if (isNaN(taskDate.getTime())) return false;
         } catch (error) {
-          console.warn('Błąd konwersji daty zadania:', task.id, error);
           return false;
         }
         
-        const filterStartDate = startOfDay(exportFilters.startDate);
-        const filterEndDate = endOfDay(exportFilters.endDate);
-        
-        const isInDateRange = taskDate >= filterStartDate && taskDate <= filterEndDate;
-        
-        if (!isInDateRange) {
-          console.log('Zadanie poza zakresem dat:', task.id, {
-            taskDate: taskDate.toISOString(),
-            filterStart: filterStartDate.toISOString(),
-            filterEnd: filterEndDate.toISOString()
-          });
-        }
-        
-        return isInDateRange;
-      });
-
-      console.log('Wynik filtrowania według dat:', {
-        originalCount: filteredTasks.length,
-        filteredByDateCount: filteredByDateTasks.length,
-        filteredByDateSample: filteredByDateTasks.slice(0, 3).map(task => ({
-          id: task.id,
-          name: task.name,
-          scheduledDate: task.scheduledDate
-        }))
+        return taskDate >= filterStartDate && taskDate <= filterEndDate;
       });
 
       if (filteredByDateTasks.length === 0) {
@@ -685,7 +653,7 @@ const TimelineExport = ({
       }
 
       await generateTimelineReport(
-        tasks,
+        exportTasks,
         workstations,
         customers,
         exportFilters.startDate,

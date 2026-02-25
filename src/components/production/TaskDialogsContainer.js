@@ -427,6 +427,9 @@ const TaskDialogsContainer = memo(({
               const targetCategory = newValue === 0 ? 'Surowce' : 'Opakowania jednostkowe';
               await fetchAvailableRawMaterials(targetCategory);
             }}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{ ...mb2, borderBottom: 1, borderColor: 'divider' }}
           >
             <Tab label="Surowce" />

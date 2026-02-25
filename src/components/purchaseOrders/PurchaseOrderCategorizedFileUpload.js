@@ -460,7 +460,7 @@ const PurchaseOrderCategorizedFileUpload = ({
   return (
     <Box>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs value={activeTab} onChange={handleTabChange} aria-label="attachment categories">
+        <Tabs value={activeTab} onChange={handleTabChange} aria-label="attachment categories" variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
           <Tab 
             label={
               <Badge badgeContent={coaAttachments.length} color="primary">

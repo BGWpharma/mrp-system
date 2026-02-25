@@ -1170,7 +1170,9 @@ const FormsResponsesPage = () => {
           onChange={handleTabChange} 
           indicatorColor="primary"
           textColor="primary"
-          variant="fullWidth"
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
         >
           <Tab label={`${t('productionForms.completedMO.tab')} (${tabCounts.completedMO !== null ? tabCounts.completedMO : '...'})`} />
           <Tab label={`${t('productionForms.productionControl.tab')} (${tabCounts.productionControl !== null ? tabCounts.productionControl : '...'})`} />

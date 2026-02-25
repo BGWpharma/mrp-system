@@ -50,6 +50,7 @@ import {
   Grid,
   TextField,
   CircularProgress,
+  LinearProgress,
   useMediaQuery,
   useTheme as useMuiTheme,
   Slider,
@@ -727,6 +728,12 @@ const ProductionTimeline = React.memo(({
   // Ref do funkcji updateScrollCanvas z Timeline
   const updateScrollCanvasRef = useRef(null);
   
+  // Viewport-based loading: śledzenie załadowanego zakresu dat
+  const [loadedRange, setLoadedRange] = useState({ start: null, end: null });
+  const loadedRangeRef = useRef({ start: null, end: null });
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const fetchInProgressRef = useRef(false);
+  
   const { showError, showSuccess } = useNotification();
   const { currentUser } = useAuth();
   const { mode: themeMode } = useTheme(); // Motyw aplikacji
@@ -755,18 +762,6 @@ const ProductionTimeline = React.memo(({
     }, performanceMode ? 300 : 250), // Zwiększone opóźnienie dla lepszej wydajności
     [performanceMode]
   );
-
-  // Pobranie danych
-  useEffect(() => {
-    let cancelled = false;
-    fetchWorkstations().then(() => { if (cancelled) return; });
-    fetchCustomers().then(() => { if (cancelled) return; });
-    fetchTasks().then(() => { if (cancelled) return; });
-    return () => { cancelled = true; };
-  }, []);
-
-
-
 
 
   const fetchWorkstations = async () => {
@@ -803,59 +798,112 @@ const ProductionTimeline = React.memo(({
     }
   };
 
-  // ⚡ OPTYMALIZACJA WYDAJNOŚCI: Dynamiczny limit na podstawie widocznego zakresu
-  const fetchTasks = useCallback(async () => {
+  // Scalanie tasków: zachowuje istniejące, nadpisuje zaktualizowane, dodaje nowe
+  const mergeTasks = useCallback((existingTasks, newTasks) => {
+    const taskMap = new Map();
+    existingTasks.forEach(t => taskMap.set(t.id, t));
+    newTasks.forEach(t => taskMap.set(t.id, t));
+    return Array.from(taskMap.values());
+  }, []);
+
+  // Czyszczenie tasków spoza rozszerzonego zakresu (3x loadedRange)
+  const cleanupOldTasks = useCallback((allTasks, rangeStart, rangeEnd) => {
+    const rangeSize = rangeEnd - rangeStart;
+    const cleanupStart = rangeStart - rangeSize;
+    const cleanupEnd = rangeEnd + rangeSize;
+    
+    return allTasks.filter(task => {
+      const taskDate = task.scheduledDate;
+      if (!taskDate) return true;
+      const taskTime = taskDate instanceof Date ? taskDate.getTime() : 
+                      taskDate.toDate ? taskDate.toDate().getTime() : 
+                      new Date(taskDate).getTime();
+      return taskTime >= cleanupStart && taskTime <= cleanupEnd;
+    });
+  }, []);
+
+  const VIEWPORT_BUFFER_MULTIPLIER = 2;
+  const REFETCH_THRESHOLD = 0.5;
+
+  // ⚡ VIEWPORT-BASED LOADING: Pobieranie danych tylko dla widocznego zakresu + bufor
+  const fetchTasks = useCallback(async (options = {}) => {
+    const { forceReload = false } = options;
+    
+    if (fetchInProgressRef.current && !forceReload) return;
+    
     try {
-      setLoading(true);
-      const startDate = new Date(canvasTimeStart);
-      const endDate = new Date(canvasTimeEnd);
+      const visibleRange = visibleTimeEnd - visibleTimeStart;
+      const buffer = visibleRange * VIEWPORT_BUFFER_MULTIPLIER;
       
-      // ⚡ OPTYMALIZACJA: Oblicz dynamiczny limit na podstawie zakresu dat
+      const fetchStart = visibleTimeStart - buffer;
+      const fetchEnd = visibleTimeEnd + buffer;
+      
+      const cached = loadedRangeRef.current;
+      if (!forceReload && cached.start !== null) {
+        const margin = visibleRange * REFETCH_THRESHOLD;
+        if (visibleTimeStart - margin >= cached.start 
+            && visibleTimeEnd + margin <= cached.end) {
+          return;
+        }
+      }
+      
+      fetchInProgressRef.current = true;
+      const isInitialLoad = cached.start === null;
+      if (isInitialLoad) {
+        setLoading(true);
+      } else {
+        setIsLoadingMore(true);
+      }
+      
+      const startDate = new Date(fetchStart);
+      const endDate = new Date(fetchEnd);
       const visibleDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-      // Zakładamy max ~30 zadań na dzień, z buforem 2x
-      // Maksymalnie 500 zadań dla wydajności (zamiast 5000)
       const dynamicLimit = Math.min(Math.max(visibleDays * 30, 100), 500);
       
-      console.log(`⚡ ProductionTimeline: Pobieranie zadań dla ${visibleDays} dni (limit: ${dynamicLimit})`);
+      console.log(`⚡ Viewport-load: ${visibleDays} dni (limit: ${dynamicLimit}, reload: ${forceReload})`);
       
       let data;
       try {
-        // Spróbuj najpierw pobrać dane z nową funkcją z dynamicznym limitem
         data = await getTasksByDateRangeOptimizedNew(
           startDate.toISOString(),
           endDate.toISOString(),
-          dynamicLimit // ⚡ ZMIANA: Dynamiczny limit zamiast stałego 5000
+          dynamicLimit
         );
-        
-        console.log(`⚡ ProductionTimeline: Pobrano ${data.length} zadań`);
+        console.log(`⚡ Viewport-load: Pobrano ${data.length} zadań`);
       } catch (error) {
         console.warn('Fallback do getAllTasks:', error.message);
-        // Fallback - pobierz wszystkie zadania z limitem
         const allData = await getAllTasks();
-        
-        // Filtruj zadania według zakresu dat po stronie klienta
         data = allData.filter(task => {
           const taskDate = task.scheduledDate;
           if (!taskDate) return true;
-          
           const taskTime = taskDate instanceof Date ? taskDate.getTime() : 
                           taskDate.toDate ? taskDate.toDate().getTime() : 
                           new Date(taskDate).getTime();
-          
-          return taskTime >= canvasTimeStart && taskTime <= canvasTimeEnd;
-        }).slice(0, dynamicLimit); // ⚡ OPTYMALIZACJA: Ogranicz po stronie klienta
+          return taskTime >= fetchStart && taskTime <= fetchEnd;
+        }).slice(0, dynamicLimit);
       }
       
-      setTasks(data);
+      let newRange;
+      if (forceReload || isInitialLoad) {
+        setTasks(data);
+        newRange = { start: fetchStart, end: fetchEnd };
+      } else {
+        setTasks(prev => {
+          const merged = mergeTasks(prev, data);
+          return cleanupOldTasks(merged, fetchStart, fetchEnd);
+        });
+        newRange = {
+          start: Math.min(cached.start ?? fetchStart, fetchStart),
+          end: Math.max(cached.end ?? fetchEnd, fetchEnd)
+        };
+      }
+      loadedRangeRef.current = newRange;
+      setLoadedRange(newRange);
       
-      // Zresetuj stan wzbogacenia przy nowym ładowaniu zadań
-      // (nowe zadania mogą być inne lub z innego zakresu dat)
       setTasksEnrichedWithPO(false);
       setDeliveryInfoEnriched(false);
       
-      // Szybkie wzbogacanie o dane dostawowe PO (ETA) - wymagane do czerwonych kropek na harmonogramie
       if (data.length > 0) {
-        console.log(`⚡ ProductionTimeline: Wzbogacanie danych dostawowych PO dla ${data.length} zadań...`);
         setTimeout(() => {
           enrichDeliveryInfoInBackground(data);
         }, 300);
@@ -865,9 +913,43 @@ const ProductionTimeline = React.memo(({
       showError(t('production.timeline.messages.loadingError') + ': ' + error.message);
     } finally {
       setLoading(false);
+      setIsLoadingMore(false);
+      fetchInProgressRef.current = false;
     }
-  }, [canvasTimeStart, canvasTimeEnd, showError]);
+  }, [visibleTimeStart, visibleTimeEnd, showError, mergeTasks, cleanupOldTasks]);
+
+  const handleRefresh = useCallback(() => {
+    loadedRangeRef.current = { start: null, end: null };
+    setLoadedRange({ start: null, end: null });
+    fetchInProgressRef.current = false;
+    fetchTasks({ forceReload: true });
+  }, [fetchTasks]);
+
+  // Pobranie danych
+  useEffect(() => {
+    let cancelled = false;
+    fetchWorkstations().then(() => { if (cancelled) return; });
+    fetchCustomers().then(() => { if (cancelled) return; });
+    fetchTasks().then(() => { if (cancelled) return; });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Viewport-based loading: debounced refetch przy zmianie widocznego zakresu
+  const fetchTasksRef = useRef(fetchTasks);
+  fetchTasksRef.current = fetchTasks;
   
+  const debouncedViewportFetch = useMemo(
+    () => debounce(() => fetchTasksRef.current(), 500),
+    []
+  );
+  
+  useEffect(() => {
+    if (loadedRange.start !== null) {
+      debouncedViewportFetch();
+    }
+    return () => debouncedViewportFetch.cancel?.();
+  }, [visibleTimeStart, visibleTimeEnd, debouncedViewportFetch]);
+
   // ⚡ OPTYMALIZACJA: Szybkie wzbogacanie o dane dostawowe PO (tylko rezerwacje, bez partii)
   const enrichDeliveryInfoInBackground = useCallback(async (tasksToEnrich) => {
     if (deliveryInfoEnriched || !tasksToEnrich || tasksToEnrich.length === 0) return;
@@ -980,13 +1062,13 @@ const ProductionTimeline = React.memo(({
         showSuccess(t('production.timeline.messages.undoSuccess'));
         
         // Odśwież dane
-        fetchTasks();
+        handleRefresh();
       }
     } catch (error) {
       console.error('Błąd podczas cofania akcji:', error);
       showError(t('production.timeline.messages.undoError') + ': ' + error.message);
     }
-  }, [undoStack, showError, showSuccess, fetchTasks, currentUser.uid]);
+  }, [undoStack, showError, showSuccess, handleRefresh, currentUser.uid]);
 
   // Aktualizuj referencję
   undoFunctionRef.current = handleUndo;
@@ -1661,12 +1743,12 @@ const ProductionTimeline = React.memo(({
       }
       
       // Odśwież dane w tle (może być opóźnione)
-      setTimeout(() => fetchTasks(), 100);
+      setTimeout(() => handleRefresh(), 100);
     } catch (error) {
       console.error('Błąd podczas aktualizacji zadania:', error);
       showError(t('production.timeline.edit.saveError') + ': ' + error.message);
     }
-  }, [items, roundToMinute, snapToTask, snapToPrevious, showError, showSuccess, fetchTasks, currentUser.uid, addToUndoStack]);
+  }, [items, roundToMinute, snapToTask, snapToPrevious, showError, showSuccess, handleRefresh, currentUser.uid, addToUndoStack]);
 
   const handleItemResize = async (itemId, time, edge) => {
     try {
@@ -1719,7 +1801,7 @@ const ProductionTimeline = React.memo(({
       showSuccess(t('production.timeline.edit.saveSuccess'));
       
       // Odśwież dane
-      fetchTasks();
+      handleRefresh();
     } catch (error) {
       console.error('Błąd podczas aktualizacji zadania:', error);
       showError(t('production.timeline.edit.saveError') + ': ' + error.message);
@@ -1818,7 +1900,7 @@ const ProductionTimeline = React.memo(({
       
       setEditDialog(false);
       setSelectedItem(null);
-      fetchTasks();
+      handleRefresh();
     } catch (error) {
       console.error('Błąd podczas zapisywania:', error);
       showError(t('production.timeline.edit.saveError') + ': ' + error.message);
@@ -3108,7 +3190,7 @@ const ProductionTimeline = React.memo(({
             />
           </Suspense>
           
-          <IconButton className="timeline-refresh-button" size="small" onClick={fetchTasks}>
+          <IconButton className="timeline-refresh-button" size="small" onClick={handleRefresh}>
             <RefreshIcon />
           </IconButton>
           
@@ -3142,7 +3224,7 @@ const ProductionTimeline = React.memo(({
             </IconButton>
             
             {/* Refresh */}
-            <IconButton size="small" onClick={fetchTasks}>
+            <IconButton size="small" onClick={handleRefresh}>
               <RefreshIcon />
             </IconButton>
             
@@ -3231,6 +3313,19 @@ const ProductionTimeline = React.memo(({
           }}>
             <CircularProgress />
           </Box>
+        )}
+
+        {isLoadingMore && (
+          <LinearProgress 
+            sx={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              right: 0, 
+              zIndex: 11,
+              height: 3
+            }} 
+          />
         )}
         
         <Timeline

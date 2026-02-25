@@ -385,6 +385,9 @@ const CustomerDetail = () => {
             value={tabValue} 
             onChange={handleTabChange} 
             aria-label="customer tabs"
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
           >
             <Tab label={t('customers.tabs.details')} />
             <Tab label={t('customers.tabs.orders')} />
