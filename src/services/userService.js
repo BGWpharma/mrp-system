@@ -7,6 +7,18 @@ const userCache = new Map();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minut
 
 /**
+ * Czyści cache dla danego użytkownika (lub cały cache jeśli nie podano userId).
+ * Wymusza ponowne pobranie danych przy następnym zapytaniu.
+ */
+export const clearUserCache = (userId) => {
+  if (userId) {
+    userCache.delete(userId);
+  } else {
+    userCache.clear();
+  }
+};
+
+/**
  * Pobiera dane użytkownika na podstawie jego ID
  * @param {string} userId - ID użytkownika
  * @returns {Promise<Object|null>} - Dane użytkownika lub null jeśli nie znaleziono
@@ -476,16 +488,40 @@ export const updateUserProfile = async (userId, userProfile, adminId) => {
  * Lista wszystkich dostępnych uprawnień w systemie
  */
 export const AVAILABLE_PERMISSIONS = {
+  // --- Dostęp do modułów ---
+  canAccessDashboard:   { id: 'canAccessDashboard',   name: 'Dashboard',        description: 'Dostęp do dashboardu, tablicy zadań, czasu pracy i grafiku', category: 'module' },
+  canAccessAnalytics:   { id: 'canAccessAnalytics',   name: 'Analityka',        description: 'Dostęp do raportów finansowych, analityk produkcji', category: 'module' },
+  canAccessHallData:    { id: 'canAccessHallData',    name: 'Parametry hali',   description: 'Dostęp do warunków środowiskowych, maszyn i formularzy hali', category: 'module' },
+  canAccessSales:       { id: 'canAccessSales',       name: 'Sprzedaż',        description: 'Dostęp do faktur, zamówień klientów, cenników i ofertowania', category: 'module' },
+  canAccessProduction:  { id: 'canAccessProduction',  name: 'Produkcja',       description: 'Dostęp do zadań produkcyjnych, receptur, kalkulatora i timeline', category: 'module' },
+  canAccessInventory:   { id: 'canAccessInventory',   name: 'Magazyn',         description: 'Dostęp do stanów magazynowych, CMR, zamówień zakupowych i dostawców', category: 'module' },
+  canAccessAIAssistant: { id: 'canAccessAIAssistant', name: 'Asystent AI',     description: 'Dostęp do asystenta AI', category: 'module' },
+  canAccessCRM:         { id: 'canAccessCRM',         name: 'CRM',             description: 'Dostęp do kontaktów, interakcji i szans sprzedażowych', category: 'module' },
+  // --- Uprawnienia operacyjne ---
   canCompleteStocktaking: {
     id: 'canCompleteStocktaking',
     name: 'Kończenie inwentaryzacji',
-    description: 'Uprawnienie do kończenia inwentaryzacji i aktualizacji stanów magazynowych'
+    description: 'Uprawnienie do kończenia inwentaryzacji i aktualizacji stanów magazynowych',
+    category: 'operational'
   },
-  // Dodaj tutaj kolejne uprawnienia w przyszłości
 };
 
 /**
- * Pobiera uprawnienia użytkownika
+ * Mapowanie identyfikatorów zakładek sidebara na wymagane uprawnienia
+ */
+export const TAB_PERMISSION_MAP = {
+  'dashboard':     'canAccessDashboard',
+  'analytics':     'canAccessAnalytics',
+  'hall-data':     'canAccessHallData',
+  'sales':         'canAccessSales',
+  'production':    'canAccessProduction',
+  'inventory':     'canAccessInventory',
+  'ai-assistant':  'canAccessAIAssistant',
+};
+
+/**
+ * Pobiera uprawnienia użytkownika.
+ * Dla administratorów zwraca wszystkie uprawnienia jako true (efektywne uprawnienia).
  * @param {string} userId - ID użytkownika
  * @returns {Promise<Object>} - Obiekt z uprawnieniami użytkownika
  */
@@ -505,6 +541,22 @@ export const getUserPermissions = async (userId) => {
     return userData?.permissions || {};
   } catch (error) {
     console.error('Błąd podczas pobierania uprawnień użytkownika:', error);
+    return {};
+  }
+};
+
+/**
+ * Pobiera surowe uprawnienia zapisane w Firestore (bez logiki admin = all true).
+ * Używane w panelu admina do edycji uprawnień — także dla kont administratorów.
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Surowy obiekt permissions z Firestore
+ */
+export const getRawUserPermissions = async (userId) => {
+  try {
+    const userData = await getUserById(userId);
+    return userData?.permissions || {};
+  } catch (error) {
+    console.error('Błąd podczas pobierania surowych uprawnień użytkownika:', error);
     return {};
   }
 };
@@ -776,9 +828,12 @@ export default {
   updateUserProfile,
   getAvailableSidebarTabs,
   getUserPermissions,
+  getRawUserPermissions,
   hasPermission,
   updateUserPermissions,
   createKioskUser,
   deleteKioskUser,
-  AVAILABLE_PERMISSIONS
+  clearUserCache,
+  AVAILABLE_PERMISSIONS,
+  TAB_PERMISSION_MAP
 }; 

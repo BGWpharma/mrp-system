@@ -5,8 +5,7 @@
   "orders": "Zamówienia",
   "customers": "Klienci",
   "recipes": "Receptury",
-  "quality": "Jakość",
-  "reports": "Raporty",
+    "reports": "Raporty",
   "settings": "Ustawienia",
   "logout": "Wyloguj"
 }

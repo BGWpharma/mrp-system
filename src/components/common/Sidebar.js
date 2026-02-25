@@ -22,8 +22,7 @@ import {
   Book as RecipesIcon, 
   Engineering as ProductionIcon, 
   Inventory as InventoryIcon, 
-  FactCheck as QualityIcon,
-  ShoppingCart as OrdersIcon,
+    ShoppingCart as OrdersIcon,
   People as CustomersIcon,
   Assessment as AnalyticsIcon,
   Assessment as AssessmentIcon,
@@ -35,8 +34,7 @@ import {
   Store as WarehouseIcon,
   List as ListIcon,
   BarChart as ReportsIcon,
-  AssessmentOutlined as QualityReportsIcon,
-  Receipt as InvoicesIcon,
+    Receipt as InvoicesIcon,
   Add as AddIcon,
   ListAlt as ListAltIcon,
   ChevronLeft as ChevronLeftIcon,
@@ -53,7 +51,8 @@ import {
   Home as HomeIcon,
   Insights as InsightsIcon,
   AccessTime as AccessTimeIcon,
-  CalendarMonth as CalendarMonthIcon
+  CalendarMonth as CalendarMonthIcon,
+  AdminPanelSettings as AdminTestIcon
 } from '@mui/icons-material';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
@@ -64,7 +63,8 @@ import BugReportDialog from './BugReportDialog';
 import FaqDialog from './FaqDialog';
 import { useSidebar } from '../../contexts/SidebarContext';
 import { useTranslation } from '../../hooks/useTranslation';
-import { getUserHiddenSidebarTabs, getUserHiddenSidebarSubtabs } from '../../services/userService';
+import { getUserHiddenSidebarTabs, getUserHiddenSidebarSubtabs, TAB_PERMISSION_MAP } from '../../services/userService';
+import { usePermissions } from '../../hooks/usePermissions';
 
 // Styled components - Clean Design
 const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
@@ -168,6 +168,7 @@ const Sidebar = ({ onToggle }) => {
   const [openSubmenu, setOpenSubmenu] = useState('');
   const [expiringItemsCount, setExpiringItemsCount] = useState(0);
   const { currentUser } = useAuth();
+  const { hasPermission, isAdmin, testMode, setTestMode } = usePermissions();
   const [bugReportDialogOpen, setBugReportDialogOpen] = useState(false);
   const [faqDialogOpen, setFaqDialogOpen] = useState(false);
   const [hiddenTabs, setHiddenTabs] = useState([]);
@@ -466,8 +467,13 @@ const Sidebar = ({ onToggle }) => {
     },
   ].sort((a, b) => a.text.localeCompare(b.text));
 
-  // Filtrowanie menuItems na podstawie ukrytych zakładek użytkownika
-  const menuItems = allMenuItems.filter(item => !hiddenTabs.includes(item.id));
+  // Filtrowanie menuItems na podstawie uprawnień i ukrytych zakładek użytkownika
+  const menuItems = allMenuItems.filter(item => {
+    if (hiddenTabs.includes(item.id)) return false;
+    const requiredPermission = TAB_PERMISSION_MAP[item.id];
+    if (!requiredPermission) return true;
+    return hasPermission(requiredPermission);
+  });
   
 
 
@@ -864,6 +870,54 @@ const Sidebar = ({ onToggle }) => {
             />
           )}
         </StyledListItem>
+        {isAdmin && (
+          <StyledListItem
+            component="div"
+            sx={{
+              color: testMode ? 'warning.main' : 'text.secondary',
+              borderRadius: '8px',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              backgroundColor: testMode ? 'rgba(237, 137, 54, 0.08)' : 'transparent',
+              '&:hover': {
+                background: testMode
+                  ? 'linear-gradient(to right, rgba(237, 137, 54, 0.15), rgba(221, 107, 32, 0.15))'
+                  : 'linear-gradient(to right, rgba(100, 100, 100, 0.08), rgba(100, 100, 100, 0.08))',
+                transform: 'translateX(4px)',
+              },
+              cursor: 'pointer'
+            }}
+            onClick={() => setTestMode(!testMode)}
+          >
+            <Tooltip title={testMode ? 'Tryb testowy AKTYWNY — kliknij aby wyłączyć' : 'Włącz tryb testowy uprawnień'} placement="right" arrow>
+              <ListItemIcon sx={{ minWidth: 36, color: testMode ? 'warning.main' : 'text.secondary' }}>
+                <AdminTestIcon />
+              </ListItemIcon>
+            </Tooltip>
+            {isDrawerOpen && (
+              <ListItemText
+                primary={testMode ? 'Test: ON' : 'Test uprawnień'}
+                primaryTypographyProps={{
+                  sx: {
+                    fontSize: '0.875rem',
+                    fontWeight: testMode ? 'bold' : 'medium',
+                    color: testMode ? 'warning.main' : 'text.secondary',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                    lineHeight: 1.3,
+                    whiteSpace: 'normal'
+                  }
+                }}
+                sx={{
+                  pr: 2,
+                  '& .MuiTypography-root': {
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word'
+                  }
+                }}
+              />
+            )}
+          </StyledListItem>
+        )}
         <StyledListItem 
           component="div"
           sx={{

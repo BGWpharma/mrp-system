@@ -80,11 +80,6 @@ export const ROUTES = {
   CMR_DETAILS: (id) => `/inventory/cmr/${id}`,
   CMR_EDIT: (id) => `/inventory/cmr/${id}/edit`,
 
-  // === Quality ===
-  QUALITY: '/quality',
-  QUALITY_NEW_TEST: '/quality/new-test',
-  QUALITY_REPORTS: '/quality/reports',
-
   // === Orders ===
   ORDERS: '/orders',
   ORDERS_CUSTOMERS: '/orders/customers',

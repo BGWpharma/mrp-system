@@ -35,11 +35,6 @@
       "description": "Manage inventory levels",
       "goTo": "Go"
     },
-    "quality": {
-      "title": "Quality",
-      "description": "Product quality control",
-      "goTo": "Go"
-    },
     "orders": {
       "title": "Customer Orders",
       "description": "Manage customer orders",

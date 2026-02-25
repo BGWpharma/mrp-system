@@ -71,7 +71,6 @@ export class ContextOptimizer {
       production: /produkc|zadani|MO|zlecen|harmonogram/i.test(lowerQuery),
       suppliers: /dostawc|supplier|vendor/i.test(lowerQuery),
       analytics: /analiz|trend|statystyk|porówn|wykres/i.test(lowerQuery),
-      quality: /jakość|test|kontrola|certyfikat|CoA/i.test(lowerQuery),
       costs: /koszt|cena|opłacalność|rentowność|finansow/i.test(lowerQuery),
       // FAZA 1: Nowe kategorie
       invoices: /faktur|płatnoś|należnoś|invoice|termin płatności|zaległoś/i.test(lowerQuery),
@@ -141,7 +140,6 @@ export class ContextOptimizer {
       // FAZA 1: Nowe kolekcje
       invoices: 0.2,
       cmrDocuments: 0.2,
-      qualityTests: 0.2,
       stocktaking: 0.2,
       inventorySupplierPriceHistory: 0.1
     };
@@ -175,14 +173,6 @@ export class ContextOptimizer {
         console.log('[ContextOptimizer] Wykryto zapytanie o transport - dodaję cmrDocuments i orders');
       }
       
-      // FAZA 1: Zapytania o jakość wymagają testów i zadań produkcyjnych
-      if (category === 'quality') {
-        relevancy.qualityTests = 1.0;
-        relevancy.production = 0.8;
-        relevancy.inventory = 0.6;
-        console.log('[ContextOptimizer] Wykryto zapytanie o jakość - dodaję qualityTests i production');
-      }
-      
       // FAZA 1: Zapytania o inwentaryzacje
       if (category === 'stocktaking') {
         relevancy.stocktaking = 1.0;
@@ -214,7 +204,6 @@ export class ContextOptimizer {
         relevancy.orders = 1.0;
         relevancy.production = 1.0;
         relevancy.invoices = 1.0;
-        relevancy.qualityTests = 1.0;
         relevancy.cmrDocuments = 0.8;
         console.log('[ContextOptimizer] Wykryto zapytanie o kompletność danych - dodaję wszystkie kolekcje');
       }
@@ -613,16 +602,6 @@ export class ContextOptimizer {
         issueDate: item.issueDate,
         deliveryDate: item.deliveryDate,
         loadingDate: item.loadingDate
-      }),
-      qualityTests: (item) => ({
-        id: item.id,
-        testName: item.testName,
-        batchNumber: item.batchNumber,
-        productionTaskId: item.productionTaskId,
-        status: item.status,
-        testDate: item.testDate,
-        performedBy: item.performedBy,
-        resultsCount: item.results?.length || 0
       }),
       stocktaking: (item) => ({
         id: item.id,

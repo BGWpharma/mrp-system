@@ -17,7 +17,6 @@ import { getAllCustomers } from './customerService';
 import { getOrdersStats } from './orderService';
 import { getAllInventoryItems, getExpiredBatches, getExpiringBatches, getInventoryTransactionsPaginated } from './inventory';
 import { getAllTasks, getTasksByStatus } from './productionService';
-import { getAllTests } from './qualityService';
 import { ServiceCacheManager } from './cache/serviceCacheManager';
 
 const AI_CACHE_PREFIX = 'ai:';
@@ -1828,7 +1827,7 @@ export const prepareBusinessDataForAI = async (query = '') => {
       'productionHistory', 'recipeVersions', 'settings', 'users',
       'warehouses', 'workstations', 'inventoryBatches',
       // FAZA 1: Nowe kolekcje dla AI
-      'invoices', 'cmrDocuments', 'qualityTests', 
+      'invoices', 'cmrDocuments', 
       'stocktaking', 'inventorySupplierPriceHistory'
     ];
     
@@ -1884,10 +1883,8 @@ export const prepareBusinessDataForAI = async (query = '') => {
         warehouses: batchData.warehouses || [],
         workstations: batchData.workstations || [],
         inventoryBatches: batchData.inventoryBatches || [],
-        // FAZA 1: Nowe kolekcje dla analizy finansowej, logistycznej i jakościowej
         invoices: batchData.invoices || [],
         cmrDocuments: batchData.cmrDocuments || [],
-        qualityTests: batchData.qualityTests || [],
         stocktaking: batchData.stocktaking || [],
         inventorySupplierPriceHistory: batchData.inventorySupplierPriceHistory || []
       },
@@ -1918,10 +1915,8 @@ export const prepareBusinessDataForAI = async (query = '') => {
         warehouses: (batchData.warehouses?.length || 0) > 0,
         workstations: (batchData.workstations?.length || 0) > 0,
         inventoryBatches: (batchData.inventoryBatches?.length || 0) > 0,
-        // FAZA 1: Kompletność nowych kolekcji
         invoices: (batchData.invoices?.length || 0) > 0,
         cmrDocuments: (batchData.cmrDocuments?.length || 0) > 0,
-        qualityTests: (batchData.qualityTests?.length || 0) > 0,
         stocktaking: (batchData.stocktaking?.length || 0) > 0,
         inventorySupplierPriceHistory: (batchData.inventorySupplierPriceHistory?.length || 0) > 0
       },
@@ -2362,8 +2357,7 @@ export const analyzeValueChain = (businessData) => {
     productionTasks = [], 
     purchaseOrders = [],
     materialBatches = [],
-    invoices = [],
-    qualityTests = []
+    invoices = []
   } = businessData.data;
 
   const valueChains = [];
@@ -2393,7 +2387,6 @@ export const analyzeValueChain = (businessData) => {
       hasProduction: false,
       hasInvoice: false,
       hasBatches: false,
-      hasQualityTests: false,
       completenessScore: 0
     };
 
@@ -2427,33 +2420,20 @@ export const analyzeValueChain = (businessData) => {
         }));
       }
 
-      // Znajdź testy jakościowe
-      const tests = qualityTests.filter(test => 
-        test.productionTaskId === task.id ||
-        test.moNumber === task.moNumber
-      );
-
-      if (tests.length > 0) {
-        chain.hasQualityTests = true;
-        task.qualityTests = tests;
-      }
     });
 
     chain.hasInvoice = chain.invoices.length > 0;
 
     // Oblicz score kompletności
     let score = 0;
-    if (chain.hasProduction) score += 0.25;
-    if (chain.hasBatches) score += 0.25;
-    if (chain.hasQualityTests) score += 0.25;
-    if (chain.hasInvoice) score += 0.25;
+    if (chain.hasProduction) score += 1/3;
+    if (chain.hasBatches) score += 1/3;
+    if (chain.hasInvoice) score += 1/3;
     chain.completenessScore = score;
 
-    // Dodaj missing steps
     chain.missingSteps = [];
     if (!chain.hasProduction) chain.missingSteps.push('production');
     if (!chain.hasBatches) chain.missingSteps.push('batches');
-    if (!chain.hasQualityTests) chain.missingSteps.push('qualityTests');
     if (!chain.hasInvoice) chain.missingSteps.push('invoice');
 
     valueChains.push(chain);
@@ -2474,8 +2454,7 @@ export const analyzeValueChain = (businessData) => {
       incompleteChains: incompleteChains.length,
       avgCompleteness: Math.round(avgCompleteness * 100),
       ordersWithoutProduction: valueChains.filter(c => !c.hasProduction).length,
-      ordersWithoutInvoice: valueChains.filter(c => !c.hasInvoice).length,
-      ordersWithoutQualityTests: valueChains.filter(c => !c.hasQualityTests).length
+      ordersWithoutInvoice: valueChains.filter(c => !c.hasInvoice).length
     }
   };
 };
@@ -2494,7 +2473,6 @@ export const analyzeDataCompleteness = (businessData) => {
     productionTasks = [],
     orders = [],
     invoices = [],
-    qualityTests = [],
     materialBatches = [],
     purchaseOrders = [],
     cmrDocuments = []
@@ -2506,7 +2484,6 @@ export const analyzeDataCompleteness = (businessData) => {
     overallScore: 0
   };
 
-  // Analiza zadań produkcyjnych
   productionTasks.forEach(task => {
     const completeness = {
       id: task.id,
@@ -2514,15 +2491,11 @@ export const analyzeDataCompleteness = (businessData) => {
       name: task.name || task.productName,
       status: task.status,
       
-      // Sprawdź powiązania
       hasRecipe: !!(task.recipeId || task.recipe),
       hasOrder: !!(task.orderId || task.linkedOrderId),
       hasBatches: materialBatches.some(b => 
         task.consumedMaterials?.some(cm => cm.batchId === b.id) ||
         task.ingredients?.some(ing => ing.batchNumber === b.batchNumber)
-      ),
-      hasQualityTests: qualityTests.some(t => 
-        t.productionTaskId === task.id || t.moNumber === task.moNumber
       ),
       hasInvoice: false,
       
@@ -2540,14 +2513,12 @@ export const analyzeDataCompleteness = (businessData) => {
       }
     }
 
-    // Oblicz score
     let score = 0;
-    const totalChecks = 5;
+    const totalChecks = 4;
     
     if (completeness.hasRecipe) score++; else completeness.missingData.push('recipe');
     if (completeness.hasOrder) score++; else completeness.missingData.push('customerOrder');
     if (completeness.hasBatches) score++; else completeness.missingData.push('materialBatches');
-    if (completeness.hasQualityTests) score++; else completeness.missingData.push('qualityTests');
     if (completeness.hasInvoice) score++; else completeness.missingData.push('invoice');
     
     completeness.completenessScore = score / totalChecks;
@@ -2603,7 +2574,6 @@ export const analyzeDataCompleteness = (businessData) => {
     ordersWithIssues: analysis.orders.filter(o => o.completenessScore < 1.0).length,
     
     // Szczegółowe braki
-    tasksWithoutQualityTests: analysis.productionTasks.filter(t => !t.hasQualityTests).length,
     tasksWithoutBatches: analysis.productionTasks.filter(t => !t.hasBatches).length,
     ordersWithoutInvoices: analysis.orders.filter(o => !o.hasInvoice).length,
     ordersWithoutCMR: analysis.orders.filter(o => !o.hasCMR).length,
@@ -2625,19 +2595,6 @@ export const generateDataCompletenessInsights = (completenessAnalysis) => {
 
   const insights = [];
   const stats = completenessAnalysis.statistics;
-
-  // Ostrzeżenia o brakujących testach jakościowych
-  if (stats.tasksWithoutQualityTests > 0) {
-    insights.push({
-      type: 'warning',
-      category: 'quality',
-      priority: 'high',
-      message: `⚠️ ${stats.tasksWithoutQualityTests} zadań produkcyjnych nie ma testów jakościowych`,
-      recommendation: 'Przeprowadź testy jakościowe dla zakończonych MO',
-      affectedCount: stats.tasksWithoutQualityTests,
-      query: 'Które MO nie mają testów jakościowych?'
-    });
-  }
 
   // Ostrzeżenia o brakujących fakturach
   if (stats.ordersWithoutInvoices > 0) {

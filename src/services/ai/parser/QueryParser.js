@@ -82,8 +82,6 @@ export class QueryParser {
     // Problemy i ryzyka
     problems: /problem|trudności|przeszkod|wyzwani|błęd/i,
     risks: /ryzyko|zagroże|niebezpieczeń|słab|defekt/i,
-    quality: /jakość|certyfikat|audit|kontrola|test|sprawdzen/i,
-    
     // Koszty i finanse
     costs: /koszt|cena|wydatk|opłacalność|zyskown|rentowność|finansow|budżet|economy/i,
     profitability: /zysk|profit|marża|zwrot|rentowność|ROI/i,
@@ -368,10 +366,6 @@ export class QueryParser {
       return 'risk_analysis';
     }
     
-    if (this.patterns.quality.test(query)) {
-      return 'quality_analysis';
-    }
-
     // Monitoring systemu
     if (this.patterns.monitoring.test(query)) {
       return 'system_monitoring';
@@ -618,7 +612,7 @@ export class QueryParser {
       // Rekomendacje
       'recommendations_inventory': ['inventory', 'orders', 'suppliers', 'usage'],
       'recommendations_production': ['productionTasks', 'recipes', 'capacity', 'orders'],
-      'recommendations_suppliers': ['suppliers', 'purchaseOrders', 'quality', 'costs'],
+      'recommendations_suppliers': ['suppliers', 'purchaseOrders', 'costs'],
       'recommendations_general': ['inventory', 'orders', 'suppliers', 'customers'],
       
       // Wydajność i benchmarking
@@ -627,8 +621,7 @@ export class QueryParser {
       'performance_general': ['inventory', 'orders', 'productionTasks', 'kpis'],
       
       // Ryzyka i jakość
-      'risk_analysis': ['inventory', 'suppliers', 'quality', 'dependencies'],
-      'quality_analysis': ['quality', 'tests', 'certificates', 'audits'],
+      'risk_analysis': ['inventory', 'suppliers', 'dependencies'],
       
       // Monitoring i planowanie
       'system_monitoring': ['systemHealth', 'performance', 'alerts', 'metrics'],
@@ -679,7 +672,7 @@ export class QueryParser {
   static isAdvancedQuery(intent) {
     const advancedIntents = [
       'analytics_', 'prediction_', 'optimization_', 'recommendations_',
-      'performance_', 'risk_analysis', 'quality_analysis', 'planning_',
+      'performance_', 'risk_analysis', 'planning_',
       'financial_', 'deep_analysis', 'system_monitoring'
     ];
     
@@ -778,7 +771,7 @@ export class QueryParser {
     if (intent.includes('optimization')) return 'optimization_analysis';
     if (intent.includes('recommendations')) return 'recommendation_engine';
     if (intent.includes('performance') || intent.includes('benchmark')) return 'performance_analysis';
-    if (intent.includes('risk') || intent.includes('quality')) return 'risk_assessment';
+    if (intent.includes('risk')) return 'risk_assessment';
     if (intent.includes('financial') || intent.includes('cost')) return 'financial_analysis';
     
     return 'descriptive_analysis';

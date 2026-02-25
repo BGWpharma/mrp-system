@@ -5,8 +5,7 @@
   "orders": "Orders",
   "customers": "Customers",
   "recipes": "Recipes",
-  "quality": "Quality",
-  "reports": "Reports",
+    "reports": "Reports",
   "settings": "Settings",
   "logout": "Logout"
 }

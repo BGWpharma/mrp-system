@@ -1,18 +1,40 @@
 // src/hooks/usePermissions.js
-import { useState, useEffect } from 'react';
-import { getUserPermissions, hasPermission } from '../services/userService';
+import { useState, useEffect, useCallback } from 'react';
+import { getRawUserPermissions, hasPermission, clearUserCache } from '../services/userService';
 import { useAuth } from './useAuth';
 
+const TEST_MODE_KEY = 'mrp_permissions_test_mode';
+
 /**
- * Hook do sprawdzania uprawnień użytkownika
- * Automatycznie pobiera uprawnienia zalogowanego użytkownika
- * @returns {Object} - Obiekt z uprawnieniami i funkcją sprawdzającą
+ * Hook do sprawdzania uprawnień użytkownika.
+ * Pobiera surowe uprawnienia z Firestore i sprawdza rolę admina.
+ * W trybie normalnym administrator ma auto-grant na wszystko.
+ * W trybie testowym administrator jest traktowany jak pracownik.
  */
 export const usePermissions = () => {
   const { currentUser } = useAuth();
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [refreshCounter, setRefreshCounter] = useState(0);
+  const [testMode, setTestModeState] = useState(() => {
+    try { return localStorage.getItem(TEST_MODE_KEY) === 'true'; } catch { return false; }
+  });
+
+  const setTestMode = useCallback((enabled) => {
+    setTestModeState(enabled);
+    try { localStorage.setItem(TEST_MODE_KEY, String(enabled)); } catch {}
+  }, []);
+
+  /**
+   * Wymusza ponowne pobranie uprawnień z Firestore (czyści cache).
+   */
+  const refreshPermissions = useCallback(() => {
+    if (currentUser?.uid) {
+      clearUserCache(currentUser.uid);
+    }
+    setRefreshCounter(c => c + 1);
+  }, [currentUser?.uid]);
 
   useEffect(() => {
     const fetchPermissions = async () => {
@@ -25,11 +47,10 @@ export const usePermissions = () => {
 
       try {
         setLoading(true);
-        const userPermissions = await getUserPermissions(currentUser.uid);
+        // Zawsze pobieraj surowe uprawnienia z Firestore
+        const userPermissions = await getRawUserPermissions(currentUser.uid);
         setPermissions(userPermissions);
         
-        // Sprawdź czy użytkownik jest administratorem
-        // Administratorzy mają wszystkie uprawnienia
         const adminCheck = await hasPermission(currentUser.uid, 'admin');
         setIsAdmin(adminCheck);
       } catch (error) {
@@ -42,27 +63,32 @@ export const usePermissions = () => {
     };
 
     fetchPermissions();
-  }, [currentUser]);
+  }, [currentUser, refreshCounter]);
 
-  /**
-   * Sprawdza czy użytkownik ma określone uprawnienie
-   * @param {string} permission - Nazwa uprawnienia
-   * @returns {boolean} - Czy użytkownik ma uprawnienie
-   */
-  const checkPermission = (permission) => {
-    // Administratorzy mają wszystkie uprawnienia
-    if (isAdmin) return true;
-    
+  const checkPermission = useCallback((permission) => {
+    if (isAdmin && !testMode) return true;
     return permissions[permission] === true;
-  };
+  }, [isAdmin, testMode, permissions]);
 
   return {
     permissions,
     loading,
     isAdmin,
+    testMode,
+    setTestMode,
+    refreshPermissions,
     hasPermission: checkPermission,
-    // Eksportuj konkretne uprawnienia dla wygody
+    // Uprawnienia operacyjne
     canCompleteStocktaking: checkPermission('canCompleteStocktaking'),
+    // Uprawnienia modułowe
+    canAccessDashboard: checkPermission('canAccessDashboard'),
+    canAccessAnalytics: checkPermission('canAccessAnalytics'),
+    canAccessProduction: checkPermission('canAccessProduction'),
+    canAccessInventory: checkPermission('canAccessInventory'),
+    canAccessSales: checkPermission('canAccessSales'),
+    canAccessHallData: checkPermission('canAccessHallData'),
+    canAccessAIAssistant: checkPermission('canAccessAIAssistant'),
+    canAccessCRM: checkPermission('canAccessCRM'),
   };
 };
 

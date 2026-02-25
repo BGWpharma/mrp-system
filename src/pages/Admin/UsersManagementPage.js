@@ -47,7 +47,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { 
   getAllUsers, 
   changeUserRole, 
-  getUserPermissions, 
+  getRawUserPermissions, 
   updateUserPermissions,
   createKioskUser,
   deleteKioskUser,
@@ -56,9 +56,11 @@ import {
 import SidebarTabsManager from '../../components/admin/SidebarTabsManager';
 import UserProfileEditor from '../../components/admin/UserProfileEditor';
 import { useTranslation } from '../../hooks/useTranslation';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const UsersManagementPage = () => {
   const { t } = useTranslation('users');
+  const { refreshPermissions } = usePermissions();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -150,8 +152,8 @@ const UsersManagementPage = () => {
       setSelectedUserForPermissions(user);
       setProcessing(true);
       
-      // Pobierz aktualne uprawnienia użytkownika
-      const permissions = await getUserPermissions(user.id);
+      // Pobierz surowe uprawnienia z Firestore (bez logiki admin=all)
+      const permissions = await getRawUserPermissions(user.id);
       setUserPermissions(permissions);
       
       setPermissionsDialogOpen(true);
@@ -185,7 +187,8 @@ const UsersManagementPage = () => {
       
       showSuccess(`Uprawnienia użytkownika ${selectedUserForPermissions.displayName || selectedUserForPermissions.email} zostały zaktualizowane`);
       handleClosePermissionsDialog();
-      fetchUsers(); // Odśwież listę użytkowników
+      fetchUsers();
+      refreshPermissions();
     } catch (error) {
       console.error('Błąd podczas aktualizacji uprawnień użytkownika:', error);
       showError(error.message || 'Nie udało się zaktualizować uprawnień użytkownika');
@@ -447,7 +450,6 @@ const UsersManagementPage = () => {
                       </IconButton>
                       <IconButton 
                         onClick={() => handleOpenPermissionsDialog(user)}
-                        disabled={user.role === 'administrator'} // Administratorzy mają wszystkie uprawnienia
                         title={t('managePermissions')}
                         color="warning"
                         sx={{ mr: 0.5 }}
@@ -554,15 +556,47 @@ const UsersManagementPage = () => {
           </DialogContentText>
           
           <Box sx={{ mt: 2 }}>
-            {Object.values(AVAILABLE_PERMISSIONS).map((permission) => (
-              <Box key={permission.id} sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
-                <FormControl component="fieldset">
+            {/* Dostęp do modułów */}
+            <Typography variant="subtitle2" color="primary" sx={{ mb: 1, mt: 2, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {t('permissionCategories.module', 'Dostęp do modułów')}
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+            {Object.values(AVAILABLE_PERMISSIONS).filter(p => p.category === 'module').map((permission) => (
+              <Box key={permission.id} sx={{ mb: 1, p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                <FormControl component="fieldset" sx={{ width: '100%' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
-                      <Typography variant="subtitle1" fontWeight="bold">
+                      <Typography variant="subtitle2" fontWeight="bold">
                         {permission.name}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary">
+                        {permission.description}
+                      </Typography>
+                    </Box>
+                    <Checkbox
+                      checked={userPermissions[permission.id] === true}
+                      onChange={() => handlePermissionChange(permission.id)}
+                      color="primary"
+                    />
+                  </Box>
+                </FormControl>
+              </Box>
+            ))}
+
+            {/* Uprawnienia operacyjne */}
+            <Typography variant="subtitle2" color="primary" sx={{ mb: 1, mt: 3, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {t('permissionCategories.operational', 'Uprawnienia operacyjne')}
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+            {Object.values(AVAILABLE_PERMISSIONS).filter(p => p.category === 'operational').map((permission) => (
+              <Box key={permission.id} sx={{ mb: 1, p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                <FormControl component="fieldset" sx={{ width: '100%' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight="bold">
+                        {permission.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
                         {permission.description}
                       </Typography>
                     </Box>

@@ -38,6 +38,7 @@ import Navbar from './components/common/Navbar';
 import Sidebar from './components/common/Sidebar';
 import PrivateRoute from './components/common/PrivateRoute';
 import AdminRoute from './components/common/AdminRoute';
+import PermissionRoute from './components/common/PermissionRoute';
 import AIChatFAB from './components/common/AIChatFAB';
 
 // Styles
@@ -105,11 +106,6 @@ const InventoryFormsPage = lazy(() => import('./pages/Inventory/InventoryFormsPa
 const InventoryFormsResponsesPage = lazy(() => import('./pages/Inventory/InventoryFormsResponsesPage'));
 const LoadingReportFormPage = lazy(() => import('./pages/Inventory/LoadingReportFormPage'));
 const UnloadingReportFormPage = lazy(() => import('./pages/Inventory/UnloadingReportFormPage'));
-
-// Quality
-const QualityPage = lazy(() => import('./pages/Quality/QualityPage'));
-const NewTestPage = lazy(() => import('./pages/Quality/NewTestPage'));
-const QualityReportsPage = lazy(() => import('./pages/Quality/QualityReportsPage'));
 
 // Orders
 const OrdersPage = lazy(() => import('./pages/Orders/OrdersPage'));
@@ -372,19 +368,19 @@ function App() {
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     
-                    <Route path="/" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
+                    <Route path="/" element={<PermissionRoute permission="canAccessDashboard"><PrivateLayout><Dashboard /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Analytics Routes */}
-                    <Route path="/analytics" element={<PrivateLayout><AnalyticsDashboardPage /></PrivateLayout>} />
-                    <Route path="/analytics/financial-report" element={<PrivateLayout><FinancialReportPage /></PrivateLayout>} />
-                    <Route path="/analytics/production-time" element={<PrivateLayout><ProductionTimePage /></PrivateLayout>} />
-                    <Route path="/analytics/mo-consumption" element={<PrivateLayout><MOConsumptionPage /></PrivateLayout>} />
-                    <Route path="/analytics/production-progress" element={<PrivateLayout><ProductionProgressPage /></PrivateLayout>} />
-                    <Route path="/analytics/production-costs" element={<PrivateLayout><ProductionCostsPage /></PrivateLayout>} />
-                    <Route path="/analytics/cashflow" element={<PrivateLayout><CashflowPage /></PrivateLayout>} />
-                    <Route path="/analytics/mixing" element={<PrivateLayout><MixingAnalyticsPage /></PrivateLayout>} />
+                    <Route path="/analytics" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><AnalyticsDashboardPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/analytics/financial-report" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><FinancialReportPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/analytics/production-time" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><ProductionTimePage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/analytics/mo-consumption" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><MOConsumptionPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/analytics/production-progress" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><ProductionProgressPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/analytics/production-costs" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><ProductionCostsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/analytics/cashflow" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><CashflowPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/analytics/mixing" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><MixingAnalyticsPage /></PrivateLayout></PermissionRoute>} />
                     <Route path="/analytics/weekly-sprint" element={<Navigate to="/analytics/production-time" replace />} />
-                    <Route path="/analytics/eco-report" element={<PrivateLayout><EcoReportPage /></PrivateLayout>} />
+                    <Route path="/analytics/eco-report" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><EcoReportPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Admin Routes - dostępne tylko dla administratorów */}
                     <Route path="/admin/users" element={
@@ -412,75 +408,70 @@ function App() {
                     } />
                     
                     {/* Recipes Routes */}
-                    <Route path="/recipes" element={<PrivateLayout><RecipesPage /></PrivateLayout>} />
-                    <Route path="/recipes/new" element={<PrivateLayout><NewRecipePage /></PrivateLayout>} />
-                    <Route path="/recipes/:id" element={<PrivateLayout><RecipeDetailsPage /></PrivateLayout>} />
-                    <Route path="/recipes/:id/edit" element={<PrivateLayout><EditRecipePage /></PrivateLayout>} />
+                    <Route path="/recipes" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><RecipesPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/recipes/new" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><NewRecipePage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/recipes/:id" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><RecipeDetailsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/recipes/:id/edit" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><EditRecipePage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Production Routes */}
-                    <Route path="/production" element={<PrivateLayout><ProductionPage /></PrivateLayout>} />
-                    <Route path="/production/new-task" element={<PrivateLayout><NewTaskPage /></PrivateLayout>} />
-                    <Route path="/production/timeline" element={<PrivateLayout><ProductionTimelinePage /></PrivateLayout>} />
-                    <Route path="/production/calculator" element={<PrivateLayout><CalculatorPage /></PrivateLayout>} />
-                    <Route path="/production/forecast" element={<PrivateLayout><ForecastPage /></PrivateLayout>} />
-                    <Route path="/production/forms" element={<PrivateLayout><FormsPage /></PrivateLayout>} />
-                    <Route path="/production/forms/completed-mo" element={<PrivateLayout><CompletedMOFormPage /></PrivateLayout>} />
-                    <Route path="/production/forms/production-control" element={<PrivateLayout><ProductionControlFormPage /></PrivateLayout>} />
-                    <Route path="/production/forms/production-shift" element={<PrivateLayout><ProductionShiftFormPage /></PrivateLayout>} />
-                    <Route path="/production/forms/responses" element={<PrivateLayout><FormsResponsesPage /></PrivateLayout>} />
-                    <Route path="/production/tasks/:id" element={<PrivateLayout><TaskDetailsPage /></PrivateLayout>} />
-                    <Route path="/production/tasks/:id/edit" element={<PrivateLayout><EditTaskPage /></PrivateLayout>} />
-                    <Route path="/production/consumption/:taskId" element={<PrivateLayout><ConsumptionPage /></PrivateLayout>} />
-                    <Route path="/production/reports" element={<PrivateLayout><ReportsPage /></PrivateLayout>} />
-                    <Route path="/production/create-from-order" element={<PrivateLayout><CreateFromOrderPage /></PrivateLayout>} />
-                    <Route path="/production/workstations" element={<PrivateLayout><WorkstationsPage /></PrivateLayout>} />
-                    <Route path="/production/workstations/new" element={<PrivateLayout><WorkstationsPage /></PrivateLayout>} />
+                    <Route path="/production" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><ProductionPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/new-task" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><NewTaskPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/timeline" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><ProductionTimelinePage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/calculator" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><CalculatorPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/forecast" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><ForecastPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/forms" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><FormsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/forms/completed-mo" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><CompletedMOFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/forms/production-control" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><ProductionControlFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/forms/production-shift" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><ProductionShiftFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/forms/responses" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><FormsResponsesPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/tasks/:id" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><TaskDetailsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/tasks/:id/edit" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><EditTaskPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/consumption/:taskId" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><ConsumptionPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/reports" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><ReportsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/create-from-order" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><CreateFromOrderPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/workstations" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><WorkstationsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/production/workstations/new" element={<PermissionRoute permission="canAccessProduction"><PrivateLayout><WorkstationsPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Inventory Routes */}
-                    <Route path="/inventory" element={<PrivateLayout><InventoryPage /></PrivateLayout>} />
-                    <Route path="/inventory/new" element={<PrivateLayout><NewInventoryItemPage /></PrivateLayout>} />
-                    <Route path="/inventory/:id" element={<PrivateLayout><ItemDetailsPage /></PrivateLayout>} />
-                    <Route path="/inventory/:id/batches" element={<PrivateLayout><BatchesPage /></PrivateLayout>} />
-                    <Route path="/inventory/batch/:batchId" element={<PrivateLayout><BatchEditPage /></PrivateLayout>} />
-                    <Route path="/inventory/:id/batches/:batchId/edit" element={<PrivateLayout><BatchEditPage /></PrivateLayout>} />
-                    <Route path="/inventory/:id/edit" element={<PrivateLayout><EditInventoryItemPage /></PrivateLayout>} />
-                    <Route path="/inventory/:id/receive" element={<PrivateLayout><ReceiveInventoryPage /></PrivateLayout>} />
-                    <Route path="/inventory/:id/issue" element={<PrivateLayout><IssueInventoryPage /></PrivateLayout>} />
-                    <Route path="/inventory/:id/history" element={<PrivateLayout><InventoryHistoryPage /></PrivateLayout>} />
-                    <Route path="/inventory/expiry-dates" element={<PrivateLayout><ExpiryDatesPage /></PrivateLayout>} />
-                    <Route path="/inventory/stocktaking" element={<PrivateLayout><StocktakingPage /></PrivateLayout>} />
-                    <Route path="/inventory/stocktaking/new" element={<PrivateLayout><StocktakingFormPage /></PrivateLayout>} />
-                    <Route path="/inventory/stocktaking/:id" element={<PrivateLayout><StocktakingDetailsPage /></PrivateLayout>} />
-                    <Route path="/inventory/stocktaking/:id/edit" element={<PrivateLayout><StocktakingFormPage /></PrivateLayout>} />
-                    <Route path="/inventory/stocktaking/:id/report" element={<PrivateLayout><StocktakingReportPage /></PrivateLayout>} />
-                    <Route path="/inventory/forms" element={<PrivateLayout><InventoryFormsPage /></PrivateLayout>} />
-                    <Route path="/inventory/forms/responses" element={<PrivateLayout><InventoryFormsResponsesPage /></PrivateLayout>} />
-                    <Route path="/inventory/forms/loading-report" element={<PrivateLayout><LoadingReportFormPage /></PrivateLayout>} />
-                    <Route path="/inventory/forms/unloading-report" element={<PrivateLayout><UnloadingReportFormPage /></PrivateLayout>} />
+                    <Route path="/inventory" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><InventoryPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/new" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><NewInventoryItemPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/:id" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><ItemDetailsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/:id/batches" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><BatchesPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/batch/:batchId" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><BatchEditPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/:id/batches/:batchId/edit" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><BatchEditPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/:id/edit" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><EditInventoryItemPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/:id/receive" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><ReceiveInventoryPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/:id/issue" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><IssueInventoryPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/:id/history" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><InventoryHistoryPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/expiry-dates" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><ExpiryDatesPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/stocktaking" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><StocktakingPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/stocktaking/new" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><StocktakingFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/stocktaking/:id" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><StocktakingDetailsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/stocktaking/:id/edit" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><StocktakingFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/stocktaking/:id/report" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><StocktakingReportPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/forms" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><InventoryFormsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/forms/responses" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><InventoryFormsResponsesPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/forms/loading-report" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><LoadingReportFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/forms/unloading-report" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><UnloadingReportFormPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* CMR Routes */}
-                    <Route path="/inventory/cmr" element={<PrivateLayout><CmrListPage /></PrivateLayout>} />
-                    <Route path="/inventory/cmr/new" element={<PrivateLayout><CmrCreatePage /></PrivateLayout>} />
-                    <Route path="/inventory/cmr/:id" element={<PrivateLayout><CmrDetailsPage /></PrivateLayout>} />
-                    <Route path="/inventory/cmr/:id/edit" element={<PrivateLayout><CmrEditPage /></PrivateLayout>} />
-                    
-                    {/* Quality Routes */}
-                    <Route path="/quality" element={<PrivateLayout><QualityPage /></PrivateLayout>} />
-                    <Route path="/quality/new-test" element={<PrivateLayout><NewTestPage /></PrivateLayout>} />
-                    <Route path="/quality/reports" element={<PrivateLayout><QualityReportsPage /></PrivateLayout>} />
+                    <Route path="/inventory/cmr" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><CmrListPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/cmr/new" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><CmrCreatePage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/cmr/:id" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><CmrDetailsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/inventory/cmr/:id/edit" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><CmrEditPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Orders Routes - główna strona z zakładkami */}
-                    <Route path="/orders" element={<PrivateLayout><OrdersPage /></PrivateLayout>} />
-                    <Route path="/orders/customers" element={<PrivateLayout><OrdersPage /></PrivateLayout>} />
-                    <Route path="/orders/price-lists" element={<PrivateLayout><OrdersPage /></PrivateLayout>} />
-                    <Route path="/orders/new" element={<PrivateLayout><OrderForm /></PrivateLayout>} />
-                    <Route path="/orders/edit/:orderId" element={<PrivateLayout><EditOrderWrapper /></PrivateLayout>} />
-                    <Route path="/orders/:orderId" element={<PrivateLayout><OrderDetails /></PrivateLayout>} />
+                    <Route path="/orders" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><OrdersPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/orders/customers" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><OrdersPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/orders/price-lists" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><OrdersPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/orders/new" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><OrderForm /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/orders/edit/:orderId" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><EditOrderWrapper /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/orders/:orderId" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><OrderDetails /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Price Lists Routes - teraz w ramach orders */}
-                    <Route path="/orders/price-lists/new" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
-                    <Route path="/orders/price-lists/:id" element={<PrivateLayout><PriceListDetailsPage /></PrivateLayout>} />
-                    <Route path="/orders/price-lists/:id/edit" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
+                    <Route path="/orders/price-lists/new" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><PriceListFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/orders/price-lists/:id" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><PriceListDetailsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/orders/price-lists/:id/edit" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><PriceListFormPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Legacy Price Lists Routes - redirect do kanonicznych ścieżek */}
                     <Route path="/sales/price-lists" element={<Navigate to="/orders/price-lists" replace />} />
@@ -490,40 +481,40 @@ function App() {
                     
                     
                     {/* Sales Routes - nowa struktura z zakładkami */}
-                    <Route path="/sales" element={<PrivateLayout><SalesPage /></PrivateLayout>} />
-                    <Route path="/sales/material-advances" element={<PrivateLayout><SalesPage /></PrivateLayout>} />
-                    <Route path="/sales/factory-costs" element={<PrivateLayout><SalesPage /></PrivateLayout>} />
-                    <Route path="/sales/quotation" element={<PrivateLayout><SalesPage /></PrivateLayout>} />
+                    <Route path="/sales" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><SalesPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/sales/material-advances" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><SalesPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/sales/factory-costs" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><SalesPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/sales/quotation" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><SalesPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Invoices Routes */}
-                    <Route path="/invoices" element={<PrivateLayout><SalesPage /></PrivateLayout>} /> {/* Legacy route - przekierowanie do /sales */}
-                    <Route path="/invoices/new" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />
-                    <Route path="/invoices/:invoiceId" element={<PrivateLayout><InvoiceDetailsPage /></PrivateLayout>} />
-                    <Route path="/invoices/:invoiceId/edit" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />
-                    <Route path="/invoices/company-settings" element={<PrivateLayout><CompanySettingsPage /></PrivateLayout>} />
+                    <Route path="/invoices" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><SalesPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/invoices/new" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><InvoiceFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/invoices/:invoiceId" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><InvoiceDetailsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/invoices/:invoiceId/edit" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><InvoiceFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/invoices/company-settings" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><CompanySettingsPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Purchase Orders Routes */}
-                    <Route path="/purchase-orders" element={<PrivateLayout><PurchaseOrdersPage /></PrivateLayout>} />
-                    <Route path="/purchase-orders/new" element={<PrivateLayout><PurchaseOrderFormPage /></PrivateLayout>} />
-                    <Route path="/purchase-orders/:id" element={<PrivateLayout><PurchaseOrderDetailsPage /></PrivateLayout>} />
-                    <Route path="/purchase-orders/:id/edit" element={<PrivateLayout><PurchaseOrderFormPage /></PrivateLayout>} />
+                    <Route path="/purchase-orders" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><PurchaseOrdersPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/purchase-orders/new" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><PurchaseOrderFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/purchase-orders/:id" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><PurchaseOrderDetailsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/purchase-orders/:id/edit" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><PurchaseOrderFormPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Suppliers Routes */}
-                    <Route path="/suppliers" element={<PrivateLayout><SuppliersPage /></PrivateLayout>} />
-                    <Route path="/suppliers/new" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
-                    <Route path="/suppliers/:id/edit" element={<PrivateLayout><SupplierFormPage /></PrivateLayout>} />
-                    <Route path="/suppliers/:id/view" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
-                    <Route path="/suppliers/:id" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
+                    <Route path="/suppliers" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><SuppliersPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/suppliers/new" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><SupplierFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/suppliers/:id/edit" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><SupplierFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/suppliers/:id/view" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/suppliers/:id" element={<PermissionRoute permission="canAccessInventory"><PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Customers Routes - teraz w ramach orders */}
-                    <Route path="/orders/customers/:customerId" element={<PrivateLayout><CustomerDetail /></PrivateLayout>} />
+                    <Route path="/orders/customers/:customerId" element={<PermissionRoute permission="canAccessSales"><PrivateLayout><CustomerDetail /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Legacy Customers Routes - redirect do kanonicznych ścieżek */}
                     <Route path="/customers" element={<Navigate to="/orders/customers" replace />} />
                     <Route path="/customers/:customerId" element={<CustomerRedirect />} />
                     
                     {/* AI Assistant Routes */}
-                    <Route path="/ai-assistant" element={<PrivateLayout><AIAssistantPage /></PrivateLayout>} />
+                    <Route path="/ai-assistant" element={<PermissionRoute permission="canAccessAIAssistant"><PrivateLayout><AIAssistantPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Kiosk Routes */}
                     <Route path="/kiosk" element={
@@ -533,29 +524,29 @@ function App() {
                     } />
                     
                     {/* Hall Data Routes */}
-                    <Route path="/hall-data/conditions" element={<PrivateLayout><HallDataConditionsPage /></PrivateLayout>} />
-                    <Route path="/hall-data/machines" element={<PrivateLayout><HallDataMachinesPage /></PrivateLayout>} />
-                    <Route path="/hall-data/forms" element={<PrivateLayout><HallDataFormsPage /></PrivateLayout>} />
-                    <Route path="/hall-data/forms/service-report" element={<PrivateLayout><ServiceReportFormPage /></PrivateLayout>} />
-                    <Route path="/hall-data/forms/monthly-service-report" element={<PrivateLayout><MonthlyServiceReportFormPage /></PrivateLayout>} />
-                    <Route path="/hall-data/forms/defect-registry" element={<PrivateLayout><DefectRegistryFormPage /></PrivateLayout>} />
-                    <Route path="/hall-data/forms/service-repair-report" element={<PrivateLayout><ServiceRepairReportFormPage /></PrivateLayout>} />
-                    <Route path="/hall-data/forms/responses" element={<PrivateLayout><HallDataFormsResponsesPage /></PrivateLayout>} />
+                    <Route path="/hall-data/conditions" element={<PermissionRoute permission="canAccessHallData"><PrivateLayout><HallDataConditionsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/hall-data/machines" element={<PermissionRoute permission="canAccessHallData"><PrivateLayout><HallDataMachinesPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/hall-data/forms" element={<PermissionRoute permission="canAccessHallData"><PrivateLayout><HallDataFormsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/hall-data/forms/service-report" element={<PermissionRoute permission="canAccessHallData"><PrivateLayout><ServiceReportFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/hall-data/forms/monthly-service-report" element={<PermissionRoute permission="canAccessHallData"><PrivateLayout><MonthlyServiceReportFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/hall-data/forms/defect-registry" element={<PermissionRoute permission="canAccessHallData"><PrivateLayout><DefectRegistryFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/hall-data/forms/service-repair-report" element={<PermissionRoute permission="canAccessHallData"><PrivateLayout><ServiceRepairReportFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/hall-data/forms/responses" element={<PermissionRoute permission="canAccessHallData"><PrivateLayout><HallDataFormsResponsesPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* CRM Routes */}
-                    <Route path="/crm" element={<PrivateLayout><CRMDashboardPage /></PrivateLayout>} />
-                    <Route path="/crm/contacts" element={<PrivateLayout><ContactsPage /></PrivateLayout>} />
-                    <Route path="/crm/contacts/new" element={<PrivateLayout><ContactFormPage /></PrivateLayout>} />
-                    <Route path="/crm/contacts/:contactId" element={<PrivateLayout><ContactDetailsPage /></PrivateLayout>} />
-                    <Route path="/crm/contacts/:contactId/edit" element={<PrivateLayout><ContactFormPage /></PrivateLayout>} />
-                    <Route path="/crm/interactions" element={<PrivateLayout><InteractionsPage /></PrivateLayout>} />
-                    <Route path="/crm/interactions/new" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
-                    <Route path="/crm/interactions/:interactionId" element={<PrivateLayout><InteractionDetailsPage /></PrivateLayout>} />
-                    <Route path="/crm/interactions/:interactionId/edit" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
-                    <Route path="/crm/opportunities" element={<PrivateLayout><OpportunitiesPage /></PrivateLayout>} />
-                    <Route path="/crm/opportunities/new" element={<PrivateLayout><OpportunityFormPage /></PrivateLayout>} />
-                    <Route path="/crm/opportunities/:opportunityId" element={<PrivateLayout><OpportunityDetailsPage /></PrivateLayout>} />
-                    <Route path="/crm/opportunities/:opportunityId/edit" element={<PrivateLayout><OpportunityFormPage /></PrivateLayout>} />
+                    <Route path="/crm" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><CRMDashboardPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/contacts" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><ContactsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/contacts/new" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><ContactFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/contacts/:contactId" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><ContactDetailsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/contacts/:contactId/edit" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><ContactFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/interactions" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><InteractionsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/interactions/new" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><InteractionFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/interactions/:interactionId" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><InteractionDetailsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/interactions/:interactionId/edit" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><InteractionFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/opportunities" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><OpportunitiesPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/opportunities/new" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><OpportunityFormPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/opportunities/:opportunityId" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><OpportunityDetailsPage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/crm/opportunities/:opportunityId/edit" element={<PermissionRoute permission="canAccessCRM"><PrivateLayout><OpportunityFormPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Interakcje zakupowe w sekcji Magazyn */}
 
@@ -564,12 +555,12 @@ function App() {
                     <Route path="/notifications/history" element={<PrivateLayout><NotificationsHistoryPage /></PrivateLayout>} />
                     
                     {/* Taskboard Routes */}
-                    <Route path="/taskboard" element={<PrivateLayout><TaskboardView /></PrivateLayout>} />
-                    <Route path="/taskboard/:boardId" element={<PrivateLayout><BoardDetail /></PrivateLayout>} />
+                    <Route path="/taskboard" element={<PermissionRoute permission="canAccessDashboard"><PrivateLayout><TaskboardView /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/taskboard/:boardId" element={<PermissionRoute permission="canAccessDashboard"><PrivateLayout><BoardDetail /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Zespół - Czas pracy i Grafik */}
-                    <Route path="/work-time" element={<PrivateLayout><WorkTimePage /></PrivateLayout>} />
-                    <Route path="/schedule" element={<PrivateLayout><SchedulePage /></PrivateLayout>} />
+                    <Route path="/work-time" element={<PermissionRoute permission="canAccessDashboard"><PrivateLayout><WorkTimePage /></PrivateLayout></PermissionRoute>} />
+                    <Route path="/schedule" element={<PermissionRoute permission="canAccessDashboard"><PrivateLayout><SchedulePage /></PrivateLayout></PermissionRoute>} />
                     
                     <Route path="*" element={<Navigate to="/" replace />} />
                           </Routes>
