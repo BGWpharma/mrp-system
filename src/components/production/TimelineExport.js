@@ -24,12 +24,12 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import * as XLSX from 'xlsx-js-style';
 import { useTranslation } from '../../hooks/useTranslation';
 
 // Funkcja do generowania raportu Timeline w formacie XLSX
-const generateTimelineReport = (tasks, workstations, customers, startDate, endDate, groupBy, filteredTasks, selectedCustomers, t) => {
+const generateTimelineReport = async (tasks, workstations, customers, startDate, endDate, groupBy, filteredTasks, selectedCustomers, t) => {
   try {
+    const XLSX = await import('xlsx-js-style');
     console.log('Rozpoczęcie generowania raportu Timeline');
     
     // Sprawdź czy są dostępne dane

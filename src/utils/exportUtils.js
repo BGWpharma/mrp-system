@@ -1,9 +1,6 @@
 /**
  * Utility functions for exporting data to CSV, Excel and PDF
  */
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 
 /**
  * Converts data to CSV format and triggers download
@@ -99,13 +96,16 @@ export const exportToCSV = (data, headers, filename) => {
  * @param {Object} options - Additional options for PDF generation
  * @returns {boolean} - Success status
  */
-export const exportToPDF = (data, headers, filename, options = {}) => {
+export const exportToPDF = async (data, headers, filename, options = {}) => {
   if (!data || !data.length || !headers || !headers.length) {
     console.error('Invalid data or headers for PDF export');
     return false;
   }
 
   try {
+    const { jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+
     const {
       title = 'Data Export',
       subtitle = '',
@@ -259,13 +259,15 @@ export const formatCurrencyForExport = (value, currency = 'EUR') => {
  * @param {string} filename - Filename for the Excel file (without extension)
  * @returns {boolean} - Success status
  */
-export const exportToExcel = (worksheets, filename) => {
+export const exportToExcel = async (worksheets, filename) => {
   if (!worksheets || !worksheets.length) {
     console.error('Invalid worksheets data for Excel export');
     return false;
   }
 
   try {
+    const XLSX = await import('xlsx');
+
     // Create a new workbook
     const workbook = XLSX.utils.book_new();
 

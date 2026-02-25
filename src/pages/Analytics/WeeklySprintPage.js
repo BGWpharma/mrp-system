@@ -819,7 +819,7 @@ const WeeklySprintPage = () => {
   };
 
   // Eksport do CSV
-  const handleExport = () => {
+  const handleExport = async () => {
     if (calculateSprintPlan.length === 0) {
       showError(t('weeklySprint.errors.noDataToExport'));
       return;
@@ -899,7 +899,7 @@ const WeeklySprintPage = () => {
       const filename = `weekly_sprint_${startDateStr}_${endDateStr}${customerStr}`;
 
       // Export to Excel with multiple sheets
-      const success = exportToExcel(worksheets, filename);
+      const success = await exportToExcel(worksheets, filename);
       if (success) {
         showSuccess(t('weeklySprint.export.success'));
       }

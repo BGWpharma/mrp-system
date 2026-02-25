@@ -39,7 +39,6 @@ import Sidebar from './components/common/Sidebar';
 import PrivateRoute from './components/common/PrivateRoute';
 import AdminRoute from './components/common/AdminRoute';
 import PermissionRoute from './components/common/PermissionRoute';
-import AIChatFAB from './components/common/AIChatFAB';
 
 // Styles
 import './styles/global.css';
@@ -47,6 +46,8 @@ import './styles/global.css';
 // ============================================================================
 // LAZY LOADED PAGES - ładowane on-demand dla lepszej wydajności
 // ============================================================================
+
+const AIChatFAB = lazy(() => import('./components/common/AIChatFAB'));
 
 // Dashboard - ładowany lazy bo może być duży
 const Dashboard = lazy(() => import('./pages/Dashboard/Dashboard'));
@@ -614,8 +615,9 @@ function PrivateLayout({ children }) {
           </main>
         </div>
         
-        {/* 🤖 AI Chat FAB - przycisk asystenta AI */}
-        <AIChatFAB />
+        <Suspense fallback={null}>
+          <AIChatFAB />
+        </Suspense>
       </div>
     </PrivateRoute>
   );

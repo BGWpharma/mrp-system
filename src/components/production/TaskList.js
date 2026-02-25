@@ -1901,7 +1901,7 @@ const TaskList = () => {
         }
       ];
       
-      const success = exportToExcel(worksheets, filename);
+      const success = await exportToExcel(worksheets, filename);
       
       if (success) {
         showSuccess(`Exported ${allTasks.length} production tasks and statistics for ${expiryStatsData.length} products to Excel`);

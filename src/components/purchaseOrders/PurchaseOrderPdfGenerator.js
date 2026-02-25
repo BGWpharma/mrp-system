@@ -1,4 +1,3 @@
-import jsPDF from 'jspdf';
 import { getWarehouseById } from '../../services/inventory';
 import { getCompanyInfo } from '../../services/companyService';
 
@@ -27,6 +26,8 @@ class PurchaseOrderPdfGenerator {
    */
   async generate() {
     try {
+      const { default: jsPDF } = await import('jspdf');
+
       // Pobierz dane wymagane do generowania PDF
       const { targetWarehouse, companyData } = await this.fetchRequiredData();
       

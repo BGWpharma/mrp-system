@@ -30,8 +30,6 @@ import { db, storage } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../../hooks/useAuth';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 
 const CompletedMOFormDialog = ({ 
   open, 
@@ -265,6 +263,9 @@ const CompletedMOFormDialog = ({
 
     try {
       setGeneratingPDF(true);
+
+      const { jsPDF } = await import('jspdf');
+      const { default: html2canvas } = await import('html2canvas');
 
       // Funkcja pomocnicza do formatowania dat
       const formatDateForPrint = (dateValue) => {

@@ -1283,7 +1283,7 @@ const COReportsPage = () => {
     };
 
     // Funkcja do eksportu kosztów produkcji do PDF z filtrem produktu
-    const handleExportProductionCostsPDFLocal = () => {
+    const handleExportProductionCostsPDFLocal = async () => {
       handleProductionExportMenuClose();
       
       let dataToExport = productionCosts;
@@ -1342,7 +1342,7 @@ const COReportsPage = () => {
       // Wygeneruj plik PDF z nazwą uwzględniającą filtr produktu
       const productSuffix = selectedProduct ? `_${selectedProduct.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
       const filename = `production_costs_report${productSuffix}_${formatDateForExport(new Date(), 'yyyyMMdd')}`;
-      const success = exportToPDF(exportData, headers, filename, pdfOptions);
+      const success = await exportToPDF(exportData, headers, filename, pdfOptions);
       
       if (success) {
         const message = selectedProduct 
@@ -1355,7 +1355,7 @@ const COReportsPage = () => {
     };
 
     // Funkcja do eksportu kosztów produkcji do Excel z osobną zakładką dla każdego CO
-    const handleExportProductionCostsToExcel = () => {
+    const handleExportProductionCostsToExcel = async () => {
       handleProductionExportMenuClose();
       
       let dataToExport = productionCosts;
@@ -1418,7 +1418,7 @@ const COReportsPage = () => {
       // Wygeneruj plik Excel
       const productSuffix = selectedProduct ? `_${selectedProduct.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
       const filename = `production_costs_by_order${productSuffix}_${formatDateForExport(new Date(), 'yyyyMMdd')}`;
-      const success = exportToExcel(worksheets, filename);
+      const success = await exportToExcel(worksheets, filename);
 
       if (success) {
         const message = selectedProduct 

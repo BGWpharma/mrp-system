@@ -18,7 +18,6 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { formatDateForExport } from '../utils/exportUtils';
-import ExcelJS from 'exceljs';
 import i18n from '../i18n';
 
 // Kolekcje Firebase
@@ -1309,6 +1308,8 @@ export const fetchEcoReportData = async (filters) => {
  * Formatowanie zgodne z dostarczonym arkuszem
  */
 export const exportEcoReportToExcel = async (data, filters) => {
+  const { default: ExcelJS } = await import('exceljs');
+
   const { dateFrom, dateTo } = filters;
   const periodFrom = formatDateForExport(new Date(dateFrom));
   const periodTo = formatDateForExport(new Date(dateTo));

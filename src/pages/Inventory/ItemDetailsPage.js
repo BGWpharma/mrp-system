@@ -1,5 +1,5 @@
 // src/pages/Inventory/ItemDetailsPage.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Container,
@@ -57,10 +57,10 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, formatDateTime, formatQuantity } from '../../utils/formatters';
 import { preciseAdd } from '../../utils/mathUtils';
 import { Timestamp } from 'firebase/firestore';
-import LabelDialog from '../../components/inventory/LabelDialog';
 import BackButton from '../../components/common/BackButton';
 import ROUTES from '../../constants/routes';
 
+const LabelDialog = lazy(() => import('../../components/inventory/LabelDialog'));
 // Lazy-loaded zakładki
 const BatchesTab = React.lazy(() => import('./ItemDetailsTabs/BatchesTab'));
 const TransactionsTab = React.lazy(() => import('./ItemDetailsTabs/TransactionsTab'));
@@ -1069,11 +1069,15 @@ const ItemDetailsPage = () => {
       </Paper>
 
       {/* Dialog do drukowania etykiet */}
-      <LabelDialog
-        open={labelDialogOpen}
-        onClose={handleCloseLabelDialog}
-        item={item}
-      />
+      {labelDialogOpen && (
+        <Suspense fallback={null}>
+          <LabelDialog
+            open={labelDialogOpen}
+            onClose={handleCloseLabelDialog}
+            item={item}
+          />
+        </Suspense>
+      )}
     </Container>
   );
 };

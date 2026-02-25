@@ -1,7 +1,3 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import QRCode from 'qrcode';
-import JsBarcode from 'jsbarcode';
-
 /**
  * Generator etykiet PDF używający PDF-lib zamiast html2canvas
  * Znacznie szybszy i bardziej wydajny
@@ -11,12 +7,19 @@ class LabelPdfGenerator {
     this.doc = null;
     this.fonts = {};
     this.logoImage = null;
+    this._pdfLib = null;
+    this._QRCode = null;
+    this._JsBarcode = null;
   }
 
   /**
    * Inicjalizacja generatora PDF
    */
   async initialize() {
+    const pdfLib = await import('pdf-lib');
+    this._pdfLib = pdfLib;
+    const { PDFDocument, StandardFonts } = pdfLib;
+
     this.doc = await PDFDocument.create();
     
     // Załaduj standardowe czcionki
@@ -65,7 +68,10 @@ class LabelPdfGenerator {
    */
   async generateQRCode(data, size = 80) {
     try {
-      const qrDataUrl = await QRCode.toDataURL(data, {
+      if (!this._QRCode) {
+        this._QRCode = (await import('qrcode')).default;
+      }
+      const qrDataUrl = await this._QRCode.toDataURL(data, {
         width: size,
         margin: 1,
         color: {
@@ -98,8 +104,11 @@ class LabelPdfGenerator {
       const cleanValue = value ? value.toString().replace(/\s+/g, '') : '';
       
       // Stwórz canvas do generowania kodu kreskowego
+      if (!this._JsBarcode) {
+        this._JsBarcode = (await import('jsbarcode')).default;
+      }
       const canvas = document.createElement('canvas');
-      JsBarcode(canvas, cleanValue, {
+      this._JsBarcode(canvas, cleanValue, {
         format: 'EAN13',
         width: options.width || 2,
         height: options.height || 50,
@@ -134,7 +143,7 @@ class LabelPdfGenerator {
     const {
       font = this.fonts.regular,
       size = 12,
-      color = rgb(0, 0, 0),
+      color = this._pdfLib.rgb(0, 0, 0),
       maxWidth = null,
       lineHeight = 1.2
     } = options;
@@ -282,7 +291,7 @@ class LabelPdfGenerator {
       y: currentY - 4, // Wyśrodkowane względem logo
       size: 10, // Większy font dla większej etykiety
       font: this.fonts.bold,
-      color: rgb(0, 0, 0) // Czarny kolor
+      color: this._pdfLib.rgb(0, 0, 0) // Czarny kolor
     });
 
     currentY -= 24; // Większy odstęp po nagłówku
@@ -292,7 +301,7 @@ class LabelPdfGenerator {
       start: { x: margin, y: currentY },
       end: { x: width - margin, y: currentY },
       thickness: 1,
-      color: rgb(0, 0, 0)
+      color: this._pdfLib.rgb(0, 0, 0)
     });
 
     currentY -= 16;
@@ -511,7 +520,7 @@ class LabelPdfGenerator {
       y: currentY - 4, // Wyśrodkowane względem logo
       size: 10, // Większy font dla większej etykiety
       font: this.fonts.bold,
-      color: rgb(0, 0, 0) // Czarny kolor
+      color: this._pdfLib.rgb(0, 0, 0) // Czarny kolor
     });
 
     currentY -= 24; // Większy odstęp po nagłówku
@@ -521,7 +530,7 @@ class LabelPdfGenerator {
       start: { x: margin, y: currentY },
       end: { x: width - margin, y: currentY },
       thickness: 1,
-      color: rgb(0, 0, 0)
+      color: this._pdfLib.rgb(0, 0, 0)
     });
 
     currentY -= 16;

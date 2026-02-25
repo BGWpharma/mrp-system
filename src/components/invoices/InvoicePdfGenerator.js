@@ -1,6 +1,6 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
+
+let _autoTableFn = null;
 
 /**
  * Komponent odpowiedzialny za generowanie PDF faktury
@@ -474,7 +474,7 @@ class InvoicePdfGenerator {
     });
     
     // Dodaj tabelę pozycji
-    autoTable(doc, {
+    _autoTableFn(doc, {
       startY: tableStartY,
       head: [tableColumns.map(col => col.header)],
       body: tableRows.map(row => [
@@ -608,7 +608,7 @@ class InvoicePdfGenerator {
         };
       });
       
-      autoTable(doc, {
+      _autoTableFn(doc, {
         head: [headColumns.map(col => col.header)],
         body: poRows.map(row => [
           row.number,
@@ -944,9 +944,13 @@ class InvoicePdfGenerator {
   /**
    * Główna funkcja generująca PDF
    */
-  generate(language = 'en') {
-    return new Promise((resolve, reject) => {
+  async generate(language = 'en') {
+    return new Promise(async (resolve, reject) => {
       try {
+        const { default: jsPDF } = await import('jspdf');
+        const autoTableModule = await import('jspdf-autotable');
+        _autoTableFn = autoTableModule.default;
+
         // Tworzenie dokumentu PDF z optymalizacjami
         const doc = new jsPDF({
           unit: 'mm',

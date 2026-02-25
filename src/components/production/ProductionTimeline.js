@@ -30,7 +30,7 @@
  * - Lepsze wrażenia użytkownika na słabszych urządzeniach
  */
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import {
   Box,
   Paper,
@@ -115,7 +115,6 @@ import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../hooks/useTranslation';
-import TimelineExport from './TimelineExport';
 import { calculateMaterialReservationStatus, getReservationStatusColors, checkPODeliveryDelays } from '../../utils/productionUtils';
 import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends, calculateEndDateForTimeline, isWeekend, calculateEndDateWithWorkingHours } from '../../utils/dateUtils';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
@@ -150,6 +149,8 @@ import {
 import 'react-calendar-timeline/dist/style.css';
 // Import enhanced styles dla ProductionTimeline
 import './ProductionTimeline.css';
+
+const TimelineExport = lazy(() => import('./TimelineExport'));
 
 // Dodatkowy lokalny styl pt1 (padding-top: 1)
 const pt1 = { pt: 1 };
@@ -2829,17 +2830,19 @@ const ProductionTimeline = React.memo(({
         
         {/* Eksport i inne akcje */}
         <Box sx={flexColumnGap1}>
-          <TimelineExport 
-            tasks={tasks}
-            workstations={workstations}
-            customers={customers}
-            startDate={visibleTimeStart}
-            endDate={visibleTimeEnd}
-            groupBy={groupBy}
-            filteredTasks={items.map(item => item.task)}
-            showSuccess={showSuccess}
-            showError={showError}
-          />
+          <Suspense fallback={null}>
+            <TimelineExport 
+              tasks={tasks}
+              workstations={workstations}
+              customers={customers}
+              startDate={visibleTimeStart}
+              endDate={visibleTimeEnd}
+              groupBy={groupBy}
+              filteredTasks={items.map(item => item.task)}
+              showSuccess={showSuccess}
+              showError={showError}
+            />
+          </Suspense>
         </Box>
       </Box>
     </Drawer>
@@ -3091,17 +3094,19 @@ const ProductionTimeline = React.memo(({
             {t('production.timeline.filters')} {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber || advancedFilters.poNumber) && '✓'}
           </Button>
           
-          <TimelineExport 
-            tasks={tasks}
-            workstations={workstations}
-            customers={customers}
-            startDate={visibleTimeStart}
-            endDate={visibleTimeEnd}
-            groupBy={groupBy}
-            filteredTasks={items.map(item => item.task)}
-            showSuccess={showSuccess}
-            showError={showError}
-          />
+          <Suspense fallback={null}>
+            <TimelineExport 
+              tasks={tasks}
+              workstations={workstations}
+              customers={customers}
+              startDate={visibleTimeStart}
+              endDate={visibleTimeEnd}
+              groupBy={groupBy}
+              filteredTasks={items.map(item => item.task)}
+              showSuccess={showSuccess}
+              showError={showError}
+            />
+          </Suspense>
           
           <IconButton className="timeline-refresh-button" size="small" onClick={fetchTasks}>
             <RefreshIcon />

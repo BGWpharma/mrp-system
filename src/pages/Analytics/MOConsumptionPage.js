@@ -444,7 +444,7 @@ const MOConsumptionPage = () => {
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
       const startDateStr = formatDateForExport(startDate, 'yyyyMMdd');
       const endDateStr = formatDateForExport(endDate, 'yyyyMMdd');
@@ -531,7 +531,7 @@ const MOConsumptionPage = () => {
         });
       });
 
-      if (worksheets.length > 0 && exportToExcel(worksheets, filename)) {
+      if (worksheets.length > 0 && (await exportToExcel(worksheets, filename))) {
         showSuccess(t('moConsumptionReport.export.excelSuccess') || 'Dane zostały wyeksportowane do pliku Excel');
       } else {
         showError(t('moConsumptionReport.export.error') || 'Błąd podczas eksportowania danych');

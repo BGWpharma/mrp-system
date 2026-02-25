@@ -1,5 +1,6 @@
-import ExcelJS from 'exceljs';
 import { format } from 'date-fns';
+
+let ExcelJS = null;
 
 const COLORS = {
   headerBg: '1E293B',
@@ -315,6 +316,9 @@ export async function generateForecastReport({
   startDate,
   endDate
 }) {
+  if (!ExcelJS) {
+    ExcelJS = (await import('exceljs')).default;
+  }
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'BGW MRP System';
   workbook.created = new Date();

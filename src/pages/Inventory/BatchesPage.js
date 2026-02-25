@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   Container,
@@ -76,9 +76,10 @@ import { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { auth } from '../../services/firebase/config';
 import { getTaskById } from '../../services/productionService';
-import LabelDialog from '../../components/inventory/LabelDialog';
 import BatchVisualization from '../../components/inventory/BatchVisualization';
 import BatchDetailsDialog from '../../components/inventory/BatchDetailsDialog';
+
+const LabelDialog = lazy(() => import('../../components/inventory/LabelDialog'));
 
 const BatchesPage = () => {
   const { id } = useParams();
@@ -1946,12 +1947,16 @@ const BatchesPage = () => {
         </DialogActions>
       </Dialog>
 
-      <LabelDialog
-        open={labelDialogOpen}
-        onClose={handleCloseLabelDialog}
-        item={item}
-        batches={selectedBatchForLabel ? [selectedBatchForLabel] : batches}
-      />
+      {labelDialogOpen && (
+        <Suspense fallback={null}>
+          <LabelDialog
+            open={labelDialogOpen}
+            onClose={handleCloseLabelDialog}
+            item={item}
+            batches={selectedBatchForLabel ? [selectedBatchForLabel] : batches}
+          />
+        </Suspense>
+      )}
 
       <Dialog
         open={deleteDialogOpen}

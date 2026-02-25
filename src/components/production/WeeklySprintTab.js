@@ -666,7 +666,7 @@ const WeeklySprintTab = ({ isMobileView }) => {
     });
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (calculateSprintPlan.length === 0) {
       showError(t('weeklySprint.errors.noDataToExport'));
       return;
@@ -749,7 +749,7 @@ const WeeklySprintTab = ({ isMobileView }) => {
         : '';
       const filename = `weekly_sprint_${startDateStr}_${endDateStr}${customerStr}`;
 
-      const success = exportToExcel(worksheets, filename);
+      const success = await exportToExcel(worksheets, filename);
       if (success) {
         showSuccess(t('weeklySprint.export.success'));
       }

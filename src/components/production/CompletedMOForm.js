@@ -29,8 +29,6 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 import { 
   getFormHeaderStyles, 
   getFormSectionStyles,
@@ -466,6 +464,9 @@ const CompletedMOForm = () => {
 
     try {
       setGeneratingPDF(true);
+
+      const { jsPDF } = await import('jspdf');
+      const { default: html2canvas } = await import('html2canvas');
 
       // Funkcja pomocnicza do formatowania dat
       const formatDateForPrint = (dateValue) => {

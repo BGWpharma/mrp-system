@@ -56,7 +56,6 @@ import { format } from 'date-fns';
 import { COMPANY_INFO } from '../../config';
 import { getCompanyInfo } from '../../services/companyService';
 import PaymentsSection from './PaymentsSection';
-import { createInvoicePdfGenerator } from './InvoicePdfGenerator';
 
 const InvoiceDetails = () => {
   const { invoiceId } = useParams();
@@ -289,6 +288,7 @@ const InvoiceDetails = () => {
       setPdfGenerating(true);
       
       // Użyj nowego komponentu do generowania PDF
+      const { createInvoicePdfGenerator } = await import('./InvoicePdfGenerator');
       const pdfGenerator = createInvoicePdfGenerator(invoice, companyInfo, language);
       const result = await pdfGenerator.downloadPdf(language);
       

@@ -1,6 +1,3 @@
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
-import { PDFDocument, rgb } from 'pdf-lib';
 import { storage, db } from './firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
@@ -105,6 +102,8 @@ const appendAttachmentsToReport = async (doc, attachments, compressionOptions = 
     console.log('No attachments provided to append');
     return null;
   }
+
+  const { PDFDocument, rgb } = await import('pdf-lib');
 
   // Default compression settings
   const defaultOptions = {
@@ -249,6 +248,8 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     if (!task) {
       throw new Error('Task data is required for generating the report');
     }
+
+    const { jsPDF } = await import('jspdf');
 
     const {
       companyData = {},

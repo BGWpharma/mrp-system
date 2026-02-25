@@ -1,5 +1,5 @@
 // src/components/inventory/InventoryList.js
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { 
   Table, 
@@ -80,7 +80,6 @@ import { formatDate, formatQuantity } from '../../utils/formatters';
 import { toast } from 'react-hot-toast';
 import { exportToCSV } from '../../utils/exportUtils';
 import { useAuth } from '../../hooks/useAuth';
-import LabelDialog from './LabelDialog';
 import EditReservationDialog from './EditReservationDialog';
 import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs, addDoc, deleteDoc, query, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
@@ -109,6 +108,7 @@ import ExpiryDatesPage from '../../pages/Inventory/ExpiryDatesPage';
 import SuppliersPage from '../../pages/Suppliers/SuppliersPage';
 import StocktakingPage from '../../pages/Inventory/StocktakingPage';
 
+const LabelDialog = lazy(() => import('./LabelDialog'));
 
 // Definicje stałych
 const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
@@ -1503,7 +1503,7 @@ const InventoryList = () => {
       ];
 
       // Wyeksportuj do Excel
-      const success = exportToExcel(
+      const success = await exportToExcel(
         worksheets, 
         `Batches_Export_${new Date().toISOString().slice(0, 10)}`
       );
@@ -3566,12 +3566,16 @@ const InventoryList = () => {
       </Dialog>
 
       {/* Dialog z etykietami */}
-      <LabelDialog
-        open={labelDialogOpen}
-        onClose={handleCloseLabelDialog}
-        item={selectedItem}
-        batches={selectedItemBatches}
-      />
+      {labelDialogOpen && (
+        <Suspense fallback={null}>
+          <LabelDialog
+            open={labelDialogOpen}
+            onClose={handleCloseLabelDialog}
+            item={selectedItem}
+            batches={selectedItemBatches}
+          />
+        </Suspense>
+      )}
 
       <Menu
         anchorEl={anchorEl}

@@ -23,7 +23,6 @@ import {
 import QRCode from 'react-qr-code';
 import Barcode from 'react-barcode';
 import { useReactToPrint } from 'react-to-print';
-import html2canvas from 'html2canvas';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 

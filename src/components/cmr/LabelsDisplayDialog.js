@@ -15,10 +15,6 @@ import {
   Close as CloseIcon,
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import LabelPdfGenerator from '../../utils/LabelPdfGenerator';
-import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
 
 const LabelsDisplayDialog = ({ 
   open, 
@@ -62,6 +58,7 @@ const LabelsDisplayDialog = ({
     setPdfProgress('Inicjalizacja generatora PDF...');
     
     try {
+      const { default: LabelPdfGenerator } = await import('../../utils/LabelPdfGenerator');
       const generator = new LabelPdfGenerator();
       let pdfDoc;
       
@@ -122,6 +119,9 @@ const LabelsDisplayDialog = ({
     setPdfProgress('Przygotowywanie PDF...');
     
     try {
+      const { default: jsPDF } = await import('jspdf');
+      const { default: html2canvas } = await import('html2canvas');
+
       // Ustawienia PDF dla etykiet 600x400px (proporcje 3:2)
       const labelWidth = 600;
       const labelHeight = 400;
@@ -242,6 +242,7 @@ const LabelsDisplayDialog = ({
 
   // Alternatywna metoda generowania PDF bez html2canvas
   const generatePDFAlternative = async () => {
+    const { default: jsPDF } = await import('jspdf');
     const pdf = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
@@ -272,6 +273,7 @@ const LabelsDisplayDialog = ({
 
   // Trzecia alternatywa - używanie @react-pdf/renderer
   const generatePDFWithReactPDF = async () => {
+    const { Document, Page, Text, View, StyleSheet, pdf } = await import('@react-pdf/renderer');
     const styles = StyleSheet.create({
       page: {
         flexDirection: 'column',

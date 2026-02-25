@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, lazy, Suspense } from 'react';
 import {
   Box,
   Typography,
@@ -40,9 +40,6 @@ import {
 import { formatDate } from '../../utils/formatters';
 import { StartProductionDialog, AddHistoryDialog, DeleteConfirmDialog, AdditionalCostDialog } from './dialogs';
 import { CommentsDrawer } from './shared';
-import ProductionControlFormDialog from './ProductionControlFormDialog';
-import CompletedMOFormDialog from './CompletedMOFormDialog';
-import ProductionShiftFormDialog from './ProductionShiftFormDialog';
 import ManualBatchSelection from './ManualBatchSelection';
 import {
   loadingContainer,
@@ -51,6 +48,10 @@ import {
   width130,
   width140,
 } from '../../styles/muiCommonStyles';
+
+const ProductionControlFormDialog = lazy(() => import('./ProductionControlFormDialog'));
+const CompletedMOFormDialog = lazy(() => import('./CompletedMOFormDialog'));
+const ProductionShiftFormDialog = lazy(() => import('./ProductionShiftFormDialog'));
 
 const TaskDialogsContainer = memo(({
   // Translation
@@ -894,32 +895,38 @@ const TaskDialogsContainer = memo(({
 
       {/* Dialog formularza kontroli produkcji */}
       {productionControlDialogOpen && (
-      <ProductionControlFormDialog
-        open
-        onClose={() => setProductionControlDialogOpen(false)}
-        task={task}
-        onSuccess={handleProductionControlFormSuccess}
-      />
+      <Suspense fallback={null}>
+        <ProductionControlFormDialog
+          open
+          onClose={() => setProductionControlDialogOpen(false)}
+          task={task}
+          onSuccess={handleProductionControlFormSuccess}
+        />
+      </Suspense>
       )}
 
       {/* Dialog formularza zakończonego MO */}
       {completedMODialogOpen && (
-      <CompletedMOFormDialog
-        open
-        onClose={() => setCompletedMODialogOpen(false)}
-        task={task}
-        onSuccess={handleCompletedMOFormSuccess}
-      />
+      <Suspense fallback={null}>
+        <CompletedMOFormDialog
+          open
+          onClose={() => setCompletedMODialogOpen(false)}
+          task={task}
+          onSuccess={handleCompletedMOFormSuccess}
+        />
+      </Suspense>
       )}
 
       {/* Dialog formularza zmiany produkcyjnej */}
       {productionShiftDialogOpen && (
-      <ProductionShiftFormDialog
-        open
-        onClose={() => setProductionShiftDialogOpen(false)}
-        task={task}
-        onSuccess={handleProductionShiftFormSuccess}
-      />
+      <Suspense fallback={null}>
+        <ProductionShiftFormDialog
+          open
+          onClose={() => setProductionShiftDialogOpen(false)}
+          task={task}
+          onSuccess={handleProductionShiftFormSuccess}
+        />
+      </Suspense>
       )}
 
       {/* DEBUG: Dialog wyników sprawdzania spójności partii */}
