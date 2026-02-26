@@ -1,5 +1,5 @@
 // src/pages/Kiosk/KioskPage.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import {
   Container,
   Typography,
@@ -9,15 +9,19 @@ import {
   useTheme,
   useMediaQuery,
   Button,
-  IconButton
+  IconButton,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
   Fullscreen as FullscreenIcon,
   FullscreenExit as FullscreenExitIcon,
   Factory as FactoryIcon,
-  AccessTime as AccessTimeIcon
+  AccessTime as AccessTimeIcon,
+  CalendarMonth as CalendarMonthIcon
 } from '@mui/icons-material';
+import { useLocation, useNavigate } from 'react-router-dom';
 import KioskTaskList from '../../components/kiosk/KioskTaskList';
 import KioskTaskDetails from '../../components/kiosk/KioskTaskDetails';
 import { baseColors, palettes } from '../../styles/colorConfig';
@@ -25,17 +29,35 @@ import { useTheme as useThemeContext } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import BackgroundEffects from '../../components/common/BackgroundEffects';
 
+const WorkTimePage = lazy(() => import('../WorkTime/WorkTimePage'));
+const SchedulePage = lazy(() => import('../Schedule/SchedulePage'));
+
 const KioskPage = () => {
   const { t } = useTranslation('common');
   const { mode } = useThemeContext();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const location = useLocation();
+  const navigate = useNavigate();
   
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const containerRef = useRef(null);
+
+  const currentTab = location.pathname === '/kiosk/work-time'
+    ? 'work-time'
+    : location.pathname === '/kiosk/schedule'
+      ? 'schedule'
+      : 'tasks';
+
+  const handleTabChange = (_, newValue) => {
+    setShowDetails(false);
+    setSelectedTask(null);
+    if (newValue === 'tasks') navigate('/kiosk');
+    else navigate(`/kiosk/${newValue}`);
+  };
 
   // Funkcja obsługi kliknięcia zadania
   const handleTaskClick = (task) => {
@@ -276,20 +298,75 @@ const KioskPage = () => {
               </IconButton>
             </Box>
           </Box>
+
+          {/* Nawigacja tabami */}
+          <Tabs
+            value={currentTab}
+            onChange={handleTabChange}
+            sx={{
+              mt: 2,
+              '& .MuiTab-root': {
+                fontWeight: 600,
+                fontSize: isMobile ? '0.8rem' : '0.9rem',
+                minHeight: 44,
+                textTransform: 'none',
+                color: colors.text.secondary,
+                '&.Mui-selected': {
+                  color: palettes.primary.main,
+                },
+              },
+              '& .MuiTabs-indicator': {
+                backgroundColor: palettes.primary.main,
+                height: 3,
+                borderRadius: '3px 3px 0 0',
+              },
+            }}
+          >
+            <Tab
+              value="tasks"
+              label="Zadania"
+              icon={<FactoryIcon sx={{ fontSize: 20 }} />}
+              iconPosition="start"
+            />
+            <Tab
+              value="work-time"
+              label="Czas pracy"
+              icon={<AccessTimeIcon sx={{ fontSize: 20 }} />}
+              iconPosition="start"
+            />
+            <Tab
+              value="schedule"
+              label="Grafik"
+              icon={<CalendarMonthIcon sx={{ fontSize: 20 }} />}
+              iconPosition="start"
+            />
+          </Tabs>
         </Paper>
 
-        {/* Lista zadań lub szczegóły zadania */}
-        {showDetails ? (
-          <KioskTaskDetails 
-            taskId={selectedTask?.id} 
-            onBack={handleBackToList} 
-          />
-        ) : (
-          <KioskTaskList 
-            isFullscreen={isFullscreen}
-            onTaskClick={handleTaskClick}
-            onLastUpdateChange={setLastRefresh}
-          />
+        {/* Zawartość na podstawie wybranej zakładki */}
+        {currentTab === 'tasks' && (
+          showDetails ? (
+            <KioskTaskDetails 
+              taskId={selectedTask?.id} 
+              onBack={handleBackToList} 
+            />
+          ) : (
+            <KioskTaskList 
+              isFullscreen={isFullscreen}
+              onTaskClick={handleTaskClick}
+              onLastUpdateChange={setLastRefresh}
+            />
+          )
+        )}
+        {currentTab === 'work-time' && (
+          <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>}>
+            <WorkTimePage />
+          </Suspense>
+        )}
+        {currentTab === 'schedule' && (
+          <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>}>
+            <SchedulePage />
+          </Suspense>
         )}
       </Container>
     </Box>

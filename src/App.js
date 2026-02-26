@@ -518,7 +518,7 @@ function App() {
                     <Route path="/ai-assistant" element={<PermissionRoute permission="canAccessAIAssistant"><PrivateLayout><AIAssistantPage /></PrivateLayout></PermissionRoute>} />
                     
                     {/* Kiosk Routes */}
-                    <Route path="/kiosk" element={
+                    <Route path="/kiosk/*" element={
                       <Suspense fallback={<PageLoading />}>
                         <KioskPage />
                       </Suspense>

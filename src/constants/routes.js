@@ -151,6 +151,8 @@ export const ROUTES = {
   // === Other ===
   AI_ASSISTANT: '/ai-assistant',
   KIOSK: '/kiosk',
+  KIOSK_WORK_TIME: '/kiosk/work-time',
+  KIOSK_SCHEDULE: '/kiosk/schedule',
   NOTIFICATIONS_HISTORY: '/notifications/history',
 };
 
