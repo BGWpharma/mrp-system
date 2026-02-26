@@ -254,8 +254,7 @@ export const getAllUsers = async () => {
 export const getAllActiveUsers = async () => {
   try {
     const users = await getAllUsers();
-    // Filtruj tylko aktywnych użytkowników (gdzie disabled !== true)
-    return users.filter(user => !user.disabled);
+    return users.filter(user => !user.disabled && !user.archived);
   } catch (error) {
     console.error('Błąd podczas pobierania aktywnych użytkowników:', error);
     throw error;
@@ -813,6 +812,80 @@ export const deleteKioskUser = async (userId, adminId) => {
   }
 };
 
+/**
+ * Archiwizuje konto użytkownika — ustawia flagę archived = true.
+ * Zarchiwizowane konta nie pojawiają się w domyślnym widoku listy,
+ * ale dane i historia zostają zachowane.
+ * @param {string} userId - ID użytkownika do archiwizacji
+ * @param {string} adminId - ID administratora wykonującego operację
+ * @returns {Promise<boolean>}
+ */
+export const archiveUser = async (userId, adminId) => {
+  try {
+    const adminData = await getUserById(adminId);
+    if (!adminData || adminData.role !== 'administrator') {
+      throw new Error('Brak uprawnień do archiwizacji użytkowników');
+    }
+
+    if (userId === adminId) {
+      throw new Error('Nie można zarchiwizować własnego konta');
+    }
+
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    if (!userDoc.exists()) {
+      throw new Error('Użytkownik nie istnieje');
+    }
+
+    await updateDoc(userRef, {
+      archived: true,
+      archivedAt: new Date(),
+      archivedBy: adminId,
+      updatedAt: new Date()
+    });
+
+    userCache.delete(userId);
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas archiwizacji użytkownika:', error);
+    throw error;
+  }
+};
+
+/**
+ * Przywraca zarchiwizowane konto użytkownika.
+ * @param {string} userId - ID użytkownika do przywrócenia
+ * @param {string} adminId - ID administratora wykonującego operację
+ * @returns {Promise<boolean>}
+ */
+export const unarchiveUser = async (userId, adminId) => {
+  try {
+    const adminData = await getUserById(adminId);
+    if (!adminData || adminData.role !== 'administrator') {
+      throw new Error('Brak uprawnień do przywracania użytkowników');
+    }
+
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    if (!userDoc.exists()) {
+      throw new Error('Użytkownik nie istnieje');
+    }
+
+    await updateDoc(userRef, {
+      archived: false,
+      archivedAt: null,
+      archivedBy: null,
+      updatedAt: new Date()
+    });
+
+    userCache.delete(userId);
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas przywracania użytkownika:', error);
+    throw error;
+  }
+};
+
 export default {
   getUserById,
   updateUserData,
@@ -833,6 +906,8 @@ export default {
   updateUserPermissions,
   createKioskUser,
   deleteKioskUser,
+  archiveUser,
+  unarchiveUser,
   clearUserCache,
   AVAILABLE_PERMISSIONS,
   TAB_PERMISSION_MAP

@@ -153,6 +153,7 @@ export const ROUTES = {
   KIOSK: '/kiosk',
   KIOSK_WORK_TIME: '/kiosk/work-time',
   KIOSK_SCHEDULE: '/kiosk/schedule',
+  KIOSK_FORMS: '/kiosk/forms',
   NOTIFICATIONS_HISTORY: '/notifications/history',
 };
 

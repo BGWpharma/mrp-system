@@ -27,14 +27,9 @@
 
 // src/components/kiosk/KioskTaskList.js - OPTIMIZED FOR MOBILE/TABLET PERFORMANCE
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { List as VirtualList } from 'react-window';
 import {
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Typography,
   Chip,
   Box,
@@ -47,18 +42,12 @@ import {
   useTheme,
   useMediaQuery,
   TextField,
-  InputAdornment,
   Select,
   MenuItem,
-  FormControl,
-  InputLabel
+  FormControl
 } from '@mui/material';
 import {
-  PlayArrow as StartIcon,
-  Pause as PauseIcon,
-  CheckCircle as CompleteIcon,
   Schedule as ScheduleIcon,
-  Assignment as TaskIcon,
   Factory as ProductionIcon,
   Search as SearchIcon,
   Sort as SortIcon
@@ -82,11 +71,8 @@ import {
   iconPrimary,
   iconResponsive,
   alertMb2,
-  boxP4,
   mt1,
-  mt2,
-  mb2,
-  p2
+  mt2
 } from '../../styles/muiCommonStyles';
 
 // ============================================
@@ -103,8 +89,11 @@ const taskCardBaseStyles = {
   cursor: 'pointer',
   overflow: 'hidden',
   position: 'relative',
-  transform: 'translateZ(0)', // Force GPU layer
-  backfaceVisibility: 'hidden', // Zapobiega flickerowi
+  transform: 'translateZ(0)',
+  backfaceVisibility: 'hidden',
+  WebkitTapHighlightColor: 'transparent',
+  touchAction: 'manipulation',
+  userSelect: 'none',
 };
 
 // Generator stylów karty (zależnych od props)
@@ -114,12 +103,17 @@ const getTaskCardStyles = (mode, colors, statusColors, isMobile) => ({
   border: `2px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
   bgcolor: colors.paper,
   willChange: !isMobile ? 'transform, box-shadow' : 'auto',
+  transition: 'transform 0.15s ease-out, box-shadow 0.15s ease-out, border-color 0.15s ease-out',
   '&:hover': !isMobile ? {
     transform: 'translateY(-2px) translateZ(0)',
-    transition: 'transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out',
     boxShadow: `0 12px 40px ${statusColors.main}20`,
     borderColor: statusColors.main,
     '&::before': { opacity: 1 }
+  } : {},
+  '&:active': isMobile ? {
+    transform: 'scale(0.98) translateZ(0)',
+    borderColor: statusColors.main,
+    boxShadow: `0 4px 16px ${statusColors.main}15`,
   } : {},
   '&::before': !isMobile ? {
     content: '""',
@@ -347,7 +341,7 @@ const searchContentBoxStyles = {
 const getSearchInputWrapperStyles = (isMobile) => ({
   display: 'flex',
   alignItems: 'center',
-  gap: 2,
+  gap: isMobile ? 1 : 2,
   width: isMobile ? '100%' : 'auto',
   flex: 1,
   flexWrap: 'wrap'
@@ -355,10 +349,10 @@ const getSearchInputWrapperStyles = (isMobile) => ({
 
 // Style dla ikony search
 const searchIconBoxStyles = {
-  p: 1.5,
+  p: { xs: 1, md: 1.5 },
   borderRadius: 2,
   background: 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%)',
-  display: 'flex',
+  display: { xs: 'none', sm: 'flex' },
   alignItems: 'center',
   justifyContent: 'center',
   minWidth: 'auto'
@@ -403,13 +397,44 @@ const getFilterBoxStyles = (isMobile) => ({
   display: 'flex',
   alignItems: 'center',
   gap: 1,
-  minWidth: isMobile ? '100%' : 200
+  minWidth: isMobile ? '100%' : 200,
+  width: isMobile ? '100%' : 'auto'
 });
 
 // Style empty state paper
 const emptyStatePaperStyles = {
   p: 4,
   textAlign: 'center'
+};
+
+// Konfiguracja statusów (bez JSX, stabilna referencja)
+const STATUS_CONFIG = {
+  'Zaplanowane': { label: 'Zaplanowane', color: 'warning' },
+  'W trakcie': { label: 'W trakcie', color: 'primary' },
+  'Wstrzymane': { label: 'Wstrzymane', color: 'secondary' },
+  'Zakończone': { label: 'Zakończone', color: 'success' },
+  'Potwierdzenie zużycia': { label: 'Potwierdzenie zużycia', color: 'info' },
+  'Anulowane': { label: 'Anulowane', color: 'error' }
+};
+const DEFAULT_STATUS = { label: '', color: 'default' };
+
+const getStatusInfo = (status) => {
+  return STATUS_CONFIG[status] || { ...DEFAULT_STATUS, label: status };
+};
+
+const calculateProgress = (task) => {
+  if (!task.targetQuantity || task.targetQuantity === 0) return 0;
+  const completed = task.completedQuantity || 0;
+  return Math.min((completed / task.targetQuantity) * 100, 100);
+};
+
+const getPriorityColor = (priority) => {
+  switch (priority?.toLowerCase()) {
+    case 'high': case 'wysoki': return 'error';
+    case 'medium': case 'średni': return 'warning';
+    case 'low': case 'niski': return 'success';
+    default: return 'default';
+  }
 };
 
 // ============================================
@@ -424,7 +449,8 @@ const TaskCard = React.memo(({
   onTaskClick,
   getStatusInfo,
   calculateProgress,
-  getStatusColor 
+  getStatusColor,
+  noGridWrapper
 }) => {
   const statusInfo = getStatusInfo(task.status);
   const statusColors = getStatusColor(task.status);
@@ -516,86 +542,86 @@ const TaskCard = React.memo(({
     fontWeight: 500
   }), [colors.text?.secondary]);
   
-  return (
-    <Grid item xs={12} sm={6} md={isFullscreen ? 4 : 6} lg={isFullscreen ? 4 : 4} xl={isFullscreen ? 3 : 4}>
-      <Card 
-        elevation={0}
-        sx={cardSx}
-        onClick={() => onTaskClick && onTaskClick(task)}
-      >
-        {/* Status header bar */}
-        <Box sx={statusBarSx} />
-        
-        <CardContent sx={cardContentStyles}>
-          {/* Header z nazwą i statusem */}
-          <Box sx={headerBoxStyles}>
-            <Typography variant="h6" sx={titleSx}>
-              {task.name}
-            </Typography>
-            <Chip 
-              label={statusInfo.label} 
-              size="small"
-              sx={statusChipSx}
-            />
-          </Box>
-          
-          {/* Produkt */}
-          <Typography variant="body1" sx={productSx}>
-            {task.productName}
+  const cardElement = (
+    <Card 
+      elevation={0}
+      sx={cardSx}
+      onClick={() => onTaskClick && onTaskClick(task)}
+    >
+      <Box sx={statusBarSx} />
+      
+      <CardContent sx={cardContentStyles}>
+        <Box sx={headerBoxStyles}>
+          <Typography variant="h6" sx={titleSx}>
+            {task.name}
           </Typography>
-          
-          {/* MO Number i Client w jednej linii */}
-          <Box sx={infoBoxContainerStyles}>
-            {task.moNumber && (
-              <Box sx={moBoxSx}>
-                <Typography variant="caption" sx={moCaptionSx}>
-                  MO: {task.moNumber}
-                </Typography>
-              </Box>
-            )}
-            
-            {task.clientName && (
-              <Box sx={clientBoxSx}>
-                <Typography variant="caption" sx={clientCaptionSx}>
-                  {task.clientName}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-          
-          {/* Postęp produkcji */}
-          <Box sx={progressSectionSx}>
-            <Box sx={progressRowStyles}>
-              <Typography variant="body2" sx={progressLabelSx}>
-                Postęp
-              </Typography>
-              <Typography variant="body2" sx={progressValueSx}>
-                {totalCompletedQuantity} / {task.quantity} {task.unit}
+          <Chip 
+            label={statusInfo.label} 
+            size="small"
+            sx={statusChipSx}
+          />
+        </Box>
+        
+        <Typography variant="body1" sx={productSx}>
+          {task.productName}
+        </Typography>
+        
+        <Box sx={infoBoxContainerStyles}>
+          {task.moNumber && (
+            <Box sx={moBoxSx}>
+              <Typography variant="caption" sx={moCaptionSx}>
+                MO: {task.moNumber}
               </Typography>
             </Box>
-            
-            <LinearProgress 
-              variant="determinate" 
-              value={Math.min((totalCompletedQuantity / task.quantity) * 100, 100)}
-              sx={linearProgressSx}
-            />
-            
-            {remainingQuantity > 0 && (
-              <Typography variant="caption" sx={remainingQuantityStyles}>
-                Pozostało: {remainingQuantity} {task.unit}
-              </Typography>
-            )}
-          </Box>
+          )}
           
-          {/* Data rozpoczęcia */}
-          <Box sx={dateSectionSx}>
-            <ScheduleIcon sx={scheduleIconSx} />
-            <Typography variant="body2" sx={dateTextSx}>
-              {formatDateTime(task.scheduledDate)}
+          {task.clientName && (
+            <Box sx={clientBoxSx}>
+              <Typography variant="caption" sx={clientCaptionSx}>
+                {task.clientName}
+              </Typography>
+            </Box>
+          )}
+        </Box>
+        
+        <Box sx={progressSectionSx}>
+          <Box sx={progressRowStyles}>
+            <Typography variant="body2" sx={progressLabelSx}>
+              Postęp
+            </Typography>
+            <Typography variant="body2" sx={progressValueSx}>
+              {totalCompletedQuantity} / {task.quantity} {task.unit}
             </Typography>
           </Box>
-        </CardContent>
-      </Card>
+          
+          <LinearProgress 
+            variant="determinate" 
+            value={Math.min((totalCompletedQuantity / task.quantity) * 100, 100)}
+            sx={linearProgressSx}
+          />
+          
+          {remainingQuantity > 0 && (
+            <Typography variant="caption" sx={remainingQuantityStyles}>
+              Pozostało: {remainingQuantity} {task.unit}
+            </Typography>
+          )}
+        </Box>
+        
+        <Box sx={dateSectionSx}>
+          <ScheduleIcon sx={scheduleIconSx} />
+          <Typography variant="body2" sx={dateTextSx}>
+            {formatDateTime(task.scheduledDate)}
+          </Typography>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+
+  if (noGridWrapper) return cardElement;
+
+  return (
+    <Grid item xs={12} sm={6} md={isFullscreen ? 4 : 6} lg={isFullscreen ? 4 : 4} xl={isFullscreen ? 3 : 4}>
+      {cardElement}
     </Grid>
   );
 }, (prevProps, nextProps) => {
@@ -610,15 +636,84 @@ const TaskCard = React.memo(({
   );
 });
 
+const VIRTUALIZATION_THRESHOLD = 24;
+const ROW_HEIGHT = 370;
+const ROW_GAP = 20;
+
+const useColumnsCount = (isFullscreen) => {
+  const theme = useTheme();
+  const isXl = useMediaQuery(theme.breakpoints.up('xl'));
+  const isLg = useMediaQuery(theme.breakpoints.up('lg'));
+  const isMd = useMediaQuery(theme.breakpoints.up('md'));
+  const isSm = useMediaQuery(theme.breakpoints.up('sm'));
+
+  return useMemo(() => {
+    if (isXl) return isFullscreen ? 4 : 3;
+    if (isLg) return 3;
+    if (isMd) return isFullscreen ? 3 : 2;
+    if (isSm) return 2;
+    return 1;
+  }, [isXl, isLg, isMd, isSm, isFullscreen]);
+};
+
+const VirtualRowComponent = ({ index, style, tasks, columnsCount, isFullscreen, isMobile, mode, colors, onTaskClick, gap }) => {
+  const startIdx = index * columnsCount;
+  const rowTasks = tasks.slice(startIdx, startIdx + columnsCount);
+
+  return (
+    <div style={{ ...style, display: 'flex', gap, paddingBottom: ROW_GAP, boxSizing: 'border-box' }}>
+      {rowTasks.map((task) => (
+        <div key={task.id} style={{ flex: 1, minWidth: 0 }}>
+          <TaskCard
+            task={task}
+            isFullscreen={isFullscreen}
+            isMobile={isMobile}
+            mode={mode}
+            colors={colors}
+            onTaskClick={onTaskClick}
+            getStatusInfo={getStatusInfo}
+            calculateProgress={calculateProgress}
+            getStatusColor={getStatusColor}
+            noGridWrapper
+          />
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const VirtualizedTaskGrid = React.memo(({
+  tasks, isFullscreen, isMobile, mode, colors, onTaskClick, columnsCount, spacing
+}) => {
+  const rowCount = Math.ceil(tasks.length / columnsCount);
+  const listHeight = Math.min(rowCount * (ROW_HEIGHT + ROW_GAP), window.innerHeight - 200);
+  const gap = spacing * 8;
+
+  const rowProps = useMemo(() => ({
+    tasks, columnsCount, isFullscreen, isMobile, mode, colors, onTaskClick, gap
+  }), [tasks, columnsCount, isFullscreen, isMobile, mode, colors, onTaskClick, gap]);
+
+  return (
+    <VirtualList
+      rowComponent={VirtualRowComponent}
+      rowCount={rowCount}
+      rowHeight={ROW_HEIGHT + ROW_GAP}
+      rowProps={rowProps}
+      overscanCount={2}
+      style={{ height: listHeight, width: '100%' }}
+    />
+  );
+});
+
 const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
   const { mode } = useThemeContext();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const { currentUser } = useAuth();
   const { showError } = useNotification();
+  const columnsCount = useColumnsCount(isFullscreen);
 
   const [tasks, setTasks] = useState([]);
-  const [filteredTasks, setFilteredTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userNames, setUserNames] = useState({});
   const [error, setError] = useState(null);
@@ -741,11 +836,7 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
     return filterTasks(tasks, debouncedSearchTerm, statusFilter);
   }, [tasks, debouncedSearchTerm, statusFilter, filterTasks]);
 
-  // Aktualizuj stan tylko gdy się zmieni i załaduj nazwy użytkowników dla widocznych
   useEffect(() => {
-    setFilteredTasks(filteredTasksMemo);
-    
-    // ✅ OPTYMALIZACJA 5: Pobierz nazwy użytkowników dla nowo przefiltrowanych zadań
     if (filteredTasksMemo.length > 0) {
       loadVisibleUserNames(filteredTasksMemo);
     }
@@ -849,37 +940,6 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
     []
   );
 
-  // Funkcja formatowania statusu
-  const getStatusInfo = (status) => {
-    const statusConfig = {
-      'Zaplanowane': { label: 'Zaplanowane', icon: <ScheduleIcon />, color: 'warning' },
-      'W trakcie': { label: 'W trakcie', icon: <StartIcon />, color: 'primary' },
-      'Wstrzymane': { label: 'Wstrzymane', icon: <PauseIcon />, color: 'secondary' },
-      'Zakończone': { label: 'Zakończone', icon: <CompleteIcon />, color: 'success' },
-      'Potwierdzenie zużycia': { label: 'Potwierdzenie zużycia', icon: <TaskIcon />, color: 'info' },
-      'Anulowane': { label: 'Anulowane', icon: <TaskIcon />, color: 'error' }
-    };
-    
-    return statusConfig[status] || { label: status, icon: <TaskIcon />, color: 'default' };
-  };
-
-  // Funkcja formatowania priorytetu
-  const getPriorityColor = (priority) => {
-    switch (priority?.toLowerCase()) {
-      case 'high': case 'wysoki': return 'error';
-      case 'medium': case 'średni': return 'warning';
-      case 'low': case 'niski': return 'success';
-      default: return 'default';
-    }
-  };
-
-  // Funkcja obliczania postępu
-  const calculateProgress = (task) => {
-    if (!task.targetQuantity || task.targetQuantity === 0) return 0;
-    const completed = task.completedQuantity || 0;
-    return Math.min((completed / task.targetQuantity) * 100, 100);
-  };
-
   // Renderowanie głównego kontenera z polami wyszukiwania zawsze widocznymi
   return (
       <Box>
@@ -959,21 +1019,7 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
                     height: 8,
                     borderRadius: '50%',
                     backgroundColor: 'success.main',
-                    animation: 'pulse 2s infinite',
-                    '@keyframes pulse': {
-                      '0%': {
-                        opacity: 1,
-                        transform: 'scale(1)'
-                      },
-                      '50%': {
-                        opacity: 0.7,
-                        transform: 'scale(1.1)'
-                      },
-                      '100%': {
-                        opacity: 1,
-                        transform: 'scale(1)'
-                      }
-                    }
+                    animation: 'pulse 2s infinite'
                   }}
                 />
                 <Typography 
@@ -984,7 +1030,7 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
                     fontSize: { xs: '0.8rem', md: '0.875rem' }
                   }}
                 >
-                  {filteredTasks.length} z {tasks.length} zadań
+                  {filteredTasksMemo.length} z {tasks.length} zadań
                 </Typography>
               </Box>
             )}
@@ -1013,7 +1059,7 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
               Wszystkie zadania zostały zakończone
             </Typography>
           </Paper>
-        ) : filteredTasks.length === 0 ? (
+        ) : filteredTasksMemo.length === 0 ? (
           <Paper elevation={2} sx={emptyStateContainer}>
             <SearchIcon sx={{ ...emptyStateIcon, ...textDisabled }} />
             <Typography variant="h6" sx={textSecondary}>
@@ -1027,10 +1073,20 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
                statusFilter ? 'Wybierz inny status lub wyczyść filtr' : 'Sprawdź filtry'}
             </Typography>
           </Paper>
+        ) : filteredTasksMemo.length > VIRTUALIZATION_THRESHOLD ? (
+          <VirtualizedTaskGrid
+            tasks={filteredTasksMemo}
+            isFullscreen={isFullscreen}
+            isMobile={isMobile}
+            mode={mode}
+            colors={colors}
+            onTaskClick={onTaskClick}
+            columnsCount={columnsCount}
+            spacing={isFullscreen ? 3 : 2.5}
+          />
         ) : (
-          // OPTYMALIZACJA: Użyj memoizowanego komponentu TaskCard
           <Grid container spacing={isFullscreen ? 3 : 2.5}>
-            {filteredTasks.map((task) => (
+            {filteredTasksMemo.map((task) => (
               <TaskCard
                 key={task.id}
                 task={task}

@@ -1,5 +1,5 @@
 // src/pages/Kiosk/KioskPage.js
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import {
   Container,
   Typography,
@@ -19,7 +19,8 @@ import {
   FullscreenExit as FullscreenExitIcon,
   Factory as FactoryIcon,
   AccessTime as AccessTimeIcon,
-  CalendarMonth as CalendarMonthIcon
+  CalendarMonth as CalendarMonthIcon,
+  Assignment as AssignmentIcon
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import KioskTaskList from '../../components/kiosk/KioskTaskList';
@@ -31,6 +32,7 @@ import BackgroundEffects from '../../components/common/BackgroundEffects';
 
 const WorkTimePage = lazy(() => import('../WorkTime/WorkTimePage'));
 const SchedulePage = lazy(() => import('../Schedule/SchedulePage'));
+const KioskFormsPanel = lazy(() => import('../../components/kiosk/KioskFormsPanel'));
 
 const KioskPage = () => {
   const { t } = useTranslation('common');
@@ -50,7 +52,9 @@ const KioskPage = () => {
     ? 'work-time'
     : location.pathname === '/kiosk/schedule'
       ? 'schedule'
-      : 'tasks';
+      : location.pathname === '/kiosk/forms'
+        ? 'forms'
+        : 'tasks';
 
   const handleTabChange = (_, newValue) => {
     setShowDetails(false);
@@ -59,45 +63,51 @@ const KioskPage = () => {
     else navigate(`/kiosk/${newValue}`);
   };
 
-  // Funkcja obsługi kliknięcia zadania
-  const handleTaskClick = (task) => {
+  const handleTaskClick = useCallback((task) => {
     setSelectedTask(task);
     setShowDetails(true);
-  };
+  }, []);
 
-  // Funkcja powrotu do listy
-  const handleBackToList = () => {
+  const handleBackToList = useCallback(() => {
     setShowDetails(false);
     setSelectedTask(null);
-  };
+  }, []);
 
   // ✅ OPTYMALIZACJA 1: Usunięto zbędny auto-refresh
   // Real-time listener w KioskTaskList już automatycznie aktualizuje dane
   // lastRefresh jest aktualizowany przez callback z KioskTaskList
 
-  // Obsługa trybu pełnoekranowego
-  const toggleFullscreen = async () => {
-    if (!document.fullscreenElement) {
-      if (containerRef.current?.requestFullscreen) {
-        await containerRef.current.requestFullscreen();
+  const toggleFullscreen = useCallback(async () => {
+    const el = containerRef.current;
+    const doc = document;
+    const isCurrentlyFullscreen = doc.fullscreenElement || doc.webkitFullscreenElement;
+
+    if (!isCurrentlyFullscreen) {
+      const requestFn = el?.requestFullscreen || el?.webkitRequestFullscreen;
+      if (requestFn) {
+        await requestFn.call(el);
         setIsFullscreen(true);
       }
     } else {
-      if (document.exitFullscreen) {
-        await document.exitFullscreen();
+      const exitFn = doc.exitFullscreen || doc.webkitExitFullscreen;
+      if (exitFn) {
+        await exitFn.call(doc);
         setIsFullscreen(false);
       }
     }
-  };
+  }, []);
 
-  // Nasłuchiwanie zmian trybu pełnoekranowego
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      setIsFullscreen(!!(document.fullscreenElement || document.webkitFullscreenElement));
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
   }, []);
 
   const colors = baseColors[mode];
@@ -254,16 +264,20 @@ const KioskPage = () => {
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
               <Button
                 variant="contained"
-                size="medium"
-                startIcon={<RefreshIcon />}
+                size={isMobile ? "small" : "medium"}
+                startIcon={!isMobile ? <RefreshIcon /> : undefined}
                 onClick={() => window.location.reload()}
                 sx={{
                   background: `linear-gradient(135deg, ${palettes.primary.main} 0%, ${palettes.primary.dark} 100%)`,
                   borderRadius: 3,
                   fontWeight: 600,
-                  px: 3,
-                  py: 1,
+                  px: { xs: 2, md: 3 },
+                  py: { xs: 0.75, md: 1 },
+                  minWidth: { xs: 44, md: 'auto' },
+                  minHeight: 44,
                   boxShadow: `0 4px 12px ${palettes.primary.main}30`,
+                  WebkitTapHighlightColor: 'transparent',
+                  touchAction: 'manipulation',
                   '&:hover': {
                     background: `linear-gradient(135deg, ${palettes.primary.dark} 0%, ${palettes.primary.main} 100%)`,
                     boxShadow: `0 6px 16px ${palettes.primary.main}40`,
@@ -272,7 +286,7 @@ const KioskPage = () => {
                   transition: 'all 0.2s ease-in-out'
                 }}
               >
-                Odśwież
+                {isMobile ? <RefreshIcon /> : 'Odśwież'}
               </Button>
               
               <IconButton
@@ -285,6 +299,8 @@ const KioskPage = () => {
                   color: palettes.primary.main,
                   width: 48,
                   height: 48,
+                  WebkitTapHighlightColor: 'transparent',
+                  touchAction: 'manipulation',
                   '&:hover': {
                     background: `linear-gradient(135deg, ${palettes.primary.main}10 0%, ${palettes.primary.main}05 100%)`,
                     borderColor: palettes.primary.main,
@@ -303,14 +319,21 @@ const KioskPage = () => {
           <Tabs
             value={currentTab}
             onChange={handleTabChange}
+            variant={isMobile ? "scrollable" : "standard"}
+            scrollButtons={isMobile ? "auto" : false}
+            allowScrollButtonsMobile
             sx={{
               mt: 2,
               '& .MuiTab-root': {
                 fontWeight: 600,
                 fontSize: isMobile ? '0.8rem' : '0.9rem',
                 minHeight: 44,
+                minWidth: isMobile ? 'auto' : undefined,
+                px: isMobile ? 1.5 : 2,
                 textTransform: 'none',
                 color: colors.text.secondary,
+                WebkitTapHighlightColor: 'transparent',
+                touchAction: 'manipulation',
                 '&.Mui-selected': {
                   color: palettes.primary.main,
                 },
@@ -340,6 +363,12 @@ const KioskPage = () => {
               icon={<CalendarMonthIcon sx={{ fontSize: 20 }} />}
               iconPosition="start"
             />
+            <Tab
+              value="forms"
+              label="Formularze"
+              icon={<AssignmentIcon sx={{ fontSize: 20 }} />}
+              iconPosition="start"
+            />
           </Tabs>
         </Paper>
 
@@ -366,6 +395,11 @@ const KioskPage = () => {
         {currentTab === 'schedule' && (
           <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>}>
             <SchedulePage />
+          </Suspense>
+        )}
+        {currentTab === 'forms' && (
+          <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>}>
+            <KioskFormsPanel />
           </Suspense>
         )}
       </Container>
