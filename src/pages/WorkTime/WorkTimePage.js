@@ -35,6 +35,19 @@ import {
 // Margines walidacji: max ±30 minut od obecnej godziny
 const TIME_MARGIN_MINUTES = 30;
 
+const getDeviceInfo = () => {
+  const ua = navigator.userAgent;
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(ua);
+  return {
+    type: isMobile ? 'mobile' : 'desktop',
+    platform: navigator.platform || 'unknown',
+    userAgent: ua,
+    screenWidth: window.screen.width,
+    screenHeight: window.screen.height,
+    timestamp: new Date().toISOString()
+  };
+};
+
 const WorkTimePage = () => {
   const [step, setStep] = useState('login'); // 'login' | 'clocks' | 'success'
   const [employeeCode, setEmployeeCode] = useState('');
@@ -178,6 +191,7 @@ const WorkTimePage = () => {
         employeeName: employee.displayName,
         startTime: formattedTime,
         endTime: null,
+        startDevice: getDeviceInfo(),
       });
       showSuccess(t('workStarted', { time: formattedTime }));
       setStartSaved(true);
@@ -202,7 +216,7 @@ const WorkTimePage = () => {
     setSavingEnd(true);
     try {
       const formattedTime = format(endTime, 'HH:mm');
-      await clockOut(openEntry.id, formattedTime, openEntry.startTime);
+      await clockOut(openEntry.id, formattedTime, openEntry.startTime, getDeviceInfo());
       showSuccess(t('workEnded', { time: formattedTime }));
       setOpenEntry(null);
       setStep('success');
@@ -264,9 +278,7 @@ const WorkTimePage = () => {
   const getStatusChip = (status) => {
     const map = {
       in_progress: { label: t('statuses.inProgress'), color: 'warning' },
-      submitted: { label: t('statuses.submitted'), color: 'info' },
       approved: { label: t('statuses.approved'), color: 'success' },
-      rejected: { label: t('statuses.rejected'), color: 'error' },
     };
     const s = map[status] || { label: status, color: 'default' };
     return <Chip label={s.label} color={s.color} size="small" />;

@@ -28,7 +28,9 @@ import {
   Grid,
   Divider,
   Alert,
-  Tooltip
+  Tooltip,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -40,7 +42,9 @@ import {
   PersonAdd as PersonAddIcon,
   Storefront as KioskIcon,
   Delete as DeleteIcon,
-  Google as GoogleIcon
+  Google as GoogleIcon,
+  AccessTime as AccessTimeIcon,
+  Group as GroupIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -55,6 +59,8 @@ import {
 } from '../../services/userService';
 import SidebarTabsManager from '../../components/admin/SidebarTabsManager';
 import UserProfileEditor from '../../components/admin/UserProfileEditor';
+import WorkTimeAdminTab from '../../components/admin/WorkTimeAdminTab';
+import WorkTimeUserDialog from '../../components/admin/WorkTimeUserDialog';
 import { useTranslation } from '../../hooks/useTranslation';
 import { usePermissions } from '../../hooks/usePermissions';
 
@@ -91,6 +97,11 @@ const UsersManagementPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Zakładki i czas pracy
+  const [activeTab, setActiveTab] = useState(0);
+  const [workTimeUserDialogOpen, setWorkTimeUserDialogOpen] = useState(false);
+  const [selectedUserForWorkTime, setSelectedUserForWorkTime] = useState(null);
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -307,7 +318,23 @@ const UsersManagementPage = () => {
       <Typography variant="h4" component="h1" gutterBottom sx={{ mt: 3 }}>
         Zarządzanie użytkownikami
       </Typography>
-      
+
+      <Paper sx={{ mb: 2 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, val) => setActiveTab(val)}
+          sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}
+        >
+          <Tab icon={<GroupIcon />} iconPosition="start" label="Użytkownicy" />
+          <Tab icon={<AccessTimeIcon />} iconPosition="start" label="Czas pracy" />
+        </Tabs>
+      </Paper>
+
+      {activeTab === 1 && (
+        <WorkTimeAdminTab users={users} adminUser={currentUser} />
+      )}
+
+      {activeTab === 0 && (
       <Paper sx={{ p: 2, mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6">Lista użytkowników systemu</Typography>
@@ -466,6 +493,18 @@ const UsersManagementPage = () => {
                           <VisibilityIcon />
                         </IconButton>
                       )}
+                      {user.employeeId && (
+                        <Tooltip title="Czas pracy">
+                          <IconButton
+                            onClick={() => { setSelectedUserForWorkTime(user); setWorkTimeUserDialogOpen(true); }}
+                            color="info"
+                            size="small"
+                            sx={{ mr: 0.5 }}
+                          >
+                            <AccessTimeIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       {user.accountType === 'kiosk' && (
                         <Tooltip title={t('deleteKioskEmployee')}>
                           <IconButton 
@@ -485,7 +524,8 @@ const UsersManagementPage = () => {
           </TableContainer>
         )}
       </Paper>
-      
+      )}
+
       {/* Dialog do edycji roli użytkownika */}
       <Dialog open={editDialogOpen} onClose={handleCloseEditDialog}>
         <DialogTitle>Zmień rolę użytkownika</DialogTitle>
@@ -748,6 +788,15 @@ const UsersManagementPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialog czasu pracy per-user */}
+      <WorkTimeUserDialog
+        open={workTimeUserDialogOpen}
+        onClose={() => { setWorkTimeUserDialogOpen(false); setSelectedUserForWorkTime(null); }}
+        user={selectedUserForWorkTime}
+        users={users}
+        adminUser={currentUser}
+      />
     </Container>
   );
 };

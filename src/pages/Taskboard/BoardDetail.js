@@ -42,8 +42,9 @@ import {
   deleteColumn
 } from '../../services/taskboardService';
 import { getUsersDisplayNames } from '../../services/userService';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
+import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 import ColumnList from '../../components/taskboard/ColumnList';
 import BoardSettingsDialog from '../../components/taskboard/BoardSettingsDialog';
 
@@ -131,22 +132,32 @@ const BoardDetail = ({
   // Debounce delay - dłuższy dla mobile
   const debounceDelay = useMemo(() => isMobile ? 400 : 250, [isMobile]);
 
-  // Real-time synchronizacja z debounce - nasłuchiwanie zmian w Firestore
+  // Real-time synchronizacja z debounce (visibility-aware)
+  const boardQuery = useMemo(() =>
+    boardId ? query(collection(db, 'boards'), where('__name__', '==', boardId)) : null,
+  [boardId]);
+  const columnsQuery = useMemo(() =>
+    boardId ? query(collection(db, 'columns'), where('boardId', '==', boardId), orderBy('position', 'asc')) : null,
+  [boardId]);
+  const boardTasksQuery = useMemo(() =>
+    boardId ? query(collection(db, 'tasks'), where('boardId', '==', boardId), orderBy('position', 'asc')) : null,
+  [boardId]);
+
   useEffect(() => {
-    if (!boardId) return;
+    if (boardId) setLoading(true);
+  }, [boardId]);
 
-    setLoading(true);
-
-    // Handler dla board z debounce
-    const handleBoardUpdate = (snapshot) => {
+  useVisibilityAwareSnapshot(
+    boardQuery,
+    null,
+    (snapshot) => {
       if (boardTimeoutRef.current) clearTimeout(boardTimeoutRef.current);
-      
       boardTimeoutRef.current = setTimeout(() => {
         if (!snapshot.empty) {
-          const doc = snapshot.docs[0];
-          const data = doc.data();
+          const d = snapshot.docs[0];
+          const data = d.data();
           setBoard({
-            id: doc.id,
+            id: d.id,
             ...data,
             createdAt: data.createdAt?.toDate() || new Date(),
             updatedAt: data.updatedAt?.toDate() || new Date()
@@ -154,17 +165,24 @@ const BoardDetail = ({
           setLoading(false);
         }
       }, debounceDelay);
-    };
+    },
+    (error) => {
+      console.error('Błąd real-time listener dla board:', error);
+      setLoading(false);
+    },
+    [boardId, debounceDelay]
+  );
 
-    // Handler dla kolumn z debounce
-    const handleColumnsUpdate = (snapshot) => {
+  useVisibilityAwareSnapshot(
+    columnsQuery,
+    null,
+    (snapshot) => {
       if (columnsTimeoutRef.current) clearTimeout(columnsTimeoutRef.current);
-      
       columnsTimeoutRef.current = setTimeout(() => {
-        const updatedColumns = snapshot.docs.map((doc) => {
-          const data = doc.data();
+        const updatedColumns = snapshot.docs.map((d) => {
+          const data = d.data();
           return {
-            id: doc.id,
+            id: d.id,
             boardId: data.boardId,
             title: data.title,
             position: data.position,
@@ -175,17 +193,23 @@ const BoardDetail = ({
         });
         setColumns(updatedColumns);
       }, debounceDelay);
-    };
+    },
+    (error) => {
+      console.error('Błąd real-time listener dla kolumn:', error);
+    },
+    [boardId, debounceDelay]
+  );
 
-    // Handler dla zadań z debounce
-    const handleTasksUpdate = (snapshot) => {
+  useVisibilityAwareSnapshot(
+    boardTasksQuery,
+    null,
+    (snapshot) => {
       if (tasksTimeoutRef.current) clearTimeout(tasksTimeoutRef.current);
-      
       tasksTimeoutRef.current = setTimeout(() => {
-        const updatedTasks = snapshot.docs.map((doc) => {
-          const data = doc.data();
+        const updatedTasks = snapshot.docs.map((d) => {
+          const data = d.data();
           return {
-            id: doc.id,
+            id: d.id,
             boardId: data.boardId,
             columnId: data.columnId,
             title: data.title,
@@ -213,54 +237,12 @@ const BoardDetail = ({
         });
         setTasks(updatedTasks);
       }, debounceDelay);
-    };
-
-    // Real-time listener dla board
-    const unsubscribeBoard = onSnapshot(
-      query(collection(db, 'boards'), where('__name__', '==', boardId)),
-      handleBoardUpdate,
-      (error) => {
-        console.error('Błąd real-time listener dla board:', error);
-        setLoading(false);
-      }
-    );
-
-    // Real-time listener dla kolumn
-    const unsubscribeColumns = onSnapshot(
-      query(
-        collection(db, 'columns'),
-        where('boardId', '==', boardId),
-        orderBy('position', 'asc')
-      ),
-      handleColumnsUpdate,
-      (error) => {
-        console.error('Błąd real-time listener dla kolumn:', error);
-      }
-    );
-
-    // Real-time listener dla zadań
-    const unsubscribeTasks = onSnapshot(
-      query(
-        collection(db, 'tasks'),
-        where('boardId', '==', boardId),
-        orderBy('position', 'asc')
-      ),
-      handleTasksUpdate,
-      (error) => {
-        console.error('Błąd real-time listener dla zadań:', error);
-      }
-    );
-
-    // Cleanup
-    return () => {
-      unsubscribeBoard();
-      unsubscribeColumns();
-      unsubscribeTasks();
-      if (boardTimeoutRef.current) clearTimeout(boardTimeoutRef.current);
-      if (columnsTimeoutRef.current) clearTimeout(columnsTimeoutRef.current);
-      if (tasksTimeoutRef.current) clearTimeout(tasksTimeoutRef.current);
-    };
-  }, [boardId, debounceDelay]);
+    },
+    (error) => {
+      console.error('Błąd real-time listener dla zadań:', error);
+    },
+    [boardId, debounceDelay]
+  );
 
   const handleAddColumn = useCallback(async () => {
     if (!boardId || !newColumnTitle.trim()) return;

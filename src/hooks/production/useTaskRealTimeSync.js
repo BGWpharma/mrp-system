@@ -10,10 +10,11 @@
  * - Shallow comparison helpers (areMaterialsChanged, areConsumedMaterialsChanged)
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { db } from '../../services/firebase/config';
-import { doc, onSnapshot, getDocs, collection, query, where } from 'firebase/firestore';
+import { doc, getDocs, collection, query, where } from 'firebase/firestore';
 import { preciseMultiply } from '../../utils/mathUtils';
+import { useVisibilityAwareSnapshot } from '../useVisibilityAwareSnapshot';
 
 // Shallow comparison dla materiałów - 10-100x szybsze niż JSON.stringify
 const areMaterialsChanged = (newMaterials, oldMaterials) => {
@@ -277,74 +278,65 @@ export const useTaskRealTimeSync = (id, callbacks, loadedTabs) => {
     }
   }, [processMaterialsUpdate, processConsumedMaterialsUpdate]);
 
-  // Główny Firestore onSnapshot listener
-  useEffect(() => {
-    if (!id) return;
-    
-    let isMounted = true;
-    
-    setLoading(true);
-    
-    const taskDocRef = doc(db, 'productionTasks', id);
-    let lastUpdateTimestamp = null;
-    
-    const unsubscribe = onSnapshot(
-      taskDocRef,
-      { includeMetadataChanges: false },
-      async (docSnapshot) => {
-        if (debounceTimerRef.current) {
-          clearTimeout(debounceTimerRef.current);
-        }
-        
-        const delay = isFirstLoadRef.current ? 0 : 300;
-        isFirstLoadRef.current = false;
+  // Główny Firestore onSnapshot listener (visibility-aware)
+  const taskDocRef = useMemo(() => id ? doc(db, 'productionTasks', id) : null, [id]);
+  const lastUpdateTimestampRef = useRef(null);
+  const isMountedRef = useRef(true);
 
-        debounceTimerRef.current = setTimeout(async () => {
-          if (!isMounted) return;
-          
-          if (!docSnapshot.exists()) {
-            if (isMounted) {
-              showError('Zadanie nie istnieje');
-              navigate('/production');
-            }
-            return;
-          }
-          
-          const taskData = { id: docSnapshot.id, ...docSnapshot.data() };
-          const updateTimestamp = taskData.updatedAt?.toMillis?.() || Date.now();
-          
-          if (lastUpdateTimestamp && updateTimestamp < lastUpdateTimestamp) {
-            return;
-          }
-          
-          lastUpdateTimestamp = updateTimestamp;
-          
-          await processTaskUpdate(taskData);
-          
-          if (isMounted) {
-            setLoading(false);
-          }
-        }, delay);
-      },
-      (error) => {
-        console.error('❌ [RealTimeSync] Listener error:', error);
-        if (isMounted) {
-          showError('Błąd synchronizacji danych zadania');
-          setLoading(false);
-        }
-      }
-    );
-    
-    return () => {
-      isMounted = false;
+  useEffect(() => {
+    isMountedRef.current = true;
+    if (id) setLoading(true);
+    return () => { isMountedRef.current = false; };
+  }, [id]);
+
+  useVisibilityAwareSnapshot(
+    taskDocRef,
+    { includeMetadataChanges: false },
+    async (docSnapshot) => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
-        debounceTimerRef.current = null;
       }
-      unsubscribe();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, navigate, showError]);
+      
+      const delay = isFirstLoadRef.current ? 0 : 300;
+      isFirstLoadRef.current = false;
+
+      debounceTimerRef.current = setTimeout(async () => {
+        if (!isMountedRef.current) return;
+        
+        if (!docSnapshot.exists()) {
+          if (isMountedRef.current) {
+            showError('Zadanie nie istnieje');
+            navigate('/production');
+          }
+          return;
+        }
+        
+        const taskData = { id: docSnapshot.id, ...docSnapshot.data() };
+        const updateTimestamp = taskData.updatedAt?.toMillis?.() || Date.now();
+        
+        if (lastUpdateTimestampRef.current && updateTimestamp < lastUpdateTimestampRef.current) {
+          return;
+        }
+        
+        lastUpdateTimestampRef.current = updateTimestamp;
+        
+        await processTaskUpdate(taskData);
+        
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
+      }, delay);
+    },
+    (error) => {
+      console.error('❌ [RealTimeSync] Listener error:', error);
+      if (isMountedRef.current) {
+        showError('Błąd synchronizacji danych zadania');
+        setLoading(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [id, navigate, showError]
+  );
 
   return {
     updateTaskRef,

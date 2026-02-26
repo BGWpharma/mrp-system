@@ -152,7 +152,8 @@ import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants'
 import { format, parseISO } from 'date-fns';
 import TaskDetails from '../../components/production/TaskDetails';
 import { db } from '../../services/firebase/config';
-import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query, where, getDocs, limit, orderBy, onSnapshot, runTransaction, writeBatch } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query, where, getDocs, limit, orderBy, runTransaction, writeBatch } from 'firebase/firestore';
+import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 // ✅ FAZA A: firebase/storage imports przeniesione do useFileHandlers
 import { getUsersDisplayNames } from '../../services/userService';
 // ✅ FAZA 2+: generateEndProductReportPDF przeniesione do useTaskReportFetcher
@@ -1124,60 +1125,48 @@ const TaskDetailsPage = () => {
   //   }
   // }, [task?.recipe?.ingredients, task?.consumedMaterials, materials]);
 
-  // Efekt z listenerem w czasie rzeczywistym dla powiązań składników z rezerwacjami
-  useEffect(() => {
-    if (!task?.id) return;
+  // Listener w czasie rzeczywistym dla powiązań składników z rezerwacjami (visibility-aware)
+  const ingredientLinksQuery = useMemo(() =>
+    task?.id ? query(collection(db, 'ingredientReservationLinks'), where('taskId', '==', task.id)) : null,
+  [task?.id]);
 
-    const ingredientLinksQuery = query(
-      collection(db, 'ingredientReservationLinks'),
-      where('taskId', '==', task.id)
-    );
-
-    const unsubscribeIngredientLinks = onSnapshot(
-      ingredientLinksQuery,
-      (snapshot) => {
-        const links = {};
-        snapshot.docs.forEach(doc => {
-          const data = doc.data();
-          
-          // Oblicz procent konsumpcji
-          const consumptionPercentage = data.linkedQuantity > 0 
-            ? Math.round((data.consumedQuantity / data.linkedQuantity) * 100)
-            : 0;
-          
-          const linkItem = {
-            id: doc.id,
-            ...data,
-            consumptionPercentage: consumptionPercentage,
-            // Używaj danych ze snapshotu zamiast pobierania na bieżąco
-            warehouseName: data.batchSnapshot?.warehouseName,
-            warehouseAddress: data.batchSnapshot?.warehouseAddress,
-            expiryDateString: data.batchSnapshot?.expiryDateString,
-            batchNumber: data.batchSnapshot?.batchNumber,
-            // Zachowaj kompatybilność wsteczną
-            quantity: data.linkedQuantity, // Dla komponentów używających starego pola
-            reservationType: data.reservationType
-          };
-          
-          // Grupuj powiązania po ingredientId
-          if (!links[data.ingredientId]) {
-            links[data.ingredientId] = [];
-          }
-          links[data.ingredientId].push(linkItem);
-        });
+  useVisibilityAwareSnapshot(
+    ingredientLinksQuery,
+    null,
+    (snapshot) => {
+      const links = {};
+      snapshot.docs.forEach(d => {
+        const data = d.data();
         
-        setIngredientReservationLinks(links);
-      },
-      (error) => {
-        console.error('❌ [INGREDIENT LINKS] Błąd listenera powiązań składników:', error);
-      }
-    );
-
-    // Cleanup funkcja
-    return () => {
-      unsubscribeIngredientLinks();
-    };
-  }, [task?.id]);
+        const consumptionPercentage = data.linkedQuantity > 0 
+          ? Math.round((data.consumedQuantity / data.linkedQuantity) * 100)
+          : 0;
+        
+        const linkItem = {
+          id: d.id,
+          ...data,
+          consumptionPercentage: consumptionPercentage,
+          warehouseName: data.batchSnapshot?.warehouseName,
+          warehouseAddress: data.batchSnapshot?.warehouseAddress,
+          expiryDateString: data.batchSnapshot?.expiryDateString,
+          batchNumber: data.batchSnapshot?.batchNumber,
+          quantity: data.linkedQuantity,
+          reservationType: data.reservationType
+        };
+        
+        if (!links[data.ingredientId]) {
+          links[data.ingredientId] = [];
+        }
+        links[data.ingredientId].push(linkItem);
+      });
+      
+      setIngredientReservationLinks(links);
+    },
+    (error) => {
+      console.error('❌ [INGREDIENT LINKS] Błąd listenera powiązań składników:', error);
+    },
+    [task?.id]
+  );
 
   // Pobieranie załączników badań klinicznych
   // Pobieranie załączników zadania (przeniesione do lazy loading w zakładce raportu)
@@ -3475,7 +3464,8 @@ const TaskDetailsPage = () => {
                 setEditedHistoryItem={setEditedHistoryItem}
                 warehouses={warehouses}
                 getUserName={getUserName}
-                fetchAllTaskData={fetchAllTaskData} // ✅ Przekaż funkcję odświeżania
+                fetchAllTaskData={fetchAllTaskData}
+                ingredientReservationLinks={ingredientReservationLinks}
                 onAddHistoryItem={handleAddHistoryItem}
                 onEditHistoryItem={handleEditHistoryItem}
                 onSaveHistoryItemEdit={handleSaveHistoryItemEdit}

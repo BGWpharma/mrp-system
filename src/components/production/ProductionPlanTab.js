@@ -59,7 +59,8 @@ const ProductionPlanTab = ({
   toLocalDateTimeString,
   fromLocalDateTimeString,
   onChecklistItemUpdate,
-  fetchAllTaskData // ✅ Funkcja do odświeżania danych zadania
+  fetchAllTaskData,
+  ingredientReservationLinks
 }) => {
   const { t } = useTranslation('taskDetails');
   const theme = useTheme();
@@ -505,6 +506,7 @@ const ProductionPlanTab = ({
             isMobile={isMobile}
             isVerySmall={isVerySmall}
             onChecklistItemUpdate={onChecklistItemUpdate}
+            externalIngredientLinks={ingredientReservationLinks}
             onPlanUpdate={async () => {
               // ✅ POPRAWKA: Odśwież dane zadania po aktualizacji planu mieszań
               // Zapobiega cofaniu się zmian przez starą wersję danych w propie task

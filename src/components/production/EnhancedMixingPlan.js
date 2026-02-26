@@ -81,8 +81,9 @@ import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
 import { baseColors, palettes } from '../../styles/colorConfig';
-import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
+import { doc, collection, query, where } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
+import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 import {
   getStandardReservationsForTask,
   linkIngredientToReservation,
@@ -492,7 +493,8 @@ const EnhancedMixingPlan = ({
   isMobile = false,
   isVerySmall = false,
   onChecklistItemUpdate,
-  onPlanUpdate 
+  onPlanUpdate,
+  externalIngredientLinks
 }) => {
   const { t } = useTranslation('taskDetails');
   const { showSuccess, showError, showInfo } = useNotification();
@@ -633,87 +635,112 @@ const EnhancedMixingPlan = ({
     return () => { cancelled = true; };
   }, [task?.consumedMaterials, task?.id]); // Reaguj na zmiany w consumedMaterials
 
-  // ⚡ OPTYMALIZACJA: Real-time listener tylko dla powiązań rezerwacji
-  // Listener zadania został przeniesiony do TaskDetailsPage aby uniknąć duplikacji snapshotów
-  // TaskDetailsPage już zarządza synchronizacją danych zadania w czasie rzeczywistym
+  // ⚡ OPTYMALIZACJA: Deduplikacja — gdy dane przychodzą z TaskDetailsPage (externalIngredientLinks),
+  // nie tworzymy własnego listenera. Listener istnieje tylko jako fallback.
+  const hasExternalLinks = externalIngredientLinks !== undefined;
+  const empLinksQuery = useMemo(() =>
+    !hasExternalLinks && task?.id
+      ? query(collection(db, 'ingredientReservationLinks'), where('taskId', '==', task.id))
+      : null,
+  [task?.id, hasExternalLinks]);
+  const empMountedRef = useRef(true);
+
   useEffect(() => {
-    if (!task?.id) return;
-
-    const taskId = task.id;
-    let cancelled = false;
-    const unsubscribers = [];
-
-    const setupRealtimeListeners = async () => {
-      try {
-        // Real-time listener dla powiązań rezerwacji
-        const linksRef = collection(db, 'ingredientReservationLinks');
-        const linksQuery = query(linksRef, where('taskId', '==', taskId));
-        
-        const unsubLinks = onSnapshot(linksQuery, async (snapshot) => {
-          if (cancelled) return;
-          try {
-            setIsLinksUpdating(true);
-            
-            const [updatedLinks, updatedStandardRes, updatedVirtualRes] = await Promise.all([
-              getIngredientReservationLinks(taskId),
-              getStandardReservationsForTask(taskId),
-              getVirtualReservationsFromSnapshots(taskId)
-            ]);
-            
-            if (cancelled) return;
-            
-            setIngredientLinks(updatedLinks);
-            
-            const allReservations = [...updatedStandardRes, ...updatedVirtualRes];
-            setStandardReservations(allReservations);
-            
-            if (updateTimerRef.current) {
-              clearTimeout(updateTimerRef.current);
-            }
-            updateTimerRef.current = setTimeout(() => {
-              if (!cancelled) setIsLinksUpdating(false);
-            }, 800);
-            
-            if (linksListenerInitialized.current) {
-              console.log('🔄 Real-time aktualizacja powiązań wykryta');
-            } else {
-              linksListenerInitialized.current = true;
-              console.log('🔷 Inicjalizacja listenera powiązań');
-            }
-          } catch (error) {
-            if (!cancelled) {
-              console.error('Błąd podczas aktualizacji powiązań:', error);
-              setIsLinksUpdating(false);
-            }
-          }
-        });
-        unsubscribers.push(unsubLinks);
-
-        if (cancelled) return;
-
-        // Pobierz dane początkowe
-        await loadData();
-        
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Błąd podczas konfiguracji real-time listenerów:', error);
-        }
-      }
-    };
-
-    setupRealtimeListeners();
-
+    empMountedRef.current = true;
+    linksListenerInitialized.current = false;
     return () => {
-      cancelled = true;
-      unsubscribers.forEach(unsub => unsub());
+      empMountedRef.current = false;
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current);
         updateTimerRef.current = null;
       }
       handleLinkIngredient.cancel();
-      linksListenerInitialized.current = false;
     };
-  }, [task?.id, showInfo]);
+  }, [task?.id, handleLinkIngredient]);
+
+  useEffect(() => {
+    if (task?.id) loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.id]);
+
+  // Synchronizacja z zewnętrznymi danymi powiązań (z TaskDetailsPage)
+  useEffect(() => {
+    if (!hasExternalLinks || !task?.id) return;
+    let cancelled = false;
+
+    setIngredientLinks(externalIngredientLinks || {});
+
+    (async () => {
+      try {
+        setIsLinksUpdating(true);
+        const [updatedStandardRes, updatedVirtualRes] = await Promise.all([
+          getStandardReservationsForTask(task.id),
+          getVirtualReservationsFromSnapshots(task.id)
+        ]);
+        if (cancelled) return;
+        setStandardReservations([...updatedStandardRes, ...updatedVirtualRes]);
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji rezerwacji:', error);
+      } finally {
+        if (!cancelled) {
+          if (updateTimerRef.current) clearTimeout(updateTimerRef.current);
+          updateTimerRef.current = setTimeout(() => {
+            if (empMountedRef.current) setIsLinksUpdating(false);
+          }, 800);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [externalIngredientLinks, hasExternalLinks, task?.id]);
+
+  // Fallback: własny listener gdy brak danych zewnętrznych
+  useVisibilityAwareSnapshot(
+    empLinksQuery,
+    null,
+    async (snapshot) => {
+      if (!empMountedRef.current) return;
+      try {
+        setIsLinksUpdating(true);
+        
+        const taskId = task.id;
+        const [updatedLinks, updatedStandardRes, updatedVirtualRes] = await Promise.all([
+          getIngredientReservationLinks(taskId),
+          getStandardReservationsForTask(taskId),
+          getVirtualReservationsFromSnapshots(taskId)
+        ]);
+        
+        if (!empMountedRef.current) return;
+        
+        setIngredientLinks(updatedLinks);
+        
+        const allReservations = [...updatedStandardRes, ...updatedVirtualRes];
+        setStandardReservations(allReservations);
+        
+        if (updateTimerRef.current) {
+          clearTimeout(updateTimerRef.current);
+        }
+        updateTimerRef.current = setTimeout(() => {
+          if (empMountedRef.current) setIsLinksUpdating(false);
+        }, 800);
+        
+        if (linksListenerInitialized.current) {
+          console.log('🔄 Real-time aktualizacja powiązań wykryta');
+        } else {
+          linksListenerInitialized.current = true;
+        }
+      } catch (error) {
+        if (empMountedRef.current) {
+          console.error('Błąd podczas aktualizacji powiązań:', error);
+          setIsLinksUpdating(false);
+        }
+      }
+    },
+    (error) => {
+      console.error('Błąd listenera powiązań rezerwacji:', error);
+    },
+    [task?.id]
+  );
 
   // 🔒 POPRAWKA: Zmemoizowana funkcja loadData aby uniknąć recreating przy każdym renderze
   const loadData = useCallback(async () => {

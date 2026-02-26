@@ -1,5 +1,5 @@
 // src/components/kiosk/KioskTaskDetails.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Paper,
   Typography,
@@ -27,8 +27,9 @@ import {
   RadioButtonUnchecked as UncheckedIcon,
   Factory as ProductionIcon
 } from '@mui/icons-material';
-import { doc, updateDoc, serverTimestamp, onSnapshot, collection, query, where } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, query, where } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
+import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 import { baseColors, palettes, getStatusColor } from '../../styles/colorConfig';
 import { useTheme as useThemeContext } from '../../contexts/ThemeContext';
 import { useNotification } from '../../hooks/useNotification';
@@ -76,82 +77,84 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
   const colors = baseColors[mode];
   const borderColor = mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)';
 
-  // Real-time synchronizacja zadania i powiązań rezerwacji
+  // Początkowe pobranie danych + listener zadania (visibility-aware)
+  const taskDocRef = useMemo(() => taskId ? doc(db, 'productionTasks', taskId) : null, [taskId]);
+  const kioskTaskMountedRef = useRef(true);
+
+  useEffect(() => {
+    kioskTaskMountedRef.current = true;
+    if (taskId) { setLoading(true); setError(null); }
+    return () => { kioskTaskMountedRef.current = false; };
+  }, [taskId]);
+
   useEffect(() => {
     if (!taskId) return;
-
     let cancelled = false;
-    const unsubscribers = [];
-
-    const setupRealtimeListeners = async () => {
+    (async () => {
       try {
-        setLoading(true);
-        setError(null);
-
-        // 1. Real-time listener dla zadania produkcyjnego
-        const taskRef = doc(db, 'productionTasks', taskId);
-        const unsubTask = onSnapshot(taskRef, (docSnapshot) => {
-          if (cancelled) return;
-          if (docSnapshot.exists()) {
-            setIsUpdating(true);
-            const taskData = { id: docSnapshot.id, ...docSnapshot.data() };
-            setTask(taskData);
-            setLastUpdate(new Date());
-            
-            setTimeout(() => { if (!cancelled) setIsUpdating(false); }, 500);
-          } else {
-            setError('Zadanie nie zostało znalezione');
-          }
-        }, (error) => {
-          if (cancelled) return;
-          console.error('Błąd listenera zadania:', error);
-          setError('Błąd podczas nasłuchiwania zmian zadania');
-          showError('Błąd synchronizacji w czasie rzeczywistym');
-        });
-        unsubscribers.push(unsubTask);
-
-        if (cancelled) return;
-
-        // 2. Pobranie początkowych powiązań rezerwacji
         const links = await getIngredientReservationLinks(taskId);
-        if (cancelled) return;
-        setIngredientLinks(links);
-
-        // 3. Real-time listener dla powiązań rezerwacji
-        const linksRef = collection(db, 'ingredientReservationLinks');
-        const linksQuery = query(linksRef, where('taskId', '==', taskId));
-        
-        const unsubLinks = onSnapshot(linksQuery, async (snapshot) => {
-          if (cancelled) return;
-          try {
-            const updatedLinks = await getIngredientReservationLinks(taskId);
-            if (cancelled) return;
-            setIngredientLinks(updatedLinks);
-            setIsUpdating(true);
-            setTimeout(() => { if (!cancelled) setIsUpdating(false); }, 500);
-          } catch (error) {
-            console.error('Błąd podczas aktualizacji powiązań:', error);
-          }
-        });
-        unsubscribers.push(unsubLinks);
-
+        if (!cancelled) setIngredientLinks(links);
       } catch (error) {
-        if (cancelled) return;
-        console.error('Błąd podczas konfiguracji real-time listenerów:', error);
-        setError('Nie udało się skonfigurować synchronizacji w czasie rzeczywistym');
-        showError('Błąd podczas konfiguracji synchronizacji');
+        console.error('Błąd podczas pobierania powiązań:', error);
       } finally {
         if (!cancelled) setLoading(false);
       }
-    };
+    })();
+    return () => { cancelled = true; };
+  }, [taskId]);
 
-    setupRealtimeListeners();
+  useVisibilityAwareSnapshot(
+    taskDocRef,
+    null,
+    (docSnapshot) => {
+      if (!kioskTaskMountedRef.current) return;
+      if (docSnapshot.exists()) {
+        setIsUpdating(true);
+        const taskData = { id: docSnapshot.id, ...docSnapshot.data() };
+        setTask(taskData);
+        setLastUpdate(new Date());
+        setLoading(false);
+        setTimeout(() => { if (kioskTaskMountedRef.current) setIsUpdating(false); }, 500);
+      } else {
+        setError('Zadanie nie zostało znalezione');
+        setLoading(false);
+      }
+    },
+    (error) => {
+      if (!kioskTaskMountedRef.current) return;
+      console.error('Błąd listenera zadania:', error);
+      setError('Błąd podczas nasłuchiwania zmian zadania');
+      showError('Błąd synchronizacji w czasie rzeczywistym');
+      setLoading(false);
+    },
+    [taskId]
+  );
 
-    return () => {
-      cancelled = true;
-      unsubscribers.forEach(unsub => unsub());
-    };
-  }, [taskId, showError]);
+  // Listener powiązań rezerwacji (visibility-aware)
+  const kioskLinksQuery = useMemo(() =>
+    taskId ? query(collection(db, 'ingredientReservationLinks'), where('taskId', '==', taskId)) : null,
+  [taskId]);
+
+  useVisibilityAwareSnapshot(
+    kioskLinksQuery,
+    null,
+    async (snapshot) => {
+      if (!kioskTaskMountedRef.current) return;
+      try {
+        const updatedLinks = await getIngredientReservationLinks(taskId);
+        if (!kioskTaskMountedRef.current) return;
+        setIngredientLinks(updatedLinks);
+        setIsUpdating(true);
+        setTimeout(() => { if (kioskTaskMountedRef.current) setIsUpdating(false); }, 500);
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji powiązań:', error);
+      }
+    },
+    (error) => {
+      console.error('Błąd listenera powiązań rezerwacji:', error);
+    },
+    [taskId]
+  );
 
   // Funkcja aktualizacji checklist
   const handleChecklistUpdate = async (itemId, completed) => {

@@ -1,5 +1,5 @@
 // src/components/common/Sidebar.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   Drawer, 
@@ -53,9 +53,10 @@ import {
   AccessTime as AccessTimeIcon,
   CalendarMonth as CalendarMonthIcon
 } from '@mui/icons-material';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { refreshExpiryStats } from '../../services/cloudFunctionsService';
+import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import BugReportDialog from './BugReportDialog';
@@ -306,43 +307,34 @@ const Sidebar = ({ onToggle }) => {
     return () => { cancelled = true; };
   }, [currentUser?.uid]);
 
-  useEffect(() => {
-    let cancelled = false;
-    let hasTriggeredRefresh = false;
-    
-    const unsubscribe = onSnapshot(
-      doc(db, 'aggregates', 'expiryStats'),
-      async (snapshot) => {
-        if (cancelled) return;
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          setExpiringItemsCount(data.totalCount || 0);
-        } else {
-          setExpiringItemsCount(0);
-          
-          if (!hasTriggeredRefresh) {
-            hasTriggeredRefresh = true;
-            try {
-              console.log('📊 Dokument agregatów nie istnieje - tworzę początkowe dane...');
-              await refreshExpiryStats();
-              if (cancelled) return;
-              console.log('✅ Początkowe agregaty utworzone pomyślnie');
-            } catch (error) {
-              if (cancelled) return;
-              console.warn('⚠️ Nie udało się utworzyć początkowych agregatów:', error.message);
-            }
+  const hasTriggeredRefreshRef = useRef(false);
+
+  useVisibilityAwareSnapshot(
+    useMemo(() => doc(db, 'aggregates', 'expiryStats'), []),
+    null,
+    async (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setExpiringItemsCount(data.totalCount || 0);
+      } else {
+        setExpiringItemsCount(0);
+        
+        if (!hasTriggeredRefreshRef.current) {
+          hasTriggeredRefreshRef.current = true;
+          try {
+            await refreshExpiryStats();
+          } catch (error) {
+            console.warn('⚠️ Nie udało się utworzyć początkowych agregatów:', error.message);
           }
         }
-      },
-      (error) => {
-        if (cancelled) return;
-        console.error('Błąd podczas nasłuchiwania na agregaty wygasających partii:', error);
-        setExpiringItemsCount(0);
       }
-    );
-
-    return () => { cancelled = true; unsubscribe(); };
-  }, []);
+    },
+    (error) => {
+      console.error('Błąd podczas nasłuchiwania na agregaty wygasających partii:', error);
+      setExpiringItemsCount(0);
+    },
+    []
+  );
   
   const isActive = (path) => {
     return location.pathname.startsWith(path);

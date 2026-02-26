@@ -90,7 +90,9 @@ import {
 } from '@mui/icons-material';
 import { getAllTasks, updateTaskStatus, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction, getProductionTasksOptimized, clearProductionTasksCache, forceRefreshProductionTasksCache, removeDuplicatesFromCache, updateTaskInCache, addTaskToCache, removeTaskFromCache, getProductionTasksCacheStatus, archiveProductionTask, unarchiveProductionTask } from '../../services/productionService';
 import { db } from '../../services/firebase/config';
-import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { collection, query, orderBy, limit } from 'firebase/firestore';
+import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
+import { useBroadcastSync } from '../../hooks/useBroadcastSync';
 import { getAllWarehouses } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -809,48 +811,44 @@ const TaskList = () => {
     }
   }, [debouncedSearchTerm]);
 
+  // BroadcastChannel — ukryte karty odświeżą po powrocie do widoczności
+  const { broadcast: broadcastTasksChange } = useBroadcastSync('production-tasks-sync', {
+    onWakeWithPendingChanges: () => { fetchTasksOptimized(); }
+  });
+
   // Real-time change detector — nasłuchuje tylko ostatnio zmodyfikowanego taska
   // zamiast całej kolekcji (redukcja reads ~100x)
-  useEffect(() => {
-    let updateTimeout = null;
-    let isInitialSnapshot = true;
-    
-    const changeDetectorQuery = query(
-      collection(db, 'productionTasks'),
-      orderBy('updatedAt', 'desc'),
-      limit(1)
-    );
-    
-    const unsubscribe = onSnapshot(
-      changeDetectorQuery,
-      (snapshot) => {
-        // Pomiń initial snapshot
-        if (isInitialSnapshot) {
-          isInitialSnapshot = false;
-          return;
-        }
+  const tasksChangeDetectorQuery = useMemo(() =>
+    query(collection(db, 'productionTasks'), orderBy('updatedAt', 'desc'), limit(1)),
+  []);
+  const isInitialTasksSnapshot = useRef(true);
+  const tasksUpdateTimeout = useRef(null);
+
+  useVisibilityAwareSnapshot(
+    tasksChangeDetectorQuery,
+    null,
+    (snapshot) => {
+      if (isInitialTasksSnapshot.current) {
+        isInitialTasksSnapshot.current = false;
+        return;
+      }
+      
+      if (snapshot.docChanges().length > 0 && !snapshot.metadata.hasPendingWrites) {
+        broadcastTasksChange({ collection: 'productionTasks' });
         
-        if (snapshot.docChanges().length > 0 && !snapshot.metadata.hasPendingWrites) {
-          if (updateTimeout) {
-            clearTimeout(updateTimeout);
-          }
-          updateTimeout = setTimeout(() => {
-            fetchTasksOptimized();
-          }, 500);
+        if (tasksUpdateTimeout.current) {
+          clearTimeout(tasksUpdateTimeout.current);
         }
-      },
-      (error) => {
-        console.error('Błąd real-time listener:', error);
+        tasksUpdateTimeout.current = setTimeout(() => {
+          fetchTasksOptimized();
+        }, 500);
       }
-    );
-    
-    return () => {
-      if (updateTimeout) {
-        clearTimeout(updateTimeout);
-      }
-      unsubscribe();
-    };
-  }, []);
+    },
+    (error) => {
+      console.error('Błąd real-time listener:', error);
+    },
+    []
+  );
 
 
 

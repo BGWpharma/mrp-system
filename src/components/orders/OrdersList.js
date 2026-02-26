@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
@@ -76,9 +76,11 @@ import { getRecipeById } from '../../services/recipeService';
 import { exportToCSV, formatDateForExport, formatCurrencyForExport } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useTranslation } from '../../hooks/useTranslation';
-import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { useOrderListState } from '../../contexts/OrderListStateContext';
+import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
+import { useBroadcastSync } from '../../hooks/useBroadcastSync';
 
 const OrdersList = () => {
   const { t } = useTranslation('orders');
@@ -207,68 +209,44 @@ const OrdersList = () => {
     };
   }, [orders]); // Zależność od orders, aby sprawdzać aktualną listę
 
-  // Real-time listener dla synchronizacji między użytkownikami
-  useEffect(() => {
-    let unsubscribe = null;
-    let updateTimeout = null;
+  // BroadcastChannel — ukryte karty odświeżą dane po powrocie do widoczności
+  const { broadcast: broadcastOrdersChange } = useBroadcastSync('orders-sync', {
+    onWakeWithPendingChanges: () => { fetchOrders(); }
+  });
 
-    const setupRealtimeListener = () => {
-      try {
-        console.log('🔥 [FIREBASE_LISTENER] Uruchamiam Firebase listener dla zamówień');
-        
-        // Lekki change-detector — nasłuchuj tylko ostatnio zmodyfikowanego zamówienia
-        // zamiast całej kolekcji (redukcja reads ~100x)
-        let isInitialSnapshot = true;
-        const changeDetectorQuery = query(
-          collection(db, 'orders'),
-          orderBy('updatedAt', 'desc'),
-          limit(1)
-        );
-        
-        unsubscribe = onSnapshot(changeDetectorQuery, (snapshot) => {
-          // Pomiń initial snapshot
-          if (isInitialSnapshot) {
-            isInitialSnapshot = false;
-            return;
-          }
-          
-          if (snapshot.docChanges().length > 0 && !snapshot.metadata.hasPendingWrites) {
-            console.log('🔄 [FIREBASE_LISTENER] Wykryto zmianę — planowanie odświeżenia listy');
-            
-            if (updateTimeout) {
-              clearTimeout(updateTimeout);
-            }
-            
-            updateTimeout = setTimeout(() => {
-              console.log('📋 [FIREBASE_LISTENER] Odświeżanie listy zamówień z filtrami');
-              fetchOrders();
-            }, 1000);
-          }
-        }, (error) => {
-          console.error('❌ [FIREBASE_LISTENER] Błąd Firebase listener:', error);
-        });
-        
-      } catch (error) {
-        console.error('❌ [FIREBASE_LISTENER] Błąd podczas konfiguracji Firebase listener:', error);
-      }
-    };
+  // Real-time change-detector — nasłuchuj tylko ostatnio zmodyfikowanego zamówienia
+  const ordersChangeDetectorQuery = useMemo(() =>
+    isInitialized ? query(collection(db, 'orders'), orderBy('updatedAt', 'desc'), limit(1)) : null,
+  [isInitialized]);
+  const isInitialOrdersSnapshot = useRef(true);
+  const ordersUpdateTimeout = useRef(null);
 
-    // Uruchom listener tylko jeśli komponent jest zainicjalizowany
-    if (isInitialized) {
-      setupRealtimeListener();
-    }
-
-    // Cleanup
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-        console.log('🛑 [FIREBASE_LISTENER] Odłączono Firebase listener dla zamówień');
+  useVisibilityAwareSnapshot(
+    ordersChangeDetectorQuery,
+    null,
+    (snapshot) => {
+      if (isInitialOrdersSnapshot.current) {
+        isInitialOrdersSnapshot.current = false;
+        return;
       }
-      if (updateTimeout) {
-        clearTimeout(updateTimeout);
+      
+      if (snapshot.docChanges().length > 0 && !snapshot.metadata.hasPendingWrites) {
+        broadcastOrdersChange({ collection: 'orders' });
+        
+        if (ordersUpdateTimeout.current) {
+          clearTimeout(ordersUpdateTimeout.current);
+        }
+        
+        ordersUpdateTimeout.current = setTimeout(() => {
+          fetchOrders();
+        }, 1000);
       }
-    };
-  }, [isInitialized]); // Zależność od isInitialized
+    },
+    (error) => {
+      console.error('❌ [FIREBASE_LISTENER] Błąd Firebase listener:', error);
+    },
+    [isInitialized]
+  );
 
   const fetchOrders = async () => {
     try {

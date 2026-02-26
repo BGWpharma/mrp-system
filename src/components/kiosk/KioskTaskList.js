@@ -63,8 +63,10 @@ import {
   Search as SearchIcon,
   Sort as SortIcon
 } from '@mui/icons-material';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
+import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
+import { useBroadcastSync } from '../../hooks/useBroadcastSync';
 import { baseColors, palettes, getStatusColor } from '../../styles/colorConfig';
 import { useTheme as useThemeContext } from '../../contexts/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
@@ -749,107 +751,103 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
     }
   }, [filteredTasksMemo, loadVisibleUserNames]);
 
-  // Real-time synchronizacja zadań produkcyjnych
-  useEffect(() => {
-    let cancelled = false;
-    let unsubscribe = null;
+  // Pobranie zadań produkcyjnych (getDocs zamiast onSnapshot na całą kolekcję)
+  const fetchKioskTasks = useCallback(async () => {
+    try {
+      setIsUpdating(true);
+      
+      const tasksRef = collection(db, 'productionTasks');
+      const activeTasksQuery = query(tasksRef, where('status', '!=', 'Anulowane'));
+      const snapshot = await getDocs(activeTasksQuery);
+      
+      const tasksData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    const setupRealtimeListener = () => {
-      try {
-        setLoading(true);
-        setError(null);
+      const activeTasks = tasksData.filter(task => task.status !== 'Anulowane');
 
-        const tasksRef = collection(db, 'productionTasks');
-        const activeTasksQuery = query(
-          tasksRef,
-          where('status', '!=', 'Anulowane')
-        );
+      const sortedTasks = activeTasks.sort((a, b) => {
+        const statusPriority = {
+          'W trakcie': 1,
+          'Wstrzymane': 2,
+          'Zaplanowane': 3,
+          'Zakończone': 4,
+          'Potwierdzenie zużycia': 5
+        };
+        
+        const priorityA = statusPriority[a.status] || 6;
+        const priorityB = statusPriority[b.status] || 6;
+        
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+        }
+        
+        const dateA = a.scheduledDate?.toDate?.() || new Date(a.scheduledDate);
+        const dateB = b.scheduledDate?.toDate?.() || new Date(b.scheduledDate);
+        return dateA - dateB;
+      });
 
-        unsubscribe = onSnapshot(activeTasksQuery, async (snapshot) => {
-          if (cancelled) return;
-          try {
-            setIsUpdating(true);
-            
-            const tasksData = snapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
-
-            const activeTasks = tasksData.filter(task => 
-              task.status !== 'Anulowane'
-            );
-
-            const sortedTasks = activeTasks.sort((a, b) => {
-              const statusPriority = {
-                'W trakcie': 1,
-                'Wstrzymane': 2,
-                'Zaplanowane': 3,
-                'Zakończone': 4,
-                'Potwierdzenie zużycia': 5
-              };
-              
-              const priorityA = statusPriority[a.status] || 6;
-              const priorityB = statusPriority[b.status] || 6;
-              
-              if (priorityA !== priorityB) {
-                return priorityA - priorityB;
-              }
-              
-              const dateA = a.scheduledDate?.toDate?.() || new Date(a.scheduledDate);
-              const dateB = b.scheduledDate?.toDate?.() || new Date(b.scheduledDate);
-              return dateA - dateB;
-            });
-
-            if (cancelled) return;
-            setTasks(sortedTasks);
-            const now = new Date();
-            setLastUpdate(now);
-            
-            if (onLastUpdateChange) {
-              onLastUpdateChange(now);
-            }
-
-            await loadVisibleUserNames(sortedTasks);
-            if (cancelled) return;
-
-            setTimeout(() => setIsUpdating(false), 500);
-            
-            console.log('🔄 Lista zadań zaktualizowana w czasie rzeczywistym:', sortedTasks.length, 'zadań');
-            
-          } catch (error) {
-            if (cancelled) return;
-            console.error('Błąd podczas przetwarzania zmian zadań:', error);
-            setError('Błąd podczas aktualizacji listy zadań');
-          } finally {
-            if (!cancelled) {
-              setLoading(false);
-            }
-          }
-        }, (error) => {
-          if (cancelled) return;
-          console.error('Błąd listenera zadań:', error);
-          setError('Błąd podczas nasłuchiwania zmian zadań');
-          setLoading(false);
-        });
-
-      } catch (error) {
-        if (cancelled) return;
-        console.error('Błąd podczas konfiguracji real-time listenera:', error);
-        setError('Nie udało się skonfigurować synchronizacji w czasie rzeczywistym');
-        setLoading(false);
+      setTasks(sortedTasks);
+      const now = new Date();
+      setLastUpdate(now);
+      
+      if (onLastUpdateChange) {
+        onLastUpdateChange(now);
       }
-    };
 
-    setupRealtimeListener();
-
-    return () => {
-      cancelled = true;
-      if (unsubscribe) {
-        unsubscribe();
-        console.log('🛑 Odłączono listener listy zadań');
-      }
-    };
+      await loadVisibleUserNames(sortedTasks);
+      
+      setTimeout(() => setIsUpdating(false), 500);
+      
+    } catch (error) {
+      console.error('Błąd podczas pobierania zadań:', error);
+      setError('Błąd podczas aktualizacji listy zadań');
+    } finally {
+      setLoading(false);
+    }
   }, [loadVisibleUserNames, onLastUpdateChange]);
+
+  // Początkowe pobranie danych
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    fetchKioskTasks();
+  }, [fetchKioskTasks]);
+
+  // BroadcastChannel — ukryte karty odświeżą po powrocie do widoczności
+  const { broadcast: broadcastKioskChange } = useBroadcastSync('production-tasks-sync', {
+    onWakeWithPendingChanges: () => { fetchKioskTasks(); }
+  });
+
+  // Change detector — nasłuchuje limit(1), odświeża całą listę przy wykryciu zmiany
+  const kioskChangeDetectorQuery = useMemo(() =>
+    query(collection(db, 'productionTasks'), orderBy('updatedAt', 'desc'), limit(1)),
+  []);
+  const isInitialKioskSnapshot = useRef(true);
+  const kioskUpdateTimeout = useRef(null);
+
+  useVisibilityAwareSnapshot(
+    kioskChangeDetectorQuery,
+    null,
+    (snapshot) => {
+      if (isInitialKioskSnapshot.current) {
+        isInitialKioskSnapshot.current = false;
+        return;
+      }
+      
+      if (snapshot.docChanges().length > 0 && !snapshot.metadata.hasPendingWrites) {
+        broadcastKioskChange({ collection: 'productionTasks' });
+        if (kioskUpdateTimeout.current) {
+          clearTimeout(kioskUpdateTimeout.current);
+        }
+        kioskUpdateTimeout.current = setTimeout(() => {
+          fetchKioskTasks();
+        }, 500);
+      }
+    },
+    (error) => {
+      console.error('Błąd change detector listenera zadań:', error);
+    },
+    []
+  );
 
   // Funkcja formatowania statusu
   const getStatusInfo = (status) => {
