@@ -68,7 +68,8 @@ const ProductionShiftFormDialog = ({
   open, 
   onClose, 
   task = null,
-  onSuccess = null 
+  onSuccess = null,
+  fullScreen = false
 }) => {
   const { currentUser } = useAuth();
   const theme = useTheme();
@@ -471,10 +472,13 @@ const ProductionShiftFormDialog = ({
       onClose={handleClose}
       maxWidth="lg"
       fullWidth
+      fullScreen={fullScreen}
       PaperProps={{
         sx: { 
-          minHeight: '85vh',
-          maxHeight: '95vh'
+          ...(!fullScreen && {
+            minHeight: '85vh',
+            maxHeight: '95vh'
+          })
         }
       }}
     >

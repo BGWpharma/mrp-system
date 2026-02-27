@@ -35,7 +35,8 @@ const CompletedMOFormDialog = ({
   open, 
   onClose, 
   task = null,
-  onSuccess = null 
+  onSuccess = null,
+  fullScreen = false
 }) => {
   const { currentUser } = useAuth();
   const theme = useTheme();
@@ -625,10 +626,13 @@ const CompletedMOFormDialog = ({
       onClose={handleClose}
       maxWidth="md"
       fullWidth
+      fullScreen={fullScreen}
       PaperProps={{
         sx: { 
-          minHeight: '80vh',
-          maxHeight: '90vh'
+          ...(!fullScreen && {
+            minHeight: '80vh',
+            maxHeight: '90vh'
+          })
         }
       }}
     >

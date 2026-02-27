@@ -654,9 +654,8 @@ const EnhancedMixingPlan = ({
         clearTimeout(updateTimerRef.current);
         updateTimerRef.current = null;
       }
-      handleLinkIngredient.cancel();
     };
-  }, [task?.id, handleLinkIngredient]);
+  }, [task?.id]);
 
   useEffect(() => {
     if (task?.id) loadData();
@@ -884,6 +883,12 @@ const EnhancedMixingPlan = ({
     () => debounce(handleLinkIngredientImmediate, 300),
     [standardReservations, ingredientLinks, task.id]
   );
+
+  useEffect(() => {
+    return () => {
+      handleLinkIngredient.cancel();
+    };
+  }, [handleLinkIngredient]);
 
   // Aktualizuj maksymalną dostępną ilość gdy wybrana zostanie rezerwacja
   useEffect(() => {

@@ -8,7 +8,9 @@ import {
   Button,
   Grid,
   Snackbar,
-  Alert
+  Alert,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import {
   Assignment as AssignmentIcon,
@@ -54,6 +56,8 @@ const formCards = [
 const KioskFormsPanel = () => {
   const { mode } = useThemeContext();
   const { t } = useTranslation('forms');
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const colors = baseColors[mode];
 
   const [openDialog, setOpenDialog] = useState(null);
@@ -83,11 +87,20 @@ const KioskFormsPanel = () => {
                   : `linear-gradient(135deg, ${colors.paper} 0%, rgba(0,0,0,0.01) 100%)`,
                 border: `1px solid ${mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
                 boxShadow: `0 4px 24px ${color}15`,
-                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: `0 8px 32px ${color}25`,
-                },
+                WebkitTapHighlightColor: 'transparent',
+                touchAction: 'manipulation',
+                ...(!isMobile && {
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  '&:hover': {
+                    transform: 'translateY(-4px)',
+                    boxShadow: `0 8px 32px ${color}25`,
+                  },
+                }),
+                ...(isMobile && {
+                  '&:active': {
+                    boxShadow: `0 8px 32px ${color}25`,
+                  },
+                }),
               }}
             >
               <CardContent sx={{ flexGrow: 1, p: 3 }}>
@@ -136,12 +149,22 @@ const KioskFormsPanel = () => {
                     borderRadius: 3,
                     fontWeight: 600,
                     py: 1.2,
+                    minHeight: 48,
                     boxShadow: `0 4px 12px ${color}30`,
-                    '&:hover': {
-                      boxShadow: `0 6px 16px ${color}40`,
-                      transform: 'translateY(-1px)',
-                    },
-                    transition: 'all 0.2s ease-in-out',
+                    WebkitTapHighlightColor: 'transparent',
+                    touchAction: 'manipulation',
+                    ...(!isMobile && {
+                      transition: 'all 0.2s ease-in-out',
+                      '&:hover': {
+                        boxShadow: `0 6px 16px ${color}40`,
+                        transform: 'translateY(-1px)',
+                      },
+                    }),
+                    ...(isMobile && {
+                      '&:active': {
+                        boxShadow: `0 6px 16px ${color}40`,
+                      },
+                    }),
                   }}
                 >
                   {t('productionForms.fillForm')}
@@ -158,6 +181,7 @@ const KioskFormsPanel = () => {
             open
             onClose={handleClose}
             onSuccess={handleSuccess}
+            fullScreen={isMobile}
           />
         </Suspense>
       )}
@@ -167,6 +191,7 @@ const KioskFormsPanel = () => {
             open
             onClose={handleClose}
             onSuccess={handleSuccess}
+            fullScreen={isMobile}
           />
         </Suspense>
       )}
@@ -176,6 +201,7 @@ const KioskFormsPanel = () => {
             open
             onClose={handleClose}
             onSuccess={handleSuccess}
+            fullScreen={isMobile}
           />
         </Suspense>
       )}
