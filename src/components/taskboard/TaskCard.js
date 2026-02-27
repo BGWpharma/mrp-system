@@ -193,8 +193,8 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
         style={style}
         {...attributes}
         {...(!disableDrag ? listeners : {})}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => { if (!isDragging) setIsHovered(true); }}
+        onMouseLeave={() => { if (!isDragging) setIsHovered(false); }}
         sx={{
           mb: isMobile ? 0.75 : 1,
           backgroundColor: isHighPriority && task.status !== 'completed'
@@ -215,15 +215,14 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
             ? 'rgba(211, 47, 47, 0.5)'
             : 'divider',
           opacity: task.status === 'completed' ? 0.6 : 1,
-          transition: 'all 0.2s ease',
+          transition: 'background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
           cursor: disableDrag ? 'pointer' : (isDragging ? 'grabbing' : (isMobile ? 'pointer' : 'grab')),
           position: 'relative',
           '&:hover': {
-            backgroundColor: 'action.selected',
-            borderColor: getDueDateInfo?.isOverdue 
+            backgroundColor: isDragging ? undefined : 'action.selected',
+            borderColor: isDragging ? undefined : (getDueDateInfo?.isOverdue 
               ? 'rgba(211, 47, 47, 0.7)' 
-              : 'action.disabled',
-            transform: isDragging ? 'none' : 'translateY(-1px)',
+              : 'action.disabled'),
             boxShadow: isDragging ? 'none' : '0 4px 12px rgba(0, 0, 0, 0.2)'
           }
         }}
@@ -491,6 +490,7 @@ export default React.memo(TaskCard, (prevProps, nextProps) => {
     JSON.stringify(prevProps.task.assignedTo) === JSON.stringify(nextProps.task.assignedTo) &&
     JSON.stringify(prevProps.task.subtaskLists) === JSON.stringify(nextProps.task.subtaskLists) &&
     JSON.stringify(prevProps.task.attachments) === JSON.stringify(nextProps.task.attachments) &&
-    JSON.stringify(prevProps.userNamesMap) === JSON.stringify(nextProps.userNamesMap)
+    JSON.stringify(prevProps.userNamesMap) === JSON.stringify(nextProps.userNamesMap) &&
+    prevProps.disableDrag === nextProps.disableDrag
   );
 });
