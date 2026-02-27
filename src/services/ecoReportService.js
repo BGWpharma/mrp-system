@@ -462,6 +462,78 @@ const calculateStockForward = (itemId, transactions, cutoffDate, inclusive = fal
 };
 
 /**
+ * Oblicza stan magazynowy na podaną datę metodą BATCH-BASED (rekonstrukcja historyczna).
+ * 
+ * Zamiast sumować transakcje od początku (forward), bierze aktualne ilości partii
+ * i cofa (undo) transakcje, które zaszły PO dacie cutoff.
+ * 
+ * Dzięki temu organizacyjne RECEIVE (z ręcznego tworzenia partii) nie zawyżają stanu,
+ * bo operujemy na rzeczywistych ilościach partii, a nie na transakcjach RECEIVE.
+ * 
+ * @param {string} itemId - ID produktu
+ * @param {Array} batches - wszystkie aktualne partie (z fetchBatches)
+ * @param {Array} allTransactions - surowe transakcje (przed orphan/dedup) do undo post-period
+ * @param {Date} cutoffDate - data graniczna
+ * @param {boolean} inclusive - true: txDate <= cutoff (closing), false: txDate < cutoff (opening)
+ * @returns {number} - obliczony stan magazynowy na daną datę
+ */
+const calculateBatchBasedStock = (itemId, batches, allTransactions, cutoffDate, inclusive = false) => {
+  const itemBatches = batches.filter(b => b.itemId === itemId);
+
+  if (itemBatches.length === 0) {
+    return null; // sygnał do callera: brak partii, użyj fallbacku
+  }
+
+  let totalStock = 0;
+
+  for (const batch of itemBatches) {
+    const batchDate = safeConvertDate(batch.receivedDate) || safeConvertDate(batch.createdAt);
+
+    // Pomiń partie utworzone po dacie granicznej
+    if (batchDate) {
+      if (inclusive ? batchDate > cutoffDate : batchDate >= cutoffDate) continue;
+    }
+
+    let qty = parseFloat(batch.quantity) || 0;
+
+    // Cofnij transakcje po dacie granicznej dla tej partii
+    for (const tx of allTransactions) {
+      if (tx.batchId !== batch.id) continue;
+      const txDate = safeConvertDate(tx.createdAt) || safeConvertDate(tx.transactionDate);
+      if (!txDate) continue;
+
+      // Transakcje w/po cutoff — do cofnięcia
+      const isAfterCutoff = inclusive ? txDate > cutoffDate : txDate >= cutoffDate;
+      if (!isAfterCutoff) continue;
+
+      const txQty = parseFloat(tx.quantity) || 0;
+      const type = normalizeTransactionType(tx.type);
+
+      switch (type) {
+        case 'ADJUSTMENT-ADD':
+        case 'RECEIVE':
+        case 'STOCKTAKING-COMPLETED':
+        case 'PRODUCTION-SESSION-ADD':
+        case 'PRODUCTION-CORRECTION-ADD':
+          qty -= txQty; // undo add
+          break;
+        case 'ADJUSTMENT-REMOVE':
+        case 'ISSUE':
+        case 'PRODUCTION-CORRECTION-REMOVE':
+          qty += txQty; // undo remove
+          break;
+        default:
+          break;
+      }
+    }
+
+    totalStock += Math.max(0, qty);
+  }
+
+  return parseFloat(totalStock.toFixed(3));
+};
+
+/**
  * Generuje dane Tab.1 - Dostawcy
  * 
  * Bazuje na transakcjach RECEIVE powiązanych z zamówieniami zakupowymi (PO),
@@ -601,7 +673,9 @@ const generateRawMaterialsData = (
   dateFrom, 
   dateTo,
   existingBatchIds = new Set(),
-  ecoRawMaterialIds = null
+  ecoRawMaterialIds = null,
+  batches = [],
+  allTransactions = []
 ) => {
   // Filtruj surowce (uwzględnij category, isRawMaterial i type)
   let rawMaterials = Object.values(inventoryItems).filter(
@@ -686,12 +760,25 @@ const generateRawMaterialsData = (
       }
     }
 
-    // Początkowy stan magazynowy — forward calculation
-    // Suma wszystkich valid transakcji PRZED dateFrom (niezależna od aktualnego stanu w bazie)
-    const openingStock = calculateStockForward(itemId, transactions, dateFrom, false);
+    // === STAN MAGAZYNOWY: batch-based (rekonstrukcja historyczna) ===
+    // Bierze aktualne ilości partii i cofa transakcje po dacie granicznej.
+    // Fallback na forward calculation jeśli item nie ma partii.
+    const batchOpeningStock = calculateBatchBasedStock(itemId, batches, allTransactions, dateFrom, false);
+    const batchClosingStock = calculateBatchBasedStock(itemId, batches, allTransactions, dateTo, true);
+
+    const useBatchBased = batchOpeningStock !== null && batchClosingStock !== null;
+    const openingStock = useBatchBased
+      ? batchOpeningStock
+      : calculateStockForward(itemId, transactions, dateFrom, false);
+    const closingStock = useBatchBased
+      ? batchClosingStock
+      : calculateStockForward(itemId, transactions, dateTo, true);
+
+    if (!useBatchBased && itemTransactions.length > 0) {
+      console.warn(`[ECO WARN] "${material.name}" nie ma partii — fallback na forward calculation`);
+    }
 
     // Zakup surowca - TYLKO transakcje RECEIVE powiązane z PO (source='purchase' lub orderId)
-    // Ręczne dodania do magazynu (RECEIVE bez PO) nie są zakupami
     const purchases = itemTransactions
       .filter(tx => isPurchaseReceive(tx))
       .reduce((sum, tx) => sum + (parseFloat(tx.quantity) || 0), 0);
@@ -701,76 +788,20 @@ const generateRawMaterialsData = (
       .filter(tx => isReceiveTransaction(tx) && isProductionRelated(tx))
       .reduce((sum, tx) => sum + (parseFloat(tx.quantity) || 0), 0);
 
-    // Przychody ręczne (RECEIVE bez PO i bez produkcji) — bazowa część "Inne przychody"
-    // Korekty inwentaryzacyjne (ADJUSTMENT-ADD/REMOVE) NIE są tu liczone —
-    // trafiają do residual i są automatycznie domykane w bilansie poniżej.
-    const rawOtherIncome = itemTransactions
-      .filter(tx => isReceiveTransaction(tx) && !isProductionRelated(tx) && !isPurchaseReceive(tx))
-      .reduce((sum, tx) => sum + (parseFloat(tx.quantity) || 0), 0);
-
-    // Zużycie do produkcji
-    // Priorytet 1: "ilość wydana" — transakcje adjustment_remove/ISSUE z reason "Konsumpcja w produkcji"
-    // Priorytet 2 (fallback): "ilość skonsumowana" — z task.consumedMaterials w zadaniach produkcyjnych
+    // === ZUŻYCIE: ZAWSZE z consumedMaterials w zadaniach produkcyjnych (MO) ===
+    let moTaskCount = 0;
     const productionConsumption = (() => {
-      // Priorytet 1: transakcje konsumpcji produkcyjnej ("ilość wydana produkcji")
-      const consumptionFromTx = itemTransactions
-        .filter(tx => isProductionConsumption(tx))
-        .reduce((sum, tx) => sum + (parseFloat(tx.quantity) || 0), 0);
-
-      if (consumptionFromTx > 0) {
-        console.log(`[ECO DEBUG]   Zużycie "${material.name}": z transakcji (ilość wydana) = ${consumptionFromTx}`);
-        return consumptionFromTx;
-      }
-
-      // Priorytet 2 (fallback): "ilość skonsumowana" z task.consumedMaterials
-      // UWAGA: sprawdzamy czy partia (batchId) nadal istnieje — pomijamy wpisy z usuniętych partii
       let total = 0;
       for (const task of productionTasks) {
-        const status = task.status;
-        if (status !== 'Zakończone' && status !== 'Potwierdzenie zużycia' && status !== 'completed') continue;
-        
-        const consumedMaterials = task.consumedMaterials || [];
-        
-        for (const consumed of consumedMaterials) {
-          if (consumed.materialId === itemId) {
-            // Jeśli consumedMaterial ma batchId — sprawdź czy partia istnieje
-            if (consumed.batchId && existingBatchIds.size > 0 && !existingBatchIds.has(consumed.batchId)) {
-              continue; // Pomiń wpis z usuniętej partii
-            }
-            total += parseFloat(consumed.quantity) || 0;
-          }
+        if (!['Zakończone', 'Potwierdzenie zużycia', 'completed'].includes(task.status)) continue;
+        for (const consumed of (task.consumedMaterials || [])) {
+          if (consumed.materialId !== itemId) continue;
+          if (consumed.batchId && existingBatchIds.size > 0 && !existingBatchIds.has(consumed.batchId)) continue;
+          total += parseFloat(consumed.quantity) || 0;
+          moTaskCount++;
         }
       }
-      
-      if (total > 0) {
-        console.log(`[ECO DEBUG]   Zużycie "${material.name}": z consumedMaterials (ilość skonsumowana) = ${total}`);
-        return total;
-      }
-
-      // Ostateczny fallback: actualMaterialUsage / planowana ilość z MO
-      let moTotal = 0;
-      for (const task of productionTasks) {
-        const status = task.status;
-        if (status !== 'Zakończone' && status !== 'Potwierdzenie zużycia' && status !== 'completed') continue;
-        
-        const materials = task.materials || [];
-        const actualUsage = task.actualMaterialUsage || {};
-        
-        for (const mat of materials) {
-          const inventoryItemId = mat.inventoryItemId || mat.id;
-          if (inventoryItemId !== itemId) continue;
-          
-          const consumed = actualUsage[mat.id] !== undefined
-            ? parseFloat(actualUsage[mat.id]) || 0
-            : parseFloat(mat.quantity) || 0;
-          
-          moTotal += consumed;
-        }
-      }
-      if (moTotal > 0) {
-        console.log(`[ECO DEBUG]   Zużycie "${material.name}": z MO actualUsage/planned (ostateczny fallback) = ${moTotal}`);
-      }
-      return moTotal;
+      return total;
     })();
 
     // Sprzedaż surowca - ISSUE z referencją do zamówienia (bez powiązania z produkcją)
@@ -778,67 +809,47 @@ const generateRawMaterialsData = (
       .filter(tx => isIssueTransaction(tx) && !isProductionRelated(tx) && tx.referenceId)
       .reduce((sum, tx) => sum + (parseFloat(tx.quantity) || 0), 0);
 
-    // Końcowy stan magazynowy — forward calculation
-    // Suma wszystkich valid transakcji DO dateTo włącznie (niezależna od aktualnego stanu w bazie)
-    const closingStock = calculateStockForward(itemId, transactions, dateTo, true);
+    // === INNE PRZYCHODY / ROZCHODY: derywacja z równania bilansowego ===
+    // opening + purchases + otherIncome + ownProd - consumption - sales - otherExpenses = closing
+    const netOtherFlow = closingStock - openingStock - purchases - ownProduction
+                         + productionConsumption + sales;
+    const otherIncome = Math.max(0, parseFloat(netOtherFlow.toFixed(3)));
+    const otherExpenses = Math.max(0, parseFloat((-netOtherFlow).toFixed(3)));
 
-    // --- Domknięcie bilansu ---
-    // closingStock (forward) jest źródłem prawdy. classifiedBalance to suma
-    // sklasyfikowanych przepływów. Różnica (residual) wynika z niesklasyfikowanych
-    // korekt ilości partii (ADJUSTMENT-ADD/REMOVE z reason="Korekta ilości partii").
-    //
-    // Te korekty partii odzwierciedlają realne zużycie w produkcji:
-    // system zapisuje konsumpcję produkcyjną zarówno jako "Konsumpcja w produkcji"
-    // (sklasyfikowane) jak i korekty ilości partii (niesklasyfikowane).
-    // Forward calculation liczy je poprawnie, ale klasyfikacja nie obejmowała korekt partii.
-    //
-    // Rozwiązanie: pozytywny residual (netto korekt partii = niesklasyfikowane rozchody)
-    // doliczamy do zużycia produkcyjnego, bo dla surowców to główna przyczyna ubytku.
-    // Negatywny residual (niesklasyfikowane przychody z korekt +) → dodaj do Inne przychody.
-    const classifiedBalance = openingStock + purchases + rawOtherIncome + ownProduction - productionConsumption - sales;
-    const residual = parseFloat((classifiedBalance - closingStock).toFixed(3));
+    // Bilans weryfikacyjny (powinien zawsze wynosić 0 dzięki derywacji)
+    const calculatedClosing = openingStock + purchases + otherIncome + ownProduction - productionConsumption - sales - otherExpenses;
 
-    // Pozytywny residual → dolicz do zużycia produkcyjnego (korekty partii = realne zużycie)
-    const adjustedConsumption = productionConsumption + Math.max(0, residual);
-    const otherExpenses = 0;
-    const otherIncome = rawOtherIncome + Math.max(0, -residual);
-
-    // Bilans weryfikacyjny (powinien zawsze wynosić 0 dzięki domknięciu)
-    const calculatedClosing = openingStock + purchases + otherIncome + ownProduction - adjustedConsumption - sales - otherExpenses;
-
-    // === SZCZEGÓŁOWE LOGI DLA POZYCJI Z TRANSAKCJAMI ===
-    if (itemTransactions.length > 0) {
+    // === SZCZEGÓŁOWE LOGI ===
+    if (itemTransactions.length > 0 && (productionConsumption > 0 || otherExpenses > 0 || otherIncome > 0)) {
       const balanceDiff = closingStock - calculatedClosing;
-      // Loguj szczególnie gdy bilans się nie zgadza lub są duże inne rozchody
-      if (Math.abs(balanceDiff) > 0.01 || otherExpenses > 0 || productionConsumption > 0) {
-        console.log(`[ECO DETAIL] === ${material.name} (id: ${itemId}) ===`);
-        console.log(`[ECO DETAIL]   Stan początkowy (forward): ${openingStock}`);
-        console.log(`[ECO DETAIL]   Zakup (PO): ${purchases}, Inne przychody: ${otherIncome} (ręczne: ${rawOtherIncome}, korekty: ${Math.max(0, -residual)}), Produkcja własna: ${ownProduction}`);
-        console.log(`[ECO DETAIL]   Zużycie do produkcji: ${adjustedConsumption} (sklasyfikowane: ${productionConsumption}, z korekt partii: ${Math.max(0, residual)})`);
-        console.log(`[ECO DETAIL]   Sprzedaż: ${sales}, Inne rozchody: ${otherExpenses}`);
-        console.log(`[ECO DETAIL]   Stan końcowy (forward): ${closingStock}`);
-        console.log(`[ECO DETAIL]   Obliczony z bilansu: ${calculatedClosing}`);
-        console.log(`[ECO DETAIL]   Różnica bilansu: ${balanceDiff}`);
-        
-        // Pokaż WSZYSTKIE transakcje tego surowca z podziałem na kategorie
-        console.log(`[ECO DETAIL]   --- Wszystkie transakcje (${itemTransactions.length}) ---`);
-        itemTransactions.forEach((tx, i) => {
-          const type = normalizeTransactionType(tx.type);
-          let bucket = '???';
-          if (isPurchaseReceive(tx)) bucket = 'ZAKUP (PO)';
-          else if (isReceiveTransaction(tx) && !isProductionRelated(tx)) bucket = 'INNE PRZYCHODY (ręczne)';
-          else if (isReceiveTransaction(tx) && isProductionRelated(tx)) bucket = 'PROD.WŁASNA';
-          else if (isProductionConsumption(tx)) bucket = 'ZUŻYCIE PROD.';
-          else if (isIssueTransaction(tx) && !isProductionRelated(tx) && tx.referenceId) bucket = 'SPRZEDAŻ';
-          else if (type === 'ADJUSTMENT-ADD' || type === 'STOCKTAKING-COMPLETED' || type === 'PRODUCTION-SESSION-ADD' || type === 'PRODUCTION-CORRECTION-ADD') bucket = 'KOREKTA+ (przychód)';
-          else if (type === 'ADJUSTMENT-REMOVE') bucket = 'KOREKTA- (rozchód)';
-          else if (type === 'TRANSFER') bucket = 'TRANSFER';
-          else if (isIssueTransaction(tx) && !isProductionRelated(tx) && !tx.referenceId) bucket = 'ISSUE (inne)';
-          else bucket = `INNE (type=${tx.type})`;
-          
-          console.log(`[ECO DETAIL]   tx[${i}]: [${bucket}] type="${tx.type}" normalizedType="${type}" qty=${tx.quantity} reason="${tx.reason || ''}" ref="${tx.reference || ''}" moNumber="${tx.moNumber || ''}" taskId="${tx.taskId || ''}`);
-        });
-      }
+      const stockMethod = useBatchBased ? 'batch-based' : 'forward';
+      console.log(`[ECO DETAIL] === ${material.name} (id: ${itemId}) ===`);
+      console.log(`[ECO DETAIL]   Stan początkowy (${stockMethod}): ${openingStock}`);
+      console.log(`[ECO DETAIL]   Zakup (PO): ${purchases}, Inne przychody (z bilansu): ${otherIncome}, Produkcja własna: ${ownProduction}`);
+      console.log(`[ECO DETAIL]   Zużycie do produkcji (consumedMaterials, ${moTaskCount} wpisów MO): ${productionConsumption}`);
+      console.log(`[ECO DETAIL]   Sprzedaż: ${sales}, Inne rozchody (z bilansu): ${otherExpenses}`);
+      console.log(`[ECO DETAIL]   Stan końcowy (${stockMethod}): ${closingStock}`);
+      console.log(`[ECO DETAIL]   Obliczony z bilansu: ${calculatedClosing}`);
+      console.log(`[ECO DETAIL]   Różnica bilansu: ${balanceDiff}`);
+
+      // Pokaż transakcje tego surowca z podziałem na kategorie (dla audytu)
+      console.log(`[ECO DETAIL]   --- Wszystkie transakcje (${itemTransactions.length}) ---`);
+      itemTransactions.forEach((tx, i) => {
+        const type = normalizeTransactionType(tx.type);
+        let bucket = '???';
+        if (isPurchaseReceive(tx)) bucket = 'ZAKUP (PO)';
+        else if (isReceiveTransaction(tx) && !isProductionRelated(tx)) bucket = 'RECEIVE (ręczne/org.)';
+        else if (isReceiveTransaction(tx) && isProductionRelated(tx)) bucket = 'PROD.WŁASNA';
+        else if (isProductionConsumption(tx)) bucket = 'ZUŻYCIE PROD. (tx)';
+        else if (isIssueTransaction(tx) && !isProductionRelated(tx) && tx.referenceId) bucket = 'SPRZEDAŻ';
+        else if (type === 'ADJUSTMENT-ADD' || type === 'STOCKTAKING-COMPLETED' || type === 'PRODUCTION-SESSION-ADD' || type === 'PRODUCTION-CORRECTION-ADD') bucket = 'KOREKTA+ (przychód)';
+        else if (type === 'ADJUSTMENT-REMOVE') bucket = 'KOREKTA- (rozchód)';
+        else if (type === 'TRANSFER') bucket = 'TRANSFER';
+        else if (isIssueTransaction(tx) && !isProductionRelated(tx) && !tx.referenceId) bucket = 'ISSUE (inne)';
+        else bucket = `INNE (type=${tx.type})`;
+
+        console.log(`[ECO DETAIL]   tx[${i}]: [${bucket}] type="${tx.type}" normalizedType="${type}" qty=${tx.quantity} reason="${tx.reason || ''}" ref="${tx.reference || ''}" moNumber="${tx.moNumber || ''}" taskId="${tx.taskId || ''}`);
+      });
     }
 
     rows.push({
@@ -848,7 +859,7 @@ const generateRawMaterialsData = (
       purchases: parseFloat(purchases.toFixed(3)),
       otherIncome: parseFloat(otherIncome.toFixed(3)),
       ownProduction: parseFloat(ownProduction.toFixed(3)),
-      productionConsumption: parseFloat(adjustedConsumption.toFixed(3)),
+      productionConsumption: parseFloat(productionConsumption.toFixed(3)),
       sales: parseFloat(sales.toFixed(3)),
       otherExpenses: parseFloat(otherExpenses.toFixed(3)),
       closingStock: parseFloat(closingStock.toFixed(3)),
@@ -1276,7 +1287,8 @@ export const fetchEcoReportData = async (filters) => {
     suppliers, purchaseOrders, inventoryItems, deduplicatedTransactions, startDate, endDate, ecoRawMaterialIds
   );
   const rawMaterialsData = generateRawMaterialsData(
-    inventoryItems, deduplicatedTransactions, productionTasks, startDate, endDate, existingBatchIds, ecoRawMaterialIds
+    inventoryItems, deduplicatedTransactions, productionTasks, startDate, endDate, existingBatchIds, ecoRawMaterialIds,
+    batches, transactions
   );
   const finishedProductsData = generateFinishedProductsData(
     inventoryItems, deduplicatedTransactions, productionTasks,
