@@ -604,7 +604,7 @@ function PrivateLayout({ children }) {
         minHeight: '100vh'
       }}>
         <BackgroundEffects />
-        <Navbar />
+        <Navbar sidebarCollapsed={isSidebarCollapsed} />
         <div className="content-container">
           <Sidebar onToggle={handleSidebarToggle} />
           <main className={`main-content ${isSidebarCollapsed || !isOpen ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>

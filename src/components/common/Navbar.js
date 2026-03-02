@@ -114,7 +114,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   width: 'auto',
 }));
 
-const Navbar = () => {
+const Navbar = ({ sidebarCollapsed }) => {
   const { currentUser, logout } = useAuth();
   const { mode, toggleTheme } = useTheme();
   const { t } = useTranslation('navigation');
@@ -444,13 +444,14 @@ const Navbar = () => {
         position="static" 
         elevation={0}
         sx={{ 
-          // Clean Design - solidne tło bez glassmorphism
           background: mode === 'dark' ? '#1e293b' : '#ffffff',
           borderBottom: '1px solid',
           borderColor: mode === 'dark' 
             ? 'rgba(255, 255, 255, 0.06)'
             : 'rgba(0, 0, 0, 0.06)',
           color: mode === 'dark' ? '#f1f5f9' : '#1e293b',
+          pl: isMobile ? 0 : (sidebarCollapsed ? '56px' : '180px'),
+          transition: 'padding-left 0.2s ease',
         }}
       >
         <Toolbar sx={{ justifyContent: 'space-between', position: 'relative', zIndex: 10 }}>
@@ -481,7 +482,7 @@ const Navbar = () => {
           
             {/* Logo - widoczne tylko na większych ekranach */}
             {!isMobile && (
-              <Box sx={{ display: 'flex', alignItems: 'center', ml: 4 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
                 <Link 
                   to="/" 
                   style={{ 
