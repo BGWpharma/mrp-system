@@ -450,7 +450,7 @@ const Navbar = ({ sidebarCollapsed }) => {
             ? 'rgba(255, 255, 255, 0.06)'
             : 'rgba(0, 0, 0, 0.06)',
           color: mode === 'dark' ? '#f1f5f9' : '#1e293b',
-          pl: isMobile ? 0 : (sidebarCollapsed ? '56px' : '180px'),
+          pl: isMobile ? 0 : (sidebarCollapsed || !isOpen ? '56px' : '190px'),
           transition: 'padding-left 0.2s ease',
         }}
       >

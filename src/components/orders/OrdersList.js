@@ -64,7 +64,10 @@ import {
   updateOrderStatus, 
   getOrderById,
   ORDER_STATUSES,
-  getOrdersWithPagination,
+  getOrdersOptimized,
+  clearOrdersCache,
+  forceRefreshOrdersCache,
+  updateOrderInCache,
   archiveOrder,
   unarchiveOrder
 } from '../../services/orderService';
@@ -185,6 +188,7 @@ const OrdersList = () => {
             console.log(`[ORDERS_LIST_BROADCAST] Znaleziono zamówienie z zadaniem ${taskId}, odświeżam listę po krótkiej przerwie`);
             
             setTimeout(() => {
+              forceRefreshOrdersCache();
               fetchOrdersRef.current();
               console.log('🔄 [ORDERS_LIST_BROADCAST] Odświeżono listę zamówień po otrzymaniu powiadomienia o aktualizacji kosztów');
             }, 500);
@@ -211,6 +215,7 @@ const OrdersList = () => {
 
   // BroadcastChannel — ukryte karty odświeżą dane po powrocie do widoczności
   const handleWakeWithPendingChanges = useCallback(() => {
+    forceRefreshOrdersCache();
     fetchOrdersRef.current();
   }, []);
 
@@ -242,6 +247,7 @@ const OrdersList = () => {
         }
         
         ordersUpdateTimeout.current = setTimeout(() => {
+          forceRefreshOrdersCache();
           fetchOrdersRef.current();
         }, 1000);
       }
@@ -254,24 +260,26 @@ const OrdersList = () => {
 
   const fetchOrders = async () => {
     try {
-      setLoading(true);
+      // Silent refresh — nie pokazuj loadera jeśli mamy już dane (cache hit)
+      const willBeFast = orders.length > 0;
+      if (!willBeFast) {
+        setLoading(true);
+      }
       
-      // Przygotowanie filtrów dla funkcji z paginacją
       const paginationFilters = {
         ...state.filters,
-        searchTerm: state.debouncedSearchTerm
+        searchTerm: state.debouncedSearchTerm,
+        showArchived: showArchived
       };
       
-      // Wywołanie funkcji paginacji serwerowej
-      const result = await getOrdersWithPagination(
-        state.page,
-        state.rowsPerPage,
-        state.orderBy,
-        state.orderDirection,
-        paginationFilters
-      );
+      const result = await getOrdersOptimized({
+        page: state.page,
+        pageSize: state.rowsPerPage,
+        sortField: state.orderBy,
+        sortOrder: state.orderDirection,
+        filters: paginationFilters
+      });
       
-      // Przelicz productsValue dla każdego zamówienia
       const calculateItemTotalValue = (item) => {
         const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
         if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
@@ -327,6 +335,7 @@ const OrdersList = () => {
                 status: fix.status, 
                 customer: fix.customer 
               }, 'system');
+              updateOrderInCache(fix.id, { totalValue: fix.totalValue });
               console.log(`[fetchOrders] Auto-korekta: zapisano totalValue=${fix.totalValue.toFixed(2)}€ dla ${fix.orderNumber}`);
             } catch (err) {
               console.warn(`[fetchOrders] Błąd auto-korekty ${fix.orderNumber}:`, err);
@@ -335,7 +344,6 @@ const OrdersList = () => {
         });
       }
       
-      // Aktualizacja danych i metadanych paginacji
       setOrders(ordersWithCalculatedValues);
       setTotalItems(result.pagination.totalItems);
       setTotalPages(result.pagination.totalPages);
@@ -1021,13 +1029,13 @@ const OrdersList = () => {
       
       // Jeśli mamy więcej niż jedną stronę, pobierz wszystkie zamówienia
       if (totalPages > 1) {
-        const allOrdersResult = await getOrdersWithPagination(
-          1, // pierwsza strona
-          totalItems, // wszystkie elementy
-          state.orderBy,
-          state.orderDirection,
-          { ...state.filters, searchTerm: state.debouncedSearchTerm }
-        );
+        const allOrdersResult = await getOrdersOptimized({
+          page: 1,
+          pageSize: totalItems,
+          sortField: state.orderBy,
+          sortOrder: state.orderDirection,
+          filters: { ...state.filters, searchTerm: state.debouncedSearchTerm, showArchived }
+        });
         ordersToRefresh = allOrdersResult.data;
       }
       
@@ -1359,13 +1367,13 @@ const OrdersList = () => {
       
       // Jeśli mamy tylko jedną stronę danych, pobieramy wszystkie zamówienia z filtrami
       if (totalPages > 1) {
-        const allOrdersResult = await getOrdersWithPagination(
-          1, // pierwsza strona
-          totalItems, // wszystkie elementy
-          state.orderBy,
-          state.orderDirection,
-          { ...state.filters, searchTerm: state.debouncedSearchTerm }
-        );
+        const allOrdersResult = await getOrdersOptimized({
+          page: 1,
+          pageSize: totalItems,
+          sortField: state.orderBy,
+          sortOrder: state.orderDirection,
+          filters: { ...state.filters, searchTerm: state.debouncedSearchTerm, showArchived }
+        });
         exportOrders = allOrdersResult.data;
       }
 

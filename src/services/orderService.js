@@ -22,6 +22,8 @@ import { ServiceCacheManager } from './cache/serviceCacheManager';
 const ORDERS_COLLECTION = 'orders';
 const ORDERS_CACHE_KEY = 'orders:all';
 const ORDERS_CACHE_TTL = 3 * 60 * 1000; // 3 minuty
+const ORDERS_LIST_CACHE_KEY = 'orders:list';
+const ORDERS_LIST_CACHE_TTL = 5 * 60 * 1000; // 5 minut
 const CUSTOMERS_COLLECTION = 'customers';
 
 // Cache dla statystyk zamówień
@@ -561,11 +563,10 @@ export const createOrder = async (orderData, userId) => {
       console.warn('Nie udało się utworzyć powiadomienia o nowym zamówieniu:', notificationError);
     }
     
-    // Zwracamy obiekt zawierający ID oraz dane zamówienia (dla zachowania kompatybilności)
-    return {
-      id: newOrderId,
-      ...orderWithMeta
-    };
+    const result = { id: newOrderId, ...orderWithMeta };
+    addOrderToCache(result);
+    ServiceCacheManager.invalidate(ORDERS_CACHE_KEY);
+    return result;
   } catch (error) {
     console.error('Błąd podczas tworzenia zamówienia:', error);
     throw error;
@@ -701,6 +702,8 @@ export const updateOrder = async (orderId, orderData, userId) => {
     };
     
     await updateDoc(doc(db, ORDERS_COLLECTION, orderId), updatedOrder);
+    updateOrderInCache(orderId, updatedOrder);
+    ServiceCacheManager.invalidate(ORDERS_CACHE_KEY);
     return true;
   } catch (error) {
     console.error('Błąd podczas aktualizacji zamówienia:', error);
@@ -714,6 +717,8 @@ export const updateOrder = async (orderId, orderData, userId) => {
 export const deleteOrder = async (orderId) => {
   try {
     await deleteDoc(doc(db, ORDERS_COLLECTION, orderId));
+    removeOrderFromCache(orderId);
+    ServiceCacheManager.invalidate(ORDERS_CACHE_KEY);
     return true;
   } catch (error) {
     console.error('Błąd podczas usuwania zamówienia:', error);
@@ -767,6 +772,7 @@ export const updateOrderItemName = async (orderId, orderItemId, newName, userId)
     });
     
     console.log(`✅ Zaktualizowano nazwę pozycji ${orderItemId} w zamówieniu ${orderId}: "${newName}"`);
+    updateOrderInCache(orderId, { items: updatedItems });
     return true;
   } catch (error) {
     console.error('Błąd podczas aktualizacji nazwy pozycji zamówienia:', error);
@@ -847,6 +853,7 @@ export const updateOrderItemShippedQuantity = async (orderId, itemUpdates, userI
       updatedAt: serverTimestamp()
     });
     
+    updateOrderInCache(orderId, { items: updatedItems });
     return { success: true, updatedItems };
   } catch (error) {
     console.error('Błąd podczas aktualizacji ilości wysłanej:', error);
@@ -952,6 +959,7 @@ export const updateOrderItemShippedQuantityPrecise = async (orderId, itemUpdates
     
     console.log(`✅ Precyzyjna aktualizacja ilości wysłanych zakończona dla zamówienia ${orderId}`);
     
+    updateOrderInCache(orderId, { items: updatedItems });
     return { 
       success: true, 
       updatedItems,
@@ -1040,6 +1048,7 @@ export const updateOrderStatus = async (orderId, status, userId) => {
       }
     }
     
+    updateOrderInCache(orderId, { status, updatedAt: new Date() });
     return true;
   } catch (error) {
     console.error('Błąd podczas aktualizacji statusu zamówienia:', error);
@@ -1483,6 +1492,7 @@ export const addProductionTaskToOrder = async (orderId, taskData, orderItemId = 
     
     console.log(`[DEBUG] Zakończono pomyślnie addProductionTaskToOrder dla zadania ${taskData.id} w zamówieniu ${orderId}`);
     
+    updateOrderInCache(orderId, { productionTasks, updatedAt: new Date() });
     return true;
   } catch (error) {
     console.error(`[ERROR] Krytyczny błąd w addProductionTaskToOrder:`, error);
@@ -1543,6 +1553,7 @@ export const removeProductionTaskFromOrder = async (orderId, taskId) => {
     }
     
     console.log(`Zadanie produkcyjne ${taskId} zostało usunięte z zamówienia ${orderId}`);
+    updateOrderInCache(orderId, { productionTasks: updatedTasks, updatedAt: new Date() });
     return true;
   } catch (error) {
     console.error('Błąd podczas usuwania zadania produkcyjnego z zamówienia:', error);
@@ -1616,6 +1627,7 @@ export const updateProductionTaskInOrder = async (orderId, taskId, updateData, u
       // Kontynuuj mimo błędu - ważniejsze jest zaktualizowanie zamówienia
     }
     
+    updateOrderInCache(orderId, { productionTasks, updatedAt: new Date() });
     return {
       success: true,
       message: 'Zadanie produkcyjne zaktualizowane w zamówieniu'
@@ -1799,6 +1811,199 @@ export const migrateCmrHistoryData = async () => {
     return { success: true, migratedCount };
   } catch (error) {
     console.error('Błąd podczas migracji danych CMR:', error);
+    throw error;
+  }
+};
+
+// ===== Cache helpers (ServiceCacheManager) =====
+
+export const clearOrdersCache = () => {
+  ServiceCacheManager.invalidate(ORDERS_LIST_CACHE_KEY);
+  ServiceCacheManager.invalidate(ORDERS_CACHE_KEY);
+};
+
+export const forceRefreshOrdersCache = () => {
+  ServiceCacheManager.invalidate(ORDERS_LIST_CACHE_KEY);
+};
+
+export const updateOrderInCache = (orderId, updatedData) => {
+  const cached = ServiceCacheManager.get(ORDERS_LIST_CACHE_KEY);
+  if (!cached || !Array.isArray(cached)) return false;
+  const idx = cached.findIndex(o => o.id === orderId);
+  if (idx === -1) return false;
+  cached[idx] = { ...cached[idx], ...updatedData, id: orderId };
+  ServiceCacheManager.set(ORDERS_LIST_CACHE_KEY, cached, ORDERS_LIST_CACHE_TTL);
+  return true;
+};
+
+export const addOrderToCache = (newOrder) => {
+  const cached = ServiceCacheManager.get(ORDERS_LIST_CACHE_KEY);
+  if (!cached || !Array.isArray(cached)) return false;
+  const idx = cached.findIndex(o => o.id === newOrder.id);
+  if (idx !== -1) {
+    cached[idx] = { ...cached[idx], ...newOrder };
+  } else {
+    cached.push(newOrder);
+  }
+  ServiceCacheManager.set(ORDERS_LIST_CACHE_KEY, cached, ORDERS_LIST_CACHE_TTL);
+  return true;
+};
+
+export const removeOrderFromCache = (orderId) => {
+  const cached = ServiceCacheManager.get(ORDERS_LIST_CACHE_KEY);
+  if (!cached || !Array.isArray(cached)) return false;
+  const filtered = cached.filter(o => o.id !== orderId);
+  if (filtered.length === cached.length) return false;
+  ServiceCacheManager.set(ORDERS_LIST_CACHE_KEY, filtered, ORDERS_LIST_CACHE_TTL);
+  return true;
+};
+
+// ===== Zoptymalizowane pobieranie zamówień (cache-first via ServiceCacheManager) =====
+
+export const getOrdersOptimized = async ({
+  page,
+  pageSize,
+  searchTerm = null,
+  sortField = 'orderDate',
+  sortOrder = 'desc',
+  filters = {},
+  forceRefresh = false
+}) => {
+  try {
+    if (!page || !pageSize) {
+      throw new Error('Parametry page i pageSize są wymagane');
+    }
+
+    const pageNum = Math.max(1, parseInt(page));
+    const itemsPerPage = Math.max(1, parseInt(pageSize));
+
+    if (forceRefresh) {
+      ServiceCacheManager.invalidate(ORDERS_LIST_CACHE_KEY);
+    }
+
+    const fromCache = ServiceCacheManager.has(ORDERS_LIST_CACHE_KEY);
+
+    let allOrders = [...(await ServiceCacheManager.getOrFetch(
+      ORDERS_LIST_CACHE_KEY,
+      async () => {
+        const ordersRef = collection(db, ORDERS_COLLECTION);
+        const q = query(ordersRef, orderBy('orderDate', 'desc'));
+        const snapshot = await getDocs(q);
+
+        const customerIds = new Set();
+        const rawOrders = snapshot.docs.map(d => {
+          const data = d.data();
+          if (data.customerId && !data.customer) customerIds.add(data.customerId);
+          return { id: d.id, ...data };
+        });
+
+        const customersMap = {};
+        if (customerIds.size > 0) {
+          const ids = Array.from(customerIds);
+          const batchSize = 10;
+          for (let i = 0; i < ids.length; i += batchSize) {
+            const batch = ids.slice(i, i + batchSize);
+            const cSnap = await getDocs(
+              query(collection(db, CUSTOMERS_COLLECTION), where('__name__', 'in', batch))
+            );
+            cSnap.forEach(cd => { customersMap[cd.id] = { id: cd.id, ...cd.data() }; });
+          }
+        }
+
+        return rawOrders.map(order => {
+          if (order.customerId && !order.customer && customersMap[order.customerId]) {
+            return { ...order, customer: customersMap[order.customerId] };
+          }
+          return order;
+        });
+      },
+      ORDERS_LIST_CACHE_TTL
+    ))];
+
+    // Filtrowanie lokalne
+    if (filters.status && filters.status !== 'all') {
+      allOrders = allOrders.filter(o => o.status === filters.status);
+    }
+    if (filters.customerId) {
+      allOrders = allOrders.filter(o =>
+        o.customer?.id === filters.customerId || o.customerId === filters.customerId
+      );
+    }
+    if (filters.fromDate) {
+      const from = new Date(filters.fromDate).getTime();
+      allOrders = allOrders.filter(o => {
+        const d = o.orderDate?.toDate ? o.orderDate.toDate() : new Date(o.orderDate);
+        return d.getTime() >= from;
+      });
+    }
+    if (filters.toDate) {
+      const to = new Date(filters.toDate).getTime();
+      allOrders = allOrders.filter(o => {
+        const d = o.orderDate?.toDate ? o.orderDate.toDate() : new Date(o.orderDate);
+        return d.getTime() <= to;
+      });
+    }
+    if (searchTerm && searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase().trim();
+      allOrders = allOrders.filter(o =>
+        (o.orderNumber && o.orderNumber.toLowerCase().includes(term)) ||
+        (o.customer?.name && o.customer.name.toLowerCase().includes(term)) ||
+        (o.items && o.items.some(item =>
+          (item.name && item.name.toLowerCase().includes(term)) ||
+          (item.description && item.description.toLowerCase().includes(term))
+        ))
+      );
+    }
+
+    // Filtrowanie archiwizacji
+    if (!filters.showArchived) {
+      allOrders = allOrders.filter(o => !o.archived);
+    }
+
+    // Sortowanie lokalne
+    allOrders.sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+
+      if (['orderDate', 'createdAt', 'updatedAt', 'deliveryDate', 'expectedDeliveryDate'].includes(sortField)) {
+        aVal = aVal ? (aVal.toDate ? aVal.toDate() : new Date(aVal)) : new Date(0);
+        bVal = bVal ? (bVal.toDate ? bVal.toDate() : new Date(bVal)) : new Date(0);
+      }
+
+      if (sortField === 'orderNumber') {
+        const getNum = (n) => { if (!n) return 0; const m = n.match(/CO(\d+)/); return m ? parseInt(m[1], 10) : 0; };
+        aVal = getNum(aVal);
+        bVal = getNum(bVal);
+      }
+
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return sortOrder === 'asc' ? 1 : -1;
+      if (bVal == null) return sortOrder === 'asc' ? -1 : 1;
+
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    // Paginacja
+    const totalItems = allOrders.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const safePage = Math.min(pageNum, Math.max(1, totalPages));
+    const startIndex = (safePage - 1) * itemsPerPage;
+    const paginatedData = allOrders.slice(startIndex, startIndex + itemsPerPage);
+
+    return {
+      data: paginatedData,
+      pagination: {
+        page: safePage,
+        limit: itemsPerPage,
+        totalItems,
+        totalPages
+      },
+      fromCache
+    };
+  } catch (error) {
+    console.error('Błąd w getOrdersOptimized:', error);
     throw error;
   }
 };
@@ -2376,6 +2581,7 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
     
     console.log(`Statystyki: ${totalShippedItems} pozycji wysłanych, ${totalCmrReferences} odniesień do CMR, przetworzono ${processedCMRs} CMR`);
     
+    updateOrderInCache(orderId, { items: updatedItems });
     return { 
       success: true, 
       updatedItems,
@@ -2957,6 +3163,8 @@ export const updateCustomerOrderNumber = async (orderId, newOrderNumber, userId)
     }
     
     console.log('📊 Raport z aktualizacji:', updateReport);
+    updateOrderInCache(orderId, { orderNumber: newOrderNumber });
+    ServiceCacheManager.invalidate(ORDERS_CACHE_KEY);
     return updateReport;
     
   } catch (error) {
@@ -2996,6 +3204,7 @@ export const archiveOrder = async (orderId) => {
       archivedAt: serverTimestamp(),
       archivedBy: 'manual'
     });
+    clearOrdersCache();
     return { success: true };
   } catch (error) {
     console.error('Błąd podczas archiwizacji zamówienia:', error);
@@ -3017,6 +3226,7 @@ export const unarchiveOrder = async (orderId) => {
       archived: false,
       archivedAt: deleteField()
     });
+    clearOrdersCache();
     return { success: true };
   } catch (error) {
     console.error('Błąd podczas przywracania zamówienia z archiwum:', error);

@@ -71,8 +71,8 @@ import { usePermissions } from '../../hooks/usePermissions';
 // Styled components - Clean Design
 const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
   borderRadius: '5px',
-  margin: '1px 6px',
-  padding: '5px 9px',
+  margin: '2px 7px',
+  padding: '6px 10px',
   border: 'none',
   transition: 'background-color 0.15s ease',
   '&.Mui-selected': {
@@ -104,8 +104,8 @@ const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
 // Clean Design - uproszczony StyledListItem
 const StyledListItem = styled(ListItem)(({ theme }) => ({
   borderRadius: '5px',
-  margin: '1px 8px',
-  padding: '3px 6px',
+  margin: '1px 10px',
+  padding: '3px 7px',
   border: 'none !important',
   outline: 'none !important',
   boxShadow: 'none !important',
@@ -165,7 +165,7 @@ const Sidebar = ({ onToggle }) => {
   const location = useLocation();
   const { mode } = useTheme();
   const { t } = useTranslation('sidebar');
-  const [drawerWidth, setDrawerWidth] = useState(180);
+  const [drawerWidth, setDrawerWidth] = useState(190);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const [openSubmenu, setOpenSubmenu] = useState('');
   const [expiringItemsCount, setExpiringItemsCount] = useState(0);
@@ -383,7 +383,7 @@ const Sidebar = ({ onToggle }) => {
   const toggleDrawer = () => {
     setIsDrawerOpen(!isDrawerOpen);
     // Dostosuj szerokość sidebara w zależności od stanu
-    setDrawerWidth(isDrawerOpen ? 56 : 180);
+    setDrawerWidth(isDrawerOpen ? 56 : 190);
   };
   
   const allMenuItems = [
@@ -533,7 +533,7 @@ const Sidebar = ({ onToggle }) => {
             component="div"
             sx={{
               fontWeight: 600,
-              fontSize: '0.65rem',
+              fontSize: '0.7rem',
               color: mode === 'dark' ? '#94a3b8' : '#64748b',
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
@@ -603,8 +603,8 @@ const Sidebar = ({ onToggle }) => {
               >
                 <Tooltip title={item.text} placement="right" arrow>
                   <ListItemIcon sx={{ 
-                    minWidth: 28, 
-                    '& .MuiSvgIcon-root': { fontSize: '1.15rem' },
+                    minWidth: 30, 
+                    '& .MuiSvgIcon-root': { fontSize: '1.2rem' },
                     color: isMenuActive(item.path) 
                       ? '#ffffff'
                       : 'inherit' 
@@ -624,7 +624,7 @@ const Sidebar = ({ onToggle }) => {
                       primary={item.text} 
                       primaryTypographyProps={{ 
                         sx: {
-                          fontSize: '0.78rem',
+                          fontSize: '0.81rem',
                           fontWeight: isMenuActive(item.path) ? 'bold' : 'normal',
                           color: isMenuActive(item.path) 
                             ? '#ffffff' // zawsze biały dla selected w obu motywach - gradient tła zapewnia kontrast
@@ -643,7 +643,7 @@ const Sidebar = ({ onToggle }) => {
                         }
                       }}
                     />
-                    {openSubmenu === item.text ? <ExpandLess sx={{ fontSize: '1rem' }} /> : <ExpandMore sx={{ fontSize: '1rem' }} />}
+                    {openSubmenu === item.text ? <ExpandLess sx={{ fontSize: '1.1rem' }} /> : <ExpandMore sx={{ fontSize: '1.1rem' }} />}
                   </Box>
                 )}
               </StyledListItemButton>
@@ -720,7 +720,7 @@ const Sidebar = ({ onToggle }) => {
                       }}
                     >
                       <Tooltip title={subItem.text} placement="right" arrow>
-                        <ListItemIcon sx={{ minWidth: 26, '& .MuiSvgIcon-root': { fontSize: '1rem' }, color: 'inherit' }}>
+                        <ListItemIcon sx={{ minWidth: 28, '& .MuiSvgIcon-root': { fontSize: '1.1rem' }, color: 'inherit' }}>
                           {subItem.badge ? (
                             <StyledBadge badgeContent={subItem.badge} color="primary">
                               {subItem.icon}
@@ -736,7 +736,7 @@ const Sidebar = ({ onToggle }) => {
                             primary={subItem.text} 
                             primaryTypographyProps={{ 
                               sx: {
-                                fontSize: '0.74rem',
+                                fontSize: '0.78rem',
                                 fontWeight: subItem.path && location.pathname === subItem.path ? 'bold' : 'normal',
                                 color: subItem.path && location.pathname === subItem.path
                                   ? (mode === 'dark' ? '#ffffff' : '#1e293b')
@@ -772,7 +772,7 @@ const Sidebar = ({ onToggle }) => {
               selected={item.path === '/' ? location.pathname === '/' : isActive(item.path)}
             >
               <Tooltip title={item.text} placement="right" arrow>
-                <ListItemIcon sx={{ minWidth: 28, '& .MuiSvgIcon-root': { fontSize: '1.15rem' }, color: 'inherit' }}>
+                <ListItemIcon sx={{ minWidth: 30, '& .MuiSvgIcon-root': { fontSize: '1.2rem' }, color: 'inherit' }}>
                   {item.badge ? (
                     <StyledBadge badgeContent={item.badge} color="primary">
                       {item.icon}
@@ -787,7 +787,7 @@ const Sidebar = ({ onToggle }) => {
                   primary={item.text} 
                   primaryTypographyProps={{ 
                     sx: {
-                      fontSize: '0.78rem',
+                      fontSize: '0.81rem',
                       fontWeight: item.path === '/' 
                         ? location.pathname === '/' ? 'bold' : 'normal'
                         : isActive(item.path) ? 'bold' : 'normal',
@@ -843,7 +843,7 @@ const Sidebar = ({ onToggle }) => {
           onClick={() => setFaqDialogOpen(true)}
         >
           <Tooltip title={t('faq')} placement="right" arrow>
-            <ListItemIcon sx={{ minWidth: 26, '& .MuiSvgIcon-root': { fontSize: '1.05rem' }, color: 'info.main' }}>
+            <ListItemIcon sx={{ minWidth: 28, '& .MuiSvgIcon-root': { fontSize: '1.1rem' }, color: 'info.main' }}>
               <FaqIcon />
             </ListItemIcon>
           </Tooltip>
@@ -852,7 +852,7 @@ const Sidebar = ({ onToggle }) => {
               primary={t('faq')} 
               primaryTypographyProps={{ 
                 sx: {
-                  fontSize: '0.74rem',
+                  fontSize: '0.78rem',
                   fontWeight: 'medium',
                   color: 'info.main',
                   wordBreak: 'break-word',
@@ -887,7 +887,7 @@ const Sidebar = ({ onToggle }) => {
           onClick={() => setBugReportDialogOpen(true)}
         >
           <Tooltip title={t('reportBug')} placement="right" arrow>
-            <ListItemIcon sx={{ minWidth: 26, '& .MuiSvgIcon-root': { fontSize: '1.05rem' }, color: 'error.main' }}>
+            <ListItemIcon sx={{ minWidth: 28, '& .MuiSvgIcon-root': { fontSize: '1.1rem' }, color: 'error.main' }}>
               <BugReportIcon />
             </ListItemIcon>
           </Tooltip>
@@ -896,7 +896,7 @@ const Sidebar = ({ onToggle }) => {
               primary={t('reportBug')} 
               primaryTypographyProps={{ 
                 sx: {
-                  fontSize: '0.74rem',
+                  fontSize: '0.78rem',
                   fontWeight: 'medium',
                   color: 'error.main',
                   wordBreak: 'break-word',

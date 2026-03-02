@@ -103,8 +103,8 @@ a {
 
 /* Klasa dla rozwiniętego sidebar */
 .sidebar-expanded .main-content {
-    margin-left: 180px;
-    width: calc(100% - 180px);
+    margin-left: 190px;
+    width: calc(100% - 190px);
 }
 
 /* Dashboard cards - Clean Design */
