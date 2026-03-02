@@ -496,11 +496,18 @@ export const AVAILABLE_PERMISSIONS = {
   canAccessInventory:   { id: 'canAccessInventory',   name: 'Magazyn',         description: 'Dostęp do stanów magazynowych, CMR, zamówień zakupowych i dostawców', category: 'module' },
   canAccessAIAssistant: { id: 'canAccessAIAssistant', name: 'Asystent AI',     description: 'Dostęp do asystenta AI', category: 'module' },
   canAccessCRM:         { id: 'canAccessCRM',         name: 'CRM',             description: 'Dostęp do kontaktów, interakcji i szans sprzedażowych', category: 'module' },
+  canAccessAccounting:  { id: 'canAccessAccounting',  name: 'Panel księgowy',  description: 'Dostęp do panelu księgowego (zewnętrzna aplikacja)', category: 'module' },
   // --- Uprawnienia operacyjne ---
   canCompleteStocktaking: {
     id: 'canCompleteStocktaking',
     name: 'Kończenie inwentaryzacji',
     description: 'Uprawnienie do kończenia inwentaryzacji i aktualizacji stanów magazynowych',
+    category: 'operational'
+  },
+  canCreateSchedule: {
+    id: 'canCreateSchedule',
+    name: 'Tworzenie grafików',
+    description: 'Uprawnienie do tworzenia i edycji grafików zmian pracowników',
     category: 'operational'
   },
 };
@@ -672,7 +679,8 @@ export const getAvailableSidebarTabs = () => {
         { id: 'sales-pricelists', name: 'Cenniki', path: '/orders/price-lists' },
         { id: 'sales-production-task', name: 'Nowe zadanie produkcyjne', path: '/production/create-from-order' },
         { id: 'sales-co-reports', name: 'Raporty CO', path: '/sales/co-reports' },
-        { id: 'sales-customer-orders', name: 'Zamówienia klientów', path: '/orders' }
+        { id: 'sales-customer-orders', name: 'Zamówienia klientów', path: '/orders' },
+        { id: 'sales-accounting-panel', name: 'Panel księgowy', external: true, href: 'https://bgw-accounting-panel.web.app/' }
       ]
     },
     { 

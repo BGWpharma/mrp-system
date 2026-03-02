@@ -51,7 +51,9 @@ import {
   Home as HomeIcon,
   Insights as InsightsIcon,
   AccessTime as AccessTimeIcon,
-  CalendarMonth as CalendarMonthIcon
+  CalendarMonth as CalendarMonthIcon,
+  AccountBalance as AccountBalanceIcon,
+  OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
 import { doc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
@@ -68,9 +70,9 @@ import { usePermissions } from '../../hooks/usePermissions';
 
 // Styled components - Clean Design
 const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
-  borderRadius: '6px',
-  margin: '2px 8px',
-  padding: '8px 12px',
+  borderRadius: '5px',
+  margin: '1px 6px',
+  padding: '5px 9px',
   border: 'none',
   transition: 'background-color 0.15s ease',
   '&.Mui-selected': {
@@ -101,9 +103,9 @@ const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
 
 // Clean Design - uproszczony StyledListItem
 const StyledListItem = styled(ListItem)(({ theme }) => ({
-  borderRadius: '6px',
-  margin: '1px 12px',
-  padding: '4px 8px',
+  borderRadius: '5px',
+  margin: '1px 8px',
+  padding: '3px 6px',
   border: 'none !important',
   outline: 'none !important',
   boxShadow: 'none !important',
@@ -163,7 +165,7 @@ const Sidebar = ({ onToggle }) => {
   const location = useLocation();
   const { mode } = useTheme();
   const { t } = useTranslation('sidebar');
-  const [drawerWidth, setDrawerWidth] = useState(200);
+  const [drawerWidth, setDrawerWidth] = useState(180);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const [openSubmenu, setOpenSubmenu] = useState('');
   const [expiringItemsCount, setExpiringItemsCount] = useState(0);
@@ -216,6 +218,7 @@ const Sidebar = ({ onToggle }) => {
       '/purchase-orders': 'inventory-component-orders'
     };
     
+    if (subItem.external) return `${parentTabId}-${subItem.text.toLowerCase().replace(/\s+/g, '-')}`;
     return pathToIdMap[subItem.path] || `${parentTabId}-${subItem.path.replace(/\//g, '-')}`;
   };
   
@@ -380,7 +383,7 @@ const Sidebar = ({ onToggle }) => {
   const toggleDrawer = () => {
     setIsDrawerOpen(!isDrawerOpen);
     // Dostosuj szerokość sidebara w zależności od stanu
-    setDrawerWidth(isDrawerOpen ? 60 : 200);
+    setDrawerWidth(isDrawerOpen ? 56 : 180);
   };
   
   const allMenuItems = [
@@ -426,6 +429,7 @@ const Sidebar = ({ onToggle }) => {
         { text: t('submenu.sales.invoices'), icon: <InvoicesIcon />, path: '/sales' },
         { text: t('submenu.sales.quotation'), icon: <CalculateIcon />, path: '/sales/quotation' },
         { text: t('submenu.sales.customerOrders'), icon: <OrdersIcon />, path: '/orders' },
+        ...(hasPermission('canAccessAccounting') ? [{ text: t('submenu.sales.accountingPanel'), icon: <AccountBalanceIcon />, href: 'https://bgw-accounting-panel.web.app/', external: true }] : []),
       ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 
@@ -517,7 +521,7 @@ const Sidebar = ({ onToggle }) => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          p: 1.5,
+          p: 1,
           borderBottom: '1px solid',
           borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
           flexShrink: 0,
@@ -525,15 +529,15 @@ const Sidebar = ({ onToggle }) => {
       >
         {isDrawerOpen && (
           <Typography
-            variant="subtitle1"
+            variant="subtitle2"
             component="div"
             sx={{
               fontWeight: 600,
-              fontSize: '0.75rem',
+              fontSize: '0.65rem',
               color: mode === 'dark' ? '#94a3b8' : '#64748b',
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
-              ml: 1,
+              ml: 0.5,
             }}
           >
             Menu
@@ -541,8 +545,9 @@ const Sidebar = ({ onToggle }) => {
         )}
         <IconButton 
           onClick={toggleDrawer}
+          size="small"
           sx={{ 
-            p: 0.5, 
+            p: 0.4, 
             color: mode === 'dark' ? '#94a3b8' : '#64748b',
             transition: 'background-color 0.15s ease',
             borderRadius: '6px',
@@ -598,9 +603,10 @@ const Sidebar = ({ onToggle }) => {
               >
                 <Tooltip title={item.text} placement="right" arrow>
                   <ListItemIcon sx={{ 
-                    minWidth: 36, 
+                    minWidth: 28, 
+                    '& .MuiSvgIcon-root': { fontSize: '1.15rem' },
                     color: isMenuActive(item.path) 
-                      ? '#ffffff' // białe ikony dla aktywnych sekcji w obu motywach
+                      ? '#ffffff'
                       : 'inherit' 
                   }}>
                     {item.badge ? (
@@ -613,12 +619,12 @@ const Sidebar = ({ onToggle }) => {
                   </ListItemIcon>
                 </Tooltip>
                 {isDrawerOpen && (
-                  <Box component="div" sx={{ display: 'flex', alignItems: 'center', flexGrow: 1, pr: 1 }}>
+                  <Box component="div" sx={{ display: 'flex', alignItems: 'center', flexGrow: 1, pr: 0.5 }}>
                     <ListItemText 
                       primary={item.text} 
                       primaryTypographyProps={{ 
                         sx: {
-                          fontSize: '0.875rem',
+                          fontSize: '0.78rem',
                           fontWeight: isMenuActive(item.path) ? 'bold' : 'normal',
                           color: isMenuActive(item.path) 
                             ? '#ffffff' // zawsze biały dla selected w obu motywach - gradient tła zapewnia kontrast
@@ -637,7 +643,7 @@ const Sidebar = ({ onToggle }) => {
                         }
                       }}
                     />
-                    {openSubmenu === item.text ? <ExpandLess /> : <ExpandMore />}
+                    {openSubmenu === item.text ? <ExpandLess sx={{ fontSize: '1rem' }} /> : <ExpandMore sx={{ fontSize: '1rem' }} />}
                   </Box>
                 )}
               </StyledListItemButton>
@@ -684,15 +690,18 @@ const Sidebar = ({ onToggle }) => {
                     })
                     .map((subItem) => (
                     <StyledListItem
-                      component={subItem.path ? Link : 'div'}
+                      component={subItem.external ? 'a' : (subItem.path ? Link : 'div')}
                       key={subItem.text}
-                      to={subItem.path}
+                      {...(subItem.external 
+                        ? { href: subItem.href, target: '_blank', rel: 'noopener noreferrer' } 
+                        : { to: subItem.path }
+                      )}
                       onClick={subItem.onClick}
                       selected={subItem.path ? location.pathname === subItem.path : false}
                       divider={false}
                       role="menuitem"
                                              sx={{ 
-                        pl: isDrawerOpen ? 4 : 2,
+                        pl: isDrawerOpen ? 3 : 1.5,
                         pr: 1, // Dodany padding prawy
                         borderRight: 'none !important',
                         borderTop: 'none !important',
@@ -711,7 +720,7 @@ const Sidebar = ({ onToggle }) => {
                       }}
                     >
                       <Tooltip title={subItem.text} placement="right" arrow>
-                        <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+                        <ListItemIcon sx={{ minWidth: 26, '& .MuiSvgIcon-root': { fontSize: '1rem' }, color: 'inherit' }}>
                           {subItem.badge ? (
                             <StyledBadge badgeContent={subItem.badge} color="primary">
                               {subItem.icon}
@@ -722,31 +731,32 @@ const Sidebar = ({ onToggle }) => {
                         </ListItemIcon>
                       </Tooltip>
                       {isDrawerOpen && (
-                        <ListItemText 
-                          primary={subItem.text} 
-                          primaryTypographyProps={{ 
-                            sx: {
-                              fontSize: '0.875rem',
-                              fontWeight: subItem.path && location.pathname === subItem.path ? 'bold' : 'normal',
-                              color: subItem.path && location.pathname === subItem.path
-                                ? (mode === 'dark' ? '#ffffff' : '#1e293b') // biały dla dark mode, ciemny dla light mode
-                                : 'inherit',
-                              // Dodane style dla lepszego łamania tekstu
-                              wordBreak: 'break-word',
-                              overflowWrap: 'break-word',
-                              hyphens: 'auto',
-                              lineHeight: 1.3,
-                              whiteSpace: 'normal'
-                            }
-                          }}
-                          sx={{
-                            pr: 4, // Padding prawy, żeby tekst nie stykał się z krawędzią
-                            '& .MuiTypography-root': {
-                              wordBreak: 'break-word',
-                              overflowWrap: 'break-word'
-                            }
-                          }}
-                        />
+                        <>
+                          <ListItemText 
+                            primary={subItem.text} 
+                            primaryTypographyProps={{ 
+                              sx: {
+                                fontSize: '0.74rem',
+                                fontWeight: subItem.path && location.pathname === subItem.path ? 'bold' : 'normal',
+                                color: subItem.path && location.pathname === subItem.path
+                                  ? (mode === 'dark' ? '#ffffff' : '#1e293b')
+                                  : 'inherit',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word',
+                                hyphens: 'auto',
+                                lineHeight: 1.3,
+                                whiteSpace: 'normal'
+                              }
+                            }}
+                            sx={{
+                              pr: subItem.external ? 0 : 4,
+                              '& .MuiTypography-root': {
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word'
+                              }
+                            }}
+                          />
+                        </>
                       )}
                     </StyledListItem>
                   ))}
@@ -762,7 +772,7 @@ const Sidebar = ({ onToggle }) => {
               selected={item.path === '/' ? location.pathname === '/' : isActive(item.path)}
             >
               <Tooltip title={item.text} placement="right" arrow>
-                <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+                <ListItemIcon sx={{ minWidth: 28, '& .MuiSvgIcon-root': { fontSize: '1.15rem' }, color: 'inherit' }}>
                   {item.badge ? (
                     <StyledBadge badgeContent={item.badge} color="primary">
                       {item.icon}
@@ -777,7 +787,7 @@ const Sidebar = ({ onToggle }) => {
                   primary={item.text} 
                   primaryTypographyProps={{ 
                     sx: {
-                      fontSize: '0.875rem',
+                      fontSize: '0.78rem',
                       fontWeight: item.path === '/' 
                         ? location.pathname === '/' ? 'bold' : 'normal'
                         : isActive(item.path) ? 'bold' : 'normal',
@@ -812,7 +822,7 @@ const Sidebar = ({ onToggle }) => {
           ? 'rgba(31, 41, 55, 0.9)' 
           : 'rgba(255, 255, 255, 0.9)',
         backdropFilter: 'blur(8px)',
-        p: 1.5,
+        p: 1,
         position: 'relative',
         zIndex: 10
       }}>
@@ -820,7 +830,7 @@ const Sidebar = ({ onToggle }) => {
           component="div"
           sx={{
             color: 'info.main',
-            borderRadius: '8px',
+            borderRadius: '6px',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': {
               background: 'linear-gradient(to right, rgba(33, 150, 243, 0.1), rgba(25, 118, 210, 0.1))',
@@ -833,7 +843,7 @@ const Sidebar = ({ onToggle }) => {
           onClick={() => setFaqDialogOpen(true)}
         >
           <Tooltip title={t('faq')} placement="right" arrow>
-            <ListItemIcon sx={{ minWidth: 36, color: 'info.main' }}>
+            <ListItemIcon sx={{ minWidth: 26, '& .MuiSvgIcon-root': { fontSize: '1.05rem' }, color: 'info.main' }}>
               <FaqIcon />
             </ListItemIcon>
           </Tooltip>
@@ -842,7 +852,7 @@ const Sidebar = ({ onToggle }) => {
               primary={t('faq')} 
               primaryTypographyProps={{ 
                 sx: {
-                  fontSize: '0.875rem',
+                  fontSize: '0.74rem',
                   fontWeight: 'medium',
                   color: 'info.main',
                   wordBreak: 'break-word',
@@ -865,7 +875,7 @@ const Sidebar = ({ onToggle }) => {
           component="div"
           sx={{
             color: 'error.main',
-            borderRadius: '8px',
+            borderRadius: '6px',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': {
               background: 'linear-gradient(to right, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1))',
@@ -877,7 +887,7 @@ const Sidebar = ({ onToggle }) => {
           onClick={() => setBugReportDialogOpen(true)}
         >
           <Tooltip title={t('reportBug')} placement="right" arrow>
-            <ListItemIcon sx={{ minWidth: 36, color: 'error.main' }}>
+            <ListItemIcon sx={{ minWidth: 26, '& .MuiSvgIcon-root': { fontSize: '1.05rem' }, color: 'error.main' }}>
               <BugReportIcon />
             </ListItemIcon>
           </Tooltip>
@@ -886,7 +896,7 @@ const Sidebar = ({ onToggle }) => {
               primary={t('reportBug')} 
               primaryTypographyProps={{ 
                 sx: {
-                  fontSize: '0.875rem',
+                  fontSize: '0.74rem',
                   fontWeight: 'medium',
                   color: 'error.main',
                   wordBreak: 'break-word',

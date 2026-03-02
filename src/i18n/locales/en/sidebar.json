@@ -30,7 +30,8 @@
       "priceLists": "Price Lists",
       "newProductionTask": "New Production Task",
       "coReports": "CO Reports",
-      "customerOrders": "Customer Orders"
+      "customerOrders": "Customer Orders",
+      "accountingPanel": "Accounting Panel"
     },
     "production": {
       "forms": "Forms",

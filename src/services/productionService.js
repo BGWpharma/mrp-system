@@ -6023,22 +6023,20 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
             const item = updatedItems[i];
             
             if (item.productionTaskId === taskId) {
-              // Użyj totalCostWithFactory (z zakładem) jeśli dostępne
-              const costWithFactory = updateData.totalCostWithFactory || finalTotalFullProductionCost;
-              const unitCostWithFactoryVal = updateData.unitCostWithFactory || (costWithFactory / (parseFloat(task.quantity) || 1));
+              // productionCost = materiały z flagą "wliczaj" + factory cost
+              const materialCostWithFactory = finalTotalMaterialCost + existingFactoryCostTotal;
+              // fullProductionCost = WSZYSTKIE materiały + factory cost
+              const fullCostWithFactory = updateData.totalCostWithFactory || (finalTotalFullProductionCost + existingFactoryCostTotal);
               
-              // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
-              const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, costWithFactory);
-              const calculatedProductionUnitCost = calculateProductionUnitCost(item, finalTotalMaterialCost);
+              const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, fullCostWithFactory);
+              const calculatedProductionUnitCost = calculateProductionUnitCost(item, materialCostWithFactory);
               
               updatedItems[i] = {
                 ...item,
-                productionCost: costWithFactory, // Pełny koszt z zakładem
-                fullProductionCost: costWithFactory,
+                productionCost: materialCostWithFactory,
+                fullProductionCost: fullCostWithFactory,
                 productionUnitCost: calculatedProductionUnitCost,
                 fullProductionUnitCost: calculatedFullProductionUnitCost,
-                // Zapisz też składowe kosztów dla debugowania
-                materialCostOnly: finalTotalMaterialCost,
                 factoryCostIncluded: existingFactoryCostTotal > 0
               };
               orderUpdated = true;

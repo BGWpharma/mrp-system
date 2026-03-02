@@ -56,7 +56,38 @@ const onProductionTaskCostUpdate = onDocumentWritten(
 
           logger.info(`Processing task ${moNumber || taskId}`);
 
-          // Znajdź zamówienia - pobierz wszystkie i filtruj w pamięci
+          // Pobierz aktualne dane zadania z bazy aby uwzględnić factory costs
+          let factoryCostTotal = 0;
+          let taskTotalCostWithFactory = 0;
+          try {
+            const taskDoc = await db.collection("productionTasks")
+                .doc(taskId).get();
+            if (taskDoc.exists) {
+              const taskData = taskDoc.data();
+              factoryCostTotal = parseFloat(taskData.factoryCostTotal) || 0;
+              taskTotalCostWithFactory =
+                parseFloat(taskData.totalCostWithFactory) || 0;
+            }
+          } catch (err) {
+            logger.warn(`Could not fetch task ${taskId} for factory cost`, {
+              error: err.message,
+            });
+          }
+
+          // Koszty z uwzględnieniem factory costs
+          const productionCost = totalMaterialCost + factoryCostTotal;
+          const fullProductionCost = taskTotalCostWithFactory > 0 ?
+            taskTotalCostWithFactory :
+            totalFullProductionCost + factoryCostTotal;
+
+          logger.info(`Task ${moNumber || taskId} costs`, {
+            materialCost: totalMaterialCost,
+            factoryCost: factoryCostTotal,
+            productionCost,
+            fullProductionCost,
+          });
+
+          // Znajdź zamówienia powiązane z tym zadaniem
           const ordersSnapshot = await db.collection("orders").get();
 
           for (const orderDoc of ordersSnapshot.docs) {
@@ -68,32 +99,26 @@ const onProductionTaskCostUpdate = onDocumentWritten(
               const item = updatedItems[i];
 
               if (item.productionTaskId === taskId) {
-                // Oblicz koszty jednostkowe - ZGODNIE Z LOGIKĄ FRONTENDU
-                // (costCalculator.js: calculateFullProductionUnitCost,
-                // calculateProductionUnitCost)
                 const quantity = parseFloat(item.quantity) || 1;
                 const price = parseFloat(item.price) || 0;
 
-                // calculateFullProductionUnitCost logic:
-                // - Jeśli z listy cenowej I ma cenę > 0: nie dodawaj ceny
-                // - W przeciwnym razie: dodaj cenę jednostkową
                 let fullProductionUnitCost;
                 if (item.fromPriceList && price > 0) {
-                  fullProductionUnitCost = totalFullProductionCost / quantity;
+                  fullProductionUnitCost = fullProductionCost / quantity;
                 } else {
                   fullProductionUnitCost =
-                    (totalFullProductionCost / quantity) + price;
+                    (fullProductionCost / quantity) + price;
                 }
 
-                // calculateProductionUnitCost logic: zawsze dziel przez ilość
-                const productionUnitCost = totalMaterialCost / quantity;
+                const productionUnitCost = productionCost / quantity;
 
                 updatedItems[i] = {
                   ...item,
-                  productionCost: totalMaterialCost,
-                  fullProductionCost: totalFullProductionCost,
+                  productionCost,
+                  fullProductionCost,
                   productionUnitCost,
                   fullProductionUnitCost,
+                  factoryCostIncluded: factoryCostTotal > 0,
                 };
                 orderUpdated = true;
 
@@ -101,8 +126,8 @@ const onProductionTaskCostUpdate = onDocumentWritten(
                   orderId: orderDoc.id,
                   orderNumber: orderData.orderNumber,
                   itemName: item.name,
-                  productionCost: totalMaterialCost.toFixed(4),
-                  fullProductionCost: totalFullProductionCost.toFixed(4),
+                  productionCost: productionCost.toFixed(4),
+                  fullProductionCost: fullProductionCost.toFixed(4),
                   productionUnitCost: productionUnitCost.toFixed(4),
                   fullProductionUnitCost: fullProductionUnitCost.toFixed(4),
                 });

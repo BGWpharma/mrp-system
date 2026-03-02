@@ -105,6 +105,9 @@ const OrdersList = () => {
   const [orderToUpdateStatus, setOrderToUpdateStatus] = useState(null);
   const [newStatus, setNewStatus] = useState('');
 
+  const fetchOrdersRef = useRef(null);
+  const ordersRef = useRef(orders);
+
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
   const navigate = useNavigate();
@@ -166,7 +169,6 @@ const OrdersList = () => {
   useEffect(() => {
     let channel;
     try {
-      // Stwórz BroadcastChannel do nasłuchiwania aktualizacji kosztów
       channel = new BroadcastChannel('production-costs-update');
       
       const handleCostUpdate = async (event) => {
@@ -174,8 +176,7 @@ const OrdersList = () => {
           const { taskId, costs, timestamp } = event.data;
           console.log(`[ORDERS_LIST_BROADCAST] Otrzymano powiadomienie o aktualizacji kosztów zadania ${taskId}:`, costs);
           
-          // Sprawdź czy któreś z aktualnie wyświetlanych zamówień ma to zadanie produkcyjne
-          const hasAffectedOrder = orders.some(order => 
+          const hasAffectedOrder = ordersRef.current.some(order => 
             (order.items && order.items.some(item => item.productionTaskId === taskId)) ||
             (order.productionTasks && order.productionTasks.some(task => task.id === taskId))
           );
@@ -183,9 +184,8 @@ const OrdersList = () => {
           if (hasAffectedOrder) {
             console.log(`[ORDERS_LIST_BROADCAST] Znaleziono zamówienie z zadaniem ${taskId}, odświeżam listę po krótkiej przerwie`);
             
-            // Odśwież listę zamówień po krótkiej przerwie, aby upewnić się, że baza danych została zaktualizowana
             setTimeout(() => {
-              fetchOrders();
+              fetchOrdersRef.current();
               console.log('🔄 [ORDERS_LIST_BROADCAST] Odświeżono listę zamówień po otrzymaniu powiadomienia o aktualizacji kosztów');
             }, 500);
           } else {
@@ -207,11 +207,15 @@ const OrdersList = () => {
         console.log(`[ORDERS_LIST_BROADCAST] Zamknięto nasłuchiwanie powiadomień dla listy zamówień`);
       }
     };
-  }, [orders]); // Zależność od orders, aby sprawdzać aktualną listę
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // BroadcastChannel — ukryte karty odświeżą dane po powrocie do widoczności
+  const handleWakeWithPendingChanges = useCallback(() => {
+    fetchOrdersRef.current();
+  }, []);
+
   const { broadcast: broadcastOrdersChange } = useBroadcastSync('orders-sync', {
-    onWakeWithPendingChanges: () => { fetchOrders(); }
+    onWakeWithPendingChanges: handleWakeWithPendingChanges
   });
 
   // Real-time change-detector — nasłuchuj tylko ostatnio zmodyfikowanego zamówienia
@@ -238,7 +242,7 @@ const OrdersList = () => {
         }
         
         ordersUpdateTimeout.current = setTimeout(() => {
-          fetchOrders();
+          fetchOrdersRef.current();
         }, 1000);
       }
     },
@@ -279,24 +283,57 @@ const OrdersList = () => {
         return itemValue;
       };
 
+      const ordersToFix = [];
       const ordersWithCalculatedValues = result.data.map(order => {
         const subtotal = (order.items || []).reduce((sum, item) => {
           return sum + calculateItemTotalValue(item);
         }, 0);
         
-        const dbTotalValue = parseFloat(order.totalValue) || 0;
-        const calculatedValue = subtotal + (parseFloat(order.shippingCost) || 0);
+        const shippingCost = parseFloat(order.shippingCost) || 0;
+        let additionalCostsTotal = 0;
+        let discountsTotal = 0;
+        if (order.additionalCostsItems && Array.isArray(order.additionalCostsItems)) {
+          additionalCostsTotal = order.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) > 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+          discountsTotal = Math.abs(order.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) < 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0));
+        }
+        const calculatedTotalValue = subtotal + shippingCost + additionalCostsTotal - discountsTotal;
         
-        // Console log dla diagnostyki
-        if (Math.abs(calculatedValue - dbTotalValue) > 0.01) {
-          console.log(`[fetchOrders] Zamówienie ${order.orderNumber}: DB totalValue=${dbTotalValue}€, obliczona=${calculatedValue}€, różnica=${(calculatedValue - dbTotalValue).toFixed(2)}€`);
+        const dbTotalValue = parseFloat(order.totalValue) || 0;
+        if (Math.abs(calculatedTotalValue - dbTotalValue) > 0.01) {
+          console.log(`[fetchOrders] Zamówienie ${order.orderNumber}: DB totalValue=${dbTotalValue.toFixed(2)}€, obliczona=${calculatedTotalValue.toFixed(2)}€, różnica=${(calculatedTotalValue - dbTotalValue).toFixed(2)}€`);
+          ordersToFix.push({ id: order.id, orderNumber: order.orderNumber, totalValue: calculatedTotalValue, items: order.items, orderDate: order.orderDate, status: order.status, customer: order.customer });
         }
         
         return {
           ...order,
-          productsValue: subtotal
+          productsValue: subtotal,
+          calculatedTotalValue
         };
       });
+      
+      if (ordersToFix.length > 0) {
+        import('../../services/orderService').then(({ updateOrder }) => {
+          ordersToFix.forEach(async (fix) => {
+            try {
+              await updateOrder(fix.id, { 
+                items: fix.items, 
+                totalValue: fix.totalValue, 
+                orderNumber: fix.orderNumber, 
+                orderDate: fix.orderDate, 
+                status: fix.status, 
+                customer: fix.customer 
+              }, 'system');
+              console.log(`[fetchOrders] Auto-korekta: zapisano totalValue=${fix.totalValue.toFixed(2)}€ dla ${fix.orderNumber}`);
+            } catch (err) {
+              console.warn(`[fetchOrders] Błąd auto-korekty ${fix.orderNumber}:`, err);
+            }
+          });
+        });
+      }
       
       // Aktualizacja danych i metadanych paginacji
       setOrders(ordersWithCalculatedValues);
@@ -309,6 +346,9 @@ const OrdersList = () => {
       setLoading(false);
     }
   };
+
+  fetchOrdersRef.current = fetchOrders;
+  ordersRef.current = orders;
 
   const applyFilters = async () => {
     actions.setPage(1); // Reset do pierwszej strony przy zmianie filtrów
@@ -732,35 +772,30 @@ const OrdersList = () => {
                 // Pobierz szczegółowe dane zadania z bazy danych
                 const taskDetails = await getTaskById(associatedTask.id);
                 
-                const fullProductionCost = taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
-                const productionCost = taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0;
+                const productionCost = (taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0) + (taskDetails.factoryCostTotal || 0);
+                const fullProductionCost = taskDetails.totalCostWithFactory || taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
                 
-                // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
                 const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, fullProductionCost);
                 const calculatedProductionUnitCost = calculateProductionUnitCost(item, productionCost);
                 
-                // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
                 updatedOrderData.items[i] = {
                   ...item,
                   productionTaskId: associatedTask.id,
                   productionTaskNumber: associatedTask.moNumber || taskDetails.moNumber,
                   productionStatus: associatedTask.status || taskDetails.status,
-                  // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
                   productionCost: productionCost,
-                  // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
                   fullProductionCost: fullProductionCost,
-                  // Dodaj obliczone koszty jednostkowe
                   productionUnitCost: calculatedProductionUnitCost,
-                  fullProductionUnitCost: calculatedFullProductionUnitCost
+                  fullProductionUnitCost: calculatedFullProductionUnitCost,
+                  factoryCostIncluded: (taskDetails.factoryCostTotal || 0) > 0
                 };
                 
-                console.log(`Zaktualizowano koszty dla pozycji ${item.name}: koszt podstawowy = ${updatedOrderData.items[i].productionCost}€, pełny koszt = ${updatedOrderData.items[i].fullProductionCost}€, pełny koszt/szt = ${calculatedFullProductionUnitCost.toFixed(2)}€ (lista cenowa: ${item.fromPriceList ? 'tak' : 'nie'})`);
+                console.log(`Zaktualizowano koszty dla pozycji ${item.name}: koszt=${productionCost.toFixed(4)}€, pełny=${fullProductionCost.toFixed(4)}€, pełny/szt=${calculatedFullProductionUnitCost.toFixed(2)}€`);
               } catch (error) {
                 console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
                 
-                // W przypadku błędu, użyj podstawowych danych z associatedTask
-                const fullProductionCost = associatedTask.totalFullProductionCost || 0;
-                const productionCost = associatedTask.totalMaterialCost || 0;
+                const productionCost = (associatedTask.totalMaterialCost || 0) + (associatedTask.factoryCostTotal || 0);
+                const fullProductionCost = associatedTask.totalCostWithFactory || associatedTask.totalFullProductionCost || 0;
                 
                 updatedOrderData.items[i] = {
                   ...item,
@@ -864,52 +899,54 @@ const OrdersList = () => {
           return sum + calculateItemTotalValue(item);
         }, 0);
         
-        // Zastosuj rabat globalny
-        const globalDiscount = parseFloat(updatedOrderData.globalDiscount) || 0;
-        const discountMultiplier = (100 - globalDiscount) / 100;
+        const shippingCost = parseFloat(updatedOrderData.shippingCost) || 0;
+        let additionalCostsTotal = 0;
+        let discountsTotal = 0;
+        if (updatedOrderData.additionalCostsItems && Array.isArray(updatedOrderData.additionalCostsItems)) {
+          additionalCostsTotal = updatedOrderData.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) > 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+          discountsTotal = Math.abs(updatedOrderData.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) < 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0));
+        }
         
-        // Oblicz całkowitą aktualną wartość zamówienia
-        const recalculatedTotalValue = subtotal * discountMultiplier;
+        const recalculatedTotalValue = subtotal + shippingCost + additionalCostsTotal - discountsTotal;
         
-        // Sprawdź czy wartość się zmieniła w porównaniu do zapisanej w bazie
         const savedTotalValue = parseFloat(updatedOrderData.totalValue) || 0;
         const valueChanged = Math.abs(recalculatedTotalValue - savedTotalValue) > 0.01;
         
-                 if (valueChanged) {
-           console.log(`Wartość zamówienia ${order.id} została zaktualizowana: ${savedTotalValue} → ${recalculatedTotalValue}`);
-           
-           // Zaktualizuj zamówienie w bazie danych z nowymi kosztami produkcji i wartością
-           try {
-             const { updateOrder } = await import('../../services/orderService');
-             
-             // Przygotuj bezpieczne dane do aktualizacji
-             const safeUpdateData = {
-               items: updatedOrderData.items,
-               totalValue: recalculatedTotalValue,
-               orderNumber: updatedOrderData.orderNumber,
-               orderDate: updatedOrderData.orderDate, // Wymagane przez walidację
-               status: updatedOrderData.status,
-               customer: updatedOrderData.customer,
-               globalDiscount: updatedOrderData.globalDiscount,
-               productionTasks: updatedOrderData.productionTasks,
-               linkedPurchaseOrders: updatedOrderData.linkedPurchaseOrders
-             };
-             
-             console.log(`[handleRefreshAll] Zapisuję zamówienie ${order.id} z wartością:`, recalculatedTotalValue);
-             await updateOrder(updatedOrderData.id, safeUpdateData, 'system');
-             console.log(`✅ [handleRefreshAll] Zapisano zamówienie ${order.id} do bazy danych`);
-           } catch (error) {
-             console.error(`❌ [handleRefreshAll] Błąd podczas aktualizacji wartości zamówienia ${order.id}:`, error);
-           }
-         } else {
-           console.log(`[handleRefreshAll] Wartość zamówienia ${order.id} nie zmieniła się (${recalculatedTotalValue}), pomijam zapis`);
-         }
+        if (valueChanged) {
+          console.log(`Wartość zamówienia ${order.id} została zaktualizowana: ${savedTotalValue} → ${recalculatedTotalValue}`);
+          
+          try {
+            const { updateOrder } = await import('../../services/orderService');
+            
+            const safeUpdateData = {
+              items: updatedOrderData.items,
+              totalValue: recalculatedTotalValue,
+              orderNumber: updatedOrderData.orderNumber,
+              orderDate: updatedOrderData.orderDate,
+              status: updatedOrderData.status,
+              customer: updatedOrderData.customer,
+              productionTasks: updatedOrderData.productionTasks,
+              linkedPurchaseOrders: updatedOrderData.linkedPurchaseOrders
+            };
+            
+            console.log(`[handleRefreshAll] Zapisuję zamówienie ${order.id} z wartością:`, recalculatedTotalValue);
+            await updateOrder(updatedOrderData.id, safeUpdateData, 'system');
+            console.log(`[handleRefreshAll] Zapisano zamówienie ${order.id} do bazy danych`);
+          } catch (error) {
+            console.error(`[handleRefreshAll] Błąd podczas aktualizacji wartości zamówienia ${order.id}:`, error);
+          }
+        }
         
-        console.log(`Zaktualizowane dane zamówienia ${order.id}: przeliczenieWartości=${recalculatedTotalValue}, produkty=${subtotal}, rabat=${globalDiscount}%, PO=${poTotal}`);
+        console.log(`Zaktualizowane dane zamówienia ${order.id}: totalValue=${recalculatedTotalValue}, produkty=${subtotal}, shipping=${shippingCost}, PO=${poTotal}`);
         
         return {
           ...updatedOrderData,
-          totalValue: recalculatedTotalValue, // Używamy przeliczonej wartości
+          totalValue: recalculatedTotalValue,
+          calculatedTotalValue: recalculatedTotalValue,
           productsValue: subtotal,
           purchaseOrdersValue: poTotal
         };
@@ -1019,14 +1056,12 @@ const OrdersList = () => {
                 // Pobierz szczegółowe dane zadania z bazy danych
                 const taskDetails = await getTaskById(associatedTask.id);
                 
-                const fullProductionCost = taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
-                const productionCost = taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0;
+                const productionCost = (taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0) + (taskDetails.factoryCostTotal || 0);
+                const fullProductionCost = taskDetails.totalCostWithFactory || taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
                 
-                // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
                 const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, fullProductionCost);
                 const calculatedProductionUnitCost = calculateProductionUnitCost(item, productionCost);
                 
-                // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
                 updatedOrderData.items[i] = {
                   ...item,
                   productionTaskId: associatedTask.id,
@@ -1035,14 +1070,14 @@ const OrdersList = () => {
                   productionCost: productionCost,
                   fullProductionCost: fullProductionCost,
                   productionUnitCost: calculatedProductionUnitCost,
-                  fullProductionUnitCost: calculatedFullProductionUnitCost
+                  fullProductionUnitCost: calculatedFullProductionUnitCost,
+                  factoryCostIncluded: (taskDetails.factoryCostTotal || 0) > 0
                 };
               } catch (error) {
                 console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
                 
-                // W przypadku błędu, użyj podstawowych danych z associatedTask
-                const fullProductionCost = associatedTask.totalFullProductionCost || 0;
-                const productionCost = associatedTask.totalMaterialCost || 0;
+                const productionCost = (associatedTask.totalMaterialCost || 0) + (associatedTask.factoryCostTotal || 0);
+                const fullProductionCost = associatedTask.totalCostWithFactory || associatedTask.totalFullProductionCost || 0;
                 
                 updatedOrderData.items[i] = {
                   ...item,
@@ -1059,7 +1094,6 @@ const OrdersList = () => {
           }
         }
         
-        // Oblicz wartość produktów z uwzględnieniem kosztów produkcji
         const calculateItemTotalValue = (item) => {
           const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
           if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
@@ -1075,10 +1109,18 @@ const OrdersList = () => {
           return sum + calculateItemTotalValue(item);
         }, 0);
         
-        // Zastosuj rabat globalny
-        const globalDiscount = parseFloat(updatedOrderData.globalDiscount) || 0;
-        const discountMultiplier = (100 - globalDiscount) / 100;
-        const recalculatedTotalValue = subtotal * discountMultiplier;
+        const shippingCost = parseFloat(updatedOrderData.shippingCost) || 0;
+        let additionalCostsTotal = 0;
+        let discountsTotal = 0;
+        if (updatedOrderData.additionalCostsItems && Array.isArray(updatedOrderData.additionalCostsItems)) {
+          additionalCostsTotal = updatedOrderData.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) > 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+          discountsTotal = Math.abs(updatedOrderData.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) < 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0));
+        }
+        const recalculatedTotalValue = subtotal + shippingCost + additionalCostsTotal - discountsTotal;
         
         return {
           ...updatedOrderData,
@@ -1127,38 +1169,32 @@ const OrdersList = () => {
           
           if (associatedTask) {
             try {
-              // Pobierz szczegółowe dane zadania z bazy danych
               const taskDetails = await getTaskById(associatedTask.id);
               
-              const fullProductionCost = taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
-              const productionCost = taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0;
+              const productionCost = (taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0) + (taskDetails.factoryCostTotal || 0);
+              const fullProductionCost = taskDetails.totalCostWithFactory || taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
               
-              // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
               const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, fullProductionCost);
               const calculatedProductionUnitCost = calculateProductionUnitCost(item, productionCost);
               
-              // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
               updatedOrder.items[i] = {
                 ...item,
                 productionTaskId: associatedTask.id,
                 productionTaskNumber: associatedTask.moNumber || taskDetails.moNumber,
                 productionStatus: associatedTask.status || taskDetails.status,
-                // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
                 productionCost: productionCost,
-                // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
                 fullProductionCost: fullProductionCost,
-                // Dodaj obliczone koszty jednostkowe
                 productionUnitCost: calculatedProductionUnitCost,
-                fullProductionUnitCost: calculatedFullProductionUnitCost
+                fullProductionUnitCost: calculatedFullProductionUnitCost,
+                factoryCostIncluded: (taskDetails.factoryCostTotal || 0) > 0
               };
               
-              console.log(`Zaktualizowano koszty dla pozycji ${item.name}: koszt podstawowy = ${updatedOrder.items[i].productionCost}€, pełny koszt = ${updatedOrder.items[i].fullProductionCost}€, pełny koszt/szt = ${calculatedFullProductionUnitCost.toFixed(2)}€ (lista cenowa: ${item.fromPriceList ? 'tak' : 'nie'})`);
+              console.log(`Zaktualizowano koszty dla pozycji ${item.name}: koszt=${productionCost.toFixed(4)}€, pełny=${fullProductionCost.toFixed(4)}€`);
             } catch (error) {
               console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
               
-              // W przypadku błędu, użyj podstawowych danych z associatedTask
-              const fullProductionCost = associatedTask.totalFullProductionCost || 0;
-              const productionCost = associatedTask.totalMaterialCost || 0;
+              const productionCost = (associatedTask.totalMaterialCost || 0) + (associatedTask.factoryCostTotal || 0);
+              const fullProductionCost = associatedTask.totalCostWithFactory || associatedTask.totalFullProductionCost || 0;
               
               updatedOrder.items[i] = {
                 ...item,
@@ -1174,26 +1210,54 @@ const OrdersList = () => {
           }
         }
         
+        // Przelicz totalValue zamówienia
+        const calculateItemTotalValue = (item) => {
+          const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
+          if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
+            return itemValue;
+          }
+          if (item.productionTaskId && item.productionCost !== undefined) {
+            return itemValue + parseFloat(item.productionCost || 0);
+          }
+          return itemValue;
+        };
+
+        const subtotal = (updatedOrder.items || []).reduce((sum, item) => {
+          return sum + calculateItemTotalValue(item);
+        }, 0);
+
+        const shippingCost = parseFloat(updatedOrder.shippingCost) || 0;
+        let additionalCostsTotal = 0;
+        let discountsTotal = 0;
+        if (updatedOrder.additionalCostsItems && Array.isArray(updatedOrder.additionalCostsItems)) {
+          additionalCostsTotal = updatedOrder.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) > 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+          discountsTotal = Math.abs(updatedOrder.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) < 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0));
+        }
+        const recalculatedTotalValue = subtotal + shippingCost + additionalCostsTotal - discountsTotal;
+
         // Zapisz zaktualizowane dane do bazy
         try {
           const { updateOrder } = await import('../../services/orderService');
           
           const safeUpdateData = {
             items: updatedOrder.items,
+            totalValue: recalculatedTotalValue,
             orderNumber: updatedOrder.orderNumber,
             orderDate: updatedOrder.orderDate,
             status: updatedOrder.status,
             customer: updatedOrder.customer,
-            globalDiscount: updatedOrder.globalDiscount,
             productionTasks: updatedOrder.productionTasks
           };
           
           await updateOrder(updatedOrder.id, safeUpdateData, 'system');
           
-          // Zaktualizuj lokalny stan
           setOrders(prevOrders => prevOrders.map(o => {
             if (o.id === order.id) {
-              return { ...o, ...updatedOrder };
+              return { ...o, ...updatedOrder, totalValue: recalculatedTotalValue, productsValue: subtotal };
             }
             return o;
           }));
@@ -1824,16 +1888,14 @@ const OrdersList = () => {
                           <TableCell align="right">
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                               <Typography variant="body2" fontWeight="medium">
-                                {/* Użyj przeliczonej wartości productsValue jeśli dostępna, inaczej totalValue z bazy */}
-                                {formatCurrency(order.productsValue !== undefined ? (order.productsValue + (order.shippingCost || 0)) : (order.totalValue || 0))}
+                                {formatCurrency(order.calculatedTotalValue !== undefined ? order.calculatedTotalValue : (order.totalValue || 0))}
                               </Typography>
                               {order.purchaseOrdersValue > 0 && (
                                 <Typography variant="caption" color="text.secondary">
                                   (PO: {formatCurrency(order.purchaseOrdersValue || 0)})
                                 </Typography>
                               )}
-                              {/* Debug: pokaż różnicę jeśli istnieje */}
-                              {order.productsValue !== undefined && Math.abs((order.productsValue + (order.shippingCost || 0)) - (order.totalValue || 0)) > 0.01 && (
+                              {order.calculatedTotalValue !== undefined && Math.abs(order.calculatedTotalValue - (order.totalValue || 0)) > 0.01 && (
                                 <Typography variant="caption" color="warning.main">
                                   (DB: {formatCurrency(order.totalValue || 0)})
                                 </Typography>

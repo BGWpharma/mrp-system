@@ -73,7 +73,7 @@ export const calculateMaterialReservationStatus = (task) => {
 
     // Użyj rzeczywistej ilości jeśli jest dostępna, w przeciwnym razie planowaną
     const actualUsage = task.actualMaterialUsage || {};
-    const requiredQuantity = (actualUsage[materialId] !== undefined) 
+    const requiredQuantity = (actualUsage[materialId] !== undefined)
       ? parseFloat(actualUsage[materialId]) || 0
       : (material.quantity || 0);
     
@@ -86,10 +86,9 @@ export const calculateMaterialReservationStatus = (task) => {
       hasAnyReservationOrConsumption = true;
     }
 
-    // KLUCZOWA ZMIANA: sprawdź pokrycie dla każdego materiału osobno
-    // Wymagamy pełnego pokrycia dla każdego materiału, nie łącznego wskaźnika
+    // 2% tolerancja — spójne z calculateMaterialReservationCoverage w useTaskCosts
     const materialCoverageRatio = requiredQuantity > 0 ? materialTotalCovered / requiredQuantity : 1;
-    if (materialCoverageRatio < 0.99) {  // materiał nie ma pełnego pokrycia (99% tolerancja dla błędów zaokrąglenia)
+    if (materialCoverageRatio < 0.98) {
       hasAnyUnreservedMaterial = true;
     }
   });

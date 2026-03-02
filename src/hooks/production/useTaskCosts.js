@@ -210,8 +210,9 @@ export const useTaskCosts = (task, materials, materialQuantities, includeInCosts
     const formattedStandardReservationsTotal = formatPrecision(standardReservationsTotal);
     const totalCoverage = formatPrecision(formattedConsumedQuantity + formattedStandardReservationsTotal);
     
-    const tolerance = 0.001;
-    const hasFullCoverage = (totalCoverage + tolerance) >= formattedRequiredQuantity;
+    // 2% tolerancja — spójne z calculateMaterialReservationStatus w productionUtils
+    const coverageRatio = formattedRequiredQuantity > 0 ? totalCoverage / formattedRequiredQuantity : 1;
+    const hasFullCoverage = coverageRatio >= 0.99;
     
     return {
       requiredQuantity: formattedRequiredQuantity,

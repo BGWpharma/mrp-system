@@ -80,6 +80,7 @@ export const usePermissions = () => {
     hasPermission: checkPermission,
     // Uprawnienia operacyjne
     canCompleteStocktaking: checkPermission('canCompleteStocktaking'),
+    canCreateSchedule: checkPermission('canCreateSchedule'),
     // Uprawnienia modułowe
     canAccessDashboard: checkPermission('canAccessDashboard'),
     canAccessAnalytics: checkPermission('canAccessAnalytics'),

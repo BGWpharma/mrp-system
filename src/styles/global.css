@@ -97,14 +97,14 @@ a {
 
 /* Klasa dla zwiniętego sidebar */
 .sidebar-collapsed .main-content {
-    margin-left: 60px;
-    width: calc(100% - 60px);
+    margin-left: 56px;
+    width: calc(100% - 56px);
 }
 
 /* Klasa dla rozwiniętego sidebar */
 .sidebar-expanded .main-content {
-    margin-left: 200px;
-    width: calc(100% - 200px);
+    margin-left: 180px;
+    width: calc(100% - 180px);
 }
 
 /* Dashboard cards - Clean Design */

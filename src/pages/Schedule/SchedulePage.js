@@ -39,6 +39,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePermissions } from '../../hooks/usePermissions';
 import { getEmployeeByCode } from '../../services/workTimeService';
 import { getAllActiveUsers } from '../../services/userService';
 import {
@@ -105,7 +106,9 @@ const SchedulePage = () => {
   const { showSuccess, showError } = useNotification();
   const { t } = useTranslation('schedule');
   const { currentUser } = useAuth();
+  const { canCreateSchedule } = usePermissions();
   const isAdmin = currentUser?.role === 'administrator';
+  const canEditSchedule = isAdmin || canCreateSchedule;
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -121,8 +124,8 @@ const SchedulePage = () => {
 
   // Admin: editor grafiku
   useEffect(() => {
-    if (activeTab === 2 && isAdmin) loadEditorData();
-  }, [activeTab, weekStart, isAdmin]);
+    if (activeTab === 2 && canEditSchedule) loadEditorData();
+  }, [activeTab, weekStart, canEditSchedule]);
 
   const loadCalendarData = useCallback(async () => {
     setCalendarLoading(true);
@@ -420,7 +423,7 @@ const SchedulePage = () => {
         >
           <Tab label={t('tabs.schedule')} icon={<CalendarMonthIcon />} iconPosition="start" />
           <Tab label={t('tabs.newRequest')} icon={<AddIcon />} iconPosition="start" />
-          {isAdmin && <Tab label={t('tabs.createSchedule')} icon={<EditCalendarIcon />} iconPosition="start" />}
+          {canEditSchedule && <Tab label={t('tabs.createSchedule')} icon={<EditCalendarIcon />} iconPosition="start" />}
         </Tabs>
 
         <Box sx={{ p: { xs: 2, md: 3 } }}>
@@ -762,7 +765,7 @@ const SchedulePage = () => {
           )}
 
           {/* ═══════════ TAB 2: UTWÓRZ GRAFIK (ADMIN) ═══════════ */}
-          {activeTab === 2 && isAdmin && (
+          {activeTab === 2 && canEditSchedule && (
             <Fade in>
               <Box>
                 {/* Toolbar */}

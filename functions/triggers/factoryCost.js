@@ -753,21 +753,28 @@ const propagateToOrders = async (db, taskIds, excludedTaskIds) => {
       if (!taskId || !taskDataMap.has(taskId)) continue;
 
       const taskData = taskDataMap.get(taskId);
+      const totalMaterialCost = parseFloat(taskData.totalMaterialCost) || 0;
+      const factoryCostTotal = parseFloat(taskData.factoryCostTotal) || 0;
       const totalCostWithFactory = parseFloat(taskData.totalCostWithFactory) || 0;
       const quantity = parseFloat(taskData.quantity) || 1;
+
+      // productionCost = materiały z flagą "wliczaj" + factory cost
+      const materialCostWithFactory = totalMaterialCost + factoryCostTotal;
       const fullProductionUnitCost = totalCostWithFactory / quantity;
 
       updatedItems[i] = {
         ...item,
-        productionCost: totalCostWithFactory,
+        productionCost: materialCostWithFactory,
         fullProductionCost: totalCostWithFactory,
+        productionUnitCost: Math.round((materialCostWithFactory / quantity) * 10000) / 10000,
         fullProductionUnitCost: Math.round(fullProductionUnitCost * 10000) / 10000,
-        factoryCostIncluded: true,
+        factoryCostIncluded: factoryCostTotal > 0,
       };
       orderUpdated = true;
 
       logger.info(`Updated order item in ${orderData.orderNumber}`, {
         taskId,
+        materialCostWithFactory,
         totalCostWithFactory,
         fullProductionUnitCost,
       });

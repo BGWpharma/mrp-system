@@ -30,7 +30,8 @@
       "priceLists": "Listy cenowe",
       "newProductionTask": "Nowe zadanie produkcyjne",
       "coReports": "Raporty CO",
-      "customerOrders": "Zamówienia klientów"
+      "customerOrders": "Zamówienia klientów",
+      "accountingPanel": "Panel księgowy"
     },
     "production": {
       "forms": "Formularze",
