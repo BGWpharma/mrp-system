@@ -6041,7 +6041,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
               };
               orderUpdated = true;
               
-              console.log(`[AUTO] Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt z zakładem=${costWithFactory.toFixed(4)}€, pełny koszt/szt=${calculatedFullProductionUnitCost.toFixed(4)}€`);
+              console.log(`[AUTO] Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt z zakładem=${materialCostWithFactory.toFixed(4)}€, pełny koszt/szt=${calculatedFullProductionUnitCost.toFixed(4)}€`);
             }
           }
             
