@@ -77,7 +77,7 @@
 
         if (currentVersion) {
           // Komunikat dla użytkownika o nowej wersji z opcją potwierdzenia
-          if (confirm('Dostępna jest nowa wersja aplikacji. Naciśnij "OK", aby odświeżyć stronę i załadować najnowszą wersję.')) {
+          if (confirm('A new version of the application is available. Click "OK" to refresh the page and load the latest version.')) {
             // Jeśli użytkownik potwierdził, wymuszamy pełne odświeżenie
             caches.keys().then(cacheNames => {
               return Promise.all(
