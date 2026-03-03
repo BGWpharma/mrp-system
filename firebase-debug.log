@@ -1,0 +1,16 @@
+[debug] [2026-03-03T14:23:56.466Z] ----------------------------------------------------------------------
+[debug] [2026-03-03T14:23:56.471Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\mateu\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting
+[debug] [2026-03-03T14:23:56.472Z] CLI Version:   14.15.2
+[debug] [2026-03-03T14:23:56.472Z] Platform:      win32
+[debug] [2026-03-03T14:23:56.472Z] Node Version:  v22.16.0
+[debug] [2026-03-03T14:23:56.472Z] Time:          Tue Mar 03 2026 15:23:56 GMT+0100 (czas środkowoeuropejski standardowy)
+[debug] [2026-03-03T14:23:56.473Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-03-03T14:23:57.390Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-03-03T14:23:57.391Z] > authorizing via signed-in user (mateusz@bgwpharma.com)
+[debug] [2026-03-03T14:23:57.391Z] [iam] checking project bgw-mrp-system for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-03-03T14:23:57.394Z] Checked if tokens are valid: true, expires at: 1772549909108
+[debug] [2026-03-03T14:23:57.394Z] Checked if tokens are valid: true, expires at: 1772549909108
+[debug] [2026-03-03T14:23:57.396Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/bgw-mrp-system:testIamPermissions [none]
+[debug] [2026-03-03T14:23:57.397Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/bgw-mrp-system:testIamPermissions x-goog-quota-user=projects/bgw-mrp-system
+[debug] [2026-03-03T14:23:57.397Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/bgw-mrp-system:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
