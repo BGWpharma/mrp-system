@@ -12,8 +12,8 @@
 const nodemailer = require("nodemailer");
 const logger = require("firebase-functions/logger");
 
-const FROM_ACCOUNTING = "BGW Pharma - Księgowość <accounting@bgwpharma.com>";
-const FROM_WAREHOUSE = "BGW Pharma - Magazyn <warehouse@bgwpharma.com>";
+const FROM_ACCOUNTING = "BGW Pharma - Accounting <accounting@bgwpharma.com>";
+const FROM_WAREHOUSE = "BGW Pharma - Warehouse <warehouse@bgwpharma.com>";
 
 let transporter = null;
 
@@ -31,13 +31,13 @@ const getTransporter = () => {
 
 /**
  * @param {Object} dateValue - Firestore Timestamp, Date, or string
- * @return {string} Formatted date string (pl-PL)
+ * @return {string} Formatted date string (en-GB: DD/MM/YYYY)
  */
 const formatDate = (dateValue) => {
   if (!dateValue) return "-";
   try {
     const date = dateValue.toDate ? dateValue.toDate() : new Date(dateValue);
-    return date.toLocaleDateString("pl-PL");
+    return date.toLocaleDateString("en-GB");
   } catch {
     return "-";
   }
@@ -58,35 +58,51 @@ const sendInvoiceNotification = async (invoice) => {
     return null;
   }
 
-  const invoiceType = invoice.isProforma ? "Proforma" : "Faktura";
-  const subject = `${invoiceType} nr ${invoice.number} — BGW Pharma`;
+  const invoiceType = invoice.isProforma ?
+    "Proforma Invoice" : "Invoice";
+  const subject = `${invoiceType} No. ${invoice.number} — BGW Pharma`;
 
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #1a237e;">${invoiceType} nr ${invoice.number}</h2>
-      <p>Szanowni Państwo,</p>
-      <p>informujemy o wystawieniu dokumentu:</p>
-      <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+    <div style="font-family: Arial, sans-serif; max-width: 600px;
+      margin: 0 auto;">
+      <h2 style="color: #1a237e;">
+        ${invoiceType} No. ${invoice.number}
+      </h2>
+      <p>Dear Customer,</p>
+      <p>Please find below the details of the issued document:</p>
+      <table style="border-collapse: collapse; width: 100%;
+        margin: 16px 0;">
         <tr>
-          <td style="padding: 10px; border: 1px solid #e0e0e0; background: #f5f5f5; font-weight: bold; width: 40%;">Numer dokumentu</td>
-          <td style="padding: 10px; border: 1px solid #e0e0e0;">${invoice.number}</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;
+            background: #f5f5f5; font-weight: bold; width: 40%;">
+            Document number</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;">
+            ${invoice.number}</td>
         </tr>
         <tr>
-          <td style="padding: 10px; border: 1px solid #e0e0e0; background: #f5f5f5; font-weight: bold;">Data wystawienia</td>
-          <td style="padding: 10px; border: 1px solid #e0e0e0;">${formatDate(invoice.issueDate)}</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;
+            background: #f5f5f5; font-weight: bold;">Issue date</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;">
+            ${formatDate(invoice.issueDate)}</td>
         </tr>
         <tr>
-          <td style="padding: 10px; border: 1px solid #e0e0e0; background: #f5f5f5; font-weight: bold;">Termin płatności</td>
-          <td style="padding: 10px; border: 1px solid #e0e0e0;">${formatDate(invoice.dueDate)}</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;
+            background: #f5f5f5; font-weight: bold;">Due date</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;">
+            ${formatDate(invoice.dueDate)}</td>
         </tr>
         <tr>
-          <td style="padding: 10px; border: 1px solid #e0e0e0; background: #f5f5f5; font-weight: bold;">Kwota</td>
-          <td style="padding: 10px; border: 1px solid #e0e0e0;">${invoice.total || "-"} ${invoice.currency || "EUR"}</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;
+            background: #f5f5f5; font-weight: bold;">Amount</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;">
+            ${invoice.total || "-"} ${invoice.currency || "EUR"}</td>
         </tr>
       </table>
       <p style="color: #666; font-size: 13px;">
-        Wiadomość wygenerowana automatycznie przez system BGW MRP.<br/>
-        W razie pytań prosimy o kontakt pod adresem accounting@bgwpharma.com.
+        This message was generated automatically by the BGW MRP
+        system.<br/>
+        For any questions please contact us at
+        accounting@bgwpharma.com.
       </p>
     </div>
   `;
@@ -99,8 +115,9 @@ const sendInvoiceNotification = async (invoice) => {
   };
 
   if (invoice.pdfAttachment?.downloadURL) {
+    const safeNumber = invoice.number.replace(/\//g, "-");
     mailOptions.attachments = [{
-      filename: `${invoiceType}_${invoice.number.replace(/\//g, "-")}.pdf`,
+      filename: `${invoiceType.replace(/ /g, "_")}_${safeNumber}.pdf`,
       path: invoice.pdfAttachment.downloadURL,
     }];
   }
@@ -131,34 +148,50 @@ const sendCmrShipmentNotification = async (cmrData, cmrId, customerData) => {
     return null;
   }
 
-  const subject = `Przesyłka w transporcie — CMR ${cmrData.cmrNumber}`;
+  const subject =
+    `Shipment in transit — CMR ${cmrData.cmrNumber}`;
 
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #1a237e;">Przesyłka w transporcie</h2>
-      <p>Szanowni Państwo,</p>
-      <p>informujemy, że Państwa przesyłka została wysłana.</p>
-      <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+    <div style="font-family: Arial, sans-serif; max-width: 600px;
+      margin: 0 auto;">
+      <h2 style="color: #1a237e;">Shipment in transit</h2>
+      <p>Dear Customer,</p>
+      <p>We would like to inform you that your shipment has been
+        dispatched.</p>
+      <table style="border-collapse: collapse; width: 100%;
+        margin: 16px 0;">
         <tr>
-          <td style="padding: 10px; border: 1px solid #e0e0e0; background: #f5f5f5; font-weight: bold; width: 40%;">Numer CMR</td>
-          <td style="padding: 10px; border: 1px solid #e0e0e0;">${cmrData.cmrNumber || "-"}</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;
+            background: #f5f5f5; font-weight: bold; width: 40%;">
+            CMR number</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;">
+            ${cmrData.cmrNumber || "-"}</td>
         </tr>
         <tr>
-          <td style="padding: 10px; border: 1px solid #e0e0e0; background: #f5f5f5; font-weight: bold;">Odbiorca</td>
-          <td style="padding: 10px; border: 1px solid #e0e0e0;">${cmrData.recipient || "-"}</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;
+            background: #f5f5f5; font-weight: bold;">Recipient</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;">
+            ${cmrData.recipient || "-"}</td>
         </tr>
         <tr>
-          <td style="padding: 10px; border: 1px solid #e0e0e0; background: #f5f5f5; font-weight: bold;">Miejsce dostawy</td>
-          <td style="padding: 10px; border: 1px solid #e0e0e0;">${cmrData.deliveryPlace || "-"}</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;
+            background: #f5f5f5; font-weight: bold;">
+            Delivery location</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;">
+            ${cmrData.deliveryPlace || "-"}</td>
         </tr>
         <tr>
-          <td style="padding: 10px; border: 1px solid #e0e0e0; background: #f5f5f5; font-weight: bold;">Przewoźnik</td>
-          <td style="padding: 10px; border: 1px solid #e0e0e0;">${cmrData.carrier || "-"}</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;
+            background: #f5f5f5; font-weight: bold;">Carrier</td>
+          <td style="padding: 10px; border: 1px solid #e0e0e0;">
+            ${cmrData.carrier || "-"}</td>
         </tr>
       </table>
       <p style="color: #666; font-size: 13px;">
-        Wiadomość wygenerowana automatycznie przez system BGW MRP.<br/>
-        W razie pytań prosimy o kontakt pod adresem warehouse@bgwpharma.com.
+        This message was generated automatically by the BGW MRP
+        system.<br/>
+        For any questions please contact us at
+        warehouse@bgwpharma.com.
       </p>
     </div>
   `;
