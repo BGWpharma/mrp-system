@@ -62,10 +62,10 @@ import {
   ArrowDownward as ArrowDownwardIcon,
   ShowChart as ShowChartIcon
 } from '@mui/icons-material';
-import { getAllTasks } from '../../services/productionService';
-import { getAllOrders } from '../../services/orderService';
-import { getAllCustomers } from '../../services/customerService';
-import { getWorkstationById } from '../../services/workstationService';
+import { getAllTasks } from '../../services/production/productionService';
+import { getAllOrders } from '../../services/orders';
+import { getAllCustomers } from '../../services/crm';
+import { getWorkstationById } from '../../services/production/workstationService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

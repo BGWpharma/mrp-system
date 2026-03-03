@@ -29,9 +29,9 @@ import {
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, getDocs, orderBy, limit as firestoreLimit } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
-import { unarchiveOrder } from '../../services/orderService';
-import { unarchivePurchaseOrder } from '../../services/purchaseOrderService';
-import { unarchiveProductionTask } from '../../services/productionService';
+import { unarchiveOrder } from '../../services/orders';
+import { unarchivePurchaseOrder } from '../../services/purchaseOrders';
+import { unarchiveProductionTask } from '../../services/production/productionService';
 import { unarchiveBatch, unarchiveInventoryItem } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { runAutoArchive } from '../../services/cloudFunctionsService';

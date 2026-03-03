@@ -49,13 +49,13 @@ import {
   AccessTime as ClockIcon
 } from '@mui/icons-material';
 import { getInventoryItemById, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations, getAllWarehouses, recalculateItemQuantity, getAwaitingOrdersForInventoryItem } from '../../services/inventory';
-import { getAllSuppliers, getSuppliersByIds } from '../../services/supplierService';
-import { getAllCustomers } from '../../services/customerService';
+import { getAllSuppliers, getSuppliersByIds } from '../../services/suppliers';
+import { getAllCustomers } from '../../services/crm';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatDate, formatDateTime, formatQuantity } from '../../utils/formatters';
-import { preciseAdd } from '../../utils/mathUtils';
+import { formatDate, formatDateTime, formatQuantity } from '../../utils/formatting';
+import { preciseAdd } from '../../utils/calculations';
 import { Timestamp } from 'firebase/firestore';
 import BackButton from '../../components/common/BackButton';
 import ROUTES from '../../constants/routes';

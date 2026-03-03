@@ -45,7 +45,7 @@ import {
   deleteFormResponse, 
   getAllProductionFormsCounts,
   FORM_TYPES 
-} from '../../services/productionFormsService';
+} from '../../services/production/productionFormsService';
 
 // Komponent strony odpowiedzi formularzy
 const FormsResponsesPage = () => {

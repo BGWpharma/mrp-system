@@ -16,7 +16,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import UploadIcon from '@mui/icons-material/Upload';
 import { format } from 'date-fns';
 
-import { getPriceListById, deletePriceList, exportPriceListToCSV } from '../../../services/priceListService';
+import { getPriceListById, deletePriceList, exportPriceListToCSV } from '../../../services/products';
 import { useNotification } from '../../../hooks/useNotification';
 import { useTranslation } from '../../../hooks/useTranslation';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';

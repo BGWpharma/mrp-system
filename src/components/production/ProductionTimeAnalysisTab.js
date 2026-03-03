@@ -68,8 +68,8 @@ import {
   getTasksForTimeAnalysis,
   enrichTasksWithProductWeights,
   formatMinutes
-} from '../../services/productionTimeAnalysisService';
-import { getRecipeById } from '../../services/recipeService';
+} from '../../services/production/productionTimeAnalysisService';
+import { getRecipeById } from '../../services/products';
 import ProductionGapAnalysisTab from './ProductionGapAnalysisTab';
 import WeeklyProductivityTab from './WeeklyProductivityTab';
 import WeeklySprintTab from './WeeklySprintTab';

@@ -76,20 +76,20 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
+import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/products';
 import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses, getInventoryItemByRecipeId, updateInventoryItem } from '../../services/inventory';
-import { getAllPriceLists, addPriceListItem, updateProductNameInPriceLists } from '../../services/priceListService';
+import { getAllPriceLists, addPriceListItem, updateProductNameInPriceLists } from '../../services/products';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
-import { getAllCustomers } from '../../services/customerService';
-import { getAllWorkstations } from '../../services/workstationService';
+import { getAllCustomers } from '../../services/crm';
+import { getAllWorkstations } from '../../services/production/workstationService';
 import { UNIT_GROUPS, UNIT_CONVERSION_FACTORS } from '../../utils/constants';
 import { NUTRITIONAL_CATEGORIES, DEFAULT_NUTRITIONAL_COMPONENT } from '../../utils/constants';
-import { useNutritionalComponents } from '../../hooks/useNutritionalComponents';
-import { addNutritionalComponent } from '../../services/nutritionalComponentsService';
+import { useNutritionalComponents } from '../../hooks/products';
+import { addNutritionalComponent } from '../../services/products';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
   flexCenter, 

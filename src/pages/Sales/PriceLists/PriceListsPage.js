@@ -25,7 +25,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { format } from 'date-fns';
 
-import { getAllPriceLists, deletePriceList } from '../../../services/priceListService';
+import { getAllPriceLists, deletePriceList } from '../../../services/products';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
 import { useTranslation } from '../../../hooks/useTranslation';

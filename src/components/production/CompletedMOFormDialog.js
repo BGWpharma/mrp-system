@@ -25,7 +25,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { getMONumbersForSelect } from '../../services/moService';
+import { getMONumbersForSelect } from '../../services/production/moService';
 import { db, storage } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -36,7 +36,8 @@ const CompletedMOFormDialog = ({
   onClose, 
   task = null,
   onSuccess = null,
-  fullScreen = false
+  fullScreen = false,
+  container
 }) => {
   const { currentUser } = useAuth();
   const theme = useTheme();
@@ -627,6 +628,7 @@ const CompletedMOFormDialog = ({
       maxWidth="md"
       fullWidth
       fullScreen={fullScreen}
+      container={container}
       PaperProps={{
         sx: { 
           ...(!fullScreen && {

@@ -1,0 +1,55 @@
+// Barrel file for CRM services
+export {
+  CUSTOMERS_CACHE_KEY,
+  getAllCustomers,
+  getCustomerById,
+  createCustomer,
+  updateCustomer,
+  deleteCustomer,
+  searchCustomers,
+  DEFAULT_CUSTOMER
+} from './customerService';
+
+export {
+  getAllClients,
+  getClientById,
+  createClient,
+  updateClient,
+  deleteClient
+} from './clientService';
+
+export {
+  CONTACTS_COLLECTION,
+  INTERACTIONS_COLLECTION,
+  CAMPAIGNS_COLLECTION,
+  LEADS_COLLECTION,
+  OPPORTUNITIES_COLLECTION,
+  createContact,
+  updateContact,
+  deleteContact,
+  getContactById,
+  getAllContacts,
+  searchContacts,
+  createInteraction,
+  updateInteraction,
+  deleteInteraction,
+  getInteractionById,
+  getContactInteractions,
+  getAllInteractions,
+  createLead,
+  updateLead,
+  deleteLead,
+  getLeadById,
+  getAllLeads,
+  createOpportunity,
+  updateOpportunity,
+  deleteOpportunity,
+  getOpportunityById,
+  getAllOpportunities,
+  createCampaign,
+  updateCampaign,
+  deleteCampaign,
+  getCampaignById,
+  getAllCampaigns,
+  getActiveCampaigns
+} from './crmService';

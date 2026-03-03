@@ -50,7 +50,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import PublicIcon from '@mui/icons-material/Public';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
-import { getAccessibleBoards, createBoard, updateBoard, deleteBoard, getOrCreateMainBoard } from '../../services/taskboardService';
+import { getAccessibleBoards, createBoard, updateBoard, deleteBoard, getOrCreateMainBoard } from '../../services/taskboard';
 import BoardDetail from './BoardDetail';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';

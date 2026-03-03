@@ -26,8 +26,8 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { Send as SendIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
-import { getMONumbersForSelect } from '../../services/moService';
-import { addProductionSessionFromShiftReport, updateProductionSession, parseShiftTime } from '../../services/productionService';
+import { getMONumbersForSelect } from '../../services/production/moService';
+import { addProductionSessionFromShiftReport, updateProductionSession, parseShiftTime } from '../../services/production/productionService';
 import { getAllWarehouses } from '../../services/inventory';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { db } from '../../services/firebase/config';
@@ -35,7 +35,7 @@ import { collection, addDoc, serverTimestamp, doc, updateDoc, getDocs, query, wh
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
-import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting, useFilteredProductOptions } from '../../hooks/useFormOptions';
+import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting, useFilteredProductOptions } from '../../hooks/forms';
 import { 
   getFormHeaderStyles, 
   getFormSectionStyles,

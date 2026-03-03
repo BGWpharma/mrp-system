@@ -49,7 +49,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { Timestamp } from 'firebase/firestore';
 import ConfirmDialog from '../common/ConfirmDialog';
-import { formatDate } from '../../utils/formatters';
+import { formatDate } from '../../utils/formatting';
 
 const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
   const [item, setItem] = useState(null);

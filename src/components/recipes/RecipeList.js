@@ -58,18 +58,17 @@ import {
   Sync as SyncIcon,
   MoreVert as MoreVertIcon
 } from '@mui/icons-material';
-import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination, syncAllRecipesCAS } from '../../services/recipeService';
+import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination, syncAllRecipesCAS } from '../../services/products';
 import { getInventoryItemsByRecipeIds, getAllInventoryItems } from '../../services/inventory';
-import { exportRecipesToCSV, exportRecipesWithSuppliers } from '../../services/recipeExportService';
-import { getNutritionalComponents } from '../../services/nutritionalComponentsService';
+import { exportRecipesToCSV, exportRecipesWithSuppliers, getNutritionalComponents } from '../../services/products';
 import { useServiceData } from '../../hooks/useServiceData';
-import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/customerService';
+import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/crm';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../hooks/useAuth';
-import { formatDate } from '../../utils/formatters';
+import { formatDate } from '../../utils/formatting';
 import searchService from '../../services/searchService';
-import { getAllWorkstations } from '../../services/workstationService';
+import { getAllWorkstations } from '../../services/production/workstationService';
 import { useRecipeListState } from '../../contexts/RecipeListStateContext';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
@@ -1710,7 +1709,7 @@ const RecipeList = () => {
     setImporting(true);
     
     try {
-      const { updateRecipe } = await import('../../services/recipeService');
+      const { updateRecipe } = await import('../../services/products');
       
       // Filtruj tylko te receptury, które mają zmiany
       const recipesToUpdate = importPreview.filter(p => p.status === 'update');

@@ -42,7 +42,7 @@ import {
 import { getAllWarehouses } from '../../services/inventory/warehouseService';
 import { getCompanyData } from '../../services/companyService';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatDate, formatCurrency } from '../../utils/formatters';
+import { formatDate, formatCurrency } from '../../utils/formatting';
 
 const StocktakingReportPage = () => {
   const { id } = useParams();

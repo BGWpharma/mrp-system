@@ -23,7 +23,7 @@ import {
   Grid
 } from '@mui/material';
 import { getItemBatches, getAllInventoryItems, getAllWarehouses, getInventoryItemByRecipeId } from '../../services/inventory';
-import { getAllRecipes } from '../../services/recipeService';
+import { getAllRecipes } from '../../services/products';
 
 /**
  * Komponent do wyboru partii magazynowych dla pozycji CMR

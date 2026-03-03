@@ -13,7 +13,7 @@
 import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { db } from '../../services/firebase/config';
 import { doc, getDocs, collection, query, where } from 'firebase/firestore';
-import { preciseMultiply } from '../../utils/mathUtils';
+import { preciseMultiply } from '../../utils/calculations';
 import { useVisibilityAwareSnapshot } from '../useVisibilityAwareSnapshot';
 
 // Shallow comparison dla materiałów - 10-100x szybsze niż JSON.stringify

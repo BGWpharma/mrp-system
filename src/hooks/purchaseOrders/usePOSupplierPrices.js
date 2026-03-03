@@ -1,4 +1,4 @@
-import { getBestSupplierPricesForItems } from '../../services/supplierService';
+import { getBestSupplierPricesForItems } from '../../services/suppliers';
 import { formatAddress } from '../../utils/addressUtils';
 
 export const usePOSupplierPrices = ({

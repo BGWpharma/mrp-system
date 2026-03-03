@@ -125,9 +125,9 @@ import {
   Assignment as FormIcon,
   BugReport as BugReportIcon
 } from '@mui/icons-material';
-import { getTaskById, deleteTask, updateActualMaterialUsage, getProductionHistory, addTaskComment, deleteTaskComment, markTaskCommentsAsRead } from '../../services/productionService';
+import { getTaskById, deleteTask, updateActualMaterialUsage, getProductionHistory, addTaskComment, deleteTaskComment, markTaskCommentsAsRead } from '../../services/production/productionService';
 // ✅ REFAKTORYZACJA: getProductionDataForHistory, getAvailableMachines przeniesione do useTaskFetcher
-import { sortIngredientsByQuantity } from '../../services/recipeService';
+import { sortIngredientsByQuantity } from '../../services/products';
 import { bookInventoryForTask, cancelBooking, getBatchReservations, getInventoryBatch, updateBatch } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -140,14 +140,14 @@ import {
   fromLocalDateTimeString,
   getStatusColor,
   getStatusActions,
-} from '../../utils/taskFormatters';
+} from '../../utils/formatting';
 import {
   validateQuantities as validateQuantitiesPure,
   validateManualBatchSelection as validateManualBatchSelectionPure,
   validateManualBatchSelectionForMaterial as validateManualBatchSelectionForMaterialPure,
   validateConsumeQuantities as validateConsumeQuantitiesPure,
   getRequiredQuantityForReservation as getRequiredQuantityForReservationPure,
-} from '../../utils/taskValidators';
+} from '../../utils/validation';
 import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants';
 import { format, parseISO } from 'date-fns';
 import TaskDetails from '../../components/production/TaskDetails';
@@ -166,7 +166,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl, enUS } from 'date-fns/locale';
 import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial, isConsumptionExceedingIssued, calculateConsumptionExcess } from '../../utils/productionUtils';
-import { preciseMultiply } from '../../utils/mathUtils';
+import { preciseMultiply } from '../../utils/calculations';
 // ✅ REFAKTORYZACJA: getIngredientReservationLinks przeniesione do useTaskFetcher
 import { useUserNames } from '../../hooks/useUserNames';
 
@@ -1636,7 +1636,7 @@ const TaskDetailsPage = () => {
     
     try {
       // Użyj globalnej funkcji aktualizacji z productionService
-      const { updateTaskCostsAutomatically } = await import('../../services/productionService');
+      const { updateTaskCostsAutomatically } = await import('../../services/production/productionService');
       const result = await updateTaskCostsAutomatically(task.id, currentUser?.uid || 'system', 'Ręczna aktualizacja z poziomu szczegółów zadania');
       
       if (result.success) {

@@ -41,7 +41,7 @@ import {
   createWorkstation,
   updateWorkstation,
   deleteWorkstation
-} from '../../services/workstationService';
+} from '../../services/production/workstationService';
 
 // Predefiniowane kolory do wyboru
 const COLOR_OPTIONS = [

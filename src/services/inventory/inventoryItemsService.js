@@ -28,7 +28,7 @@ import {
   formatQuantityPrecision,
   convertTimestampToDate 
 } from './utils/formatters.js';
-import { preciseAdd } from '../../utils/mathUtils.js';
+import { preciseAdd } from '../../utils/calculations';
 import { FirebaseQueryBuilder } from './config/firebaseQueries.js';
 
 /**
@@ -521,7 +521,7 @@ export const updateInventoryItem = async (itemId, itemData, userId, options = {}
     let updatedRecipesCount = 0;
     if (!options.skipRecipeUpdates && validatedData.name && validatedData.name !== currentItem.name) {
       try {
-        const { getRecipesContainingIngredient, updateRecipe } = await import('../recipeService');
+        const { getRecipesContainingIngredient, updateRecipe } = await import('../products');
         const recipesToUpdate = await getRecipesContainingIngredient(validatedId);
         
         for (const recipe of recipesToUpdate) {

@@ -36,7 +36,7 @@ import {
   Visibility as VisibilityIcon,
   PhotoCamera as PhotoCameraIcon
 } from '@mui/icons-material';
-import { uploadRecipeDesignAttachment, deleteRecipeDesignAttachment } from '../../services/recipeService';
+import { uploadRecipeDesignAttachment, deleteRecipeDesignAttachment } from '../../services/products';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

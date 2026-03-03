@@ -2,14 +2,21 @@
  * CMR Status Update Trigger
  * Trigger 4: CMR Documents → Customer Orders
  * Automatycznie aktualizuje ilości wysłane w zamówieniach gdy CMR zmienia status na "W transporcie"
+ * + wysyła email powiadomienie do klienta (via SMTP Relay, IP-based auth)
  *
  * DEPLOYMENT:
  * firebase deploy --only functions:bgw-mrp:onCmrStatusUpdate
+ *
+ * POST-DEPLOY (Direct VPC Egress for SMTP Relay):
+ * gcloud functions deploy onCmrStatusUpdate --gen2
+ *   --region=europe-central2 --project=bgw-mrp-system
+ *   --network=default --subnet=default --egress-settings=all
  */
 
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const {admin} = require("../config");
+const {sendCmrShipmentNotification} = require("../utils/emailService");
 
 const onCmrStatusUpdate = onDocumentUpdated(
     {
@@ -82,6 +89,28 @@ const onCmrStatusUpdate = onDocumentUpdated(
             cmrNumber: cmrData.cmrNumber,
             orderCount: uniqueOrderIds.length,
           });
+
+          // Send email notification to customer
+          try {
+            const orderId = cmrData.linkedOrderId ||
+                (cmrData.linkedOrderIds && cmrData.linkedOrderIds[0]);
+            if (orderId) {
+              const orderDoc = await db.collection("orders").doc(orderId).get();
+              const orderData = orderDoc.exists ? orderDoc.data() : null;
+              if (orderData?.customer) {
+                await sendCmrShipmentNotification(
+                    afterData, cmrId, orderData.customer,
+                );
+              } else {
+                logger.warn("[Email] Order has no customer data", {orderId});
+              }
+            }
+          } catch (emailError) {
+            logger.error("[Email] Błąd wysyłki powiadomienia CMR (non-fatal)", {
+              cmrId,
+              error: emailError.message,
+            });
+          }
         } catch (error) {
           logger.error("❌ Error updating shipped quantities for CMR", {cmrId, error: error.message});
           throw error; // Re-throw to trigger retry

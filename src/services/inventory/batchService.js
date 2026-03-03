@@ -35,7 +35,7 @@ import {
   convertTimestampToDate,
   isDefaultDate 
 } from './utils/formatters.js';
-import { preciseAdd } from '../../utils/mathUtils.js';
+import { preciseAdd } from '../../utils/calculations';
 import { FirebaseQueryBuilder } from './config/firebaseQueries.js';
 
 /**

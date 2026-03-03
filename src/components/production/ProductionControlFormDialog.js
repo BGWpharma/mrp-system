@@ -15,7 +15,8 @@ const ProductionControlFormDialog = ({
   onClose, 
   task = null,
   onSuccess = null,
-  fullScreen = false
+  fullScreen = false,
+  container
 }) => {
   // Przygotuj dane wstępne na podstawie zadania produkcyjnego
   const preparePrefilledData = () => {
@@ -87,6 +88,7 @@ const ProductionControlFormDialog = ({
       maxWidth="md"
       fullWidth
       fullScreen={fullScreen}
+      container={container}
       PaperProps={{
         sx: { 
           ...(!fullScreen && {

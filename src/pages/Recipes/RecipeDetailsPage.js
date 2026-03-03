@@ -42,9 +42,9 @@ import {
   Add as AddIcon,
   Download as DownloadIcon
 } from '@mui/icons-material';
-import { getRecipeById, getRecipeVersions, getRecipeVersion, restoreRecipeVersion, deleteRecipe, updateRecipe } from '../../services/recipeService';
+import { getRecipeById, getRecipeVersions, getRecipeVersion, restoreRecipeVersion, deleteRecipe, updateRecipe } from '../../services/products';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDate } from '../../utils/formatters';
+import { formatDate } from '../../utils/formatting';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import RecipeVersionComparison from '../../components/recipes/RecipeVersionComparison';
@@ -54,8 +54,8 @@ import PdfMiniaturePreview from '../../components/common/PdfMiniaturePreview';
 import { createInventoryItem, getAllInventoryItems, getInventoryItemByRecipeId } from '../../services/inventory';
 import { db } from '../../services/firebase/config';
 import { collection, query, where, limit, getDocs, doc, getDoc, updateDoc, orderBy } from 'firebase/firestore';
-import { getAllWorkstations } from '../../services/workstationService';
-import { getPriceListsContainingRecipe } from '../../services/priceListService';
+import { getAllWorkstations } from '../../services/production/workstationService';
+import { getPriceListsContainingRecipe } from '../../services/products';
 
 // TabPanel component for recipe detail tabs
 function TabPanel(props) {

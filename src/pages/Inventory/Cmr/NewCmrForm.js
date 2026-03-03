@@ -49,8 +49,8 @@ import LinkIcon from '@mui/icons-material/Link';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { Calculate as CalculateIcon } from '@mui/icons-material';
-import { getOrderById, searchOrdersByNumber } from '../../../services/orderService';
-import { getCustomerById } from '../../../services/customerService';
+import { getOrderById, searchOrdersByNumber } from '../../../services/orders';
+import { getCustomerById } from '../../../services/crm';
 import { getCompanyData } from '../../../services/companyService';
 import BatchSelector from '../../../components/cmr/BatchSelector';
 import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDialog';
@@ -339,7 +339,7 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     // Spróbuj automatycznie znaleźć pozycję magazynową na podstawie receptury
     try {
       // Import potrzebnych funkcji
-      const { getAllRecipes } = await import('../../services/recipeService');
+      const { getAllRecipes } = await import('../../services/products');
       const { getInventoryItemByRecipeId } = await import('../../services/inventory');
       
       // Pobierz receptury
@@ -695,7 +695,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
   const handleRefreshOrders = async () => {
     setIsLoadingOrder(true);
     try {
-      const { getAllOrders } = await import('../../../services/orderService');
+      const { getAllOrders } = await import('../../../services/orders');
       const orders = await getAllOrders();
       const customerOrders = orders.filter(order => order.type !== 'purchase');
       setAvailableOrders(customerOrders);

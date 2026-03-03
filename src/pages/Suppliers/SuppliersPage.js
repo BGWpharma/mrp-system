@@ -1,7 +1,7 @@
 import React from 'react';
 import { Container, Typography, Box } from '@mui/material';
 import { useTranslation } from '../../hooks/useTranslation';
-import SuppliersList from '../../components/purchaseOrders/SuppliersList';
+import SuppliersList from '../../components/suppliers/SuppliersList';
 
 const SuppliersPage = () => {
   const { t } = useTranslation('suppliers');

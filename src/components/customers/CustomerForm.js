@@ -15,7 +15,7 @@ import {
   createCustomer, 
   updateCustomer, 
   DEFAULT_CUSTOMER 
-} from '../../services/customerService';
+} from '../../services/crm';
 import { validateNipFormat, getBasicCompanyDataByNip } from '../../services/nipValidationService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';

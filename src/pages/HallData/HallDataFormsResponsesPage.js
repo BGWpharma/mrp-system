@@ -46,7 +46,7 @@ import {
   deleteHallDataFormResponse,
   getAllHallDataFormsCounts,
   HALL_DATA_FORM_TYPES
-} from '../../services/hallDataFormsService';
+} from '../../services/forms';
 
 const HallDataFormsResponsesPage = () => {
   const theme = useTheme();

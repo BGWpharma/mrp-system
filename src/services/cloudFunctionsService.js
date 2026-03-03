@@ -4,7 +4,7 @@
  */
 
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '../firebase';
+import { app } from './firebase/config';
 
 // Initialize Functions with europe-central2 region
 const functions = getFunctions(app, 'europe-central2');

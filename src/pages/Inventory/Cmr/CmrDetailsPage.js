@@ -84,8 +84,8 @@ import {
   uploadCmrOtherAttachment,
   getCmrOtherAttachments,
   deleteCmrOtherAttachment
-} from '../../../services/cmrService';
-import { getOrderById } from '../../../services/orderService';
+} from '../../../services/logistics';
+import { getOrderById } from '../../../services/orders';
 import { 
   collection, 
   query, 
@@ -97,7 +97,7 @@ import {
   calculatePalletWeights, 
   calculateBoxWeights, 
   getInventoryDataFromBatches 
-} from '../../../utils/cmrWeightCalculator';
+} from '../../../utils/calculations';
 import LabelsDisplayDialog from '../../../components/cmr/LabelsDisplayDialog';
 import LabelGenerator from '../../../components/cmr/LabelGenerator';
 

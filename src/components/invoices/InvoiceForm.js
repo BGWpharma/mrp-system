@@ -22,13 +22,13 @@ import {
   getInvoicesByOrderId,
   calculateTotalUnitCost,
   getInvoicedAmountsByOrderItems
-} from '../../services/invoiceService';
-import { getAllCustomers, getCustomerById } from '../../services/customerService';
-import { getAllOrders } from '../../services/orderService';
+} from '../../services/finance';
+import { getAllCustomers, getCustomerById } from '../../services/crm';
+import { getAllOrders } from '../../services/orders';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDateForInput } from '../../utils/dateUtils';
-import { preciseCompare } from '../../utils/mathUtils';
+import { preciseCompare } from '../../utils/calculations';
 import { calculateInvoiceTotalInPLN } from '../../utils/nbpExchangeRates';
 import { COMPANY_INFO } from '../../config';
 import { getCompanyInfo } from '../../services/companyService';
@@ -293,7 +293,7 @@ const InvoiceForm = ({ invoiceId }) => {
     
     const timeoutId = setTimeout(async () => {
       try {
-        const { searchPurchaseOrdersByNumber } = await import('../../services/purchaseOrderService');
+        const { searchPurchaseOrdersByNumber } = await import('../../services/purchaseOrders');
         const results = await searchPurchaseOrdersByNumber(poSearchTerm);
         if (cancelled) return;
         setPoSearchResults(results);
@@ -645,7 +645,7 @@ const InvoiceForm = ({ invoiceId }) => {
       let selectedOrder;
       
       if (orderType === 'purchase') {
-        const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+        const { getPurchaseOrderById } = await import('../../services/purchaseOrders');
         selectedOrder = await getPurchaseOrderById(orderId);
         
         // Dokładnie przeglądamy dane PO

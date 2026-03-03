@@ -91,13 +91,13 @@ import {
   uploadDeliveryProof,
   deleteDeliveryProof,
   calculateOrderTotal
-} from '../../services/orderService';
+} from '../../services/orders';
 import { getAllInventoryItems, getIngredientPrices, getInventoryItemsByCategory } from '../../services/inventory';
-import { getAllCustomers, createCustomer } from '../../services/customerService';
+import { getAllCustomers, createCustomer } from '../../services/crm';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatCurrency } from '../../utils/formatUtils';
+import { formatCurrency } from '../../utils/formatting';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
   flexCenter, 
@@ -112,25 +112,25 @@ import {
   p2
 } from '../../styles/muiCommonStyles';
 import { formatDateForInput, formatDate, safeParseDate, ensureDateInputFormat } from '../../utils/dateUtils';
-import { getAllRecipes, getRecipeById } from '../../services/recipeService';
+import { getAllRecipes, getRecipeById } from '../../services/products';
 import { storage } from '../../services/firebase/config';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { calculateProductionCost } from '../../utils/costCalculator';
-import { createPurchaseOrder, getPurchaseOrderById, getAllPurchaseOrders } from '../../services/purchaseOrderService';
-import { getBestSupplierPricesForItems, getAllSuppliers } from '../../services/supplierService';
-import { getPriceForCustomerProduct } from '../../services/priceListService';
+import { calculateProductionCost } from '../../utils/calculations';
+import { createPurchaseOrder, getPurchaseOrderById, getAllPurchaseOrders } from '../../services/purchaseOrders';
+import { getBestSupplierPricesForItems, getAllSuppliers } from '../../services/suppliers';
+import { getPriceForCustomerProduct } from '../../services/products';
 import { 
   getInventoryItemByName as findProductByName, 
   getInventoryItemById as getProductById 
 } from '../../services/inventory';
 import { 
   getRecipeById as getRecipeByProductId 
-} from '../../services/recipeService';
+} from '../../services/products';
 import { 
   getAllInventoryItems as getAllProducts 
 } from '../../services/inventory';
-import { getExchangeRate } from '../../services/exchangeRateService';
-import { getLastRecipeUsageInfo } from '../../services/orderService';
+import { getExchangeRate } from '../../services/finance';
+import { getLastRecipeUsageInfo } from '../../services/orders';
 import ImportOrderItemsDialog from './ImportOrderItemsDialog';
 
 const DEFAULT_ITEM = {
@@ -772,7 +772,7 @@ const OrderForm = ({ orderId }) => {
           
           // Przypisz informacje o zadaniach produkcyjnych do pozycji zamówienia - ZOPTYMALIZOWANE BATCH QUERIES
           if (fetchedOrder.productionTasks && fetchedOrder.productionTasks.length > 0 && fetchedOrder.items.length > 0) {
-            const { updateTask } = await import('../../services/productionService');
+            const { updateTask } = await import('../../services/production/productionService');
             const { query, collection, where, getDocs } = await import('firebase/firestore');
             const { db } = await import('../../services/firebase/config');
             
@@ -914,7 +914,7 @@ const OrderForm = ({ orderId }) => {
                 
                 // Dodaj aktualizacje zamówień
                 if (orderUpdates.length > 0) {
-                  const { updateProductionTaskInOrder } = await import('../../services/orderService');
+                  const { updateProductionTaskInOrder } = await import('../../services/orders');
                   orderUpdates.forEach(({ taskId, updateData }) => {
                     updatePromises.push(
                       updateProductionTaskInOrder(orderId, taskId, updateData, currentUser?.uid || 'system')
@@ -1008,8 +1008,8 @@ const OrderForm = ({ orderId }) => {
       console.log('Odświeżanie kosztów produkcji przed zapisaniem zamówienia...');
 
       // Importuj funkcję do pobierania szczegółów zadania
-      const { getTaskById } = await import('../../services/productionService');
-      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+      const { getTaskById } = await import('../../services/production/productionService');
+      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/calculations');
       
       if (orderDataToUpdate.items && orderDataToUpdate.items.length > 0) {
         for (let i = 0; i < orderDataToUpdate.items.length; i++) {
@@ -1343,7 +1343,7 @@ const OrderForm = ({ orderId }) => {
     try {
       setRecalculatingTransport(true);
       
-      const { recalculateTransportServiceForOrder } = await import('../../services/cmrService');
+      const { recalculateTransportServiceForOrder } = await import('../../services/logistics');
       const result = await recalculateTransportServiceForOrder(orderId, currentUser.uid);
       
       if (result.success) {
@@ -1416,7 +1416,7 @@ const OrderForm = ({ orderId }) => {
       if (orderData.customer?.id) {
         try {
           // Importuj nową funkcję pobierającą pełne dane pozycji z listy cenowej
-          const { getPriceListItemForCustomerProduct } = await import('../../services/priceListService');
+          const { getPriceListItemForCustomerProduct } = await import('../../services/products');
           
           // Pobierz pełny obiekt pozycji z listy cenowej zamiast tylko ceny
           const priceListItem = await getPriceListItemForCustomerProduct(orderData.customer.id, product.id, isRecipe);
@@ -1492,7 +1492,7 @@ const OrderForm = ({ orderId }) => {
                 if (!lastUsageInfo || !lastUsageInfo.cost || lastUsageInfo.cost === 0) {
                   console.log('Brak ostatniego kosztu - obliczam szacowany koszt materiałów');
                   
-                  const { calculateEstimatedMaterialsCost } = await import('../../utils/costCalculator');
+                  const { calculateEstimatedMaterialsCost } = await import('../../utils/calculations');
                   const estimatedCost = await calculateEstimatedMaterialsCost(recipe);
                   
                   if (estimatedCost.totalCost > 0) {
@@ -1849,8 +1849,8 @@ const OrderForm = ({ orderId }) => {
       const refreshedOrderData = await getOrderById(orderId);
       
       // Importuj funkcję do pobierania szczegółów zadania
-      const { getTaskById } = await import('../../services/productionService');
-      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+      const { getTaskById } = await import('../../services/production/productionService');
+      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/calculations');
       
       const updatedItems = [...refreshedOrderData.items];
       
@@ -1962,8 +1962,8 @@ const OrderForm = ({ orderId }) => {
     }
 
     try {
-      const { getTaskById, updateTask } = await import('../../services/productionService');
-      const { removeProductionTaskFromOrder, updateProductionTaskInOrder } = await import('../../services/orderService');
+      const { getTaskById, updateTask } = await import('../../services/production/productionService');
+      const { removeProductionTaskFromOrder, updateProductionTaskInOrder } = await import('../../services/orders');
       
       const verifiedTasks = [];
       const tasksToRemove = [];
@@ -2236,8 +2236,8 @@ const OrderForm = ({ orderId }) => {
     let updatedItems = 0;
     
     try {
-      const { getRecipeById } = await import('../../services/recipeService');
-      const { calculateEstimatedMaterialsCost } = await import('../../utils/costCalculator');
+      const { getRecipeById } = await import('../../services/products');
+      const { calculateEstimatedMaterialsCost } = await import('../../utils/calculations');
       
       for (let index = 0; index < orderData.items.length; index++) {
         const item = orderData.items[index];

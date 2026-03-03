@@ -19,7 +19,8 @@
  * - onBatchPriceUpdate        (trigger: _systemEvents)
  * - onProductionTaskCostUpdate (trigger: _systemEvents)
  * - onProductionTaskScheduleUpdate (trigger: productionTasks)
- * - onCmrStatusUpdate         (trigger: cmrDocuments)
+ * - onCmrStatusUpdate         (trigger: cmrDocuments + email notification)
+ * - onInvoiceStatusChange     (trigger: invoices → email on status=issued)
  * - onProductionHistoryChange (trigger: productionHistory)
  * - onFactoryCostChange       (trigger: factoryCosts)
  * - onJournalEntryChange      (trigger: journalEntries - BGW overhead sync)
@@ -57,6 +58,7 @@ const {onCmrStatusUpdate} = require("./triggers/cmrStatus");
 const {onProductionHistoryChange, onFactoryCostChange} = require("./triggers/factoryCost");
 const {onJournalEntryChange} = require("./triggers/bgwOverhead");
 const {onPurchaseInvoicePaymentChange} = require("./triggers/poPaymentSync");
+const {onInvoiceStatusChange} = require("./triggers/invoiceEmail");
 
 // ============================================================================
 // INVOICE OCR TRIGGERS - Automatyczne przetwarzanie faktur
@@ -102,6 +104,7 @@ exports.onProductionHistoryChange = onProductionHistoryChange;
 exports.onFactoryCostChange = onFactoryCostChange;
 exports.onJournalEntryChange = onJournalEntryChange;
 exports.onPurchaseInvoicePaymentChange = onPurchaseInvoicePaymentChange;
+exports.onInvoiceStatusChange = onInvoiceStatusChange;
 exports.updateExpiryStats = updateExpiryStats;
 exports.checkUnorderedPOReservations = checkUnorderedPOReservations;
 exports.autoArchiveStaleDocuments = autoArchiveStaleDocuments;

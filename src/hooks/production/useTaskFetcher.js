@@ -1,11 +1,11 @@
 import { useCallback, useRef } from 'react';
 import { db } from '../../services/firebase/config';
 import { getDoc, doc, collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
-import { getTaskById, getProductionHistory } from '../../services/productionService';
-import { getProductionDataForHistory, getAvailableMachines } from '../../services/machineDataService';
-import { getRecipeVersion } from '../../services/recipeService';
-import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
-import { preciseMultiply } from '../../utils/mathUtils';
+import { getTaskById, getProductionHistory } from '../../services/production/productionService';
+import { getProductionDataForHistory, getAvailableMachines } from '../../services/production/machineDataService';
+import { getRecipeVersion } from '../../services/products';
+import { getIngredientReservationLinks } from '../../services/production/mixingPlanReservationService';
+import { preciseMultiply } from '../../utils/calculations';
 
 const CACHE_TTL = 30000; // 30 sekund
 
@@ -315,7 +315,7 @@ export const useTaskFetcher = ({
       // Rezerwacje PO - zawsze potrzebne dla zakładki materiałów
       if (fetchedTask?.id) {
         dataLoadingPromises.push(
-          import('../../services/poReservationService')
+          import('../../services/purchaseOrders')
             .then(module => module.getPOReservationsForTask(fetchedTask.id))
             .then(reservations => ({ type: 'poReservations', data: reservations || [] }))
             .catch(error => {
@@ -509,7 +509,7 @@ export const useTaskFetcher = ({
       }
       
       const importStartTime = performance.now();
-      const { getPOReservationsForTask } = await import('../../services/poReservationService');
+      const { getPOReservationsForTask } = await import('../../services/purchaseOrders');
       console.log('✅ [TaskDetails] poReservationService zaimportowany', {
         duration: `${(performance.now() - importStartTime).toFixed(2)}ms`
       });

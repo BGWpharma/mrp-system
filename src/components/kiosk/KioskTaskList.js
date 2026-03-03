@@ -61,7 +61,7 @@ import { useTheme as useThemeContext } from '../../contexts/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getUsersDisplayNames } from '../../services/userService';
-import { formatDateTime } from '../../utils/formatters';
+import { formatDateTime } from '../../utils/formatting';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
   emptyStateContainer,

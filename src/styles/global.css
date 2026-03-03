@@ -1,16 +1,4 @@
-/* src/assets/styles/global.css */
-/* 
- * ⚠️ DEPRECATED - Ten plik jest przestarzały
- * 
- * Wszystkie style zostały przeniesione do nowej struktury:
- * - src/styles/design-tokens.css (zmienne)
- * - src/styles/themes/ (motywy)
- * - src/styles/components/ (komponenty)
- * 
- * Zobacz STYLING_GUIDE.md dla więcej informacji
- * 
- * Ten plik można usunąć po migracji wszystkich komponentów.
- */
+/* src/styles/global.css */
 
 /* Theme Variables - Clean Design */
 :root {

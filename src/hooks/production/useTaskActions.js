@@ -11,7 +11,7 @@ import {
   updateTaskStatus,
   deleteTask,
   addTaskProductToInventory
-} from '../../services/productionService';
+} from '../../services/production/productionService';
 import { useNotification } from '../useNotification';
 
 export const useTaskActions = (taskId, currentUserId, onRefresh) => {

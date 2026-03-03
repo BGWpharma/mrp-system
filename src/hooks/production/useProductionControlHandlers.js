@@ -7,7 +7,7 @@ import {
   startProduction,
   stopProduction,
   generateMaterialsAndLotsReport
-} from '../../services/productionService';
+} from '../../services/production/productionService';
 
 export const useProductionControlHandlers = ({
   id,
@@ -93,7 +93,7 @@ export const useProductionControlHandlers = ({
           if (recipeInventoryItem) {
             inventoryProductId = recipeInventoryItem.id;
             
-            const { updateTask } = await import('../../services/productionService');
+            const { updateTask } = await import('../../services/production/productionService');
             await updateTask(id, {
               inventoryProductId: inventoryProductId
             }, currentUser.uid);

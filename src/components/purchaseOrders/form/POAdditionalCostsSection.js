@@ -29,8 +29,8 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl, enUS } from 'date-fns/locale';
 import { parseISO, isValid, format } from 'date-fns';
-import { formatCurrency } from '../../../utils/formatUtils';
-import { formatNumberClean } from '../../../utils/formatters';
+import { formatCurrency } from '../../../utils/formatting';
+import { formatNumberClean } from '../../../utils/formatting';
 import { mb2 } from '../../../styles/muiCommonStyles';
 
 const numberInputSx = {

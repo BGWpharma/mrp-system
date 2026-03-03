@@ -40,8 +40,8 @@ import {
   getInventoryItemById,
   getAllInventoryItems
 } from '../../services/inventory';
-import { getRecipesContainingIngredient } from '../../services/recipeService';
-import { getAllCustomers } from '../../services/customerService';
+import { getRecipesContainingIngredient } from '../../services/products';
+import { getAllCustomers } from '../../services/crm';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

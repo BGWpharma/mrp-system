@@ -9,9 +9,9 @@ import {
   getCountFromServer
 } from 'firebase/firestore';
 import { db } from './firebase/config';
-import { getOrdersStats } from './orderService';
-import { getTasksByStatus } from './productionService';
-import { getKpiData } from './analyticsService';
+import { getOrdersStats } from './orders';
+import { getTasksByStatus } from './production/productionService';
+// TODO: analyticsService nie istnieje - getKpiData do zaimplementowania
 
 // Cache dla danych Dashboard z osobnymi czasami wygaśnięcia
 const dashboardCache = {
@@ -157,7 +157,7 @@ export const getDashboardAnalytics = async () => {
   
   try {
     console.log('Pobieram dane analityczne dla Dashboard...');
-    const analytics = await getKpiData();
+    const analytics = null; // getKpiData - analyticsService not implemented yet
     
     setCacheData(cacheKey, analytics);
     return analytics;

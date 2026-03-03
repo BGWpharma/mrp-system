@@ -81,21 +81,21 @@ import {
   updateTask,
   getTaskById,
   clearProductionTasksCache
-} from '../../services/productionService';
-import { getAllRecipes, getRecipeById, getRecipeVersions, getRecipeVersion, getActiveRecipesMinimal } from '../../services/recipeService';
+} from '../../services/production/productionService';
+import { getAllRecipes, getRecipeById, getRecipeVersions, getRecipeVersion, getActiveRecipesMinimal } from '../../services/products';
 import {
   getAllInventoryItems,
   getInventoryItemById
 } from '../../services/inventory';
-import { getAllPurchaseOrders } from '../../services/purchaseOrderService';
-import { getOrderById, getAllOrders, updateOrder } from '../../services/orderService';
+import { getAllPurchaseOrders } from '../../services/purchaseOrders';
+import { getOrderById, getAllOrders, updateOrder } from '../../services/orders';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { getAllWorkstations } from '../../services/workstationService';
-import { getAllMONumbers } from '../../services/moService';
-import { generateLOTNumber } from '../../utils/numberGenerators';
+import { getAllWorkstations } from '../../services/production/workstationService';
+import { getAllMONumbers } from '../../services/production/moService';
+import { generateLOTNumber } from '../../utils/calculations';
 import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends, calculateEndDateWithWorkingHours, calculateProductionTimeWithWorkingHours } from '../../utils/dateUtils';
-import { preciseMultiply } from '../../utils/mathUtils';
+import { preciseMultiply } from '../../utils/calculations';
 
 const TaskForm = ({ taskId }) => {
   const [loading, setLoading] = useState(!!taskId);
@@ -732,8 +732,8 @@ const TaskForm = ({ taskId }) => {
   const updateRelatedCustomerOrders = async (taskId, totalMaterialCost, totalFullProductionCost) => {
     try {
       // Dynamicznie importuj potrzebne funkcje
-      const { getOrdersByProductionTaskId, updateOrder, calculateOrderTotal } = await import('../../services/orderService');
-      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+      const { getOrdersByProductionTaskId, updateOrder, calculateOrderTotal } = await import('../../services/orders');
+      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/calculations');
       
       // Pobierz tylko zamówienia powiązane z tym zadaniem
       const relatedOrders = await getOrdersByProductionTaskId(taskId);
@@ -1790,7 +1790,7 @@ const TaskForm = ({ taskId }) => {
     
     if (shouldUpdate && syncCOData) {
       try {
-        const { updateOrderItemName } = await import('../../services/orderService');
+        const { updateOrderItemName } = await import('../../services/orders');
         await updateOrderItemName(
           syncCOData.orderId, 
           syncCOData.orderItemId, 

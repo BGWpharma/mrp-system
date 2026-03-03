@@ -35,7 +35,7 @@ import {
   getNextPaymentDueDate,
   archivePurchaseOrder,
   unarchivePurchaseOrder
-} from '../../services/purchaseOrderService';
+} from '../../services/purchaseOrders';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
@@ -43,8 +43,7 @@ import { usePurchaseOrderListState } from '../../contexts/PurchaseOrderListState
 import { useTranslation } from '../../hooks/useTranslation';
 import PurchaseOrderReportDialog from './PurchaseOrderReportDialog';
 import POOrderReminderDialog from './POOrderReminderDialog';
-import { generatePurchaseOrderReport } from '../../services/purchaseOrderReportService';
-import { getUnorderedMaterialAlertsCount } from '../../services/poOrderReminderService';
+import { generatePurchaseOrderReport, getUnorderedMaterialAlertsCount } from '../../services/purchaseOrders';
 
 // Czysta funkcja — przeniesiona poza komponent
 const formatCurrencySymbol = (currencyCode) => {

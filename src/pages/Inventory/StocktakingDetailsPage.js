@@ -77,7 +77,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { usePermissions } from '../../hooks/usePermissions';
-import { formatDate } from '../../utils/formatters';
+import { formatDate } from '../../utils/formatting';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useUserNames } from '../../hooks/useUserNames';
 import { doc, getDoc } from 'firebase/firestore';

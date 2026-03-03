@@ -28,7 +28,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../services/firebase/config';
 import { useAuth } from '../../hooks/useAuth';
-import { updatePurchaseOrderAttachments, validateAndCleanupAttachments } from '../../services/purchaseOrderService';
+import { updatePurchaseOrderAttachments, validateAndCleanupAttachments } from '../../services/purchaseOrders';
 import { useNotification } from '../../hooks/useNotification';
 
 const PurchaseOrderFileUpload = ({ orderId, attachments = [], onAttachmentsChange, disabled = false }) => {

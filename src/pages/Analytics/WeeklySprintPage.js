@@ -51,7 +51,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { exportToCSV, exportToExcel, formatDateForExport } from '../../utils/exportUtils';
-import { getAllCustomers } from '../../services/customerService';
+import { getAllCustomers } from '../../services/crm';
 
 const WeeklySprintPage = () => {
   const { currentUser } = useAuth();

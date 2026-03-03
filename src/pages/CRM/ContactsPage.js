@@ -37,7 +37,7 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { Link, useNavigate, Link as RouterLink } from 'react-router-dom';
-import { getAllContacts, searchContacts, deleteContact } from '../../services/crmService';
+import { getAllContacts, searchContacts, deleteContact } from '../../services/crm';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { CRM_CONTACT_TYPES } from '../../utils/constants';

@@ -37,7 +37,7 @@ import {
   BuildCircle as BuildCircleIcon,
   BugReport as BugReportIcon,
 } from '@mui/icons-material';
-import { formatDate } from '../../utils/formatters';
+import { formatDate } from '../../utils/formatting';
 import { StartProductionDialog, AddHistoryDialog, DeleteConfirmDialog, AdditionalCostDialog } from './dialogs';
 import { CommentsDrawer } from './shared';
 import ManualBatchSelection from './ManualBatchSelection';

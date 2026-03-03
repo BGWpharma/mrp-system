@@ -82,11 +82,11 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../services/firebase/config';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
-import { getAllOrders, updateOrder, getOrdersByDateRange } from '../../../services/orderService';
-import { getAllCustomers } from '../../../services/customerService';
-import { getTaskById, getMultipleTasksById, getTasksWithCosts } from '../../../services/productionService';
+import { getAllOrders, updateOrder, getOrdersByDateRange } from '../../../services/orders';
+import { getAllCustomers } from '../../../services/crm';
+import { getTaskById, getMultipleTasksById, getTasksWithCosts } from '../../../services/production/productionService';
 import { getAllInventoryItems } from '../../../services/inventory/inventoryItemsService';
-import { formatCurrency } from '../../../utils/formatUtils';
+import { formatCurrency } from '../../../utils/formatting';
 import { exportToCSV, exportToPDF, exportToExcel, formatDateForExport, formatCurrencyForExport } from '../../../utils/exportUtils';
 import {
   LineChart,

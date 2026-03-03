@@ -24,7 +24,7 @@ import {
   Delete as DeleteIcon,
   Send as SendIcon
 } from '@mui/icons-material';
-import { formatDateTime } from '../../../utils/formatters';
+import { formatDateTime } from '../../../utils/formatting';
 
 const CommentsDrawer = memo(({
   open,

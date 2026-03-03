@@ -49,9 +49,9 @@ import { format, subYears } from 'date-fns';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { getTasksWithCosts } from '../../services/productionService';
-import { getAllCustomers } from '../../services/customerService';
-import { formatCurrency } from '../../utils/formatUtils';
+import { getTasksWithCosts } from '../../services/production/productionService';
+import { getAllCustomers } from '../../services/crm';
+import { formatCurrency } from '../../utils/formatting';
 import { exportToCSV, formatDateForExport } from '../../utils/exportUtils';
 
 const ProductionCostsPage = () => {

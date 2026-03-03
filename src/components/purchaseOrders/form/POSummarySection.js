@@ -8,7 +8,7 @@ import {
   Divider,
   alpha
 } from '@mui/material';
-import { formatNumberClean } from '../../../utils/formatters';
+import { formatNumberClean } from '../../../utils/formatting';
 import { mb1, mb2 } from '../../../styles/muiCommonStyles';
 
 const numberInputSx = {

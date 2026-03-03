@@ -24,7 +24,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { createContact, getContactById, updateContact } from '../../services/crmService';
+import { createContact, getContactById, updateContact } from '../../services/crm';
 import { CRM_CONTACT_TYPES, DEFAULT_CRM_VALUES } from '../../utils/constants';
 
 const ContactFormPage = () => {

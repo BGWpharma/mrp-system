@@ -39,7 +39,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { 
   getUnorderedMaterialAlerts, 
   getUnorderedMaterialAlertsFromCache 
-} from '../../services/poOrderReminderService';
+} from '../../services/purchaseOrders';
 
 const POOrderReminderDialog = ({ open, onClose }) => {
   const { t, currentLanguage } = useTranslation('purchaseOrders');

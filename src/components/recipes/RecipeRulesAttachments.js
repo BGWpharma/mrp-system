@@ -30,7 +30,7 @@ import {
   Visibility as VisibilityIcon,
   Gavel as GavelIcon
 } from '@mui/icons-material';
-import { uploadRecipeRulesAttachment, deleteRecipeRulesAttachment } from '../../services/recipeService';
+import { uploadRecipeRulesAttachment, deleteRecipeRulesAttachment } from '../../services/products';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

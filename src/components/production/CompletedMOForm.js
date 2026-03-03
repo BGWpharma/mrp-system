@@ -22,7 +22,7 @@ import { pl } from 'date-fns/locale';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon, Print as PrintIcon, Assignment as AssignmentIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
-import { getMONumbersForSelect } from '../../services/moService';
+import { getMONumbersForSelect } from '../../services/production/moService';
 import { db, storage } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';

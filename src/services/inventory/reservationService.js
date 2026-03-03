@@ -24,7 +24,7 @@ import {
 } from 'firebase/firestore';
 import * as Sentry from '@sentry/react';
 import { db } from '../firebase/config';
-import { withFirebaseErrorHandling } from '../../utils/firebaseErrorHandler';
+import { withFirebaseErrorHandling } from '../../utils/errors';
 import { 
   COLLECTIONS, 
   TRANSACTION_TYPES,
@@ -42,7 +42,7 @@ import {
   formatQuantityPrecision,
   convertTimestampToDate 
 } from './utils/formatters.js';
-import { preciseSubtract, preciseAdd, preciseIsLessThan, preciseIsLessOrEqual } from '../../utils/mathUtils.js';
+import { preciseSubtract, preciseAdd, preciseIsLessThan, preciseIsLessOrEqual } from '../../utils/calculations';
 import { FirebaseQueryBuilder } from './config/firebaseQueries.js';
 
 // ✅ OPTYMALIZACJA 2: Statyczne importy zamiast dynamicznych (await import)
@@ -59,7 +59,7 @@ import {
 import { 
   getAvailablePOItems, 
   createPOReservation 
-} from '../poReservationService.js';
+} from '../purchaseOrders';
 
 /**
  * Usługa systemu rezerwacji magazynowych

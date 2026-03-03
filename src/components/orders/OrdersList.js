@@ -70,12 +70,12 @@ import {
   updateOrderInCache,
   archiveOrder,
   unarchiveOrder
-} from '../../services/orderService';
+} from '../../services/orders';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatTimestamp, formatDateForInput } from '../../utils/dateUtils';
-import { formatCurrency } from '../../utils/formatUtils';
-import { getRecipeById } from '../../services/recipeService';
+import { formatCurrency } from '../../utils/formatting';
+import { getRecipeById } from '../../services/products';
 import { exportToCSV, formatDateForExport, formatCurrencyForExport } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -122,7 +122,7 @@ const OrdersList = () => {
     const loadCustomers = async () => {
       try {
         setCustomersLoading(true);
-        const { getAllCustomers } = await import('../../services/customerService');
+        const { getAllCustomers } = await import('../../services/crm');
         const data = await getAllCustomers();
         if (cancelled) return;
         setCustomers(data);
@@ -324,7 +324,7 @@ const OrdersList = () => {
       });
       
       if (ordersToFix.length > 0) {
-        import('../../services/orderService').then(({ updateOrder }) => {
+        import('../../services/orders').then(({ updateOrder }) => {
           ordersToFix.forEach(async (fix) => {
             try {
               await updateOrder(fix.id, { 
@@ -566,8 +566,8 @@ const OrdersList = () => {
   const handleRefreshOrder = async (order) => {
     try {
       // Import potrzebnych funkcji
-      const { getOrderById } = await import('../../services/orderService');
-      const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+      const { getOrderById } = await import('../../services/orders');
+      const { getPurchaseOrderById } = await import('../../services/purchaseOrders');
       
       // Pobierz zaktualizowane dane zamówienia
       const updatedOrder = await getOrderById(order.id);
@@ -677,7 +677,7 @@ const OrdersList = () => {
         console.log(`Wartość zamówienia ${order.id} została zaktualizowana: ${savedTotalValue} → ${recalculatedTotalValue}`);
         
         try {
-          const { updateOrder } = await import('../../services/orderService');
+          const { updateOrder } = await import('../../services/orders');
           
           // Przygotuj bezpieczne dane do aktualizacji
           const safeUpdateData = {
@@ -744,8 +744,8 @@ const OrdersList = () => {
       showInfo(t('orders.notifications.refreshingValues'));
       
       // Import potrzebnych funkcji
-      const { getOrderById } = await import('../../services/orderService');
-      const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+      const { getOrderById } = await import('../../services/orders');
+      const { getPurchaseOrderById } = await import('../../services/purchaseOrders');
       
       // Pobierz świeże dane z serwera
       const freshData = await getAllOrders();
@@ -762,8 +762,8 @@ const OrdersList = () => {
         // Aktualizuj koszty produkcji dla pozycji zamówienia
         if (updatedOrderData.productionTasks && updatedOrderData.productionTasks.length > 0 && updatedOrderData.items && updatedOrderData.items.length > 0) {
           // Importuj funkcję do pobierania szczegółów zadania
-          const { getTaskById } = await import('../../services/productionService');
-          const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+          const { getTaskById } = await import('../../services/production/productionService');
+          const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/calculations');
           
           console.log("Aktualizuję koszty produkcji dla zamówienia:", order.id);
           
@@ -928,7 +928,7 @@ const OrdersList = () => {
           console.log(`Wartość zamówienia ${order.id} została zaktualizowana: ${savedTotalValue} → ${recalculatedTotalValue}`);
           
           try {
-            const { updateOrder } = await import('../../services/orderService');
+            const { updateOrder } = await import('../../services/orders');
             
             const safeUpdateData = {
               items: updatedOrderData.items,
@@ -1020,9 +1020,9 @@ const OrdersList = () => {
   const refreshOrdersForExport = async () => {
     try {
       // Import potrzebnych funkcji
-      const { getAllOrders } = await import('../../services/orderService');
-      const { getOrderById } = await import('../../services/orderService');
-      const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+      const { getAllOrders } = await import('../../services/orders');
+      const { getOrderById } = await import('../../services/orders');
+      const { getPurchaseOrderById } = await import('../../services/purchaseOrders');
       
       // Pobierz wszystkie zamówienia z uwzględnieniem filtrów
       let ordersToRefresh = orders;
@@ -1048,8 +1048,8 @@ const OrdersList = () => {
         
         // Aktualizuj koszty produkcji dla pozycji zamówienia
         if (updatedOrderData.productionTasks && updatedOrderData.productionTasks.length > 0 && updatedOrderData.items && updatedOrderData.items.length > 0) {
-          const { getTaskById } = await import('../../services/productionService');
-          const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+          const { getTaskById } = await import('../../services/production/productionService');
+          const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/calculations');
           
           for (let i = 0; i < updatedOrderData.items.length; i++) {
             const item = updatedOrderData.items[i];
@@ -1154,7 +1154,7 @@ const OrdersList = () => {
       showInfo(t('orders.notifications.refreshingMO'));
       
       // Import potrzebnych funkcji
-      const { getOrderById } = await import('../../services/orderService');
+      const { getOrderById } = await import('../../services/orders');
       
       // Pobierz zaktualizowane dane zamówienia
       const updatedOrder = await getOrderById(order.id);
@@ -1162,8 +1162,8 @@ const OrdersList = () => {
       // Aktualizuj koszty produkcji dla pozycji zamówienia
       if (updatedOrder.productionTasks && updatedOrder.productionTasks.length > 0 && updatedOrder.items && updatedOrder.items.length > 0) {
         // Importuj funkcję do pobierania szczegółów zadania
-        const { getTaskById } = await import('../../services/productionService');
-        const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+        const { getTaskById } = await import('../../services/production/productionService');
+        const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/calculations');
         
         console.log("Aktualizuję koszty produkcji dla zamówienia:", order.id);
         
@@ -1249,7 +1249,7 @@ const OrdersList = () => {
 
         // Zapisz zaktualizowane dane do bazy
         try {
-          const { updateOrder } = await import('../../services/orderService');
+          const { updateOrder } = await import('../../services/orders');
           
           const safeUpdateData = {
             items: updatedOrder.items,
@@ -1292,7 +1292,7 @@ const OrdersList = () => {
       showInfo(t('orders.notifications.refreshingCMR'));
       
       // Import funkcji do debugowania i odświeżania danych CMR
-      const { debugOrderCMRConnections, refreshShippedQuantitiesFromCMR, cleanupObsoleteCMRConnections } = await import('../../services/orderService');
+      const { debugOrderCMRConnections, refreshShippedQuantitiesFromCMR, cleanupObsoleteCMRConnections } = await import('../../services/orders');
       
       // Najpierw uruchom debugowanie aby zobaczyć stan przed odświeżaniem
       console.log('=== ROZPOCZĘCIE DEBUGOWANIA CMR ===');

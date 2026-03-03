@@ -36,7 +36,7 @@ import {
   Check as CheckIcon
 } from '@mui/icons-material';
 import { getSupplierPrices, addSupplierPrice, updateSupplierPrice, deleteSupplierPrice, setDefaultSupplierPrice, unsetDefaultSupplierPrice } from '../../services/inventory';
-import { getAllSuppliers } from '../../services/supplierService';
+import { getAllSuppliers } from '../../services/suppliers';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { DEFAULT_CURRENCY, CURRENCY_OPTIONS } from '../../config';

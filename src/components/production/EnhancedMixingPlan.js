@@ -92,7 +92,7 @@ import {
   getIngredientReservationLinks,
   getVirtualReservationsFromSnapshots,
   getLinkedReservationIds
-} from '../../services/mixingPlanReservationService';
+} from '../../services/production/mixingPlanReservationService';
 import debounce from 'lodash/debounce';
 
 // ===============================================
@@ -976,7 +976,7 @@ const EnhancedMixingPlan = ({
       setEditQuantityLoading(true);
       
       // Importuj funkcję dynamicznie
-      const { updateIngredientQuantityInMixingPlan } = await import('../../services/productionService');
+      const { updateIngredientQuantityInMixingPlan } = await import('../../services/production/productionService');
       
       const result = await updateIngredientQuantityInMixingPlan(
         task.id,
@@ -1044,7 +1044,7 @@ const EnhancedMixingPlan = ({
       setEditMixingLoading(true);
       
       // Importuj funkcję dynamicznie
-      const { updateMixingDetails } = await import('../../services/productionService');
+      const { updateMixingDetails } = await import('../../services/production/productionService');
       
       const result = await updateMixingDetails(
         task.id,
@@ -1148,7 +1148,7 @@ const EnhancedMixingPlan = ({
         piecesCount: newMixingPiecesCount ? parseFloat(newMixingPiecesCount) : undefined
       };
 
-      const { addMixingToPlan } = await import('../../services/productionService');
+      const { addMixingToPlan } = await import('../../services/production/productionService');
       const result = await addMixingToPlan(task.id, mixingData, currentUser.uid);
 
       if (result.success) {
@@ -1214,7 +1214,7 @@ const EnhancedMixingPlan = ({
     try {
       setRemovingMixing(mixingToRemove.id);
 
-      const { removeMixingFromPlan } = await import('../../services/productionService');
+      const { removeMixingFromPlan } = await import('../../services/production/productionService');
       const result = await removeMixingFromPlan(task.id, parseInt(mixingToRemove.number), currentUser.uid);
 
       if (result.success) {

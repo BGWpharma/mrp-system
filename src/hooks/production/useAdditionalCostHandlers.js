@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { getTaskById } from '../../services/productionService';
+import { getTaskById } from '../../services/production/productionService';
 
 export const useAdditionalCostHandlers = ({
   id,
@@ -34,7 +34,7 @@ export const useAdditionalCostHandlers = ({
   const handleSaveAdditionalCost = useCallback(async (data) => {
     try {
       setSavingAdditionalCost(true);
-      const { updateTask } = await import('../../services/productionService');
+      const { updateTask } = await import('../../services/production/productionService');
       const currentAdditionalCosts = Array.isArray(task?.additionalCosts) ? [...task.additionalCosts] : [];
       let newList;
       const editIndex = editingAdditionalCost?._editIndex;
@@ -59,7 +59,7 @@ export const useAdditionalCostHandlers = ({
         newList = [...currentAdditionalCosts, newItem];
       }
       await updateTask(id, { additionalCosts: newList }, currentUser?.uid || 'system');
-      const { updateTaskCostsAutomatically } = await import('../../services/productionService');
+      const { updateTaskCostsAutomatically } = await import('../../services/production/productionService');
       await updateTaskCostsAutomatically(id, currentUser?.uid || 'system', 'Aktualizacja po zmianie dodatkowych kosztów');
       const updatedTask = await getTaskById(id);
       setTask(updatedTask);
@@ -79,7 +79,7 @@ export const useAdditionalCostHandlers = ({
   const handleConfirmDeleteAdditionalCost = useCallback(async () => {
     if (!additionalCostToDelete) return { success: false };
     try {
-      const { updateTask } = await import('../../services/productionService');
+      const { updateTask } = await import('../../services/production/productionService');
       const currentAdditionalCosts = Array.isArray(task?.additionalCosts) ? task.additionalCosts : [];
       const itemToMatch = additionalCostToDelete;
       const invDateStr = itemToMatch.invoiceDate?.toDate
@@ -92,7 +92,7 @@ export const useAdditionalCostHandlers = ({
         return true;
       });
       await updateTask(id, { additionalCosts: newList }, currentUser?.uid || 'system');
-      const { updateTaskCostsAutomatically } = await import('../../services/productionService');
+      const { updateTaskCostsAutomatically } = await import('../../services/production/productionService');
       await updateTaskCostsAutomatically(id, currentUser?.uid || 'system', 'Aktualizacja po usunięciu dodatkowego kosztu');
       const updatedTask = await getTaskById(id);
       setTask(updatedTask);

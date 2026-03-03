@@ -12,7 +12,7 @@ import {
 import {
   Speed as ProgressIcon
 } from '@mui/icons-material';
-import { getAllTasks } from '../../services/productionService';
+import { getAllTasks } from '../../services/production/productionService';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import ProgressReportTab from '../../components/production/ProgressReportTab';

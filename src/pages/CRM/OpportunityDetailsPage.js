@@ -38,7 +38,7 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getOpportunityById, getContactById, deleteOpportunity } from '../../services/crmService';
+import { getOpportunityById, getContactById, deleteOpportunity } from '../../services/crm';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';

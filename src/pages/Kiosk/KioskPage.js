@@ -399,7 +399,7 @@ const KioskPage = () => {
         )}
         {currentTab === 'forms' && (
           <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>}>
-            <KioskFormsPanel />
+            <KioskFormsPanel dialogContainer={isFullscreen ? containerRef.current : undefined} />
           </Suspense>
         )}
       </Container>

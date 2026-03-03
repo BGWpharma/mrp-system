@@ -24,8 +24,8 @@ import {
   createPriceList, 
   updatePriceList, 
   DEFAULT_PRICE_LIST 
-} from '../../../services/priceListService';
-import { getAllCustomers } from '../../../services/customerService';
+} from '../../../services/products';
+import { getAllCustomers } from '../../../services/crm';
 import { CURRENCY_OPTIONS } from '../../../config';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';

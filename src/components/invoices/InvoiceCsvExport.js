@@ -34,8 +34,8 @@ import { format } from 'date-fns';
 import pl from 'date-fns/locale/pl';
 import enUS from 'date-fns/locale/en-US';
 import { useTranslation } from '../../hooks/useTranslation';
-import { preciseCompare } from '../../utils/mathUtils';
-import { calculateRequiredAdvancePayment } from '../../services/invoiceService';
+import { preciseCompare } from '../../utils/calculations';
+import { calculateRequiredAdvancePayment } from '../../services/finance';
 
 // Słownik tłumaczeń dla raportów
 const translations = {

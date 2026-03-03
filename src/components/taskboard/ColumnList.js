@@ -48,7 +48,7 @@ import {
 } from '@dnd-kit/sortable';
 import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import TaskCard from './TaskCard';
-import { createTask, moveTask, updateTask, updateColumn } from '../../services/taskboardService';
+import { createTask, moveTask, updateTask, updateColumn } from '../../services/taskboard';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 

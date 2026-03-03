@@ -49,8 +49,8 @@ import {
   exportReportToCSV,
   getReportStatistics,
   getFilterOptions
-} from '../../services/financialReportService';
-import { formatCurrency } from '../../utils/formatUtils';
+} from '../../services/finance';
+import { formatCurrency } from '../../utils/formatting';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

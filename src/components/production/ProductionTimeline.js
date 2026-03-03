@@ -109,9 +109,9 @@ import {
   getProductionHistory,
   enrichTasksWithAllPONumbers,
   enrichTasksWithPODeliveryInfo
-} from '../../services/productionService';
-import { getAllWorkstations } from '../../services/workstationService';
-import { getAllCustomers } from '../../services/customerService';
+} from '../../services/production/productionService';
+import { getAllWorkstations } from '../../services/production/workstationService';
+import { getAllCustomers } from '../../services/crm';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';

@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -21,10 +21,9 @@ import {
 import { useTheme as useThemeContext } from '../../contexts/ThemeContext';
 import { baseColors, palettes } from '../../styles/colorConfig';
 import { useTranslation } from '../../hooks/useTranslation';
-
-const CompletedMOFormDialog = lazy(() => import('../production/CompletedMOFormDialog'));
-const ProductionControlFormDialog = lazy(() => import('../production/ProductionControlFormDialog'));
-const ProductionShiftFormDialog = lazy(() => import('../production/ProductionShiftFormDialog'));
+import CompletedMOFormDialog from '../production/CompletedMOFormDialog';
+import ProductionControlFormDialog from '../production/ProductionControlFormDialog';
+import ProductionShiftFormDialog from '../production/ProductionShiftFormDialog';
 
 const formCards = [
   {
@@ -53,7 +52,7 @@ const formCards = [
   },
 ];
 
-const KioskFormsPanel = () => {
+const KioskFormsPanel = ({ dialogContainer }) => {
   const { mode } = useThemeContext();
   const { t } = useTranslation('forms');
   const theme = useTheme();
@@ -175,36 +174,27 @@ const KioskFormsPanel = () => {
         ))}
       </Grid>
 
-      {openDialog === 'completedMO' && (
-        <Suspense fallback={null}>
-          <CompletedMOFormDialog
-            open
-            onClose={handleClose}
-            onSuccess={handleSuccess}
-            fullScreen={isMobile}
-          />
-        </Suspense>
-      )}
-      {openDialog === 'productionControl' && (
-        <Suspense fallback={null}>
-          <ProductionControlFormDialog
-            open
-            onClose={handleClose}
-            onSuccess={handleSuccess}
-            fullScreen={isMobile}
-          />
-        </Suspense>
-      )}
-      {openDialog === 'productionShift' && (
-        <Suspense fallback={null}>
-          <ProductionShiftFormDialog
-            open
-            onClose={handleClose}
-            onSuccess={handleSuccess}
-            fullScreen={isMobile}
-          />
-        </Suspense>
-      )}
+      <CompletedMOFormDialog
+        open={openDialog === 'completedMO'}
+        onClose={handleClose}
+        onSuccess={handleSuccess}
+        fullScreen={isMobile}
+        container={dialogContainer}
+      />
+      <ProductionControlFormDialog
+        open={openDialog === 'productionControl'}
+        onClose={handleClose}
+        onSuccess={handleSuccess}
+        fullScreen={isMobile}
+        container={dialogContainer}
+      />
+      <ProductionShiftFormDialog
+        open={openDialog === 'productionShift'}
+        onClose={handleClose}
+        onSuccess={handleSuccess}
+        fullScreen={isMobile}
+        container={dialogContainer}
+      />
 
       <Snackbar
         open={snackbar.open}

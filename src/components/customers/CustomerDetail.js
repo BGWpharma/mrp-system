@@ -33,14 +33,14 @@ import {
   ShoppingCart as OrderIcon,
   Add as AddIcon
 } from '@mui/icons-material';
-import { getCustomerById } from '../../services/customerService';
-import { getCustomerOrders } from '../../services/orderService';
+import { getCustomerById } from '../../services/crm';
+import { getCustomerOrders } from '../../services/orders';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import CustomerForm from './CustomerForm';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { getInvoicesByCustomerId } from '../../services/invoiceService';
+import { getInvoicesByCustomerId } from '../../services/finance';
 import { useTranslation } from '../../hooks/useTranslation';
 
 // Funkcja formatująca datę

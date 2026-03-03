@@ -2258,8 +2258,8 @@ export const updateStocktakingAttachments = async (stocktakingId, attachments, u
  */
 const enrichStocktakingItemsWithExchangeRates = async (items) => {
   try {
-    const { getPurchaseOrderById } = await import('../purchaseOrderService');
-    const { getExchangeRate } = await import('../exchangeRateService');
+    const { getPurchaseOrderById } = await import('../purchaseOrders');
+    const { getExchangeRate } = await import('../finance');
     const { getBatchById } = await import('./batchService');
     
     // Cache dla kursów (unikalne daty) - klucz: "currency_YYYY-MM-DD"

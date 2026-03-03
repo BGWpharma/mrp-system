@@ -28,14 +28,14 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { getMONumbersForSelect } from '../../services/moService';
-import { addProductionSessionFromShiftReport, updateProductionSession, parseShiftTime } from '../../services/productionService';
+import { getMONumbersForSelect } from '../../services/production/moService';
+import { addProductionSessionFromShiftReport, updateProductionSession, parseShiftTime } from '../../services/production/productionService';
 import { getAllWarehouses } from '../../services/inventory';
 import { db } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDocs, query, where, getDoc } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
-import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting, useFilteredProductOptions } from '../../hooks/useFormOptions';
+import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting, useFilteredProductOptions } from '../../hooks/forms';
 
 // Funkcja do pobierania szczegółów zadania produkcyjnego (MO) na podstawie numeru MO
 const getMODetailsById = async (moNumber) => {
@@ -69,7 +69,8 @@ const ProductionShiftFormDialog = ({
   onClose, 
   task = null,
   onSuccess = null,
-  fullScreen = false
+  fullScreen = false,
+  container
 }) => {
   const { currentUser } = useAuth();
   const theme = useTheme();
@@ -473,6 +474,7 @@ const ProductionShiftFormDialog = ({
       maxWidth="lg"
       fullWidth
       fullScreen={fullScreen}
+      container={container}
       PaperProps={{
         sx: { 
           ...(!fullScreen && {

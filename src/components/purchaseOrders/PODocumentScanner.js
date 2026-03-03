@@ -59,7 +59,7 @@ import {
   prepareInvoiceUpdates,
   validateFile,
   SUPPORTED_MIME_TYPES
-} from '../../services/documentOcrService';
+} from '../../services/documents';
 
 // Typy dokumentów
 const DOCUMENT_TYPES = {

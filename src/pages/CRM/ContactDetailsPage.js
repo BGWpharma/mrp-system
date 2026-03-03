@@ -43,7 +43,7 @@ import {
   FileCopy as FileCopyIcon
 } from '@mui/icons-material';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getContactById, getContactInteractions, deleteContact } from '../../services/crmService';
+import { getContactById, getContactInteractions, deleteContact } from '../../services/crm';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

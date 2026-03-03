@@ -35,7 +35,7 @@ import {
   Person as PersonIcon
 } from '@mui/icons-material';
 import { Link, useNavigate } from 'react-router-dom';
-import { getAllOpportunities, getContactById, deleteOpportunity } from '../../services/crmService';
+import { getAllOpportunities, getContactById, deleteOpportunity } from '../../services/crm';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { format } from 'date-fns';

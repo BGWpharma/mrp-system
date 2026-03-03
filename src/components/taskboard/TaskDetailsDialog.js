@@ -44,14 +44,14 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FolderZipIcon from '@mui/icons-material/FolderZip';
-import { updateTask } from '../../services/taskboardService';
+import { updateTask } from '../../services/taskboard';
 import { getAllActiveUsers } from '../../services/userService';
 import { 
   uploadTaskAttachment, 
   deleteTaskAttachment, 
   validateFile,
   formatFileSize 
-} from '../../services/taskboardAttachmentService';
+} from '../../services/taskboard';
 import PersonIcon from '@mui/icons-material/Person';
 import { nanoid } from 'nanoid';
 import { useTranslation } from '../../hooks/useTranslation';

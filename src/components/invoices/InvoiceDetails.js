@@ -46,12 +46,12 @@ import {
   getInvoicesByOrderId,
   getAvailableProformaAmount,
   getInvoicesUsingProforma
-} from '../../services/invoiceService';
-import { formatCurrency } from '../../utils/formatters';
+} from '../../services/finance';
+import { formatCurrency } from '../../utils/formatting';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { preciseCompare } from '../../utils/mathUtils';
+import { preciseCompare } from '../../utils/calculations';
 import { format } from 'date-fns';
 import { COMPANY_INFO } from '../../config';
 import { getCompanyInfo } from '../../services/companyService';

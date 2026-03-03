@@ -3,7 +3,7 @@ import { Container, Box, Typography, Paper } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from '../../../hooks/useTranslation';
 import NewCmrForm from './NewCmrForm';
-import { addCmr, updateCmr, getCmrById } from '../../../services/cmrService';
+import { addCmr, updateCmr, getCmrById } from '../../../services/logistics';
 import { useEffect } from 'react';
 
 /**

@@ -507,7 +507,7 @@ export const getBestSupplierPriceForItem = async (itemId, quantity = 1, options 
     // Dołącz nazwę dostawcy jeśli wymagane
     if (includeSupplierNames && bestPrice.supplierId) {
       try {
-        const { getAllSuppliers } = await import('../supplierService');
+        const { getAllSuppliers } = await import('../suppliers');
         const suppliers = await getAllSuppliers();
         const supplier = suppliers.find(s => s.id === bestPrice.supplierId);
         result.supplierName = supplier ? supplier.name : 'Nieznany dostawca';
@@ -650,7 +650,7 @@ export const getBestSupplierPricesForItems = async (items, options = {}) => {
     if (includeSupplierNames && Object.keys(result).length > 0) {
       try {
         // Import funkcji getAllSuppliers dynamicznie aby uniknąć cyklicznych zależności
-        const { getAllSuppliers } = await import('../supplierService');
+        const { getAllSuppliers } = await import('../suppliers');
         const suppliers = await getAllSuppliers();
         
         // Dodaj nazwy dostawców do wyników
@@ -1019,7 +1019,7 @@ export const updateSupplierPricesFromCompletedPO = async (purchaseOrderId, userI
     console.log(`Rozpoczynam aktualizację cen dostawców dla zamówienia ${validatedPOId}`);
     
     // Pobierz zamówienie zakupowe (import dynamiczny żeby uniknąć cyklicznych zależności)
-    const { getPurchaseOrderById } = await import('../purchaseOrderService');
+    const { getPurchaseOrderById } = await import('../purchaseOrders');
     const purchaseOrder = await getPurchaseOrderById(validatedPOId);
     
     if (!purchaseOrder) {

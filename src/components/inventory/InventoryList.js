@@ -76,7 +76,7 @@ import { getBatchesWithFilters } from '../../services/inventory/batchService';
 import { convertTimestampToDate, isDefaultDate } from '../../services/inventory/utils/formatters';
 import { exportToExcel } from '../../utils/exportUtils';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDate, formatQuantity } from '../../utils/formatters';
+import { formatDate, formatQuantity } from '../../utils/formatting';
 import { toast } from 'react-hot-toast';
 import { exportToCSV } from '../../utils/exportUtils';
 import { useAuth } from '../../hooks/useAuth';
@@ -88,7 +88,7 @@ import { useInventoryListState } from '../../contexts/InventoryListStateContext'
 import { INVENTORY_CATEGORIES } from '../../utils/constants';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServiceData } from '../../hooks/useServiceData';
-import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/customerService';
+import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/crm';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
   flexCenter, 

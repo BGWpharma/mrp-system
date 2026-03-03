@@ -9,7 +9,7 @@ import {
   TextField,
   Tooltip
 } from '@mui/material';
-import { preciseCompare } from '../../../utils/mathUtils';
+import { preciseCompare } from '../../../utils/calculations';
 
 const ProformaSettlementSection = React.memo(({
   invoice,

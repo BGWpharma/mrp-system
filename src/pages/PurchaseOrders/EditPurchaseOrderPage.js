@@ -13,18 +13,18 @@ import {
   updatePurchaseOrder,
   deletePurchaseOrder,
   updateBatchesForPurchaseOrder
-} from '../../services/purchaseOrderService';
-import { getSuppliers } from '../../services/supplierService';
+} from '../../services/purchaseOrders';
+import { getAllSuppliers } from '../../services/suppliers';
 import { getWarehouseLocations } from '../../services/warehouseService';
 import { searchItems } from '../../services/inventory';
 import PurchaseOrderItemsTable from '../../components/purchaseOrders/PurchaseOrderItemsTable';
 import PurchaseOrderForm from '../../components/purchaseOrders/PurchaseOrderForm';
 import ConfirmationDialog from '../../components/common/ConfirmationDialog';
 import useNotification from '../../hooks/useNotification';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatting';
 import AdditionalCostsForm from '../../components/purchaseOrders/AdditionalCostsForm';
 import ReceiveItemsDialog from '../../components/purchaseOrders/ReceiveItemsDialog';
-import { getSupplierProducts } from '../../services/supplierProductService';
+import { getSupplierProducts } from '../../services/suppliers';
 import LoadingScreen from '../../components/common/LoadingScreen';
 
 const EditPurchaseOrderPage = () => {
@@ -54,7 +54,7 @@ const EditPurchaseOrderPage = () => {
         setLoading(true);
         const [poData, suppliersData, warehousesData] = await Promise.all([
           getPurchaseOrderById(id),
-          getSuppliers(),
+          getAllSuppliers(),
           getWarehouseLocations()
         ]);
         if (cancelled) return;

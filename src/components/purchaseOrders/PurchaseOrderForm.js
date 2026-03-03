@@ -18,7 +18,7 @@ import {
   getPurchaseOrderById, 
   updatePurchaseOrder,
   PURCHASE_ORDER_STATUSES
-} from '../../services/purchaseOrderService';
+} from '../../services/purchaseOrders';
 import { 
   getAllInventoryItems,
   getAllWarehouses
@@ -29,8 +29,8 @@ import {
   getAllSuppliers,
   getBestSupplierPriceForItem, 
   getSupplierPriceForItem
-} from '../../services/supplierService';
-import { getExchangeRate, getExchangeRates } from '../../services/exchangeRateService';
+} from '../../services/suppliers';
+import { getExchangeRate, getExchangeRates } from '../../services/finance';
 import SavingOverlay from '../common/SavingOverlay';
 import PODocumentScanner from './PODocumentScanner';
 import {

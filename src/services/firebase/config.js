@@ -201,6 +201,7 @@ const toggleRTDBConnection = async (enable = true) => {
 
 // Eksportujemy funkcje potrzebne do zarządzania bazą danych
 export { 
+  app,
   db, 
   auth, 
   storage, 

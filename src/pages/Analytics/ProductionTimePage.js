@@ -13,7 +13,7 @@ import {
   Schedule as ScheduleIcon
 } from '@mui/icons-material';
 import { startOfMonth, endOfMonth } from 'date-fns';
-import { getAllCustomers } from '../../services/customerService';
+import { getAllCustomers } from '../../services/crm';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import ProductionTimeAnalysisTab from '../../components/production/ProductionTimeAnalysisTab';

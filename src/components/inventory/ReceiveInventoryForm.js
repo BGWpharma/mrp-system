@@ -20,7 +20,7 @@ const ReceiveInventoryForm = () => {
 
     const loadLOT = async () => {
       try {
-        const { generateLOTNumber } = await import('../../utils/numberGenerators');
+        const { generateLOTNumber } = await import('../../utils/calculations');
         const lotNumber = await generateLOTNumber();
         if (cancelled) return;
         console.log('Wygenerowano nowy numer LOT:', lotNumber);

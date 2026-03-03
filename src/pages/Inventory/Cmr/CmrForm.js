@@ -29,11 +29,11 @@ import {
   CMR_STATUSES, 
   CMR_PAYMENT_STATUSES, 
   TRANSPORT_TYPES
-} from '../../../services/cmrService';
-import { getOrderById, getAllOrders, searchOrdersByNumber } from '../../../services/orderService';
-import { getCustomerById } from '../../../services/customerService';
+} from '../../../services/logistics';
+import { getOrderById, getAllOrders, searchOrdersByNumber } from '../../../services/orders';
+import { getCustomerById } from '../../../services/crm';
 import { getCompanyData } from '../../../services/companyService';
-import { getAllCarriers, createCarrier, updateCarrier, deleteCarrier } from '../../../services/carrierService';
+import { getAllCarriers, createCarrier, updateCarrier, deleteCarrier } from '../../../services/logistics';
 import BatchSelector from '../../../components/cmr/BatchSelector';
 import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDialog';
 import {
@@ -43,7 +43,7 @@ import {
   CarrierFormDialog,
   DeleteCarrierDialog
 } from '../../../components/cmr/dialogs';
-import { calculatePalletWeights, calculateBoxWeights, calculateCmrItemWeight, getInventoryDataFromBatches } from '../../../utils/cmrWeightCalculator';
+import { calculatePalletWeights, calculateBoxWeights, calculateCmrItemWeight, getInventoryDataFromBatches } from '../../../utils/calculations';
 import {
   CmrBasicInfoCard,
   CmrSenderCard,
@@ -1251,7 +1251,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     // Spróbuj automatycznie znaleźć pozycję magazynową na podstawie receptury
     try {
       // Import potrzebnych funkcji
-      const { getAllRecipes } = await import('../../../services/recipeService');
+      const { getAllRecipes } = await import('../../../services/products');
       const { getInventoryItemByRecipeId } = await import('../../../services/inventory');
       
       // Pobierz receptury

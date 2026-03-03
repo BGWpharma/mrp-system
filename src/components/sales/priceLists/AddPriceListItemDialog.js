@@ -17,9 +17,9 @@ import {
 
 import { 
   addPriceListItem, 
-  DEFAULT_PRICE_LIST_ITEM 
-} from '../../../services/priceListService';
-import { getAllRecipes } from '../../../services/recipeService';
+  DEFAULT_PRICE_LIST_ITEM,
+  getAllRecipes
+} from '../../../services/products';
 import { getInventoryItemsByCategory } from '../../../services/inventory';
 import { UNIT_OPTIONS } from '../../../config';
 import { useAuth } from '../../../contexts/AuthContext';

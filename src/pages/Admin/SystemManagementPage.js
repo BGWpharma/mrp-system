@@ -35,7 +35,7 @@ import {
   Archive as ArchiveIcon
 } from '@mui/icons-material';
 import * as Sentry from '@sentry/react';
-import { addBreadcrumb } from '../../utils/errorHandler';
+import { addBreadcrumb } from '../../utils/errors';
 import {
   Dialog,
   DialogTitle,
@@ -51,8 +51,8 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { migrateAIMessageLimits, migrateNutritionalComponents, cleanupOrphanedProductionHistory } from '../../services/migrationService';
-import { cleanNegativeCmrHistoryEntries } from '../../services/cmrService';
-import { checkCmrItemsForMigration, migrateCmrItemsWithPalletInfo } from '../../services/cmrMigrationService';
+import { cleanNegativeCmrHistoryEntries } from '../../services/logistics';
+import { checkCmrItemsForMigration, migrateCmrItemsWithPalletInfo } from '../../services/logistics';
 import APIKeySettings from '../../components/common/APIKeySettings';
 import CounterEditor from '../../components/admin/CounterEditor';
 import FormOptionsManager from '../../components/admin/FormOptionsManager';

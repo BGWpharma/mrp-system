@@ -40,17 +40,17 @@ import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
-import { getEmployeeByCode } from '../../services/workTimeService';
+import { getEmployeeByCode } from '../../services/production/workTimeService';
 import { getAllActiveUsers } from '../../services/userService';
 import {
   REQUEST_TYPES, REQUEST_TYPE_LABELS,
   addScheduleRequest, getRequestsByMonth, getRequestsByDateRange, deleteScheduleRequest,
-} from '../../services/scheduleService';
+} from '../../services/production/scheduleService';
 import {
   SHIFT_PRESETS, SHIFT_TYPES,
   getShiftsForWeek, getShiftsByDateRange, saveShiftsBatch, deleteShift,
   getShiftTemplates, addShiftTemplate, deleteShiftTemplate, getMonday
-} from '../../services/shiftService';
+} from '../../services/production/shiftService';
 
 // Ikony i kolory typów wniosków
 const TYPE_ICONS = {

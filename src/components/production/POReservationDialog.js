@@ -50,8 +50,8 @@ import {
   ExpandLess as CollapseIcon,
   Info as InfoIcon
 } from '@mui/icons-material';
-import { formatDateTime, formatCurrency } from '../../utils/formatters';
-import { getAvailablePOItems } from '../../services/poReservationService';
+import { formatDateTime, formatCurrency } from '../../utils/formatting';
+import { getAvailablePOItems } from '../../services/purchaseOrders';
 
 const POReservationDialog = ({ 
   open, 

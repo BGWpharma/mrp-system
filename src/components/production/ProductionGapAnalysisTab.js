@@ -89,7 +89,7 @@ import {
   textSecondary
 } from '../../styles/muiCommonStyles';
 import { useNotification } from '../../hooks/useNotification';
-import { analyzeProductionGaps, formatMinutes } from '../../services/productionTimeAnalysisService';
+import { analyzeProductionGaps, formatMinutes } from '../../services/production/productionTimeAnalysisService';
 
 const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
   const { t } = useTranslation('production');

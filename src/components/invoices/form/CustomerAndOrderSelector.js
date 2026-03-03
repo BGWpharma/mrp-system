@@ -14,7 +14,7 @@ import {
   Person as PersonIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { calculateInvoiceTotalGross } from '../../../services/invoiceService';
+import { calculateInvoiceTotalGross } from '../../../services/finance';
 import { mb2, mt2 } from '../../../styles/muiCommonStyles';
 
 const CustomerAndOrderSelector = React.memo(({

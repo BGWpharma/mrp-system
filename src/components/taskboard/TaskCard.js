@@ -25,7 +25,7 @@ import WarningIcon from '@mui/icons-material/Warning';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { updateTask, deleteTask } from '../../services/taskboardService';
+import { updateTask, deleteTask } from '../../services/taskboard';
 import { format, isToday, isTomorrow, isPast, differenceInDays } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import TaskDetailsDialog from './TaskDetailsDialog';

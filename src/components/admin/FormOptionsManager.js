@@ -46,7 +46,7 @@ import {
   migrateFormOptions,
   FORM_OPTION_TYPES,
   FORM_OPTION_CATEGORIES
-} from '../../services/formOptionsService';
+} from '../../services/forms';
 
 const FormOptionsManager = () => {
   const { currentUser } = useAuth();

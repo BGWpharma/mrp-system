@@ -28,7 +28,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import {
   exportInvoicesToOptimaXML,
   validateInvoiceForOptima
-} from '../../services/comarchOptimaExportService';
+} from '../../services/finance';
 
 const InvoiceOptimaExport = ({ selectedInvoices = [], allInvoices = [], customers = [] }) => {
   const { t } = useTranslation('invoices');

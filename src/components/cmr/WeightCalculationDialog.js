@@ -29,7 +29,7 @@ import {
   calculateCmrItemWeight,
   getInventoryDataFromBatches,
   getPackageData
-} from '../../utils/cmrWeightCalculator';
+} from '../../utils/calculations';
 
 /**
  * Dialog do obliczania i wyświetlania szczegółów wagi pozycji CMR

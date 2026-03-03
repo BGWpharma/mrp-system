@@ -13,7 +13,7 @@
  */
 
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { preciseAdd, preciseSubtract, preciseMultiply } from '../../utils/mathUtils';
+import { preciseAdd, preciseSubtract, preciseMultiply } from '../../utils/calculations';
 import { getConsumedQuantityForMaterial } from '../../utils/productionUtils';
 import { db } from '../../services/firebase/config';
 import { doc, getDoc, getDocs, collection, query, where } from 'firebase/firestore';
@@ -273,7 +273,7 @@ export const useTaskCosts = (task, materials, materialQuantities, includeInCosts
         return costsCache.current.data;
       }
       
-      const { fixFloatingPointPrecision, preciseMultiply: pMul, preciseAdd: pAdd, preciseSubtract: pSub, preciseDivide } = await import('../../utils/mathUtils');
+      const { fixFloatingPointPrecision, preciseMultiply: pMul, preciseAdd: pAdd, preciseSubtract: pSub, preciseDivide } = await import('../../utils/calculations');
       
       let totalMaterialCost = 0;
       let totalFullProductionCost = 0;
@@ -377,7 +377,7 @@ export const useTaskCosts = (task, materials, materialQuantities, includeInCosts
       
       const poReservationsByMaterial = {};
       if (task?.poReservationIds && task.poReservationIds.length > 0) {
-        const { getPOReservationsForTask } = await import('../../services/poReservationService');
+        const { getPOReservationsForTask } = await import('../../services/purchaseOrders');
         const fetchedPOReservations = await getPOReservationsForTask(task.id);
         
         const activePoReservations = fetchedPOReservations.filter(r => 
@@ -413,7 +413,7 @@ export const useTaskCosts = (task, materials, materialQuantities, includeInCosts
               const batchDoc = await getDoc(batchRef);
               if (batchDoc.exists()) {
                 const batchData = batchDoc.data();
-                const { fixFloatingPointPrecision: fix } = await import('../../utils/mathUtils');
+                const { fixFloatingPointPrecision: fix } = await import('../../utils/calculations');
                 batchPricesCache[batchId] = fix(parseFloat(batchData.unitPrice) || 0);
               } else {
                 batchPricesCache[batchId] = 0;
@@ -610,7 +610,7 @@ export const useTaskCosts = (task, materials, materialQuantities, includeInCosts
       // ===== 3. KOSZT PROCESOWY =====
       let processingCostPerUnit = 0;
       if (task?.processingCostPerUnit !== undefined && task?.processingCostPerUnit !== null) {
-        const { fixFloatingPointPrecision: fix } = await import('../../utils/mathUtils');
+        const { fixFloatingPointPrecision: fix } = await import('../../utils/calculations');
         processingCostPerUnit = fix(parseFloat(task.processingCostPerUnit) || 0);
       }
 
@@ -691,7 +691,7 @@ export const useTaskCosts = (task, materials, materialQuantities, includeInCosts
     try {
       const uiCosts = providedUiCosts || await calculateAllCosts();
       
-      const { getTaskById } = await import('../../services/productionService');
+      const { getTaskById } = await import('../../services/production/productionService');
       const freshTask = await getTaskById(task.id);
       
       const dbCosts = {
@@ -766,7 +766,7 @@ export const useTaskCosts = (task, materials, materialQuantities, includeInCosts
           setTimeout(async () => {
             if (!isActive) return;
             try {
-              const { updateTaskCostsAutomatically, getTaskById } = await import('../../services/productionService');
+              const { updateTaskCostsAutomatically, getTaskById } = await import('../../services/production/productionService');
               await updateTaskCostsAutomatically(
                 task.id, 
                 'system', 

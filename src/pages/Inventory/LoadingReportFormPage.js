@@ -30,8 +30,8 @@ import { Save as SaveIcon, ArrowBack as ArrowBackIcon, Search as SearchIcon, Loc
 import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from '../../hooks/useTranslation';
-import { useInventoryEmployeeOptions, useInventoryPositionOptions } from '../../hooks/useFormOptions';
-import { getAllCmrDocuments, getCmrDocumentById } from '../../services/cmrService';
+import { useInventoryEmployeeOptions, useInventoryPositionOptions } from '../../hooks/forms';
+import { getAllCmrDocuments, getCmrDocumentById } from '../../services/logistics';
 import { db } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';

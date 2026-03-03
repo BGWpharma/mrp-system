@@ -10,7 +10,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { pl } from 'date-fns/locale';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import { addWorkTimeEntryAdmin } from '../../services/workTimeService';
+import { addWorkTimeEntryAdmin } from '../../services/production/workTimeService';
 
 const WorkTimeAddDialog = ({ open, onClose, users, adminUser, onSaved, preselectedUser = null }) => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);

@@ -38,23 +38,23 @@ import {
   Calculate as CalculateIcon,
   Link as LinkIcon
 } from '@mui/icons-material';
-import { getAllOrders, getOrderById, addProductionTaskToOrder, updateOrder } from '../../services/orderService';
-import { createTask, reserveMaterialsForTask } from '../../services/productionService';
-import { getAllRecipes, getRecipeById, getRecipesByCustomer } from '../../services/recipeService';
+import { getAllOrders, getOrderById, addProductionTaskToOrder, updateOrder } from '../../services/orders';
+import { createTask, reserveMaterialsForTask } from '../../services/production/productionService';
+import { getAllRecipes, getRecipeById, getRecipesByCustomer } from '../../services/products';
 import { getIngredientPrices, getInventoryItemById } from '../../services/inventory';
-import { calculateManufacturingOrderCosts } from '../../utils/costCalculator';
+import { calculateManufacturingOrderCosts } from '../../utils/calculations';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, addProductionTime, isWeekend, isWorkingDay, calculateEndDateExcludingWeekends, calculateEndDateWithWorkingHours } from '../../utils/dateUtils';
-import { formatCurrency } from '../../utils/formatUtils';
-import { getPriceForCustomerProduct } from '../../services/priceListService';
+import { formatCurrency } from '../../utils/formatting';
+import { getPriceForCustomerProduct } from '../../services/products';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { getAllWorkstations } from '../../services/workstationService';
-import { preciseMultiply } from '../../utils/mathUtils';
+import { getAllWorkstations } from '../../services/production/workstationService';
+import { preciseMultiply } from '../../utils/calculations';
 
 const CreateFromOrderPage = () => {
   const navigate = useNavigate();
@@ -579,7 +579,7 @@ const CreateFromOrderPage = () => {
         if (recipeId) {
           console.log(`[DEBUG-CREATE] Receptura przypisana do pozycji: ${recipeId}`);
           try {
-            const { getRecipeById } = await import('../../services/recipeService');
+            const { getRecipeById } = await import('../../services/products');
             recipeData = await getRecipeById(recipeId);
             console.log(`[DEBUG-CREATE] Pobrano dane receptury: ${recipeData.name}`);
           } catch (error) {
@@ -1092,8 +1092,8 @@ const CreateFromOrderPage = () => {
         orderItemId: task.orderItemId
       })));
       
-      const { getTaskById, deleteTask } = await import('../../services/productionService');
-      const { removeProductionTaskFromOrder } = await import('../../services/orderService');
+      const { getTaskById, deleteTask } = await import('../../services/production/productionService');
+      const { removeProductionTaskFromOrder } = await import('../../services/orders');
       
       const verifiedTasks = [];
       const tasksToRemove = [];
@@ -1113,7 +1113,7 @@ const CreateFromOrderPage = () => {
               console.log(`[DEBUG-VERIFY] Niespójność orderItemId dla zadania ${task.id}. Aktualizuję zadanie w bazie.`);
               
               // Aktualizuj zadanie w bazie danych
-              const { updateTask } = await import('../../services/productionService');
+              const { updateTask } = await import('../../services/production/productionService');
               await updateTask(task.id, {
                 orderItemId: task.orderItemId,
                 orderId: orderData.id,

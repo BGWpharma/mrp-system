@@ -74,8 +74,8 @@ import {
   analyzeWeeklyTrends,
   getDailyBreakdown,
   formatWeekString
-} from '../../services/weeklyProductivityService';
-import { analyzeProductionTime } from '../../services/productionTimeAnalysisService';
+} from '../../services/production/weeklyProductivityService';
+import { analyzeProductionTime } from '../../services/production/productionTimeAnalysisService';
 import { useTranslation } from '../../hooks/useTranslation';
 
 // Funkcja obliczająca regresję liniową dla krzywej trendu

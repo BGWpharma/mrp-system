@@ -56,10 +56,10 @@ import {
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatDateTime } from '../../utils/formatters';
-import { getAdaptiveBackgroundStyle, getClinicalFileIcon, formatClinicalFileSize } from '../../utils/taskFormatters';
-import { sortIngredientsByQuantity } from '../../services/recipeService';
-import { generateEndProductReportPDF, generateAndSaveEndProductReport } from '../../services/endProductReportService';
+import { formatDateTime } from '../../utils/formatting';
+import { getAdaptiveBackgroundStyle, getClinicalFileIcon, formatClinicalFileSize } from '../../utils/formatting';
+import { sortIngredientsByQuantity } from '../../services/products';
+import { generateEndProductReportPDF, generateAndSaveEndProductReport } from '../../services/documents';
 import { useAttachmentsState, useTaskReportState } from '../../hooks/production';
 import { useFileHandlers } from '../../hooks/production/useFileHandlers';
 import { useTaskReportFetcher } from '../../hooks/production/useTaskReportFetcher';

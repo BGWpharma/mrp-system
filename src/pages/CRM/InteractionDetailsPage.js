@@ -38,8 +38,8 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getInteractionById, deleteInteraction } from '../../services/crmService';
-import { getSupplierById } from '../../services/supplierService';
+import { getInteractionById, deleteInteraction } from '../../services/crm';
+import { getSupplierById } from '../../services/suppliers';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

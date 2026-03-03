@@ -26,7 +26,7 @@ import {
   Refresh as RefreshIcon,
   ArrowForward as ArrowForwardIcon,
 } from '@mui/icons-material';
-import { formatDate } from '../../utils/formatters';
+import { formatDate } from '../../utils/formatting';
 import { getConsumedQuantityForMaterial } from '../../utils/productionUtils';
 import {
   loadingContainer,

@@ -240,7 +240,7 @@ export const convertAdditionalCostToEUR = async (amount, currency, invoiceDate) 
   previousDay.setDate(previousDay.getDate() - 1);
 
   try {
-    const { getExchangeRate } = await import("../services/exchangeRateService");
+    const { getExchangeRate } = await import("../services/finance");
     const rate = await getExchangeRate(currencyUpper, "EUR", previousDay);
     const amountInEUR = amount * rate;
     return {

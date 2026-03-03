@@ -1,6 +1,6 @@
 import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase/config';
-import { setNutritionalComponentWithId } from './nutritionalComponentsService';
+import { setNutritionalComponentWithId } from './products';
 import { ALL_NUTRITIONAL_COMPONENTS } from '../utils/constants';
 
 /**

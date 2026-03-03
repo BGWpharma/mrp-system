@@ -5,7 +5,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useNotification } from '../../../hooks/useNotification';
 import { useTranslation } from '../../../hooks/useTranslation';
 import CmrForm from './CmrForm';
-import { createCmrDocument } from '../../../services/cmrService';
+import { createCmrDocument } from '../../../services/logistics';
 
 const CmrCreatePage = () => {
   const navigate = useNavigate();

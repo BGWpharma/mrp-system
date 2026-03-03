@@ -10,7 +10,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { pl } from 'date-fns/locale';
 import EditIcon from '@mui/icons-material/Edit';
-import { updateWorkTimeEntry } from '../../services/workTimeService';
+import { updateWorkTimeEntry } from '../../services/production/workTimeService';
 
 const WorkTimeEditDialog = ({ open, onClose, entry, adminUser, onSaved }) => {
   const [date, setDate] = useState(null);

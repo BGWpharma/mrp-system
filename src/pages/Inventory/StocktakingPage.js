@@ -40,7 +40,7 @@ import { getUsersDisplayNames } from '../../services/userService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatDate } from '../../utils/formatters';
+import { formatDate } from '../../utils/formatting';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 

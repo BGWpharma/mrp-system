@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import {
   getInvoicesByOrderId,
   getAvailableProformasForOrderWithExclusion
-} from '../../services/invoiceService';
+} from '../../services/finance';
 
 /**
  * Hook handling proforma advance allocation logic:

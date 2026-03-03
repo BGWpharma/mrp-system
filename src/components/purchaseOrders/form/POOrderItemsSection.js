@@ -40,7 +40,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl, enUS } from 'date-fns/locale';
 import { parseISO, isValid } from 'date-fns';
-import { formatCurrency } from '../../../utils/formatUtils';
+import { formatCurrency } from '../../../utils/formatting';
 import { mr1 } from '../../../styles/muiCommonStyles';
 
 const numberInputSx = {

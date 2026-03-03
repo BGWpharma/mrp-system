@@ -33,8 +33,8 @@ import {
   Medication as MedicationIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../hooks/useNotification';
-import { getRecipeById, getRecipesWithPagination } from '../../services/recipeService';
-import { getTasksWithPagination } from '../../services/productionService';
+import { getRecipeById, getRecipesWithPagination } from '../../services/products';
+import { getTasksWithPagination } from '../../services/production/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { palettes, gradients } from '../../styles/colorConfig';
@@ -203,7 +203,7 @@ const CalculatorPage = () => {
     const loadFromMO = async () => {
       try {
         setLoading(true);
-        const { getTaskById } = await import('../../services/productionService');
+        const { getTaskById } = await import('../../services/production/productionService');
         if (cancelled) return;
         
         const task = await getTaskById(selectedTaskId);
@@ -1038,7 +1038,7 @@ const CalculatorPage = () => {
     try {
       setLoading(true);
       // Importujemy funkcję do zapisywania planu mieszań
-      const { saveProductionMixingPlan } = await import('../../services/productionService');
+      const { saveProductionMixingPlan } = await import('../../services/production/productionService');
       
       // Zapisujemy plan mieszań w zadaniu
       const result = await saveProductionMixingPlan(

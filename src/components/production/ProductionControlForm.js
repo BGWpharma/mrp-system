@@ -33,7 +33,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon, Sensors as SensorsIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
-import { getMONumbersForSelect } from '../../services/moService';
+import { getMONumbersForSelect } from '../../services/production/moService';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { db, storage } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, getDocs } from 'firebase/firestore';
@@ -41,10 +41,10 @@ import { ref as firebaseStorageRef, uploadBytes, getDownloadURL, deleteObject } 
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { query, where } from 'firebase/firestore';
-import { getAllOrders } from '../../services/orderService';
+import { getAllOrders } from '../../services/orders';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
-import { useStaffOptions, usePositionOptions } from '../../hooks/useFormOptions';
+import { useStaffOptions, usePositionOptions } from '../../hooks/forms';
 import FileOrCameraInput from '../common/FileOrCameraInput';
 import { 
   getSensors, 
@@ -52,7 +52,7 @@ import {
   getSensorDataForDateTime,
   formatSensorTimestamp,
   checkEnvironmentalNorms 
-} from '../../services/environmentalConditionsService';
+} from '../../services/production/environmentalConditionsService';
 import { 
   getFormHeaderStyles, 
   getFormSectionStyles,

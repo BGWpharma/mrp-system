@@ -1,6 +1,6 @@
 // src/services/ai/rag/KnowledgeBaseManager.js
 
-import { db } from '../../../firebase';
+import { db } from '../../firebase/config';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 
 /**

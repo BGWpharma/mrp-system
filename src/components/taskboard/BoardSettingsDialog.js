@@ -37,7 +37,7 @@ import {
   addUserToBoard,
   removeUserFromBoard,
   getBoardAllowedUsers
-} from '../../services/taskboardService';
+} from '../../services/taskboard';
 
 const BoardSettingsDialog = ({ open, onClose, board, onBoardUpdated }) => {
   const { t } = useTranslation('taskboard');

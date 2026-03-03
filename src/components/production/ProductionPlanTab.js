@@ -35,7 +35,7 @@ import {
   Delete as DeleteIcon,
   Info as InfoIcon
 } from '@mui/icons-material';
-import { formatDateTime } from '../../utils/formatters';
+import { formatDateTime } from '../../utils/formatting';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const ProductionPlanTab = ({

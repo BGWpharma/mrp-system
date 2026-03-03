@@ -4,7 +4,7 @@ import {
   getInvoicesByOrderId,
   getInvoicedAmountsByOrderItems,
   calculateTotalUnitCost
-} from '../../services/invoiceService';
+} from '../../services/finance';
 
 /**
  * Hook handling logic for selecting items from CO/PO orders to add to invoice.

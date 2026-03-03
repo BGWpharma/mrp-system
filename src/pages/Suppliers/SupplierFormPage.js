@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams } from 'react-router-dom';
 import { Container, Typography, Box } from '@mui/material';
 import { useTranslation } from '../../hooks/useTranslation';
-import SupplierForm from '../../components/purchaseOrders/SupplierForm';
+import SupplierForm from '../../components/suppliers/SupplierForm';
 
 const SupplierFormPage = ({ viewOnly = false }) => {
   const { t } = useTranslation('suppliers');

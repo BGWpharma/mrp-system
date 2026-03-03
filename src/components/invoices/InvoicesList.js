@@ -59,14 +59,14 @@ import {
   calculateRequiredAdvancePayment,
   getInvoiceById,
   updateInvoicesExchangeRates
-} from '../../services/invoiceService';
-import { preciseCompare, preciseSubtract } from '../../utils/mathUtils';
-import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/customerService';
-import { getAllOrders } from '../../services/orderService';
+} from '../../services/finance';
+import { preciseCompare, preciseSubtract } from '../../utils/calculations';
+import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/crm';
+import { getAllOrders } from '../../services/orders';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatting';
 import DeleteConfirmationDialog from '../common/DeleteConfirmationDialog';
 import InvoiceCsvExport from './InvoiceCsvExport';
 import InvoiceOptimaExport from './InvoiceOptimaExport';

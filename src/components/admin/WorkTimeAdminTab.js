@@ -11,15 +11,18 @@ import {
   AddCircleOutline as AddIcon,
   Refresh as RefreshIcon,
   PersonAdd as ManualIcon,
-  HistoryEdu as EditedIcon
+  HistoryEdu as EditedIcon,
+  FileDownload as DownloadIcon
 } from '@mui/icons-material';
-import { format } from 'date-fns';
+import { format, differenceInCalendarDays } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import {
   getAllWorkTimeEntries,
   getWorkTimeEntries,
   deleteWorkTimeEntry
-} from '../../services/workTimeService';
+} from '../../services/production/workTimeService';
+import { getRequestsByMonth, REQUEST_TYPE_LABELS } from '../../services/production/scheduleService';
+import { exportToExcel, formatDateForExport } from '../../utils/exportUtils';
 import WorkTimeEditDialog from './WorkTimeEditDialog';
 import WorkTimeAddDialog from './WorkTimeAddDialog';
 
@@ -42,6 +45,7 @@ const WorkTimeAdminTab = ({ users, adminUser, filterEmployeeId = null }) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const employeeOptions = (users || []).filter((u) => u.employeeId);
 
@@ -103,6 +107,161 @@ const WorkTimeAdminTab = ({ users, adminUser, filterEmployeeId = null }) => {
     }
   };
 
+  const handleGenerateReport = async () => {
+    setGenerating(true);
+    try {
+      const scheduleRequests = await getRequestsByMonth(month, year);
+      const filteredRequests = employeeFilter
+        ? scheduleRequests.filter(r => r.employeeId === employeeFilter)
+        : scheduleRequests;
+
+      const monthName = format(new Date(year, month, 1), 'LLLL yyyy', { locale: pl });
+
+      // Arkusz 1: Czas pracy
+      const workTimeData = entries.map(entry => {
+        const date = entry.date?.toDate ? entry.date.toDate() : new Date(entry.date);
+        return {
+          employeeName: entry.employeeName || '',
+          employeeId: entry.employeeId || '',
+          date: formatDateForExport(date),
+          dayOfWeek: format(date, 'EEEE', { locale: pl }),
+          startTime: entry.startTime || '—',
+          endTime: entry.endTime || '—',
+          totalHours: entry.totalHours != null ? Number(entry.totalHours.toFixed(2)) : 0,
+          source: entry.manualEntry ? 'Ręczny' : entry.lastEditedBy ? 'Edytowany' : 'Automat',
+        };
+      });
+
+      const workTimeHeaders = [
+        { label: 'Pracownik', key: 'employeeName' },
+        { label: 'ID', key: 'employeeId' },
+        { label: 'Data', key: 'date' },
+        { label: 'Dzień tygodnia', key: 'dayOfWeek' },
+        { label: 'Start', key: 'startTime' },
+        { label: 'Koniec', key: 'endTime' },
+        { label: 'Godziny', key: 'totalHours' },
+        { label: 'Źródło', key: 'source' },
+      ];
+
+      // Arkusz 2: Wnioski urlopowe
+      const requestsData = filteredRequests.map(req => {
+        const start = req.startDate?.toDate ? req.startDate.toDate() : new Date(req.startDate);
+        const end = req.endDate?.toDate ? req.endDate.toDate() : new Date(req.endDate);
+        const days = differenceInCalendarDays(end, start) + 1;
+        return {
+          employeeName: req.employeeName || '',
+          employeeId: req.employeeId || '',
+          type: REQUEST_TYPE_LABELS[req.type] || req.type,
+          startDate: formatDateForExport(start),
+          endDate: formatDateForExport(end),
+          days,
+          reason: req.reason || '',
+          status: req.status === 'approved' ? 'Zatwierdzony'
+            : req.status === 'rejected' ? 'Odrzucony' : 'Oczekujący',
+        };
+      });
+
+      const requestsHeaders = [
+        { label: 'Pracownik', key: 'employeeName' },
+        { label: 'ID', key: 'employeeId' },
+        { label: 'Typ', key: 'type' },
+        { label: 'Data od', key: 'startDate' },
+        { label: 'Data do', key: 'endDate' },
+        { label: 'Dni', key: 'days' },
+        { label: 'Powód', key: 'reason' },
+        { label: 'Status', key: 'status' },
+      ];
+
+      // Arkusz 3: Podsumowanie per pracownik
+      const employeeMap = {};
+
+      entries.forEach(entry => {
+        const key = entry.employeeId;
+        if (!key) return;
+        if (!employeeMap[key]) {
+          employeeMap[key] = {
+            employeeName: entry.employeeName || '',
+            employeeId: key,
+            totalHours: 0,
+            workDays: 0,
+            vacation: 0,
+            sickLeave: 0,
+            dayOff: 0,
+            unpaidLeave: 0,
+            other: 0,
+          };
+        }
+        employeeMap[key].totalHours += entry.totalHours || 0;
+        employeeMap[key].workDays += 1;
+      });
+
+      filteredRequests.forEach(req => {
+        const key = req.employeeId;
+        if (!key) return;
+        if (!employeeMap[key]) {
+          employeeMap[key] = {
+            employeeName: req.employeeName || '',
+            employeeId: key,
+            totalHours: 0,
+            workDays: 0,
+            vacation: 0,
+            sickLeave: 0,
+            dayOff: 0,
+            unpaidLeave: 0,
+            other: 0,
+          };
+        }
+        const start = req.startDate?.toDate ? req.startDate.toDate() : new Date(req.startDate);
+        const end = req.endDate?.toDate ? req.endDate.toDate() : new Date(req.endDate);
+        const days = differenceInCalendarDays(end, start) + 1;
+
+        switch (req.type) {
+          case 'vacation': employeeMap[key].vacation += days; break;
+          case 'sick_leave': employeeMap[key].sickLeave += days; break;
+          case 'day_off': employeeMap[key].dayOff += days; break;
+          case 'unpaid_leave': employeeMap[key].unpaidLeave += days; break;
+          default: employeeMap[key].other += days; break;
+        }
+      });
+
+      const summaryData = Object.values(employeeMap).map(emp => ({
+        ...emp,
+        totalHours: Number(emp.totalHours.toFixed(1)),
+      }));
+
+      const summaryHeaders = [
+        { label: 'Pracownik', key: 'employeeName' },
+        { label: 'ID', key: 'employeeId' },
+        { label: 'Przepracowane godziny', key: 'totalHours' },
+        { label: 'Dni z wpisem', key: 'workDays' },
+        { label: 'Urlop wypoczynkowy (dni)', key: 'vacation' },
+        { label: 'Zwolnienie lekarskie (dni)', key: 'sickLeave' },
+        { label: 'Dni wolne', key: 'dayOff' },
+        { label: 'Urlop bezpłatny (dni)', key: 'unpaidLeave' },
+        { label: 'Inne (dni)', key: 'other' },
+      ];
+
+      const worksheets = [
+        { name: 'Czas pracy', data: workTimeData, headers: workTimeHeaders },
+      ];
+
+      if (requestsData.length > 0) {
+        worksheets.push({ name: 'Wnioski urlopowe', data: requestsData, headers: requestsHeaders });
+      }
+
+      if (summaryData.length > 0) {
+        worksheets.push({ name: 'Podsumowanie', data: summaryData, headers: summaryHeaders });
+      }
+
+      const fileName = `Raport_czas_pracy_${monthName.replace(' ', '_')}`;
+      await exportToExcel(worksheets, fileName);
+    } catch (error) {
+      console.error('Błąd generowania raportu:', error);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const months = Array.from({ length: 12 }, (_, i) => ({
     value: i,
     label: format(new Date(2024, i, 1), 'LLLL', { locale: pl }),
@@ -117,6 +276,16 @@ const WorkTimeAdminTab = ({ users, adminUser, filterEmployeeId = null }) => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="h6">Czas pracy — wpisy</Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            color="secondary"
+            startIcon={generating ? <CircularProgress size={18} color="inherit" /> : <DownloadIcon />}
+            onClick={handleGenerateReport}
+            disabled={loading || generating || entries.length === 0}
+            size="small"
+          >
+            {generating ? 'Generowanie...' : 'Generuj raport'}
+          </Button>
           <Button
             variant="contained"
             color="success"

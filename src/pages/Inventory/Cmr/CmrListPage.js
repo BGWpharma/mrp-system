@@ -56,8 +56,8 @@ import {
   clearCmrDocumentsCache,
   updateCmrDocumentInCache,
   removeCmrDocumentFromCache
-} from '../../../services/cmrService';
-import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../../services/customerService';
+} from '../../../services/logistics';
+import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../../services/crm';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { useTheme as useThemeContext } from '../../../contexts/ThemeContext';
 

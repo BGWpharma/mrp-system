@@ -39,7 +39,7 @@ import {
   deleteCustomer, 
   searchCustomers,
   CUSTOMERS_CACHE_KEY
-} from '../../services/customerService';
+} from '../../services/crm';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';

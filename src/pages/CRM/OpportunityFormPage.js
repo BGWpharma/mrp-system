@@ -33,7 +33,7 @@ import {
   createOpportunity,
   updateOpportunity,
   getAllContacts
-} from '../../services/crmService';
+} from '../../services/crm';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

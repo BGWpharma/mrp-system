@@ -49,7 +49,7 @@ export const useFileHandlers = ({
               const batchData = await getInventoryBatch(consumed.batchId);
               
               if (batchData && batchData.purchaseOrderDetails && batchData.purchaseOrderDetails.id) {
-                const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+                const { getPurchaseOrderById } = await import('../../services/purchaseOrders');
                 const poData = await getPurchaseOrderById(batchData.purchaseOrderDetails.id);
                 
                 const coaAttachments = poData.coaAttachments || [];
@@ -413,7 +413,7 @@ export const useFileHandlers = ({
               
               if (batchAttachments.length === 0 && batchData && batchData.purchaseOrderDetails && batchData.purchaseOrderDetails.id) {
                 try {
-                  const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+                  const { getPurchaseOrderById } = await import('../../services/purchaseOrders');
                   const poData = await getPurchaseOrderById(batchData.purchaseOrderDetails.id);
                   
                   const coaAttachments = poData.coaAttachments || [];

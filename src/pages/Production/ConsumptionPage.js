@@ -43,11 +43,11 @@ import {
 import {
   getTaskById,
   updateTaskStatus
-} from '../../services/productionService';
+} from '../../services/production/productionService';
 import { 
   checkOrderQuantitySync, 
   syncTaskQuantityToOrder 
-} from '../../services/productionOrderSyncService';
+} from '../../services/production/productionOrderSyncService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

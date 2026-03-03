@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { addProductionSession, updateProductionSession, deleteProductionSession, addTaskProductToInventory } from '../../services/productionService';
+import { addProductionSession, updateProductionSession, deleteProductionSession, addTaskProductToInventory } from '../../services/production/productionService';
 
 export const useHistoryHandlers = ({
   task,

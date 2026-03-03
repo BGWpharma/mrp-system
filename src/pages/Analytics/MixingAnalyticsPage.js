@@ -80,7 +80,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { exportToCSV, formatDateForExport } from '../../utils/exportUtils';
-import { getAllCustomers } from '../../services/customerService';
+import { getAllCustomers } from '../../services/crm';
 
 const MixingAnalyticsPage = () => {
   const { currentUser } = useAuth();

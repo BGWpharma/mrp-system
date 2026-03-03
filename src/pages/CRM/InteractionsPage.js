@@ -42,8 +42,8 @@ import {
   Visibility as ViewIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import { getAllInteractions, deleteInteraction, updateInteraction, getInteractionById } from '../../services/crmService';
-import { getAllSuppliers } from '../../services/supplierService';
+import { getAllInteractions, deleteInteraction, updateInteraction, getInteractionById } from '../../services/crm';
+import { getAllSuppliers } from '../../services/suppliers';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { format } from 'date-fns';

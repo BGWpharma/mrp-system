@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
-import { getRecipeVersion } from '../../services/recipeService';
+import { getRecipeVersion } from '../../services/products';
 import { getCompanyData } from '../../services/companyService';
-import { getWorkstationById } from '../../services/workstationService';
-import { generateEndProductReportPDF } from '../../services/endProductReportService';
+import { getWorkstationById } from '../../services/production/workstationService';
+import { generateEndProductReportPDF } from '../../services/documents';
 
 export const useTaskReportFetcher = ({
   task,
@@ -75,7 +75,7 @@ export const useTaskReportFetcher = ({
   const saveAllergensToRecipe = async (recipeId, allergens) => {
     try {
       // Pobierz aktualną recepturę
-      const { getRecipeById, updateRecipe } = await import('../../services/recipeService');
+      const { getRecipeById, updateRecipe } = await import('../../services/products');
       const currentRecipe = await getRecipeById(recipeId);
       
       if (!currentRecipe) {
@@ -130,13 +130,13 @@ export const useTaskReportFetcher = ({
         } catch (error) {
           console.warn(`Nie udało się pobrać wersji ${task.recipeVersion}, próbuję pobrać aktualną recepturę:`, error);
           // Jeśli nie udało się pobrać konkretnej wersji, pobierz aktualną recepturę
-          const { getRecipeById } = await import('../../services/recipeService');
+          const { getRecipeById } = await import('../../services/products');
           recipeData = await getRecipeById(task.recipeId);
           console.log('Pobrano aktualną wersję receptury');
         }
       } else {
         // Jeśli nie ma wersji, pobierz aktualną recepturę
-        const { getRecipeById } = await import('../../services/recipeService');
+        const { getRecipeById } = await import('../../services/products');
         recipeData = await getRecipeById(task.recipeId);
         console.log('Pobrano aktualną recepturę (brak wersji w zadaniu)');
       }
@@ -202,7 +202,7 @@ export const useTaskReportFetcher = ({
       showInfo(t('syncNames.syncing'));
       
       // Pobierz aktualną recepturę
-      const { getRecipeById } = await import('../../services/recipeService');
+      const { getRecipeById } = await import('../../services/products');
       const recipe = await getRecipeById(task.recipeId);
       
       if (!recipe) {
@@ -453,7 +453,7 @@ export const useTaskReportFetcher = ({
       // Jeśli zadanie ma recipeId ale nie ma załadowanych danych receptury, pobierz je
       const fetchRecipeAllergens = async () => {
         try {
-          const { getRecipeById } = await import('../../services/recipeService');
+          const { getRecipeById } = await import('../../services/products');
           const recipe = await getRecipeById(task.recipeId);
           if (recipe?.allergens && recipe.allergens.length > 0) {
             setSelectedAllergens(recipe.allergens);

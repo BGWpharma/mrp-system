@@ -75,18 +75,17 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
 import { format, addDays, parseISO } from 'date-fns';
-import { getTasksByDateRangeOptimized } from '../../services/productionService';
+import { getTasksByDateRangeOptimized } from '../../services/production/productionService';
 import { getAllInventoryItems } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatCurrency } from '../../utils/formatUtils';
-import { formatDateTime } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatting';
+import { formatDateTime } from '../../utils/formatting';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import SaveAltIcon from '@mui/icons-material/SaveAlt';
 import { toast } from 'react-hot-toast';
-import { createProcurementForecast } from '../../services/procurementForecastService';
-import { generateForecastReport } from '../../services/forecastExcelExport';
+import { createProcurementForecast, generateForecastReport } from '../../services/purchaseOrders';
 
 const ForecastPage = () => {
   const { t } = useTranslation('production');
@@ -540,7 +539,7 @@ const ForecastPage = () => {
     fetchData();
   };
   
-  // ✅ REFAKTORYZACJA: Generowanie raportu Excel wydzielone do src/services/forecastExcelExport.js
+  // ✅ REFAKTORYZACJA: Generowanie raportu Excel w src/services/purchaseOrders/forecastExcelExport.js
   const handleGenerateReport = async () => {
     try {
       const dataToExport = filteredData();

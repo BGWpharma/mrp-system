@@ -40,7 +40,7 @@ import {
   getBoardTasks,
   createColumn,
   deleteColumn
-} from '../../services/taskboardService';
+} from '../../services/taskboard';
 import { getUsersDisplayNames } from '../../services/userService';
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';

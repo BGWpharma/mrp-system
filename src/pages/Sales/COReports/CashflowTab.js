@@ -29,17 +29,17 @@ import { subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
 import { useTranslation } from '../../../hooks/useTranslation';
-import { getAllCustomers } from '../../../services/customerService';
+import { getAllCustomers } from '../../../services/crm';
 import {
   generateCashflowReportWithExpenses,
   calculateCashflowStatisticsWithExpenses,
   prepareCashflowChartDataWithExpenses,
   exportCashflowRevenueAndCostsToCSV
-} from '../../../services/cashflowService';
-import CashflowSummaryCards from '../../../components/sales/co-reports/CashflowSummaryCards';
-import CashflowChart from '../../../components/sales/co-reports/CashflowChart';
-import CashflowTable from '../../../components/sales/co-reports/CashflowTable';
-import ExpenseTimeline from '../../../components/sales/co-reports/ExpenseTimeline';
+} from '../../../services/finance';
+import CashflowSummaryCards from '../../../components/sales/coReports/CashflowSummaryCards';
+import CashflowChart from '../../../components/sales/coReports/CashflowChart';
+import CashflowTable from '../../../components/sales/coReports/CashflowTable';
+import ExpenseTimeline from '../../../components/sales/coReports/ExpenseTimeline';
 
 /**
  * Główny komponent zakładki Cashflow w raporcie CO

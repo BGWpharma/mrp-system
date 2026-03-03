@@ -27,7 +27,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { formatDate } from '../../../utils/formatters';
+import { formatDate } from '../../../utils/formatting';
 import { getConsumedQuantityForMaterial } from '../../../utils/productionUtils';
 
 const ManualBatchSelectionContent = memo(({

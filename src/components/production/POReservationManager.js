@@ -62,7 +62,7 @@ import {
   Refresh as RefreshIcon,
   BugReport as BugReportIcon
 } from '@mui/icons-material';
-import { formatDateTime, formatCurrency } from '../../utils/formatters';
+import { formatDateTime, formatCurrency } from '../../utils/formatting';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../hooks/useAuth';
@@ -75,7 +75,7 @@ import {
   getPOReservationStats,
   syncPOReservationsWithBatches,
   refreshLinkedBatchesQuantities
-} from '../../services/poReservationService';
+} from '../../services/purchaseOrders';
 
 const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger, hideTitle = false }) => {
   const { t } = useTranslation('taskDetails');

@@ -9,7 +9,7 @@ import {
   addProductionSession,
   updateProductionSession,
   deleteProductionSession
-} from '../../services/productionService';
+} from '../../services/production/productionService';
 import { useNotification } from '../useNotification';
 import { useUserNames } from '../useUserNames';
 
@@ -53,7 +53,7 @@ export const useProductionHistory = (taskId) => {
   // ✅ Pobieranie dostępnych maszyn
   const fetchMachines = useCallback(async () => {
     try {
-      const { getAvailableMachines } = await import('../../services/machineDataService');
+      const { getAvailableMachines } = await import('../../services/production/machineDataService');
       const machines = await getAvailableMachines();
       setAvailableMachines(machines);
       return machines;
@@ -71,7 +71,7 @@ export const useProductionHistory = (taskId) => {
     }
     
     try {
-      const { getProductionDataForHistory } = await import('../../services/machineDataService');
+      const { getProductionDataForHistory } = await import('../../services/production/machineDataService');
       const enriched = await getProductionDataForHistory(selectedMachineId, productionHistory);
       setEnrichedHistory(enriched);
     } catch (error) {

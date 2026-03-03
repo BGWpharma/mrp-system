@@ -34,12 +34,12 @@ import {
   updatePaymentInInvoice,
   getInvoicePayments,
   calculateRequiredAdvancePayment
-} from '../../services/invoiceService';
+} from '../../services/finance';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { preciseCompare } from '../../utils/mathUtils';
-import { formatCurrency } from '../../utils/formatters';
+import { preciseCompare } from '../../utils/calculations';
+import { formatCurrency } from '../../utils/formatting';
 
 const PaymentsSection = ({ invoice, onPaymentChange }) => {
   const [payments, setPayments] = useState([]);

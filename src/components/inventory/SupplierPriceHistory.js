@@ -25,7 +25,7 @@ import {
 } from '@mui/icons-material';
 import { getSupplierPriceHistory } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatting';
 import { formatTimestamp } from '../../utils/dateUtils';
 import { getUserById } from '../../services/userService';
 

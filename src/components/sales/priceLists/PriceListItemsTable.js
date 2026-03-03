@@ -21,7 +21,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { 
   getPriceListItems, 
   deletePriceListItem 
-} from '../../../services/priceListService';
+} from '../../../services/products';
 import { useNotification } from '../../../hooks/useNotification';
 import { useTranslation } from '../../../hooks/useTranslation';
 import ConfirmDialog from '../../common/ConfirmDialog';

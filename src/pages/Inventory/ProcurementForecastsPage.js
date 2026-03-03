@@ -53,11 +53,11 @@ import {
   archiveProcurementForecast,
   updateProcurementForecast,
   subscribeToProcurementForecasts
-} from '../../services/procurementForecastService';
+} from '../../services/purchaseOrders';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatCurrency } from '../../utils/formatUtils';
+import { formatCurrency } from '../../utils/formatting';
 
 const ProcurementForecastsPage = ({ embedded = false }) => {
   const { t } = useTranslation('inventory');

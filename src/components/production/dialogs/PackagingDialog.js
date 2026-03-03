@@ -25,7 +25,7 @@ import {
   InputAdornment
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
-import { formatDate } from '../../../utils/formatters';
+import { formatDate } from '../../../utils/formatting';
 
 const PackagingDialog = memo(({
   open,

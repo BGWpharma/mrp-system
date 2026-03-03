@@ -37,8 +37,8 @@ import {
   createInteraction,
   updateInteraction,
   getInteractionById
-} from '../../services/crmService';
-import { getAllSuppliers } from '../../services/supplierService';
+} from '../../services/crm';
+import { getAllSuppliers } from '../../services/suppliers';
 import { INTERACTION_TYPES, INTERACTION_STATUSES } from '../../utils/constants';
 
 const InteractionFormPage = () => {

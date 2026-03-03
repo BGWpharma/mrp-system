@@ -25,7 +25,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useTranslation } from '../../hooks/useTranslation';
-import { getTasksByDateRangeOptimizedNew } from '../../services/productionService';
+import { getTasksByDateRangeOptimizedNew } from '../../services/production/productionService';
 
 // Funkcja do generowania raportu Timeline w formacie XLSX
 const generateTimelineReport = async (tasks, workstations, customers, startDate, endDate, groupBy, filteredTasks, selectedCustomers, t) => {

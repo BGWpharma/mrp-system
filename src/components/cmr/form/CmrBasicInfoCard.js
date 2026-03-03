@@ -23,7 +23,7 @@ import {
   TRANSPORT_TYPES,
   getTransportTypeLabel,
   translatePaymentStatus
-} from '../../../services/cmrService';
+} from '../../../services/logistics';
 
 const CmrBasicInfoCard = React.memo(({
   formData,

@@ -38,7 +38,7 @@ import {
   previewPriceListImport,
   executePriceListImport,
   generatePriceListTemplate
-} from '../../../services/priceListImportService';
+} from '../../../services/products';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
 import { useTranslation } from '../../../hooks/useTranslation';

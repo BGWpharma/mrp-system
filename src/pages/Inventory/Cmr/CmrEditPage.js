@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNotification } from '../../../hooks/useNotification';
 import CmrForm from './CmrForm';
-import { getCmrDocumentById, updateCmrDocument } from '../../../services/cmrService';
+import { getCmrDocumentById, updateCmrDocument } from '../../../services/logistics';
 
 const CmrEditPage = () => {
   const { id } = useParams();

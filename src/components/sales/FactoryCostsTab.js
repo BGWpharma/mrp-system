@@ -71,7 +71,7 @@ import {
   getProductionTasksInDateRange,
   updateFactoryCostInTasks,
   recalculateAllTaskFactoryCosts
-} from '../../services/factoryCostService';
+} from '../../services/finance';
 
 const FactoryCostsTab = () => {
   const { currentUser } = useAuth();

@@ -432,8 +432,8 @@ export const useTaskMaterialFetcher = ({
       if (!taskData || !taskData.id) return;
       
       // Importuj funkcje do zarządzania zamówieniami
-      const { getAllOrders, updateOrder } = await import('../../services/orderService');
-      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+      const { getAllOrders, updateOrder } = await import('../../services/orders');
+      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/calculations');
       
       // Pobierz wszystkie zamówienia
       const allOrders = await getAllOrders();

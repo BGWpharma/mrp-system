@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Container, CircularProgress } from '@mui/material';
 import TaskForm from '../../components/production/TaskForm';
-import { getTaskById } from '../../services/productionService';
+import { getTaskById } from '../../services/production/productionService';
 import { useNotification } from '../../hooks/useNotification';
 
 const EditTaskPage = () => {

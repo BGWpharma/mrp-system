@@ -13,7 +13,7 @@ import {
   Divider,
   Chip
 } from '@mui/material';
-import { formatDate } from '../../utils/formatters';
+import { formatDate } from '../../utils/formatting';
 
 const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
   const [differences, setDifferences] = useState({

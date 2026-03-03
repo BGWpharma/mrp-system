@@ -43,7 +43,7 @@ import {
   getCompletedTasksStats,
   getTasksWithCosts,
   calculateCostStatistics
-} from '../../services/productionService';
+} from '../../services/production/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -51,7 +51,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
 import { format, subDays, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
-import { formatDateTime } from '../../utils/formatters';
+import { formatDateTime } from '../../utils/formatting';
 
 // Symulacja komponentu wykresu, później można zastąpić prawdziwą biblioteką
 const SimplePieChart = ({ data }) => {

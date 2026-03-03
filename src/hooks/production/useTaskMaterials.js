@@ -6,7 +6,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
-import { preciseMultiply } from '../../utils/mathUtils';
+import { preciseMultiply } from '../../utils/calculations';
 import { 
   getReservedQuantityForMaterial, 
   getConsumedQuantityForMaterial 

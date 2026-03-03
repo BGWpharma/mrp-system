@@ -34,12 +34,12 @@ import {
   Science as ScienceIcon,
   ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
-import { useNutritionalComponents } from '../../hooks/useNutritionalComponents';
+import { useNutritionalComponents } from '../../hooks/products';
 import {
   addNutritionalComponent,
   updateNutritionalComponent,
   deleteNutritionalComponent
-} from '../../services/nutritionalComponentsService';
+} from '../../services/products';
 import { useNotification } from '../../hooks/useNotification';
 import { NUTRITIONAL_CATEGORIES } from '../../utils/constants';
 

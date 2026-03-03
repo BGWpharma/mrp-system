@@ -62,16 +62,16 @@ import {
   translateStatus,
   translatePaymentStatus,
   getNextPaymentDueDate,
-  recalculatePOPaymentFromInvoices
-} from '../../services/purchaseOrderService';
+  recalculatePOPaymentFromInvoices,
+  getPOReservationsForItem
+} from '../../services/purchaseOrders';
 import { getBatchesByPurchaseOrderId, getInventoryBatch, getWarehouseById } from '../../services/inventory';
-import { getPOReservationsForItem } from '../../services/poReservationService';
-import { getInvoicesByOrderId, getReinvoicedAmountsByPOItems } from '../../services/invoiceService';
+import { getInvoicesByOrderId, getReinvoicedAmountsByPOItems } from '../../services/finance';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { db } from '../../services/firebase/config';
 import { updateDoc, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { formatCurrency } from '../../utils/formatUtils';
+import { formatCurrency } from '../../utils/formatting';
 import { getUsersDisplayNames } from '../../services/userService';
 import { createPurchaseOrderPdfGenerator } from './PurchaseOrderPdfGenerator';
 import CoAMigrationDialog from './CoAMigrationDialog';

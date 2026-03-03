@@ -64,21 +64,21 @@ import {
   Info as InfoIcon,
   Receipt as ReceiptIcon
 } from '@mui/icons-material';
-import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData, updateCustomerOrderNumber, validateOrderNumberFormat, refreshShippedQuantitiesFromCMR, updateOrderStatus } from '../../services/orderService';
+import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData, updateCustomerOrderNumber, validateOrderNumberFormat, refreshShippedQuantitiesFromCMR, updateOrderStatus } from '../../services/orders';
 import { useNotification } from '../../hooks/useNotification';
-import { formatCurrency } from '../../utils/formatUtils';
+import { formatCurrency } from '../../utils/formatting';
 import { formatTimestamp, formatDate } from '../../utils/dateUtils';
 import { storage } from '../../services/firebase/config';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useAuth } from '../../contexts/AuthContext';
-import { getAllPurchaseOrders } from '../../services/purchaseOrderService';
+import { getAllPurchaseOrders } from '../../services/purchaseOrders';
 import { db } from '../../services/firebase/config';
 import { getDoc, doc } from 'firebase/firestore';
 import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 import { getUsersDisplayNames } from '../../services/userService';
-import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '../../utils/costCalculator';
-import { getInvoicesByOrderId, getInvoicedAmountsByOrderItems, getProformaAmountsByOrderItems, migrateInvoiceItemsOrderIds, getAvailableProformasForOrder } from '../../services/invoiceService';
-import { getCmrDocumentsByOrderId, CMR_STATUSES } from '../../services/cmrService';
+import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '../../utils/calculations';
+import { getInvoicesByOrderId, getInvoicedAmountsByOrderItems, getProformaAmountsByOrderItems, migrateInvoiceItemsOrderIds, getAvailableProformasForOrder } from '../../services/finance';
+import { getCmrDocumentsByOrderId, CMR_STATUSES } from '../../services/logistics';
 import { recalculateShippedQuantities } from '../../services/cloudFunctionsService';
 import { useTranslation } from '../../hooks/useTranslation';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
@@ -190,8 +190,8 @@ const verifyProductionTasks = async (orderToVerify) => {
   }
 
   try {
-    const { getMultipleTasksById } = await import('../../services/productionService');
-    const { removeProductionTaskFromOrder } = await import('../../services/orderService');
+    const { getMultipleTasksById } = await import('../../services/production/productionService');
+    const { removeProductionTaskFromOrder } = await import('../../services/orders');
     
     // 🚀 OPTYMALIZACJA: Pobierz wszystkie zadania równolegle
     const taskIds = orderToVerify.productionTasks.map(task => task.id);
@@ -331,7 +331,7 @@ const verifyProductionTasks = async (orderToVerify) => {
       // Zapisz zaktualizowane dane zadań do zamówienia w bazie
       if (orderToVerify.id && verifiedTasks.length > 0) {
         try {
-          const { updateOrder } = await import('../../services/orderService');
+          const { updateOrder } = await import('../../services/orders');
           const updatedOrderData = {
             ...orderToVerify,
             productionTasks: verifiedTasks,
@@ -774,8 +774,8 @@ const OrderDetails = () => {
       const refreshedOrderData = await getOrderById(orderId);
       
       // Importuj funkcję do pobierania szczegółów zadania
-      const { getTaskById } = await import('../../services/productionService');
-      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+      const { getTaskById } = await import('../../services/production/productionService');
+      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/calculations');
       
       if (refreshedOrderData.productionTasks && refreshedOrderData.productionTasks.length > 0) {
         // Zaktualizuj dane kosztów produkcji w pozycjach zamówienia
@@ -878,7 +878,7 @@ const OrderDetails = () => {
 
         // Zapisz zaktualizowane dane do bazy
         try {
-          const { updateOrder } = await import('../../services/orderService');
+          const { updateOrder } = await import('../../services/orders');
           await updateOrder(orderId, {
             items: updatedOrderData.items,
             totalValue: updatedOrderData.totalValue,
@@ -1426,7 +1426,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     }
 
     try {
-      const { getInvoiceById } = await import('../../services/invoiceService');
+      const { getInvoiceById } = await import('../../services/finance');
       const verifiedInvoices = [];
       let removedCount = 0;
 
@@ -1456,7 +1456,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     }
 
     try {
-      const { getCmrDocumentById } = await import('../../services/cmrService');
+      const { getCmrDocumentById } = await import('../../services/logistics');
       const verifiedCmrDocuments = [];
       let removedCount = 0;
 

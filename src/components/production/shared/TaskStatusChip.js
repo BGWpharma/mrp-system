@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { PRODUCTION_TASK_STATUSES } from '../../../utils/constants';
-import { updateTaskStatus } from '../../../services/productionService';
+import { updateTaskStatus } from '../../../services/production/productionService';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNotification } from '../../../hooks/useNotification';
 

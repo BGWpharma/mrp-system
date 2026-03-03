@@ -58,7 +58,7 @@ const LabelsDisplayDialog = ({
     setPdfProgress('Inicjalizacja generatora PDF...');
     
     try {
-      const { default: LabelPdfGenerator } = await import('../../utils/LabelPdfGenerator');
+      const { default: LabelPdfGenerator } = await import('../../utils/labelPdfGenerator');
       const generator = new LabelPdfGenerator();
       let pdfDoc;
       

@@ -30,7 +30,7 @@ import {
   clockOut,
   getOpenEntry,
   getWorkTimeEntries,
-} from '../../services/workTimeService';
+} from '../../services/production/workTimeService';
 
 // Margines walidacji: max ±30 minut od obecnej godziny
 const TIME_MARGIN_MINUTES = 30;
@@ -94,6 +94,16 @@ const WorkTimePage = () => {
   const now = new Date();
   const minStartTime = subMinutes(now, TIME_MARGIN_MINUTES);
   const maxEndTime = addMinutes(now, TIME_MARGIN_MINUTES);
+
+  const minEndTime = (() => {
+    if (openEntry) {
+      const [h, m] = openEntry.startTime.split(':').map(Number);
+      const d = new Date();
+      d.setHours(h, m, 0, 0);
+      return d;
+    }
+    return startTime;
+  })();
 
   // Sprawdź otwarty wpis
   const checkOpenEntry = useCallback(async (empId) => {
@@ -537,6 +547,7 @@ const WorkTimePage = () => {
                                 }}
                                 ampm={false}
                                 minutesStep={15}
+                                minTime={minEndTime}
                                 maxTime={maxEndTime}
                                 slotProps={{ actionBar: { sx: { display: 'none' } } }}
                               />

@@ -71,11 +71,11 @@ import {
 import { archiveBatch, unarchiveBatch } from '../../services/inventory/batchService';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatDate, formatQuantity } from '../../utils/formatters';
+import { formatDate, formatQuantity } from '../../utils/formatting';
 import { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { auth } from '../../services/firebase/config';
-import { getTaskById } from '../../services/productionService';
+import { getTaskById } from '../../services/production/productionService';
 import BatchVisualization from '../../components/inventory/BatchVisualization';
 import BatchDetailsDialog from '../../components/inventory/BatchDetailsDialog';
 

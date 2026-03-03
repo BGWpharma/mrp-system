@@ -38,7 +38,7 @@ import {
   WarningAmber as WarningIcon
 } from '@mui/icons-material';
 import { useTranslation } from '../../hooks/useTranslation';
-import { fetchEcoReportData, exportEcoReportToExcel } from '../../services/ecoReportService';
+import { fetchEcoReportData, exportEcoReportToExcel } from '../../services/documents';
 
 /**
  * Komponent panelu Tab

@@ -14,9 +14,9 @@ import {
   ExpandLess as ExpandLessIcon,
   Euro as EuroIcon
 } from '@mui/icons-material';
-import { formatDateTime } from '../../utils/formatters';
+import { formatDateTime } from '../../utils/formatting';
 import { useTranslation } from '../../hooks/useTranslation';
-import { getWorkstationById } from '../../services/workstationService';
+import { getWorkstationById } from '../../services/production/workstationService';
 import { useNotification } from '../../hooks/useNotification';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';

@@ -11,7 +11,7 @@ import {
   MenuItem
 } from '@mui/material';
 
-import { updatePriceListItem } from '../../../services/priceListService';
+import { updatePriceListItem } from '../../../services/products';
 import { UNIT_OPTIONS } from '../../../config';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';

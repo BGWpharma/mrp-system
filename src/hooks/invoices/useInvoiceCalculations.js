@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { calculateInvoiceTotalGross } from '../../services/invoiceService';
+import { calculateInvoiceTotalGross } from '../../services/finance';
 
 /**
  * Hook handling invoice item calculations: totals, VAT, net/gross values.

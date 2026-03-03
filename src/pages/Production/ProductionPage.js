@@ -15,7 +15,7 @@ import TaskList from '../../components/production/TaskList';
 import ProductionTimeline from '../../components/production/ProductionTimeline';
 import FormsPage from './FormsPage';
 import WorkstationsPage from './WorkstationsPage';
-import { initializeMissingCostFields } from '../../services/productionService';
+import { initializeMissingCostFields } from '../../services/production/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useNotification } from '../../hooks/useNotification';

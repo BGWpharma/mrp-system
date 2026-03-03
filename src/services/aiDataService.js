@@ -13,10 +13,10 @@ import {
   onSnapshot,
   setDoc
 } from 'firebase/firestore';
-import { getAllCustomers } from './customerService';
-import { getOrdersStats } from './orderService';
+import { getAllCustomers } from './crm';
+import { getOrdersStats } from './orders';
 import { getAllInventoryItems, getExpiredBatches, getExpiringBatches, getInventoryTransactionsPaginated } from './inventory';
-import { getAllTasks, getTasksByStatus } from './productionService';
+import { getAllTasks, getTasksByStatus } from './production/productionService';
 import { ServiceCacheManager } from './cache/serviceCacheManager';
 
 const AI_CACHE_PREFIX = 'ai:';

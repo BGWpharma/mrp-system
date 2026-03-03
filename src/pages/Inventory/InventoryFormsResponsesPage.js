@@ -38,7 +38,7 @@ import {
   deleteInventoryFormResponse,
   getInventoryFormsStatistics,
   INVENTORY_FORM_TYPES
-} from '../../services/inventoryFormsService';
+} from '../../services/forms';
 
 // Komponent strony odpowiedzi formularzy magazynowych z optymalizacjami
 const InventoryFormsResponsesPage = () => {

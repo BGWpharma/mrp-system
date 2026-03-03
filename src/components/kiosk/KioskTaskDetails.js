@@ -29,8 +29,8 @@ import { baseColors, palettes, getStatusColor } from '../../styles/colorConfig';
 import { useTheme as useThemeContext } from '../../contexts/ThemeContext';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
-import { formatDateTime } from '../../utils/formatters';
-import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
+import { formatDateTime } from '../../utils/formatting';
+import { getIngredientReservationLinks } from '../../services/production/mixingPlanReservationService';
 import { createRealtimeCheckboxNotification } from '../../services/notificationService';
 import { getAllActiveUsers } from '../../services/userService';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI

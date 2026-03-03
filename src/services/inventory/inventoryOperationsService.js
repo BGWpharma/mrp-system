@@ -31,9 +31,9 @@ import {
   formatQuantityPrecision,
   convertTimestampToDate 
 } from './utils/formatters.js';
-import { preciseAdd } from '../../utils/mathUtils.js';
+import { preciseAdd } from '../../utils/calculations';
 import { FirebaseQueryBuilder } from './config/firebaseQueries.js';
-import { generateLOTNumber } from '../../utils/numberGenerators.js';
+import { generateLOTNumber } from '../../utils/calculations';
 
 /**
  * Usługa operacji magazynowych
@@ -194,7 +194,7 @@ export const receiveInventory = async (itemId, quantity, transactionData, userId
     if (transactionData.source === 'purchase' && transactionData.orderId && transactionData.itemPOId) {
       try {
         // Import funkcji do aktualizacji zamówienia zakupowego
-        const { updatePurchaseOrderReceivedQuantity } = await import('../purchaseOrderService');
+        const { updatePurchaseOrderReceivedQuantity } = await import('../purchaseOrders');
         
         console.log(`Aktualizacja ilości odebranej dla PO ${transactionData.orderId}, produkt ${transactionData.itemPOId}, ilość: ${validatedQuantity}`);
         await updatePurchaseOrderReceivedQuantity(
@@ -699,7 +699,7 @@ const processPurchaseOrderDetails = async (batch, transactionData, quantity) => 
   if (!poId) return;
   
   try {
-    const { getPurchaseOrderById } = await import('../purchaseOrderService');
+    const { getPurchaseOrderById } = await import('../purchaseOrders');
     const poData = await getPurchaseOrderById(poId);
     
     // Zapisz szczegółowe informacje o PO w partii

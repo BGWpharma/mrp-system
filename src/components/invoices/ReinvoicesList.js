@@ -42,13 +42,13 @@ import {
   getAllInvoices, 
   deleteInvoice,
   calculateRequiredAdvancePayment
-} from '../../services/invoiceService';
-import { preciseCompare } from '../../utils/mathUtils';
-import { getAllCustomers } from '../../services/customerService';
+} from '../../services/finance';
+import { preciseCompare } from '../../utils/calculations';
+import { getAllCustomers } from '../../services/crm';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatting';
 import DeleteConfirmationDialog from '../common/DeleteConfirmationDialog';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
