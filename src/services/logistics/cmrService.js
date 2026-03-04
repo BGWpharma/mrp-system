@@ -596,7 +596,18 @@ export const deleteCmrDocument = async (cmrId) => {
       }
     }
     
-    // KROK 3: Usuń elementy dokumentu CMR (cmrItems)
+    // KROK 3: Anuluj rezerwacje magazynowe (jeśli CMR był w transporcie)
+    if (cmrData && cmrData.status === CMR_STATUSES.IN_TRANSIT) {
+      try {
+        console.log('🔓 Anulowanie rezerwacji magazynowych dla usuwanego CMR w transporcie...');
+        const cancellationResult = await cancelCmrReservations(cmrId, 'system');
+        console.log('✅ Rezerwacje magazynowe anulowane:', cancellationResult);
+      } catch (reservationError) {
+        console.error('❌ Błąd podczas anulowania rezerwacji magazynowych przy usuwaniu CMR:', reservationError);
+      }
+    }
+    
+    // KROK 4: Usuń elementy dokumentu CMR (cmrItems)
     const itemsRef = collection(db, CMR_ITEMS_COLLECTION);
     const q = query(itemsRef, where('cmrId', '==', cmrId));
     const itemsSnapshot = await getDocs(q);
@@ -605,12 +616,12 @@ export const deleteCmrDocument = async (cmrId) => {
     const deletePromises = itemsSnapshot.docs.map(doc => deleteDoc(doc.ref));
     await Promise.all(deletePromises);
     
-    // KROK 4: Usuń dokument CMR
+    // KROK 5: Usuń dokument CMR
     const cmrRef = doc(db, CMR_COLLECTION, cmrId);
     await deleteDoc(cmrRef);
     console.log(`✅ Usunięto dokument CMR ${cmrId}`);
     
-    // KROK 5: KLUCZOWE - Wyczyść cache CMR i usuń dokument z cache
+    // KROK 6: Wyczyść cache CMR i usuń dokument z cache
     console.log('🧹 Czyszczenie cache CMR po usunięciu...');
     removeCmrDocumentFromCache(cmrId);
     

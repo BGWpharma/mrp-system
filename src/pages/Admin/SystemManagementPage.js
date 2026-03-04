@@ -58,8 +58,6 @@ import CounterEditor from '../../components/admin/CounterEditor';
 import FormOptionsManager from '../../components/admin/FormOptionsManager';
 import NutritionalComponentsManager from '../../components/admin/NutritionalComponentsManager';
 import { 
-  migrateInventoryItemsFromV1toV2, 
-  checkInventoryIntegrityAndFix,
   bulkUpdateSupplierPricesFromCompletedPOs
 } from '../../services/inventory';
 import ArchiveManager from '../../components/admin/ArchiveManager';

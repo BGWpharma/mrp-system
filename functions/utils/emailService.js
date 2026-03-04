@@ -111,7 +111,15 @@ const sendMailWithRetry = async (mailOptions) => {
 const formatDate = (dateValue) => {
   if (!dateValue) return "-";
   try {
-    const date = dateValue.toDate ? dateValue.toDate() : new Date(dateValue);
+    let date;
+    if (dateValue.toDate) {
+      date = dateValue.toDate();
+    } else if (dateValue._seconds != null) {
+      date = new Date(dateValue._seconds * 1000);
+    } else {
+      date = new Date(dateValue);
+    }
+    if (isNaN(date.getTime())) return "-";
     return date.toLocaleDateString("en-GB");
   } catch {
     return "-";

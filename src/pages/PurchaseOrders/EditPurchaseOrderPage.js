@@ -15,8 +15,7 @@ import {
   updateBatchesForPurchaseOrder
 } from '../../services/purchaseOrders';
 import { getAllSuppliers } from '../../services/suppliers';
-import { getWarehouseLocations } from '../../services/warehouseService';
-import { searchItems } from '../../services/inventory';
+import { searchItems, getAllWarehouses } from '../../services/inventory';
 import PurchaseOrderItemsTable from '../../components/purchaseOrders/PurchaseOrderItemsTable';
 import PurchaseOrderForm from '../../components/purchaseOrders/PurchaseOrderForm';
 import ConfirmationDialog from '../../components/common/ConfirmationDialog';
@@ -55,7 +54,7 @@ const EditPurchaseOrderPage = () => {
         const [poData, suppliersData, warehousesData] = await Promise.all([
           getPurchaseOrderById(id),
           getAllSuppliers(),
-          getWarehouseLocations()
+          getAllWarehouses()
         ]);
         if (cancelled) return;
         setPurchaseOrder(poData);
