@@ -4,13 +4,15 @@
  * Automatycznie aktualizuje ilości wysłane w zamówieniach gdy CMR zmienia status na "W transporcie"
  * + wysyła email powiadomienie do klienta (via SMTP Relay, IP-based auth)
  *
- * DEPLOYMENT:
- * firebase deploy --only functions:bgw-mrp:onCmrStatusUpdate
+ * VPC Connector "smtp-connector" routes all egress through Cloud NAT
+ * so the function exits with the whitelisted static IP.
  *
- * POST-DEPLOY (Direct VPC Egress for SMTP Relay):
- * gcloud functions deploy onCmrStatusUpdate --gen2
- *   --region=europe-central2 --project=bgw-mrp-system
- *   --network=default --subnet=default --egress-settings=all
+ * DEPLOYMENT:
+ * firebase deploy --only functions:bgw-mrp:onCmrStatusUpdate --force
+ *
+ * PRE-REQUISITE (one-time):
+ * gcloud compute networks vpc-access connectors create smtp-connector \
+ *   --region=europe-central2 --network=default --range=10.8.0.0/28
  */
 
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
@@ -23,6 +25,9 @@ const onCmrStatusUpdate = onDocumentUpdated(
       document: "cmrDocuments/{cmrId}",
       region: "europe-central2",
       memory: "512MiB",
+      timeoutSeconds: 120,
+      vpcConnector: "smtp-connector",
+      vpcConnectorEgressSettings: "ALL_TRAFFIC",
     },
     async (event) => {
       const cmrId = event.params.cmrId;

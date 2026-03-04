@@ -4,16 +4,15 @@
  * Attaches invoice PDF if available.
  * Uses Google Workspace SMTP Relay with IP-based auth (Cloud NAT).
  *
+ * VPC Connector "smtp-connector" routes all egress through Cloud NAT
+ * so the function exits with the whitelisted static IP.
+ *
  * DEPLOYMENT:
- * firebase deploy --only functions:bgw-mrp:onInvoiceStatusChange
+ * firebase deploy --only functions:bgw-mrp:onInvoiceStatusChange --force
  *
- * POST-DEPLOY (Direct VPC Egress for SMTP Relay):
- * gcloud beta run services update oninvoicestatuschange
- *   --region=europe-central2 --project=bgw-mrp-system
- *   --network=default --subnet=default --vpc-egress=all-traffic
- *
- * CLEANUP (delete old function):
- * firebase functions:delete onInvoiceCreated --region=europe-central2
+ * PRE-REQUISITE (one-time):
+ * gcloud compute networks vpc-access connectors create smtp-connector \
+ *   --region=europe-central2 --network=default --range=10.8.0.0/28
  */
 
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
@@ -27,6 +26,8 @@ const onInvoiceStatusChange = onDocumentUpdated(
       region: "europe-central2",
       memory: "256MiB",
       timeoutSeconds: 60,
+      vpcConnector: "smtp-connector",
+      vpcConnectorEgressSettings: "ALL_TRAFFIC",
     },
     async (event) => {
       const before = event.data.before.data();

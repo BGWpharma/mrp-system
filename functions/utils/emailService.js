@@ -4,6 +4,9 @@
  * Authentication: IP-based (Cloud NAT static IP: 34.118.11.47)
  * No user credentials required.
  *
+ * Requires VPC Connector "smtp-connector" with ALL_TRAFFIC egress
+ * so outbound traffic routes through Cloud NAT.
+ *
  * From addresses use Google Groups (no Workspace license needed):
  * - accounting@bgwpharma.com  → invoice notifications
  * - warehouse@bgwpharma.com   → CMR shipment notifications
@@ -15,18 +18,47 @@ const logger = require("firebase-functions/logger");
 const FROM_ACCOUNTING = "BGW Pharma - Accounting <accounting@bgwpharma.com>";
 const FROM_WAREHOUSE = "BGW Pharma - Warehouse <warehouse@bgwpharma.com>";
 
-let transporter = null;
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 2000;
 
-const getTransporter = () => {
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: "smtp-relay.gmail.com",
-      port: 587,
-      secure: false,
-      tls: {rejectUnauthorized: true},
-    });
+const createTransporter = () => nodemailer.createTransport({
+  host: "smtp-relay.gmail.com",
+  port: 587,
+  secure: false,
+  tls: {rejectUnauthorized: true},
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 30_000,
+});
+
+/**
+ * Send mail with retry & exponential backoff.
+ * Creates a fresh transporter on each retry to avoid stale connections.
+ * @param {Object} mailOptions - nodemailer mail options
+ * @return {Promise<Object>} nodemailer send result
+ */
+const sendMailWithRetry = async (mailOptions) => {
+  let lastError;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const transporter = createTransporter();
+      const result = await transporter.sendMail(mailOptions);
+      return result;
+    } catch (error) {
+      lastError = error;
+      logger.warn(`[Email] Próba ${attempt}/${MAX_RETRIES} nieudana`, {
+        to: mailOptions.to,
+        error: error.message,
+        code: error.code,
+        command: error.command,
+      });
+      if (attempt < MAX_RETRIES) {
+        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
   }
-  return transporter;
+  throw lastError;
 };
 
 /**
@@ -122,7 +154,7 @@ const sendInvoiceNotification = async (invoice) => {
     }];
   }
 
-  const result = await getTransporter().sendMail(mailOptions);
+  const result = await sendMailWithRetry(mailOptions);
   logger.info("[Email] Wysłano powiadomienie o fakturze", {
     invoiceId: invoice.id,
     to: customerEmail,
@@ -196,7 +228,7 @@ const sendCmrShipmentNotification = async (cmrData, cmrId, customerData) => {
     </div>
   `;
 
-  const result = await getTransporter().sendMail({
+  const result = await sendMailWithRetry({
     from: FROM_WAREHOUSE,
     to: customerEmail,
     subject,

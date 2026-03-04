@@ -25,7 +25,9 @@ import {
   Autocomplete,
   CircularProgress,
   LinearProgress,
-  Alert
+  Alert,
+  Tooltip,
+  Popover
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -33,6 +35,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
@@ -88,6 +91,9 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
 
   const [newSubtaskListTitle, setNewSubtaskListTitle] = useState('');
   const [newSubtasks, setNewSubtasks] = useState({});
+  const [editingSubtask, setEditingSubtask] = useState(null);
+  const [subtaskAssignAnchor, setSubtaskAssignAnchor] = useState(null);
+  const [assigningSubtask, setAssigningSubtask] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [newAttachment, setNewAttachment] = useState({ name: '', url: '' });
@@ -292,7 +298,8 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
             {
               id: nanoid(),
               title: subtaskTitle,
-              completed: false
+              completed: false,
+              assignedTo: null
             }
           ]
         };
@@ -335,6 +342,49 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
     });
 
     setFormData({ ...formData, subtaskLists: updatedLists });
+  };
+
+  const handleEditSubtask = (listId, subtaskId, newTitle) => {
+    if (!newTitle?.trim()) {
+      setEditingSubtask(null);
+      return;
+    }
+    const updatedLists = formData.subtaskLists.map(list => {
+      if (list.id === listId) {
+        return {
+          ...list,
+          subtasks: list.subtasks.map(subtask => {
+            if (subtask.id === subtaskId) {
+              return { ...subtask, title: newTitle.trim() };
+            }
+            return subtask;
+          })
+        };
+      }
+      return list;
+    });
+    setFormData({ ...formData, subtaskLists: updatedLists });
+    setEditingSubtask(null);
+  };
+
+  const handleAssignSubtask = (listId, subtaskId, userId) => {
+    const updatedLists = formData.subtaskLists.map(list => {
+      if (list.id === listId) {
+        return {
+          ...list,
+          subtasks: list.subtasks.map(subtask => {
+            if (subtask.id === subtaskId) {
+              return { ...subtask, assignedTo: userId || null };
+            }
+            return subtask;
+          })
+        };
+      }
+      return list;
+    });
+    setFormData({ ...formData, subtaskLists: updatedLists });
+    setSubtaskAssignAnchor(null);
+    setAssigningSubtask(null);
   };
 
   const priorityOptions = [
@@ -734,39 +784,112 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
             </Box>
 
             <List dense sx={{ bgcolor: 'action.hover', borderRadius: 1, mb: 1 }}>
-              {list.subtasks.map((subtask) => (
-                <ListItem
-                  key={subtask.id}
-                  secondaryAction={
-                    <IconButton
-                      edge="end"
-                      size="small"
-                      onClick={() => handleDeleteSubtask(list.id, subtask.id)}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  }
-                  disablePadding
-                >
-                  <ListItemButton onClick={() => handleToggleSubtask(list.id, subtask.id)} dense>
+              {list.subtasks.map((subtask) => {
+                const isEditing = editingSubtask?.listId === list.id && editingSubtask?.subtaskId === subtask.id;
+                const assignedUser = subtask.assignedTo ? allUsers.find(u => u.id === subtask.assignedTo) : null;
+
+                return (
+                  <ListItem
+                    key={subtask.id}
+                    secondaryAction={
+                      <Box sx={{ display: 'flex', gap: 0.25, alignItems: 'center' }}>
+                        <Tooltip title={assignedUser ? (assignedUser.displayName || assignedUser.email) : t('assignSubtaskUser')}>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              setAssigningSubtask({ listId: list.id, subtaskId: subtask.id });
+                              setSubtaskAssignAnchor(e.currentTarget);
+                            }}
+                          >
+                            {assignedUser ? (
+                              <Avatar sx={{ width: 22, height: 22, fontSize: '0.65rem', bgcolor: 'primary.main' }}>
+                                {(assignedUser.displayName || assignedUser.email || '?').charAt(0).toUpperCase()}
+                              </Avatar>
+                            ) : (
+                              <PersonIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+                            )}
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('editSubtask')}>
+                          <IconButton
+                            size="small"
+                            onClick={() => setEditingSubtask({ listId: list.id, subtaskId: subtask.id, title: subtask.title })}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <IconButton
+                          edge="end"
+                          size="small"
+                          onClick={() => handleDeleteSubtask(list.id, subtask.id)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    }
+                    disablePadding
+                    sx={{ pl: 1 }}
+                  >
                     <Checkbox
                       edge="start"
                       checked={subtask.completed}
+                      onChange={() => handleToggleSubtask(list.id, subtask.id)}
                       tabIndex={-1}
                       disableRipple
                       icon={<CheckBoxOutlineBlankIcon />}
                       checkedIcon={<CheckBoxIcon />}
+                      size="small"
                     />
-                    <ListItemText
-                      primary={subtask.title}
-                      sx={{
-                        textDecoration: subtask.completed ? 'line-through' : 'none',
-                        color: subtask.completed ? 'text.disabled' : 'text.primary'
-                      }}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              ))}
+                    {isEditing ? (
+                      <TextField
+                        size="small"
+                        fullWidth
+                        value={editingSubtask.title}
+                        onChange={(e) => setEditingSubtask({ ...editingSubtask, title: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleEditSubtask(list.id, subtask.id, editingSubtask.title);
+                          }
+                          if (e.key === 'Escape') {
+                            setEditingSubtask(null);
+                          }
+                        }}
+                        onBlur={() => handleEditSubtask(list.id, subtask.id, editingSubtask.title)}
+                        autoFocus
+                        sx={{ mr: 1 }}
+                      />
+                    ) : (
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                textDecoration: subtask.completed ? 'line-through' : 'none',
+                                color: subtask.completed ? 'text.disabled' : 'text.primary'
+                              }}
+                            >
+                              {subtask.title}
+                            </Typography>
+                            {assignedUser && (
+                              <Chip
+                                size="small"
+                                avatar={
+                                  <Avatar sx={{ width: 18, height: 18, fontSize: '0.6rem' }}>
+                                    {(assignedUser.displayName || assignedUser.email || '?').charAt(0).toUpperCase()}
+                                  </Avatar>
+                                }
+                                label={assignedUser.displayName || assignedUser.email}
+                                sx={{ height: 20, fontSize: '0.7rem', '& .MuiChip-label': { px: 0.5 } }}
+                              />
+                            )}
+                          </Box>
+                        }
+                      />
+                    )}
+                  </ListItem>
+                );
+              })}
             </List>
 
             {/* Dodaj podzadanie */}
@@ -819,6 +942,56 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
             {t('newList')}
           </Button>
         </Box>
+        {/* Popover do przypisywania użytkownika do podzadania */}
+        <Popover
+          open={Boolean(subtaskAssignAnchor)}
+          anchorEl={subtaskAssignAnchor}
+          onClose={() => {
+            setSubtaskAssignAnchor(null);
+            setAssigningSubtask(null);
+          }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        >
+          <Box sx={{ minWidth: 220, maxHeight: 320, overflow: 'auto' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 1.5, pb: 0.5, display: 'block', fontWeight: 600 }}>
+              {t('assignSubtaskUser')}
+            </Typography>
+            <MenuItem
+              dense
+              onClick={() => assigningSubtask && handleAssignSubtask(assigningSubtask.listId, assigningSubtask.subtaskId, null)}
+            >
+              <PersonIcon fontSize="small" sx={{ mr: 1, color: 'text.disabled' }} />
+              <Typography variant="body2" color="text.secondary">{t('unassign')}</Typography>
+            </MenuItem>
+            <Divider />
+            {allUsers.map(user => {
+              const currentSubtask = assigningSubtask 
+                ? formData.subtaskLists
+                    .find(l => l.id === assigningSubtask.listId)
+                    ?.subtasks.find(s => s.id === assigningSubtask.subtaskId) 
+                : null;
+              const isSelected = currentSubtask?.assignedTo === user.id;
+
+              return (
+                <MenuItem
+                  key={user.id}
+                  dense
+                  selected={isSelected}
+                  onClick={() => assigningSubtask && handleAssignSubtask(assigningSubtask.listId, assigningSubtask.subtaskId, user.id)}
+                >
+                  <Avatar sx={{ width: 24, height: 24, fontSize: '0.7rem', bgcolor: 'primary.main', mr: 1 }}>
+                    {(user.displayName || user.email || '?').charAt(0).toUpperCase()}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="body2">{user.displayName || t('noName')}</Typography>
+                    <Typography variant="caption" color="text.secondary">{user.email}</Typography>
+                  </Box>
+                </MenuItem>
+              );
+            })}
+          </Box>
+        </Popover>
       </DialogContent>
       <DialogActions sx={{ borderTop: 1, borderColor: 'divider', px: 2.5, py: 2 }}>
         <Button onClick={onClose}>{t('cancel')}</Button>

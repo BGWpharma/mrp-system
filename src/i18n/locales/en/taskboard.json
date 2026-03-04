@@ -126,5 +126,8 @@
   "sortByUpdatedDate": "Updated date",
   "sortOrderAsc": "Ascending",
   "sortOrderDesc": "Descending",
-  "autoSort": "Automatic sorting"
+  "autoSort": "Automatic sorting",
+  "editSubtask": "Edit subtask",
+  "assignSubtaskUser": "Assign person",
+  "unassign": "Unassigned"
 }

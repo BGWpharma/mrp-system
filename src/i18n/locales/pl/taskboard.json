@@ -126,5 +126,8 @@
   "sortByUpdatedDate": "Data aktualizacji",
   "sortOrderAsc": "Rosnąco",
   "sortOrderDesc": "Malejąco",
-  "autoSort": "Sortowanie automatyczne"
+  "autoSort": "Sortowanie automatyczne",
+  "editSubtask": "Edytuj podzadanie",
+  "assignSubtaskUser": "Przypisz osobę",
+  "unassign": "Brak przypisania"
 }
