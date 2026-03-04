@@ -640,7 +640,7 @@ const validateCmrBatches = async (cmrId) => {
     }
     
     // Import getBatchById do pobierania aktualnych danych partii z bazy
-    const { getBatchById } = await import('./inventory/batchService');
+    const { getBatchById } = await import('../inventory/batchService');
     
     const errors = [];
     
@@ -1106,8 +1106,8 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
       return { success: true, message: 'Brak elementów do rezerwacji' };
     }
     
-    const { bookInventoryForTask } = await import('./inventory');
-    const { getBatchById } = await import('./inventory/batchService');
+    const { bookInventoryForTask } = await import('../inventory');
+    const { getBatchById } = await import('../inventory/batchService');
     const reservationResults = [];
     const errors = [];
     
@@ -1280,7 +1280,7 @@ export const processCmrDelivery = async (cmrId, userId) => {
       return { success: true, message: 'Brak elementów do przetworzenia' };
     }
     
-    const { cleanupTaskReservations, issueInventory } = await import('./inventory');
+    const { cleanupTaskReservations, issueInventory } = await import('../inventory');
     const deliveryResults = [];
     const errors = [];
     
@@ -1307,7 +1307,7 @@ export const processCmrDelivery = async (cmrId, userId) => {
     
     // Oblicz całkowitą ilość we wszystkich powiązanych partiach dla każdego elementu
     // FIX: Pobiera AKTUALNE ilości partii z bazy danych zamiast polegać na snapshocie w CMR
-    const { getBatchById } = await import('./inventory/batchService');
+    const { getBatchById } = await import('../inventory/batchService');
     
     for (const item of cmrData.items) {
       if (!item.linkedBatches || item.linkedBatches.length === 0) {
@@ -2008,7 +2008,7 @@ const cancelLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
     
     // KROK 3: Zapisz zaktualizowane dane zamówienia
     const { updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
-    const { db } = await import('./firebase/config'); 
+    const { db } = await import('../firebase/config'); 
     const orderRef = doc(db, 'orders', orderId);
     
     await updateDoc(orderRef, {
@@ -2041,7 +2041,7 @@ export const cleanNegativeCmrHistoryEntries = async (userId = 'system') => {
     console.log('🧹 Rozpoczynanie oczyszczania ujemnych wpisów z cmrHistory...');
     
     const { collection, getDocs, updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
-    const { db } = await import('./firebase/config');
+    const { db } = await import('../firebase/config');
     
     const ordersRef = collection(db, 'orders');
     const snapshot = await getDocs(ordersRef);
@@ -2227,7 +2227,7 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
             
             // Pobierz pozycje z listy cenowej klienta
             const { getPriceListItems, getPriceListsByCustomerId } = await import('../products');
-            const { getInventoryItemById } = await import('./inventory');
+            const { getInventoryItemById } = await import('../inventory');
             
             const priceLists = await getPriceListsByCustomerId(order.customer.id);
             
@@ -2269,7 +2269,7 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
         if (!transportService) {
           console.log(`🔍 Nie znaleziono usługi transportowej w liście cenowej - szukam w magazynie...`);
           
-          const { getInventoryItemsByCategory } = await import('./inventory');
+          const { getInventoryItemsByCategory } = await import('../inventory');
           const servicesData = await getInventoryItemsByCategory('Inne');
           const services = servicesData?.items || servicesData || [];
           
@@ -2540,7 +2540,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
         console.log(`🔍 Szukam usługi transportowej w liście cenowej klienta ${order.customer.name}...`);
         
         const { getPriceListItems, getPriceListsByCustomerId } = await import('../products');
-        const { getInventoryItemById } = await import('./inventory');
+        const { getInventoryItemById } = await import('../inventory');
         
         const priceLists = await getPriceListsByCustomerId(order.customer.id);
         
@@ -2575,7 +2575,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
     if (!transportService) {
       console.log(`🔍 Nie znaleziono usługi w liście cenowej - szukam w magazynie...`);
       
-      const { getInventoryItemsByCategory } = await import('./inventory');
+      const { getInventoryItemsByCategory } = await import('../inventory');
       const servicesData = await getInventoryItemsByCategory('Inne');
       const services = servicesData?.items || servicesData || [];
       
@@ -2935,7 +2935,7 @@ export const cancelCmrReservations = async (cmrId, userId) => {
       return { success: true, message: 'Brak elementów do anulowania rezerwacji' };
     }
 
-    const { cleanupTaskReservations } = await import('./inventory');
+    const { cleanupTaskReservations } = await import('../inventory');
     const cancellationResults = [];
     const errors = [];
     

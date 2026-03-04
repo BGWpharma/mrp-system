@@ -536,7 +536,7 @@ export const createOrder = async (orderData, userId) => {
     
     // Tworzenie powiadomienia o nowym zamówieniu
     try {
-      const { createRealtimeNotification } = require('./notificationService');
+      const { createRealtimeNotification } = require('../notificationService');
       
       // ID użytkowników, którzy powinni otrzymać powiadomienie
       // W tym przypadku wysyłamy powiadomienie do użytkownika, który utworzył zamówienie
@@ -596,7 +596,7 @@ export const createPurchaseOrder = async (orderData, userId) => {
     
     // Tworzenie powiadomienia o nowym zamówieniu zakupowym
     try {
-      const { createRealtimeNotification } = require('./notificationService');
+      const { createRealtimeNotification } = require('../notificationService');
       
       // ID użytkowników, którzy powinni otrzymać powiadomienie
       const userIds = [userId];
@@ -1012,7 +1012,7 @@ export const updateOrderStatus = async (orderId, status, userId) => {
       
       // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
       try {
-        const { createRealtimeStatusChangeNotification } = require('./notificationService');
+        const { createRealtimeStatusChangeNotification } = require('../notificationService');
         
         // Pobierz wszystkich administratorów, którzy powinni otrzymać powiadomienie
         // W tym przypadku powiadomienie wysyłamy tylko do użytkownika, który zmienił status,
@@ -1033,7 +1033,7 @@ export const updateOrderStatus = async (orderId, status, userId) => {
         
         // Fallback do starego systemu powiadomień, jeśli Realtime Database nie zadziała
         try {
-          const { createStatusChangeNotification } = require('./notificationService');
+          const { createStatusChangeNotification } = require('../notificationService');
           await createStatusChangeNotification(
             userId,
             'order',
@@ -2190,7 +2190,7 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
     };
     
     // Pobierz wszystkie CMR powiązane z tym zamówieniem
-    const { getCmrDocumentsByOrderId, findCmrDocumentsByOrderNumber } = await import('./cmrService');
+    const { getCmrDocumentsByOrderId, findCmrDocumentsByOrderNumber } = await import('../logistics/cmrService');
     let linkedCMRs = await getCmrDocumentsByOrderId(orderId);
     
     console.log(`Znaleziono ${linkedCMRs.length} powiązanych CMR dla zamówienia ${orderId}:`, 
@@ -2321,7 +2321,7 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
       
       // NOWA FUNKCJONALNOŚĆ: Sprawdź czy dokument CMR nadal istnieje w bazie danych
       try {
-        const { getCmrDocumentById } = await import('./cmrService');
+        const { getCmrDocumentById } = await import('../logistics/cmrService');
         const cmrExists = await getCmrDocumentById(cmr.id);
         
         if (!cmrExists) {
@@ -2707,7 +2707,7 @@ export const debugOrderCMRConnections = async (orderId) => {
     });
     
     // Sprawdź powiązane CMR używając nowego systemu orderItemId
-    const { getCmrDocumentsByOrderId, getAllCmrDocuments } = await import('./cmrService');
+    const { getCmrDocumentsByOrderId, getAllCmrDocuments } = await import('../logistics/cmrService');
     
     // Pobierz CMR przez stary system (linkedOrderIds)
     const linkedCMRs = await getCmrDocumentsByOrderId(orderId);
@@ -2837,8 +2837,8 @@ export const cleanupObsoleteCMRConnections = async (obsoleteItems, userId = 'sys
     console.log(`🧹 Rozpoczynanie oczyszczania ${obsoleteItems.length} nieaktualnych powiązań CMR...`);
     
     const { updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
-    const { db } = await import('./firebase/config');
-    const { getCmrDocumentById, CMR_ITEMS_COLLECTION } = await import('./cmrService');
+    const { db } = await import('../firebase/config');
+    const { getCmrDocumentById, CMR_ITEMS_COLLECTION } = await import('../logistics/cmrService');
     
     let cleanedItems = 0;
     const results = [];

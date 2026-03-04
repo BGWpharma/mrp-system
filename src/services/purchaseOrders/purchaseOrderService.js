@@ -524,7 +524,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             if (matchingInventoryItemIds.size === 0) {
               try {
                 // Importuj i użyj funkcji wyszukiwania pozycji magazynowych
-                const { getAllInventoryItems } = await import('./inventory');
+                const { getAllInventoryItems } = await import('../inventory');
                 const inventorySearchResult = await getAllInventoryItems(
                   null, // warehouseId - wszystkie magazyny
                   1, // page - pierwsza strona
@@ -1375,7 +1375,7 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
       
       // Spróbuj utworzyć powiadomienie w czasie rzeczywistym
       try {
-        const { createRealtimeStatusChangeNotification } = require('./notificationService');
+        const { createRealtimeStatusChangeNotification } = require('../notificationService');
         
         // Powiadomienie wysyłamy nie tylko do użytkownika, który zmienił status,
         // ale do wszystkich administratorów
@@ -1398,7 +1398,7 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
         
         // Fallback do starego systemu powiadomień, jeśli Realtime Database nie zadziała
         try {
-          const { createStatusChangeNotification } = require('./notificationService');
+          const { createStatusChangeNotification } = require('../notificationService');
           await createStatusChangeNotification(
             userId,
             'purchaseOrder',
@@ -1718,7 +1718,7 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
     // Jeśli nie znaleziono po ID, spróbuj znaleźć element po nazwie produktu
     if (!itemWasUpdated) {
       try {
-        const { getInventoryItemById } = await import('./inventory');
+        const { getInventoryItemById } = await import('../inventory');
         const inventoryItem = await getInventoryItemById(itemId);
         
         if (inventoryItem && inventoryItem.name) {
@@ -1768,7 +1768,7 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
     if (!itemWasUpdated && poData.items.length > 0) {
       try {
         // Pobierz informacje o produkcie z magazynu
-        const { getInventoryItemById } = await import('./inventory');
+        const { getInventoryItemById } = await import('../inventory');
         const inventoryItem = await getInventoryItemById(itemId);
         
         if (inventoryItem && inventoryItem.sku) {
@@ -2039,7 +2039,7 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
     
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
     const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-    const firebaseConfig = await import('./firebase/config');
+    const firebaseConfig = await import('../firebase/config');
     const db = firebaseConfig.db;
     const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
     
@@ -2336,7 +2336,7 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
     
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
     const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-    const firebaseConfig = await import('./firebase/config');
+    const firebaseConfig = await import('../firebase/config');
     const db = firebaseConfig.db;
     const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
     
@@ -2558,7 +2558,7 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
     
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
     const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-    const firebaseConfig = await import('./firebase/config');
+    const firebaseConfig = await import('../firebase/config');
     const db = firebaseConfig.db;
     const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
     
@@ -2707,7 +2707,7 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
     
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
     const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-    const firebaseConfig = await import('./firebase/config');
+    const firebaseConfig = await import('../firebase/config');
     const db = firebaseConfig.db;
     const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
     
@@ -2909,7 +2909,7 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
         console.log(`🔄 [TASK_COST_UPDATE] Rozpoczynam aktualizację kosztów zadań po zmianie cen partii...`);
         
         // Pobierz wszystkie zadania które używają zaktualizowanych partii
-        const { updateTaskCostsForUpdatedBatches } = await import('./productionService');
+        const { updateTaskCostsForUpdatedBatches } = await import('../productionService');
         const batchIds = batchesToUpdate.map(batch => batch.id);
         
         const taskUpdateResult = await updateTaskCostsForUpdatedBatches(batchIds, userId || 'system');
@@ -2958,7 +2958,7 @@ const updateBatchPricesWithDetails = async (purchaseOrderId, userId) => {
     
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
     const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-    const firebaseConfig = await import('./firebase/config');
+    const firebaseConfig = await import('../firebase/config');
     const db = firebaseConfig.db;
     const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
     

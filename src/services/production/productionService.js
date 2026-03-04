@@ -1455,7 +1455,7 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
       if (taskWithMeta.orderId) {
         try {
           console.log(`[DEBUG-MO] Próba dodania zadania ${docRef.id} do zamówienia ${taskWithMeta.orderId} z orderItemId: ${taskWithMeta.orderItemId}`);
-          const { addProductionTaskToOrder } = await import('./orders');
+          const { addProductionTaskToOrder } = await import('../orders');
           await addProductionTaskToOrder(taskWithMeta.orderId, {
             id: docRef.id,
             moNumber,
@@ -1793,7 +1793,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       if (oldStatus !== updates.status) {
         // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
         try {
-          const { createRealtimeStatusChangeNotification } = require('./notificationService');
+          const { createRealtimeStatusChangeNotification } = require('../notificationService');
           
           // Określ użytkowników, którzy powinni otrzymać powiadomienie
           // Na przykład: użytkownik wykonujący zmianę oraz opcjonalnie menadżerowie produkcji
@@ -1813,7 +1813,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           
           // Fallback do starego systemu powiadomień, jeśli Realtime Database nie zadziała
           try {
-            const { createStatusChangeNotification } = require('./notificationService');
+            const { createStatusChangeNotification } = require('../notificationService');
             await createStatusChangeNotification(
               userId,
               'productionTask',
@@ -1969,7 +1969,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       
       // OPTYMALIZACJA 2: Usuń redundantne czyszczenie - tylko konkretne rezerwacje dla tego zadania
       try {
-        const { cleanupTaskReservations } = await import('./inventory');
+        const { cleanupTaskReservations } = await import('../inventory');
         
         // Wyczyść tylko konkretne rezerwacje dla tego zadania (bez globalnego czyszczenia)
         await cleanupTaskReservations(taskId);
@@ -1981,7 +1981,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
 
       // OPTYMALIZACJA 3: Usuń rezerwacje PO powiązane z tym zadaniem
       try {
-        const { getPOReservationsForTask, cancelPOReservation } = await import('./purchaseOrders');
+        const { getPOReservationsForTask, cancelPOReservation } = await import('../purchaseOrders');
         
         // Pobierz wszystkie rezerwacje PO dla tego zadania
         const poReservations = await getPOReservationsForTask(taskId);
@@ -2034,7 +2034,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         (async () => {
           if (task.orderId) {
             try {
-              const { removeProductionTaskFromOrder } = await import('./orders');
+              const { removeProductionTaskFromOrder } = await import('../orders');
               await removeProductionTaskFromOrder(task.orderId, taskId);
               console.log(`Zadanie produkcyjne ${taskId} zostało usunięte z zamówienia ${task.orderId}`);
               return true;
@@ -2231,7 +2231,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Jeśli zadanie ma przypisane inventoryProductId, sprawdź czy pozycja rzeczywiście istnieje
       if (inventoryItemId) {
         try {
-          const { getInventoryItemById } = await import('./inventory');
+          const { getInventoryItemById } = await import('../inventory');
           inventoryItem = await getInventoryItemById(inventoryItemId);
           
           if (!inventoryItem) {
@@ -2253,7 +2253,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           
           try {
             // Importuj funkcję do pobierania pozycji magazynowej powiązanej z recepturą
-            const { getInventoryItemByRecipeId } = await import('./inventory');
+            const { getInventoryItemByRecipeId } = await import('../inventory');
             const recipeInventoryItem = await getInventoryItemByRecipeId(taskData.recipeId);
             
             if (recipeInventoryItem) {
@@ -2713,7 +2713,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       let recipesMap = {};
       if (recipeIds.size > 0) {
         // Importuj funkcje z recipeService
-        const { getAllRecipes } = await import('./products');
+        const { getAllRecipes } = await import('../products');
         
         // Pobierz wszystkie receptury
         const recipes = await getAllRecipes();
@@ -3538,7 +3538,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             console.log(`Rezerwowanie ${reserveAmount} ${requiredMaterial.unit || 'szt.'} z partii ${batch.batchId}`);
             
             // Użyj funkcji bookInventoryForTask z inventoryService
-            const { bookInventoryForTask } = await import('../services/inventory');
+            const { bookInventoryForTask } = await import('../inventory');
             const bookingResult = await bookInventoryForTask(
               requiredMaterial.id,
               reserveAmount,
@@ -3886,7 +3886,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         let userName = session.userName || 'System';
         if (!session.userName && session.createdBy) {
           try {
-            const { getUserById } = await import('./userService');
+            const { getUserById } = await import('../userService');
             const userData = await getUserById(session.createdBy);
             userName = userData?.displayName || userData?.email || session.createdBy;
           } catch (error) {
@@ -4016,7 +4016,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             
             // Przelicz całkowitą ilość pozycji magazynowej
             try {
-              const { recalculateItemQuantity } = await import('./inventory');
+              const { recalculateItemQuantity } = await import('../inventory');
               await recalculateItemQuantity(batchData.itemId);
             } catch (recalcError) {
               console.error('Błąd podczas przeliczania ilości pozycji magazynowej:', recalcError);
@@ -4036,7 +4036,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       let userName = 'System';
       if (userId) {
         try {
-          const { getUserById } = await import('./userService');
+          const { getUserById } = await import('../userService');
           const userData = await getUserById(userId);
           userName = userData?.displayName || userData?.email || userId;
         } catch (error) {
@@ -4158,7 +4158,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             
             // Przelicz całkowitą ilość pozycji magazynowej
             try {
-              const { recalculateItemQuantity } = await import('./inventory');
+              const { recalculateItemQuantity } = await import('../inventory');
               await recalculateItemQuantity(batchData.itemId);
             } catch (recalcError) {
               console.error('Błąd podczas przeliczania ilości pozycji magazynowej:', recalcError);
@@ -4180,7 +4180,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       let userName = 'System';
       if (sessionData.userId) {
         try {
-          const { getUserById } = await import('./userService');
+          const { getUserById } = await import('../userService');
           const userData = await getUserById(sessionData.userId);
           userName = userData?.displayName || userData?.email || sessionData.userId;
         } catch (error) {
@@ -5299,7 +5299,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             
             // Przelicz całkowitą ilość pozycji magazynowej
             try {
-              const { recalculateItemQuantity } = await import('./inventory');
+              const { recalculateItemQuantity } = await import('../inventory');
               await recalculateItemQuantity(batchData.itemId);
             } catch (recalcError) {
               console.error('Błąd podczas przeliczania ilości pozycji magazynowej:', recalcError);
@@ -5387,7 +5387,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       }
       
       // Importuj funkcje z recipeService
-      const { getRecipeById } = await import('./products');
+      const { getRecipeById } = await import('../products');
       
       // Pobierz recepturę
       const recipe = await getRecipeById(taskDoc.recipeId);
@@ -5558,7 +5558,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     if (task.poReservationIds && task.poReservationIds.length > 0) {
       console.log(`[AUTO] Przetwarzam ${task.poReservationIds.length} rezerwacji PO`);
       
-      const { getPOReservationsForTask } = await import('./purchaseOrders');
+      const { getPOReservationsForTask } = await import('../purchaseOrders');
       const poReservations = await getPOReservationsForTask(taskId);
       
       // Uwzględnij tylko rezerwacje pending i delivered (nie converted - bo te są już w materialBatches)
@@ -6005,7 +6005,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     
     // PRZYWRÓCONA LOGIKA: Automatycznie aktualizuj związane zamówienia klientów
     try {
-      const { getOrdersByProductionTaskId, updateOrder } = await import('./orders');
+      const { getOrdersByProductionTaskId, updateOrder } = await import('../orders');
       const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/calculations');
       
       // Pobierz tylko zamówienia powiązane z tym zadaniem (optymalizacja)
@@ -6318,7 +6318,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       // Jeśli zadanie ma przypisane inventoryProductId, sprawdź czy pozycja rzeczywiście istnieje
       if (inventoryItemId) {
         try {
-          const { getInventoryItemById } = await import('./inventory');
+          const { getInventoryItemById } = await import('../inventory');
           inventoryItem = await getInventoryItemById(inventoryItemId);
           
           if (!inventoryItem) {
@@ -6339,7 +6339,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
           console.log(`Sprawdzanie pozycji magazynowej powiązanej z recepturą ${taskData.recipeId}`);
           
           try {
-            const { getInventoryItemByRecipeId } = await import('./inventory');
+            const { getInventoryItemByRecipeId } = await import('../inventory');
             const recipeInventoryItem = await getInventoryItemByRecipeId(taskData.recipeId);
             
             if (recipeInventoryItem) {

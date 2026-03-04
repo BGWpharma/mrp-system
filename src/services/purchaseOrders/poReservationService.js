@@ -478,7 +478,7 @@ export const convertPOReservationToStandard = async (reservationId, selectedBatc
     }
     
     // Utwórz standardową rezerwację magazynową
-    const { bookInventoryForTask } = await import('./inventory');
+    const { bookInventoryForTask } = await import('../inventory');
     const bookingResult = await bookInventoryForTask(
       reservation.materialId,
       quantityToConvert,
@@ -1071,7 +1071,7 @@ export const updatePOReservationsPricesOnPOChange = async (purchaseOrderId, poDa
       // STARA LOGIKA (przed Cloud Functions): Aktualizuj koszty w zadaniach
       console.log(`🔄 [PO_RES_PRICE_UPDATE] Aktualizacja kosztów w ${affectedTaskIds.size} zadaniach...`);
       
-      const { updateTaskCostsAutomatically } = await import('./productionService');
+      const { updateTaskCostsAutomatically } = await import('../productionService');
       const taskUpdatePromises = Array.from(affectedTaskIds).map(taskId =>
         updateTaskCostsAutomatically(taskId, userId, 'Automatyczna aktualizacja po zmianie cen w rezerwacjach PO')
       );

@@ -134,7 +134,7 @@ const getActiveReservationsForPO = async (poId) => {
  */
 const sendDeliveryNotification = async (userId, po, reservations, updatedReservations) => {
   try {
-    const { createRealtimeNotification } = await import('./notificationService');
+    const { createRealtimeNotification } = await import('../notificationService');
     
     // Znajdź zadania użytkownika z rezerwacjami z tego PO
     const userReservations = reservations.filter(r => r.reservedBy === userId);

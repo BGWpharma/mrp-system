@@ -3538,7 +3538,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             console.log(`Rezerwowanie ${reserveAmount} ${requiredMaterial.unit || 'szt.'} z partii ${batch.batchId}`);
             
             // Użyj funkcji bookInventoryForTask z inventoryService
-            const { bookInventoryForTask } = await import('../services/inventory');
+            const { bookInventoryForTask } = await import('./inventory');
             const bookingResult = await bookInventoryForTask(
               requiredMaterial.id,
               reserveAmount,
