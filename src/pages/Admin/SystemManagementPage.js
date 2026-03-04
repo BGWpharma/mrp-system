@@ -63,6 +63,7 @@ import {
   bulkUpdateSupplierPricesFromCompletedPOs
 } from '../../services/inventory';
 import ArchiveManager from '../../components/admin/ArchiveManager';
+import { getRandomBatch } from '../../services/cloudFunctionsService';
 
 /**
  * Strona dla administratorów z narzędziami do zarządzania systemem
@@ -96,6 +97,10 @@ const SystemManagementPage = () => {
   const [cfTestLoading, setcfTestLoading] = useState(false);
   const [cfTestResults, setCfTestResults] = useState(null);
   const [cfTestStep, setCfTestStep] = useState('');
+
+  // Stany dla losowej partii
+  const [randomBatchLoading, setRandomBatchLoading] = useState(false);
+  const [randomBatchResult, setRandomBatchResult] = useState(null);
 
   // Funkcja do testowania Cloud Functions łańcucha PO → Batch → MO → CO
   const handleTestCloudFunctionsChain = async () => {
@@ -268,6 +273,23 @@ const SystemManagementPage = () => {
     }
   };
   
+  // Funkcja do pobrania losowej partii z magazynu
+  const handleGetRandomBatch = async () => {
+    try {
+      setRandomBatchLoading(true);
+      setRandomBatchResult(null);
+      
+      const result = await getRandomBatch();
+      setRandomBatchResult(result);
+      showSuccess('Pobrano losową partię z magazynu');
+    } catch (error) {
+      console.error('Błąd podczas pobierania losowej partii:', error);
+      showError(`Błąd: ${error.message}`);
+    } finally {
+      setRandomBatchLoading(false);
+    }
+  };
+
   // Funkcja do uruchomienia migracji limitów wiadomości AI
   const handleRunAILimitsMigration = async () => {
     try {
@@ -1007,6 +1029,58 @@ const SystemManagementPage = () => {
               <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
                 Testy i diagnostyka systemu
               </Typography>
+
+              {/* SEKCJA: Losowa partia z magazynu */}
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <StorageIcon sx={{ mr: 1.5, color: 'info.main' }} />
+                    <Typography variant="h6">
+                      🎲 Losowa partia z magazynu
+                    </Typography>
+                  </Box>
+                  
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Pobiera losową partię z magazynu za pomocą Cloud Function <code>getRandomBatch</code>. 
+                    Przydatne do testowania i weryfikacji danych magazynowych.
+                  </Typography>
+
+                  {randomBatchResult && (
+                    <Box sx={{ mt: 2 }}>
+                      <Alert severity="success" sx={{ mb: 2 }}>
+                        Pobrano losową partię z magazynu
+                      </Alert>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableBody>
+                            {Object.entries(randomBatchResult).map(([key, value]) => (
+                              <TableRow key={key}>
+                                <TableCell sx={{ fontWeight: 'bold', width: '30%' }}>{key}</TableCell>
+                                <TableCell>
+                                  {typeof value === 'object' && value !== null
+                                    ? JSON.stringify(value, null, 2)
+                                    : String(value ?? '-')}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Box>
+                  )}
+                </CardContent>
+                <CardActions>
+                  <Button
+                    startIcon={randomBatchLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
+                    variant="contained"
+                    color="info"
+                    onClick={handleGetRandomBatch}
+                    disabled={randomBatchLoading}
+                  >
+                    {randomBatchLoading ? 'Pobieranie...' : 'Pobierz losową partię'}
+                  </Button>
+                </CardActions>
+              </Card>
 
               {/* SEKCJA: Test Cloud Functions - Łańcuch aktualizacji */}
         <Card sx={{ mb: 3 }}>

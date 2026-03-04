@@ -339,5 +339,9 @@
     "description": "Wybierz typ formularza, który chcesz wypełnić",
     "fillForm": "Wypełnij formularz",
     "viewResponses": "Zobacz odpowiedzi"
+  },
+  "updateNotification": {
+    "message": "Dostępna jest nowa wersja aplikacji",
+    "refresh": "Odśwież"
   }
 }

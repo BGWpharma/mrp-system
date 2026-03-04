@@ -53,7 +53,6 @@ import {
   TrendingUp as TrendIcon,
   Assessment as AnalysisIcon,
   Timeline as TimelineIcon,
-  CalendarToday as WeeklyIcon,
   BarChart as BarChartIcon,
   PieChart as PieChartIcon,
   FileDownload as ExportIcon,
@@ -71,7 +70,6 @@ import {
 } from '../../services/production/productionTimeAnalysisService';
 import { getRecipeById } from '../../services/products';
 import ProductionGapAnalysisTab from './ProductionGapAnalysisTab';
-import WeeklyProductivityTab from './WeeklyProductivityTab';
 import WeeklySprintTab from './WeeklySprintTab';
 
 const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) => {
@@ -170,7 +168,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
 
   // Załaduj dane przy montowaniu komponentu i zmianie dat
   useEffect(() => {
-    if (selectedTab === 0 || selectedTab === 1) { // Dla zakładki analizy czasu i tygodniówek
+    if (selectedTab === 0) {
       fetchTimeAnalysisData();
     }
   }, [timeAnalysisStartDate, timeAnalysisEndDate, selectedTab]);
@@ -320,12 +318,6 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
             sx={{ minHeight: 48 }}
           />
           <Tab 
-            icon={<WeeklyIcon />} 
-            label={t('productionReport.tabs.weeklyProductivity')} 
-            iconPosition="start"
-            sx={{ minHeight: 48 }}
-          />
-          <Tab 
             icon={<TimelineIcon />} 
             label={t('productionReport.tabs.gapAnalysis')} 
             iconPosition="start"
@@ -370,20 +362,6 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
       )}
 
       {selectedTab === 1 && (
-        <WeeklyProductivityTab
-          timeAnalysis={timeAnalysis}
-          tasksMap={tasksMap}
-          isMobileView={isMobileView}
-          startDate={timeAnalysisStartDate}
-          endDate={timeAnalysisEndDate}
-          onDateChange={(newStartDate, newEndDate) => {
-            setTimeAnalysisStartDate(newStartDate);
-            setTimeAnalysisEndDate(newEndDate);
-          }}
-        />
-      )}
-
-      {selectedTab === 2 && (
         <ProductionGapAnalysisTab
           startDate={startDate}
           endDate={endDate}
@@ -391,7 +369,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
         />
       )}
 
-      {selectedTab === 3 && (
+      {selectedTab === 2 && (
         <WeeklySprintTab
           isMobileView={isMobileView}
         />

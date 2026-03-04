@@ -9,6 +9,24 @@ import App from './App';
 import './styles/global.css';
 import './styles/enhancements.css';
 
+// Automatyczny reload przy błędzie ładowania chunków (po nowym deployu)
+window.addEventListener('error', (event) => {
+  const isChunkError =
+    event.message?.includes('Unexpected token') ||
+    event.message?.includes('Loading chunk') ||
+    event.message?.includes('Loading CSS chunk') ||
+    event.message?.includes('Failed to fetch dynamically imported module');
+
+  if (isChunkError) {
+    const lastReload = sessionStorage.getItem('chunk-error-reload');
+    const now = Date.now();
+    if (!lastReload || now - Number(lastReload) > 10000) {
+      sessionStorage.setItem('chunk-error-reload', String(now));
+      window.location.reload();
+    }
+  }
+});
+
 // Pobierz wersję z package.json dla release tracking
 const packageJson = require('../package.json');
 

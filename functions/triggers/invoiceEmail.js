@@ -25,7 +25,7 @@ const onInvoiceStatusChange = onDocumentUpdated(
       document: "invoices/{invoiceId}",
       region: "europe-central2",
       memory: "256MiB",
-      timeoutSeconds: 60,
+      timeoutSeconds: 120,
       vpcConnector: "smtp-connector",
       vpcConnectorEgressSettings: "ALL_TRAFFIC",
     },

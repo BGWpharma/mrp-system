@@ -338,5 +338,9 @@
     "description": "Select the type of form you want to fill out",
     "fillForm": "Fill form",
     "viewResponses": "View responses"
+  },
+  "updateNotification": {
+    "message": "A new version of the application is available",
+    "refresh": "Refresh"
   }
 }

@@ -72,6 +72,7 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
+    "prebuild": "node scripts/generate-meta.js",
     "start": "set PORT=3003 && react-scripts start",
     "build": "react-scripts build && npm run sentry:sourcemaps",
     "build:dev": "react-scripts build",

@@ -13,31 +13,71 @@
  */
 
 const nodemailer = require("nodemailer");
+const https = require("https");
 const logger = require("firebase-functions/logger");
 
 const FROM_ACCOUNTING = "BGW Pharma - Accounting <accounting@bgwpharma.com>";
 const FROM_WAREHOUSE = "BGW Pharma - Warehouse <warehouse@bgwpharma.com>";
 
-const MAX_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 2000;
+const MAX_RETRIES = 4;
+const RETRY_DELAYS_MS = [3_000, 8_000, 15_000, 25_000];
+
+let _externalIpLogged = false;
+
+/**
+ * Logs the external (egress) IP once per cold start for NAT diagnostics.
+ */
+const logExternalIpOnce = async () => {
+  if (_externalIpLogged) return;
+  _externalIpLogged = true;
+  try {
+    const ip = await new Promise((resolve, reject) => {
+      const req = https.get(
+          "https://api.ipify.org",
+          {timeout: 5_000},
+          (res) => {
+            let data = "";
+            res.on("data", (chunk) => data += chunk);
+            res.on("end", () => resolve(data.trim()));
+          },
+      );
+      req.on("error", reject);
+      req.on("timeout", () => {
+        req.destroy();
+        reject(new Error("timeout"));
+      });
+    });
+    logger.info("[Email] Egress IP (NAT diagnostic)", {externalIp: ip});
+  } catch (err) {
+    logger.warn("[Email] Nie udało się sprawdzić egress IP", {
+      error: err.message,
+    });
+  }
+};
 
 const createTransporter = () => nodemailer.createTransport({
   host: "smtp-relay.gmail.com",
   port: 587,
   secure: false,
   tls: {rejectUnauthorized: true},
-  connectionTimeout: 10_000,
-  greetingTimeout: 10_000,
+  connectionTimeout: 15_000,
+  greetingTimeout: 15_000,
   socketTimeout: 30_000,
 });
+
+const is421Error = (error) =>
+  error?.message?.includes("421") || error?.responseCode === 421;
 
 /**
  * Send mail with retry & exponential backoff.
  * Creates a fresh transporter on each retry to avoid stale connections.
+ * Uses longer delays for 421 (rate-limit / IP rejection) errors.
  * @param {Object} mailOptions - nodemailer mail options
  * @return {Promise<Object>} nodemailer send result
  */
 const sendMailWithRetry = async (mailOptions) => {
+  await logExternalIpOnce();
+
   let lastError;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -51,9 +91,12 @@ const sendMailWithRetry = async (mailOptions) => {
         error: error.message,
         code: error.code,
         command: error.command,
+        responseCode: error.responseCode,
       });
       if (attempt < MAX_RETRIES) {
-        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        const baseDelay = RETRY_DELAYS_MS[attempt - 1] || 25_000;
+        const delay = is421Error(error) ? baseDelay * 2 : baseDelay;
+        logger.info(`[Email] Retry za ${delay}ms...`);
         await new Promise((r) => setTimeout(r, delay));
       }
     }
@@ -164,13 +207,36 @@ const sendInvoiceNotification = async (invoice) => {
 };
 
 /**
+ * Build HTML table rows for shipped items.
+ * @param {Array} items - CMR items array
+ * @return {string} HTML rows
+ */
+const buildItemsRowsHtml = (items) => {
+  if (!items || items.length === 0) return "";
+  return items.map((item) => {
+    const desc = item.description || item.name || "-";
+    const qty = item.quantity || item.numberOfPackages || "-";
+    const unit = item.unit || "pcs";
+    return `<tr>
+      <td style="padding: 8px 10px; border: 1px solid #e0e0e0;">
+        ${desc}</td>
+      <td style="padding: 8px 10px; border: 1px solid #e0e0e0;
+        text-align: center;">${qty} ${unit}</td>
+    </tr>`;
+  }).join("");
+};
+
+/**
  * Send CMR shipment notification email to customer
  * @param {Object} cmrData - CMR document data
  * @param {string} cmrId - CMR document ID
- * @param {Object} customerData - Customer object from linked order (needs .email)
+ * @param {Object} customerData - Customer object from linked order
+ * @param {Array} cmrItems - Items shipped in this CMR
  * @return {Promise<Object|null>} nodemailer send result or null if skipped
  */
-const sendCmrShipmentNotification = async (cmrData, cmrId, customerData) => {
+const sendCmrShipmentNotification = async (
+    cmrData, cmrId, customerData, cmrItems = [],
+) => {
   const customerEmail = customerData?.email;
   if (!customerEmail) {
     logger.warn("[Email] Brak emaila klienta — pomijam powiadomienie CMR", {
@@ -182,6 +248,22 @@ const sendCmrShipmentNotification = async (cmrData, cmrId, customerData) => {
 
   const subject =
     `Shipment in transit — CMR ${cmrData.cmrNumber}`;
+
+  const itemsHtml = cmrItems.length > 0 ? `
+      <h3 style="color: #1a237e; margin: 24px 0 8px;">
+        Shipped items</h3>
+      <table style="border-collapse: collapse; width: 100%;
+        margin: 0 0 16px;">
+        <tr>
+          <th style="padding: 8px 10px; border: 1px solid #e0e0e0;
+            background: #1a237e; color: #fff; text-align: left;">
+            Description</th>
+          <th style="padding: 8px 10px; border: 1px solid #e0e0e0;
+            background: #1a237e; color: #fff; text-align: center;
+            width: 120px;">Quantity</th>
+        </tr>
+        ${buildItemsRowsHtml(cmrItems)}
+      </table>` : "";
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px;
@@ -214,11 +296,13 @@ const sendCmrShipmentNotification = async (cmrData, cmrId, customerData) => {
         </tr>
         <tr>
           <td style="padding: 10px; border: 1px solid #e0e0e0;
-            background: #f5f5f5; font-weight: bold;">Carrier</td>
+            background: #f5f5f5; font-weight: bold;">
+            Planned delivery date</td>
           <td style="padding: 10px; border: 1px solid #e0e0e0;">
-            ${cmrData.carrier || "-"}</td>
+            ${formatDate(cmrData.deliveryDate)}</td>
         </tr>
       </table>
+      ${itemsHtml}
       <p style="color: #666; font-size: 13px;">
         This message was generated automatically by the BGW MRP
         system.<br/>
@@ -239,6 +323,7 @@ const sendCmrShipmentNotification = async (cmrData, cmrId, customerData) => {
     cmrId,
     to: customerEmail,
     messageId: result.messageId,
+    itemsCount: cmrItems.length,
   });
   return result;
 };

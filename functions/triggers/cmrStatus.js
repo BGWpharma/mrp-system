@@ -104,7 +104,7 @@ const onCmrStatusUpdate = onDocumentUpdated(
               const orderData = orderDoc.exists ? orderDoc.data() : null;
               if (orderData?.customer) {
                 await sendCmrShipmentNotification(
-                    afterData, cmrId, orderData.customer,
+                    afterData, cmrId, orderData.customer, cmrItems,
                 );
               } else {
                 logger.warn("[Email] Order has no customer data", {orderId});

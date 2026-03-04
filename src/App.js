@@ -36,6 +36,7 @@ import Register from './pages/Auth/Register';
 import BackgroundEffects from './components/common/BackgroundEffects';
 import Navbar from './components/common/Navbar';
 import Sidebar from './components/common/Sidebar';
+import UpdateNotification from './components/common/UpdateNotification';
 import PrivateRoute from './components/common/PrivateRoute';
 import AdminRoute from './components/common/AdminRoute';
 import PermissionRoute from './components/common/PermissionRoute';
@@ -604,6 +605,7 @@ function PrivateLayout({ children }) {
         minHeight: '100vh'
       }}>
         <BackgroundEffects />
+        <UpdateNotification />
         <Navbar sidebarCollapsed={isSidebarCollapsed} />
         <div className="content-container">
           <Sidebar onToggle={handleSidebarToggle} />

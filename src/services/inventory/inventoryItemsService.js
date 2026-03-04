@@ -856,7 +856,7 @@ export const getAllAwaitingOrdersIndexed = async () => {
     const purchaseOrdersRef = collection(db, 'purchaseOrders');
     const q = query(
       purchaseOrdersRef,
-      where('status', 'not-in', ['completed', 'cancelled'])
+      where('status', 'not-in', ['completed', 'cancelled', 'draft'])
     );
     
     const fetchStart = performance.now();
@@ -976,12 +976,12 @@ export const getAwaitingOrdersForInventoryItem = async (inventoryItemId) => {
   try {
     const validatedItemId = validateId(inventoryItemId, 'inventoryItemId');
     
-    // Pobierz zamówienia zakupowe, które mają status inny niż "completed" lub "cancelled"
+    // Pobierz zamówienia zakupowe, które mają status inny niż "completed", "cancelled" lub "draft"
     // i zawierają szukany produkt
     const purchaseOrdersRef = collection(db, 'purchaseOrders');
     const q = query(
       purchaseOrdersRef,
-      where('status', 'not-in', ['completed', 'cancelled'])
+      where('status', 'not-in', ['completed', 'cancelled', 'draft'])
     );
     
     const querySnapshot = await getDocs(q);
@@ -1107,7 +1107,7 @@ export const getAwaitingOrdersForMultipleItems = async (inventoryItemIds) => {
       const purchaseOrdersRef = collection(db, 'purchaseOrders');
       const q = query(
         purchaseOrdersRef,
-        where('status', 'not-in', ['completed', 'cancelled'])
+        where('status', 'not-in', ['completed', 'cancelled', 'draft'])
       );
       querySnapshot = await getDocs(q);
       activePOCache = { data: querySnapshot, timestamp: now };
