@@ -24,6 +24,7 @@ import {
   updatePurchaseOrder
 } from '../../../../services/purchaseOrders';
 import { useNotification } from '../../../../hooks/useNotification';
+import { useTranslation } from '../../../../hooks/useTranslation';
 import PurchaseOrderCategorizedFileUpload from '../../PurchaseOrderCategorizedFileUpload';
 
 const getFileIcon = (filename) => {
@@ -35,6 +36,7 @@ const getFileIcon = (filename) => {
 };
 
 const POModalDocumentsTab = ({ purchaseOrder, orderId, onRefresh }) => {
+  const { t } = useTranslation('purchaseOrders');
   const { showSuccess, showError } = useNotification();
   const [invoiceLinkDialog, setInvoiceLinkDialog] = useState(false);
   const [tempInvoiceLinks, setTempInvoiceLinks] = useState([]);
@@ -47,7 +49,7 @@ const POModalDocumentsTab = ({ purchaseOrder, orderId, onRefresh }) => {
 
   const handleOpenInvoiceLinkDialog = () => {
     if ((!invoiceLinks || invoiceLinks.length === 0) && po?.invoiceLink) {
-      setTempInvoiceLinks([{ id: `invoice-${Date.now()}`, description: 'Faktura główna', url: po.invoiceLink }]);
+      setTempInvoiceLinks([{ id: `invoice-${Date.now()}`, description: t('purchaseOrders.kanban.documents.mainInvoice'), url: po.invoiceLink }]);
     } else {
       setTempInvoiceLinks([...invoiceLinks]);
     }
@@ -61,11 +63,11 @@ const POModalDocumentsTab = ({ purchaseOrder, orderId, onRefresh }) => {
         invoiceLink: tempInvoiceLinks.length > 0 ? tempInvoiceLinks[0].url : '',
         invoiceLinks: tempInvoiceLinks
       });
-      showSuccess('Linki do faktur zostały zaktualizowane');
+      showSuccess(t('purchaseOrders.kanban.documents.linksUpdated'));
       setInvoiceLinkDialog(false);
       if (onRefresh) onRefresh();
     } catch (err) {
-      showError('Błąd zapisu linków: ' + err.message);
+      showError(t('purchaseOrders.kanban.documents.linksSaveError') + ': ' + err.message);
     }
   };
 
@@ -103,7 +105,7 @@ const POModalDocumentsTab = ({ purchaseOrder, orderId, onRefresh }) => {
               {getFileIcon(att.name || att.fileName)}
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
-                  {att.name || att.fileName || `Plik ${idx + 1}`}
+                  {att.name || att.fileName || t('purchaseOrders.kanban.documents.fileFallback', { index: idx + 1 })}
                 </Typography>
                 {att.uploadedAt && (
                   <Typography variant="caption" color="text.secondary">
@@ -128,21 +130,21 @@ const POModalDocumentsTab = ({ purchaseOrder, orderId, onRefresh }) => {
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <AttachmentSection
-            title={`Faktury (${invoiceAttachments.length})`}
+            title={t('purchaseOrders.kanban.documents.invoicesTitle', { count: invoiceAttachments.length })}
             attachments={invoiceAttachments}
-            emptyText="Brak załączonych faktur"
+            emptyText={t('purchaseOrders.kanban.documents.noInvoiceAttachments')}
           />
 
           <AttachmentSection
-            title={`Certyfikaty CoA (${coaAttachments.length})`}
+            title={t('purchaseOrders.kanban.documents.coaTitle', { count: coaAttachments.length })}
             attachments={coaAttachments}
-            emptyText="Brak certyfikatów CoA"
+            emptyText={t('purchaseOrders.kanban.documents.noCoaAttachments')}
           />
 
           <AttachmentSection
-            title={`Pozostałe dokumenty (${generalAttachments.length})`}
+            title={t('purchaseOrders.kanban.documents.generalTitle', { count: generalAttachments.length })}
             attachments={generalAttachments}
-            emptyText="Brak innych załączników"
+            emptyText={t('purchaseOrders.kanban.documents.noGeneralAttachments')}
           />
         </Grid>
 
@@ -150,7 +152,7 @@ const POModalDocumentsTab = ({ purchaseOrder, orderId, onRefresh }) => {
           <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                Linki do faktur ({invoiceLinks.length})
+                {t('purchaseOrders.kanban.documents.invoiceLinksTitle', { count: invoiceLinks.length })}
               </Typography>
               <Button
                 size="small"
@@ -158,11 +160,11 @@ const POModalDocumentsTab = ({ purchaseOrder, orderId, onRefresh }) => {
                 onClick={handleOpenInvoiceLinkDialog}
                 sx={{ textTransform: 'none' }}
               >
-                Zarządzaj
+                {t('purchaseOrders.kanban.documents.manage')}
               </Button>
             </Box>
             {invoiceLinks.length === 0 && !po?.invoiceLink ? (
-              <Typography variant="body2" color="text.secondary">Brak linków do faktur</Typography>
+              <Typography variant="body2" color="text.secondary">{t('purchaseOrders.kanban.documents.noInvoiceLinks')}</Typography>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                 {invoiceLinks.map((link, idx) => (
@@ -189,7 +191,7 @@ const POModalDocumentsTab = ({ purchaseOrder, orderId, onRefresh }) => {
                     rel="noopener noreferrer"
                     sx={{ color: 'primary.main' }}
                   >
-                    Faktura
+                    {t('purchaseOrders.kanban.documents.invoice')}
                   </Typography>
                 )}
               </Box>
@@ -198,7 +200,7 @@ const POModalDocumentsTab = ({ purchaseOrder, orderId, onRefresh }) => {
 
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
-              Dodaj dokumenty
+              {t('purchaseOrders.kanban.documents.addDocuments')}
             </Typography>
             <PurchaseOrderCategorizedFileUpload
               purchaseOrderId={orderId}
@@ -211,13 +213,13 @@ const POModalDocumentsTab = ({ purchaseOrder, orderId, onRefresh }) => {
 
       {/* Dialog zarządzania linkami do faktur */}
       <Dialog open={invoiceLinkDialog} onClose={() => setInvoiceLinkDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Zarządzaj linkami do faktur</DialogTitle>
+        <DialogTitle>{t('purchaseOrders.kanban.documents.manageInvoiceLinks')}</DialogTitle>
         <DialogContent>
           {tempInvoiceLinks.map((link, idx) => (
             <Box key={link.id} sx={{ display: 'flex', gap: 1, mb: 1.5, alignItems: 'flex-start' }}>
               <TextField
                 size="small"
-                label="Opis"
+                label={t('purchaseOrders.kanban.documents.description')}
                 value={link.description}
                 onChange={(e) => handleInvoiceLinkChange(link.id, 'description', e.target.value)}
                 sx={{ width: '35%' }}
@@ -235,12 +237,12 @@ const POModalDocumentsTab = ({ purchaseOrder, orderId, onRefresh }) => {
             </Box>
           ))}
           <Button startIcon={<AddIcon />} onClick={handleAddInvoiceLink} size="small" sx={{ mt: 1 }}>
-            Dodaj link
+            {t('purchaseOrders.kanban.documents.addLink')}
           </Button>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setInvoiceLinkDialog(false)}>Anuluj</Button>
-          <Button onClick={handleSaveInvoiceLinks} variant="contained">Zapisz</Button>
+          <Button onClick={() => setInvoiceLinkDialog(false)}>{t('purchaseOrders.form.actions.cancel')}</Button>
+          <Button onClick={handleSaveInvoiceLinks} variant="contained">{t('purchaseOrders.form.actions.save')}</Button>
         </DialogActions>
       </Dialog>
     </Box>

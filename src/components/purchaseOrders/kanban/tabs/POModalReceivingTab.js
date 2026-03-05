@@ -24,14 +24,15 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import { useNavigate } from 'react-router-dom';
-// Status constants are used inline
 import { useNotification } from '../../../../hooks/useNotification';
+import { useTranslation } from '../../../../hooks/useTranslation';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
 const RECEIVABLE_STATUSES = ['ordered', 'confirmed', 'shipped', 'delivered', 'partial'];
 
 const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, onRefresh }) => {
+  const { t } = useTranslation('purchaseOrders');
   const navigate = useNavigate();
   const { showError } = useNotification();
   const [activeStep, setActiveStep] = useState(0);
@@ -105,12 +106,12 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
 
   const handleReceiveItem = (item) => {
     if (!item.inventoryItemId) {
-      showError(`Pozycja "${item.name}" nie jest powiązana z produktem w magazynie`);
+      showError(t('purchaseOrders.kanban.receiving.errorNoProduct', { name: item.name }));
       return;
     }
 
     if (!isItemInUnloadingForms(item)) {
-      showError(`Pozycja "${item.name}" nie została zgłoszona w raporcie rozładunku`);
+      showError(t('purchaseOrders.kanban.receiving.errorNotInReport', { name: item.name }));
       return;
     }
 
@@ -159,7 +160,7 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
     <Box sx={{ p: 3 }}>
       {!canReceive && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          Przyjmowanie towaru jest dostępne tylko dla zamówień o statusie: Zamówione, Potwierdzone, Wysłane, Dostarczone lub Częściowo dostarczone.
+          {t('purchaseOrders.kanban.receiving.unavailable')}
         </Alert>
       )}
 
@@ -173,11 +174,11 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <AssignmentIcon sx={{ fontSize: 20 }} />
-              <Typography variant="subtitle2">Protokół rozładunku</Typography>
+              <Typography variant="subtitle2">{t('purchaseOrders.kanban.receiving.unloadingProtocol')}</Typography>
               {hasUnloadingReports ? (
-                <Chip label={`${unloadingFormResponses.length} raport(ów)`} size="small" color="success" variant="outlined" sx={{ height: 22 }} />
+                <Chip label={t('purchaseOrders.kanban.receiving.reportsCount', { count: unloadingFormResponses.length })} size="small" color="success" variant="outlined" sx={{ height: 22 }} />
               ) : (
-                <Chip label="Brak" size="small" color="warning" variant="outlined" sx={{ height: 22 }} />
+                <Chip label={t('purchaseOrders.kanban.receiving.noReport')} size="small" color="warning" variant="outlined" sx={{ height: 22 }} />
               )}
             </Box>
           </StepLabel>
@@ -189,16 +190,16 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Box>
                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          Raport #{idx + 1}
+                          {t('purchaseOrders.kanban.receiving.report', { index: idx + 1 })}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Brak daty'}
+                          {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : t('purchaseOrders.kanban.receiving.noDate')}
                           {report.employee && ` — ${report.employee}`}
                         </Typography>
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <Chip
-                          label={`${report.selectedItems?.length || 0} pozycji`}
+                          label={t('purchaseOrders.kanban.receiving.itemsCount', { count: report.selectedItems?.length || 0 })}
                           size="small"
                           variant="outlined"
                           sx={{ height: 22 }}
@@ -209,13 +210,13 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
                   </Paper>
                 ))}
                 <Button size="small" variant="text" onClick={() => setActiveStep(1)} sx={{ mt: 1 }}>
-                  Dalej: Weryfikacja
+                  {t('purchaseOrders.kanban.receiving.nextVerification')}
                 </Button>
               </Box>
             ) : (
               <Box>
                 <Alert severity="warning" sx={{ mb: 1.5 }}>
-                  Przed przyjęciem towaru należy wypełnić protokół rozładunku.
+                  {t('purchaseOrders.kanban.receiving.fillProtocol')}
                 </Alert>
                 <Button
                   variant="outlined"
@@ -223,7 +224,7 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
                   onClick={handleOpenUnloadingForm}
                   size="small"
                 >
-                  Wypełnij protokół rozładunku
+                  {t('purchaseOrders.kanban.receiving.openProtocolForm')}
                 </Button>
               </Box>
             )}
@@ -238,7 +239,7 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <LocalShippingIcon sx={{ fontSize: 20 }} />
-              <Typography variant="subtitle2">Weryfikacja towaru</Typography>
+              <Typography variant="subtitle2">{t('purchaseOrders.kanban.receiving.goodsVerification')}</Typography>
               <Chip
                 label={`${verificationSummary.verified}/${verificationSummary.total}`}
                 size="small"
@@ -252,11 +253,11 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ py: 0.5 }}>Status</TableCell>
-                  <TableCell sx={{ py: 0.5 }}>Pozycja</TableCell>
-                  <TableCell align="right" sx={{ py: 0.5 }}>Zamówiono</TableCell>
-                  <TableCell align="right" sx={{ py: 0.5 }}>W raporcie</TableCell>
-                  <TableCell align="right" sx={{ py: 0.5 }}>Przyjęto</TableCell>
+                  <TableCell sx={{ py: 0.5 }}>{t('purchaseOrders.kanban.receiving.verificationStatus')}</TableCell>
+                  <TableCell sx={{ py: 0.5 }}>{t('purchaseOrders.kanban.receiving.item')}</TableCell>
+                  <TableCell align="right" sx={{ py: 0.5 }}>{t('purchaseOrders.kanban.receiving.ordered')}</TableCell>
+                  <TableCell align="right" sx={{ py: 0.5 }}>{t('purchaseOrders.kanban.receiving.inReport')}</TableCell>
+                  <TableCell align="right" sx={{ py: 0.5 }}>{t('purchaseOrders.kanban.received')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -279,7 +280,7 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
                     </TableCell>
                     <TableCell align="right" sx={{ py: 0.5 }}>
                       <Typography variant="body2" color={item.inUnloading ? 'success.main' : 'error.main'}>
-                        {item.batchCount > 0 ? `${item.batchCount} partii` : (item.inUnloading ? 'Tak' : 'Nie')}
+                        {item.batchCount > 0 ? t('purchaseOrders.kanban.receiving.batchCount', { count: item.batchCount }) : (item.inUnloading ? t('purchaseOrders.kanban.receiving.yes') : t('purchaseOrders.kanban.receiving.no'))}
                       </Typography>
                     </TableCell>
                     <TableCell align="right" sx={{ py: 0.5 }}>
@@ -290,7 +291,7 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
               </TableBody>
             </Table>
             <Button size="small" variant="text" onClick={() => setActiveStep(2)} sx={{ mt: 1 }}>
-              Dalej: Przyjęcie na magazyn
+              {t('purchaseOrders.kanban.receiving.nextReceiving')}
             </Button>
           </StepContent>
         </Step>
@@ -303,7 +304,7 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <InventoryIcon sx={{ fontSize: 20 }} />
-              <Typography variant="subtitle2">Przyjęcie na magazyn</Typography>
+              <Typography variant="subtitle2">{t('purchaseOrders.kanban.receiving.warehouseReceiving')}</Typography>
               <Chip
                 label={`${verificationSummary.fullyReceived}/${verificationSummary.total}`}
                 size="small"
@@ -316,7 +317,7 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
           <StepContent>
             {itemsVerification.filter(i => !i.fullyReceived).length === 0 ? (
               <Alert severity="success" sx={{ mb: 1.5 }}>
-                Wszystkie pozycje zostały w pełni przyjęte na magazyn.
+                {t('purchaseOrders.kanban.receiving.allReceived')}
               </Alert>
             ) : (
               <Box>
@@ -339,7 +340,7 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
                             onClick={() => handleReceiveItem(item)}
                             sx={{ minWidth: 'auto', fontSize: '0.75rem', textTransform: 'none' }}
                           >
-                            Przyjmij
+                            {t('purchaseOrders.kanban.receiving.receive')}
                           </Button>
                         </Box>
                       </Box>
@@ -350,12 +351,12 @@ const POModalReceivingTab = ({ purchaseOrder, orderId, unloadingFormResponses, o
                       />
                       {!item.inUnloading && (
                         <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
-                          Wymaga raportu rozładunku
+                          {t('purchaseOrders.kanban.receiving.requiresProtocol')}
                         </Typography>
                       )}
                       {!item.inventoryItemId && (
                         <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
-                          Brak powiązania z produktem magazynowym
+                          {t('purchaseOrders.kanban.receiving.noProductLink')}
                         </Typography>
                       )}
                     </Paper>

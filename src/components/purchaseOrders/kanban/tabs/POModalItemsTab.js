@@ -22,6 +22,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import { format, parseISO, isValid } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { useTranslation } from '../../../../hooks/useTranslation';
 
 const formatCurrency = (value, currency = 'PLN', precision = 2) => {
   if (value == null) return '-';
@@ -47,7 +48,7 @@ const safeFormatDate = (date) => {
   }
 };
 
-const ItemRow = ({ item, index, currency, poCurrency, batches, reinvoicedAmounts }) => {
+const ItemRow = ({ item, index, currency, poCurrency, batches, reinvoicedAmounts, t }) => {
   const [expanded, setExpanded] = useState(false);
   const qty = Number(item.quantity) || 0;
   const received = Number(item.received) || 0;
@@ -94,7 +95,7 @@ const ItemRow = ({ item, index, currency, poCurrency, batches, reinvoicedAmounts
         <TableCell sx={{ py: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              {item.name || `Pozycja ${index + 1}`}
+              {item.name || t('purchaseOrders.kanban.itemFallback', { index: index + 1 })}
             </Typography>
             {itemBatches.length > 0 && (
               <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ ml: 0.5 }}>
@@ -176,11 +177,11 @@ const ItemRow = ({ item, index, currency, poCurrency, batches, reinvoicedAmounts
               title={
                 <Box>
                   <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                    Refakturowano do {reinvoicedData.invoices?.length || 0} faktur:
+                    {t('purchaseOrders.kanban.items.reinvoicedToInvoices', { count: reinvoicedData.invoices?.length || 0 })}
                   </Typography>
                   {reinvoicedData.invoices?.map((inv, i) => (
                     <Typography key={i} variant="body2">
-                      • {inv.invoiceNumber} → {inv.customerName || 'Brak klienta'}: {formatCurrency(inv.itemValue, poCurrency)}
+                      • {inv.invoiceNumber} → {inv.customerName || t('purchaseOrders.kanban.items.noClient')}: {formatCurrency(inv.itemValue, poCurrency)}
                     </Typography>
                   ))}
                 </Box>
@@ -210,7 +211,7 @@ const ItemRow = ({ item, index, currency, poCurrency, batches, reinvoicedAmounts
               <Box sx={{ py: 1, pl: 5 }}>
                 <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
                   <InventoryIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
-                  Powiązane partie ({itemBatches.length})
+                  {t('purchaseOrders.kanban.items.relatedBatches', { count: itemBatches.length })}
                 </Typography>
                 {itemBatches.map((batch, bIdx) => (
                   <Box key={batch.id || bIdx} sx={{ display: 'flex', gap: 2, mb: 0.5, alignItems: 'center' }}>
@@ -218,7 +219,7 @@ const ItemRow = ({ item, index, currency, poCurrency, batches, reinvoicedAmounts
                     <Typography variant="caption">{batch.quantity} {item.unit || 'szt'}</Typography>
                     {batch.expiryDate && (
                       <Typography variant="caption" color="text.secondary">
-                        Ważność: {new Date(batch.expiryDate?.seconds ? batch.expiryDate.seconds * 1000 : batch.expiryDate).toLocaleDateString('pl')}
+                        {t('purchaseOrders.kanban.items.expiry')} {new Date(batch.expiryDate?.seconds ? batch.expiryDate.seconds * 1000 : batch.expiryDate).toLocaleDateString('pl')}
                       </Typography>
                     )}
                     {batch.warehouseName && (
@@ -236,6 +237,7 @@ const ItemRow = ({ item, index, currency, poCurrency, batches, reinvoicedAmounts
 };
 
 const POModalItemsTab = ({ purchaseOrder, relatedBatches, reinvoicedAmounts }) => {
+  const { t } = useTranslation('purchaseOrders');
   const po = purchaseOrder;
   const items = useMemo(() => po?.items || [], [po?.items]);
   const additionalCosts = po?.additionalCostsItems || [];
@@ -252,10 +254,10 @@ const POModalItemsTab = ({ purchaseOrder, relatedBatches, reinvoicedAmounts }) =
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Pozycje zamówienia ({items.length})
+          {t('purchaseOrders.kanban.items.title', { count: items.length })}
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 200 }}>
-          <Typography variant="caption" color="text.secondary">Przyjęto ogółem:</Typography>
+          <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.items.receivedTotal')}</Typography>
           <LinearProgress
             variant="determinate"
             value={totalProgress}
@@ -270,19 +272,19 @@ const POModalItemsTab = ({ purchaseOrder, relatedBatches, reinvoicedAmounts }) =
           <TableHead>
             <TableRow>
               <TableCell sx={{ width: 30 }}></TableCell>
-              <TableCell>Nazwa produktu</TableCell>
-              <TableCell align="right">Ilość</TableCell>
-              <TableCell>Jedn.</TableCell>
-              <TableCell align="right">Cena jedn.</TableCell>
-              <TableCell align="right">Rabat</TableCell>
-              <TableCell align="right">Cena po rabacie</TableCell>
-              <TableCell align="right">Wartość netto</TableCell>
-              <TableCell align="right">Kwota oryg.</TableCell>
-              <TableCell align="right">Termin płatności</TableCell>
-              <TableCell align="right">Plan. data dost.</TableCell>
-              <TableCell align="right">Rzecz. data dost.</TableCell>
-              <TableCell align="right">Odebrano</TableCell>
-              <TableCell align="right">Refakturowane</TableCell>
+              <TableCell>{t('purchaseOrders.details.table.productName')}</TableCell>
+              <TableCell align="right">{t('purchaseOrders.details.table.quantity')}</TableCell>
+              <TableCell>{t('purchaseOrders.details.table.unit')}</TableCell>
+              <TableCell align="right">{t('purchaseOrders.details.table.unitPrice')}</TableCell>
+              <TableCell align="right">{t('purchaseOrders.details.table.discount')}</TableCell>
+              <TableCell align="right">{t('purchaseOrders.details.table.unitPriceAfterDiscount')}</TableCell>
+              <TableCell align="right">{t('purchaseOrders.details.table.netValue')}</TableCell>
+              <TableCell align="right">{t('purchaseOrders.details.table.originalAmount')}</TableCell>
+              <TableCell align="right">{t('purchaseOrders.kanban.items.paymentDueDate')}</TableCell>
+              <TableCell align="right">{t('purchaseOrders.details.table.plannedDeliveryDate')}</TableCell>
+              <TableCell align="right">{t('purchaseOrders.details.table.actualDeliveryDate')}</TableCell>
+              <TableCell align="right">{t('purchaseOrders.details.table.received')}</TableCell>
+              <TableCell align="right">{t('purchaseOrders.kanban.items.reinvoiced')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -295,12 +297,13 @@ const POModalItemsTab = ({ purchaseOrder, relatedBatches, reinvoicedAmounts }) =
                 poCurrency={currency}
                 batches={relatedBatches || []}
                 reinvoicedAmounts={reinvoicedAmounts}
+                t={t}
               />
             ))}
             {items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={14} align="center" sx={{ py: 4 }}>
-                  <Typography variant="body2" color="text.secondary">Brak pozycji w zamówieniu</Typography>
+                  <Typography variant="body2" color="text.secondary">{t('purchaseOrders.kanban.items.noItems')}</Typography>
                 </TableCell>
               </TableRow>
             )}
@@ -311,21 +314,21 @@ const POModalItemsTab = ({ purchaseOrder, relatedBatches, reinvoicedAmounts }) =
       {additionalCosts.length > 0 && (
         <Box sx={{ mt: 3 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-            Koszty dodatkowe ({additionalCosts.length})
+            {t('purchaseOrders.kanban.items.additionalCosts', { count: additionalCosts.length })}
           </Typography>
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Nazwa</TableCell>
-                  <TableCell align="right">Wartość</TableCell>
+                  <TableCell>{t('purchaseOrders.kanban.items.name')}</TableCell>
+                  <TableCell align="right">{t('purchaseOrders.kanban.items.value')}</TableCell>
                   <TableCell align="right">VAT</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {additionalCosts.map((cost, idx) => (
                   <TableRow key={cost.id || idx}>
-                    <TableCell>{cost.name || cost.description || `Koszt ${idx + 1}`}</TableCell>
+                    <TableCell>{cost.name || cost.description || t('purchaseOrders.kanban.items.costFallback', { index: idx + 1 })}</TableCell>
                     <TableCell align="right">{formatCurrency(cost.value, currency)}</TableCell>
                     <TableCell align="right">{cost.vatRate ? `${cost.vatRate}%` : '0%'}</TableCell>
                   </TableRow>

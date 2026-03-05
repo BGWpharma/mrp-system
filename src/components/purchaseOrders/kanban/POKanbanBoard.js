@@ -117,7 +117,7 @@ const POKanbanBoard = ({ initialOpenPOId = null }) => {
         <TextField
           type="date"
           size="small"
-          label="Od"
+          label={t('purchaseOrders.kanban.dateFrom')}
           value={toInputDate(dateFrom)}
           onChange={(e) => setDateFrom(e.target.value ? new Date(e.target.value) : null)}
           InputLabelProps={{ shrink: true }}
@@ -126,14 +126,14 @@ const POKanbanBoard = ({ initialOpenPOId = null }) => {
         <TextField
           type="date"
           size="small"
-          label="Do"
+          label={t('purchaseOrders.kanban.dateTo')}
           value={toInputDate(dateTo)}
           onChange={(e) => setDateTo(e.target.value ? new Date(e.target.value + 'T23:59:59') : null)}
           InputLabelProps={{ shrink: true }}
           sx={{ width: 160 }}
         />
         <Chip
-          label={`${filteredCount} / ${totalCount} zamówień`}
+          label={t('purchaseOrders.kanban.ordersCount', { filtered: filteredCount, total: totalCount })}
           size="small"
           variant="outlined"
           sx={{ fontSize: '0.75rem' }}

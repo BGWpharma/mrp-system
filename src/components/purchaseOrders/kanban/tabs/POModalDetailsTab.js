@@ -28,6 +28,7 @@ import {
   KANBAN_COLUMN_COLORS,
   getAlowedTransitions
 } from '../../../../services/purchaseOrders';
+import { useTranslation } from '../../../../hooks/useTranslation';
 import { format, parseISO, isValid } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -63,6 +64,7 @@ const formatAddress = (address) => {
 };
 
 const POModalDetailsTab = ({ purchaseOrder, userNames, onStatusChange, onRefresh }) => {
+  const { t } = useTranslation('purchaseOrders');
   const [statusMenuAnchor, setStatusMenuAnchor] = React.useState(null);
   const po = purchaseOrder;
   const supplier = po?.supplier;
@@ -111,15 +113,15 @@ const POModalDetailsTab = ({ purchaseOrder, userNames, onStatusChange, onRefresh
       <Grid container spacing={3}>
         <Grid item xs={12} md={7}>
           <Paper variant="outlined" sx={{ p: 2.5, mb: 2 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>Dane zamówienia</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>{t('purchaseOrders.kanban.modal.orderData')}</Typography>
 
             <Grid container spacing={1.5}>
               <Grid item xs={6}>
-                <Typography variant="caption" color="text.secondary">Numer</Typography>
+                <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.modal.number')}</Typography>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{po?.number}</Typography>
               </Grid>
               <Grid item xs={6}>
-                <Typography variant="caption" color="text.secondary">Status</Typography>
+                <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.modal.status')}</Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Chip
                     label={translateStatus(po?.status)}
@@ -134,7 +136,7 @@ const POModalDetailsTab = ({ purchaseOrder, userNames, onStatusChange, onRefresh
                         onClick={(e) => setStatusMenuAnchor(e.currentTarget)}
                         sx={{ minWidth: 'auto', fontSize: '0.7rem', textTransform: 'none' }}
                       >
-                        Zmień
+                        {t('purchaseOrders.kanban.modal.changeStatus')}
                       </Button>
                       <Menu
                         anchorEl={statusMenuAnchor}
@@ -159,42 +161,42 @@ const POModalDetailsTab = ({ purchaseOrder, userNames, onStatusChange, onRefresh
                 </Box>
               </Grid>
               <Grid item xs={6}>
-                <Typography variant="caption" color="text.secondary">Status płatności</Typography>
+                <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.modal.paymentStatus')}</Typography>
                 <Typography variant="body2">{translatePaymentStatus(po?.paymentStatus)}</Typography>
               </Grid>
               <Grid item xs={6}>
-                <Typography variant="caption" color="text.secondary">Waluta</Typography>
+                <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.modal.currency')}</Typography>
                 <Typography variant="body2">{currency}</Typography>
               </Grid>
               <Grid item xs={6}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <CalendarTodayIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                  <Typography variant="caption" color="text.secondary">Data zamówienia</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.modal.orderDate')}</Typography>
                 </Box>
                 <Typography variant="body2">{safeFormatDate(po?.orderDate)}</Typography>
               </Grid>
               <Grid item xs={6}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <LocalShippingIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                  <Typography variant="caption" color="text.secondary">Planowana dostawa</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.modal.plannedDelivery')}</Typography>
                 </Box>
                 <Typography variant="body2">{safeFormatDate(po?.expectedDeliveryDate)}</Typography>
               </Grid>
               {po?.incoterms && (
                 <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Incoterms</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.modal.incoterms')}</Typography>
                   <Typography variant="body2">{po.incoterms}</Typography>
                 </Grid>
               )}
               {po?.deliveryAddress && (
                 <Grid item xs={12}>
-                  <Typography variant="caption" color="text.secondary">Adres dostawy</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.modal.deliveryAddress')}</Typography>
                   <Typography variant="body2">{po.deliveryAddress}</Typography>
                 </Grid>
               )}
               {po?.notes && (
                 <Grid item xs={12}>
-                  <Typography variant="caption" color="text.secondary">Uwagi</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.modal.notes')}</Typography>
                   <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{po.notes}</Typography>
                 </Grid>
               )}
@@ -202,43 +204,43 @@ const POModalDetailsTab = ({ purchaseOrder, userNames, onStatusChange, onRefresh
           </Paper>
 
           <Paper variant="outlined" sx={{ p: 2.5 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>Podsumowanie kosztów</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>{t('purchaseOrders.kanban.modal.costSummary')}</Typography>
             <Grid container spacing={1}>
-              <Grid item xs={8}><Typography variant="body2">Pozycje netto</Typography></Grid>
+              <Grid item xs={8}><Typography variant="body2">{t('purchaseOrders.kanban.modal.itemsNet')}</Typography></Grid>
               <Grid item xs={4}><Typography variant="body2" align="right">{formatCurrency(vat.itemsNet, currency)}</Typography></Grid>
 
               {vat.addCostsNet > 0 && (
                 <>
-                  <Grid item xs={8}><Typography variant="body2">Koszty dodatkowe netto</Typography></Grid>
+                  <Grid item xs={8}><Typography variant="body2">{t('purchaseOrders.kanban.modal.additionalCostsNet')}</Typography></Grid>
                   <Grid item xs={4}><Typography variant="body2" align="right">{formatCurrency(vat.addCostsNet, currency)}</Typography></Grid>
                 </>
               )}
 
               {vat.discount > 0 && (
                 <>
-                  <Grid item xs={8}><Typography variant="body2" color="error">Rabat globalny ({vat.discount}%)</Typography></Grid>
+                  <Grid item xs={8}><Typography variant="body2" color="error">{t('purchaseOrders.kanban.modal.globalDiscount', { pct: vat.discount })}</Typography></Grid>
                   <Grid item xs={4}><Typography variant="body2" align="right" color="error">-</Typography></Grid>
                 </>
               )}
 
               <Grid item xs={12}><Divider sx={{ my: 0.5 }} /></Grid>
 
-              <Grid item xs={8}><Typography variant="body2">Netto</Typography></Grid>
+              <Grid item xs={8}><Typography variant="body2">{t('purchaseOrders.kanban.modal.net')}</Typography></Grid>
               <Grid item xs={4}><Typography variant="body2" align="right">{formatCurrency(vat.totalNet, currency)}</Typography></Grid>
 
-              <Grid item xs={8}><Typography variant="body2">VAT</Typography></Grid>
+              <Grid item xs={8}><Typography variant="body2">{t('purchaseOrders.kanban.modal.vat')}</Typography></Grid>
               <Grid item xs={4}><Typography variant="body2" align="right">{formatCurrency(vat.totalVat, currency)}</Typography></Grid>
 
               <Grid item xs={12}><Divider sx={{ my: 0.5 }} /></Grid>
 
-              <Grid item xs={8}><Typography variant="body1" sx={{ fontWeight: 700 }}>Brutto</Typography></Grid>
+              <Grid item xs={8}><Typography variant="body1" sx={{ fontWeight: 700 }}>{t('purchaseOrders.kanban.modal.gross')}</Typography></Grid>
               <Grid item xs={4}><Typography variant="body1" align="right" sx={{ fontWeight: 700 }}>{formatCurrency(vat.totalGross, currency)}</Typography></Grid>
             </Grid>
 
             {po?.totalPaidFromInvoices != null && vat.totalGross > 0 && (
               <Box sx={{ mt: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography variant="caption" color="text.secondary">Wpłacono z faktur</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.modal.paidFromInvoices')}</Typography>
                   <Typography variant="caption">
                     {formatCurrency(po.totalPaidFromInvoices, currency)} ({Math.min(100, Math.round((po.totalPaidFromInvoices / vat.totalGross) * 100))}%)
                   </Typography>
@@ -255,7 +257,7 @@ const POModalDetailsTab = ({ purchaseOrder, userNames, onStatusChange, onRefresh
 
         <Grid item xs={12} md={5}>
           <Paper variant="outlined" sx={{ p: 2.5, mb: 2 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>Dostawca</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>{t('purchaseOrders.kanban.modal.supplier')}</Typography>
             {supplier ? (
               <Box>
                 <Typography variant="body1" sx={{ fontWeight: 600, mb: 1 }}>{supplier.name}</Typography>
@@ -295,14 +297,14 @@ const POModalDetailsTab = ({ purchaseOrder, userNames, onStatusChange, onRefresh
 
           {po?.statusHistory?.length > 0 && (
             <Paper variant="outlined" sx={{ p: 2.5 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>Historia statusów</Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>{t('purchaseOrders.kanban.modal.statusHistory')}</Typography>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ py: 0.5, fontSize: '0.75rem' }}>Data</TableCell>
-                    <TableCell sx={{ py: 0.5, fontSize: '0.75rem' }}>Z</TableCell>
-                    <TableCell sx={{ py: 0.5, fontSize: '0.75rem' }}>Na</TableCell>
-                    <TableCell sx={{ py: 0.5, fontSize: '0.75rem' }}>Kto</TableCell>
+                    <TableCell sx={{ py: 0.5, fontSize: '0.75rem' }}>{t('purchaseOrders.kanban.modal.historyDate')}</TableCell>
+                    <TableCell sx={{ py: 0.5, fontSize: '0.75rem' }}>{t('purchaseOrders.kanban.modal.historyFrom')}</TableCell>
+                    <TableCell sx={{ py: 0.5, fontSize: '0.75rem' }}>{t('purchaseOrders.kanban.modal.historyTo')}</TableCell>
+                    <TableCell sx={{ py: 0.5, fontSize: '0.75rem' }}>{t('purchaseOrders.kanban.modal.historyWho')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>

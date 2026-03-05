@@ -20,6 +20,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { format, isPast, differenceInDays } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 const formatCurrency = (value, currency = 'PLN') => {
   if (value == null) return '-';
@@ -38,6 +39,7 @@ const safeDate = (d) => {
 };
 
 const POKanbanCard = React.memo(({ order, onClick, isDragOverlay = false }) => {
+  const { t } = useTranslation('purchaseOrders');
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
 
@@ -73,10 +75,10 @@ const POKanbanCard = React.memo(({ order, onClick, isDragOverlay = false }) => {
     const now = new Date();
     const daysLeft = differenceInDays(deliveryDate, now);
     if (isPast(deliveryDate) && order.status !== 'completed' && order.status !== 'delivered') {
-      return { label: format(deliveryDate, 'dd MMM', { locale: pl }), color: 'error', tooltip: `Opóźnione o ${Math.abs(daysLeft)} dni` };
+      return { label: format(deliveryDate, 'dd MMM', { locale: pl }), color: 'error', tooltip: t('purchaseOrders.kanban.delayedDays', { days: Math.abs(daysLeft) }) };
     }
     if (daysLeft <= 3 && daysLeft >= 0) {
-      return { label: format(deliveryDate, 'dd MMM', { locale: pl }), color: 'warning', tooltip: `Za ${daysLeft} dni` };
+      return { label: format(deliveryDate, 'dd MMM', { locale: pl }), color: 'warning', tooltip: t('purchaseOrders.kanban.inDays', { days: daysLeft }) };
     }
     return { label: format(deliveryDate, 'dd MMM', { locale: pl }), color: 'default', tooltip: format(deliveryDate, 'dd MMMM yyyy', { locale: pl }) };
   }, [deliveryDate, order.status]);
@@ -113,7 +115,7 @@ const POKanbanCard = React.memo(({ order, onClick, isDragOverlay = false }) => {
       <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
-            {order.number || 'Brak numeru'}
+            {order.number || t('purchaseOrders.kanban.noNumber')}
           </Typography>
           <IconButton
             size="small"
@@ -154,7 +156,7 @@ const POKanbanCard = React.memo(({ order, onClick, isDragOverlay = false }) => {
           <Box sx={{ mt: 0.5 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                Przyjęto
+                {t('purchaseOrders.kanban.received')}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
                 {receivingProgress}%
@@ -194,7 +196,7 @@ const POKanbanCard = React.memo(({ order, onClick, isDragOverlay = false }) => {
                       <RadioButtonUncheckedIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
                     )}
                     <Typography variant="caption" sx={{ flex: 1, lineHeight: 1.2, fontSize: '0.7rem' }}>
-                      {item.name || 'Pozycja'}
+                      {item.name || t('purchaseOrders.kanban.itemFallback', { index: idx + 1 })}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
                       {received}/{qty} {item.unit || 'szt'}
@@ -204,7 +206,7 @@ const POKanbanCard = React.memo(({ order, onClick, isDragOverlay = false }) => {
               })
             ) : (
               <Typography variant="caption" color="text.secondary">
-                Brak pozycji
+                {t('purchaseOrders.kanban.noItems')}
               </Typography>
             )}
           </Box>

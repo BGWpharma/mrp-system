@@ -6,9 +6,11 @@ import {
 } from '../../../../services/purchaseOrders';
 import { useNotification } from '../../../../hooks/useNotification';
 import { useAuth } from '../../../../hooks/useAuth';
+import { useTranslation } from '../../../../hooks/useTranslation';
 
 export const usePODragAndDrop = ({ groupedOrders, updateOrderLocally, refresh }) => {
   const [activeOrder, setActiveOrder] = useState(null);
+  const { t } = useTranslation('purchaseOrders');
   const { showSuccess, showError } = useNotification();
   const { currentUser } = useAuth();
 
@@ -55,7 +57,7 @@ export const usePODragAndDrop = ({ groupedOrders, updateOrderLocally, refresh })
     if (!currentStatus || currentStatus === targetStatus) return;
 
     if (!validateStatusTransition(currentStatus, targetStatus)) {
-      showError(`Nie można zmienić statusu z "${currentStatus}" na "${targetStatus}"`);
+      showError(t('purchaseOrders.kanban.statusTransitionError', { from: currentStatus, to: targetStatus }));
       return;
     }
 
@@ -63,11 +65,11 @@ export const usePODragAndDrop = ({ groupedOrders, updateOrderLocally, refresh })
 
     try {
       await updatePurchaseOrderStatus(orderId, targetStatus, currentUser?.uid);
-      showSuccess('Status zamówienia został zaktualizowany');
+      showSuccess(t('purchaseOrders.kanban.statusUpdated'));
     } catch (err) {
       console.error('Błąd podczas aktualizacji statusu:', err);
       updateOrderLocally(orderId, { status: currentStatus });
-      showError('Błąd podczas zmiany statusu: ' + err.message);
+      showError(t('purchaseOrders.kanban.statusChangeError') + ': ' + err.message);
     }
   }, [findColumnForOrder, updateOrderLocally, showError, showSuccess, currentUser]);
 

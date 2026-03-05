@@ -3,9 +3,11 @@ import { Box, Paper, Typography, Badge, useTheme } from '@mui/material';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { translateStatus, KANBAN_COLUMN_COLORS } from '../../../services/purchaseOrders';
+import { useTranslation } from '../../../hooks/useTranslation';
 import POKanbanCard from './POKanbanCard';
 
 const POKanbanColumn = React.memo(({ status, orders, onCardClick, isMobile }) => {
+  const { t } = useTranslation('purchaseOrders');
   const theme = useTheme();
   const color = KANBAN_COLUMN_COLORS[status] || '#9E9E9E';
 
@@ -87,7 +89,7 @@ const POKanbanColumn = React.memo(({ status, orders, onCardClick, isMobile }) =>
               opacity: 0.5
             }}>
               <Typography variant="caption" color="text.secondary">
-                {isOver ? 'Upuść tutaj' : 'Brak zamówień'}
+                {isOver ? t('purchaseOrders.kanban.dropHere') : t('purchaseOrders.kanban.noOrders')}
               </Typography>
             </Box>
           ) : (

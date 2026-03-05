@@ -81,7 +81,7 @@ const PODetailsModal = ({ open, orderId, onClose, onSave }) => {
       }
     } catch (err) {
       console.error('Błąd ładowania PO w modalu:', err);
-      showError('Błąd ładowania zamówienia: ' + err.message);
+      showError(t('purchaseOrders.kanban.loadError') + ': ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -153,10 +153,10 @@ const PODetailsModal = ({ open, orderId, onClose, onSave }) => {
   const handleStatusChange = async (newStatus) => {
     try {
       await updatePurchaseOrderStatus(orderId, newStatus, currentUser?.uid);
-      showSuccess('Status zamówienia został zaktualizowany');
+      showSuccess(t('purchaseOrders.kanban.statusUpdated'));
       await handleRefresh();
     } catch (err) {
-      showError('Błąd zmiany statusu: ' + err.message);
+      showError(t('purchaseOrders.kanban.statusChangeError') + ': ' + err.message);
     }
   };
 
@@ -212,7 +212,7 @@ const PODetailsModal = ({ open, orderId, onClose, onSave }) => {
               )}
             </Box>
             <Box sx={{ display: 'flex', gap: 0.5 }}>
-              <IconButton size="small" onClick={handleEdit} title="Edytuj">
+              <IconButton size="small" onClick={handleEdit} title={t('purchaseOrders.kanban.edit')}>
                 <EditIcon fontSize="small" />
               </IconButton>
               <IconButton size="small" onClick={onClose}>
@@ -269,7 +269,7 @@ const PODetailsModal = ({ open, orderId, onClose, onSave }) => {
         </>
       ) : (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 400 }}>
-          <Typography color="text.secondary">Nie znaleziono zamówienia</Typography>
+          <Typography color="text.secondary">{t('purchaseOrders.kanban.orderNotFound')}</Typography>
         </Box>
       )}
     </Dialog>
