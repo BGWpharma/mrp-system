@@ -22,7 +22,8 @@ export {
   addUserToBoard,
   removeUserFromBoard,
   getBoardAllowedUsers,
-  isBoardOwner
+  isBoardOwner,
+  getTaskUpdatedAt
 } from './taskboardService';
 
 export {

@@ -1,5 +1,5 @@
 // src/components/taskboard/TaskDetailsDialog.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -47,7 +47,7 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FolderZipIcon from '@mui/icons-material/FolderZip';
-import { updateTask } from '../../services/taskboard';
+import { updateTask, getTaskUpdatedAt } from '../../services/taskboard';
 import { getAllActiveUsers } from '../../services/userService';
 import { 
   uploadTaskAttachment, 
@@ -89,6 +89,19 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
     attachments: []
   });
 
+  const [originalData, setOriginalData] = useState(null);
+  const [conflict, setConflict] = useState(false);
+  const [externalChangeDetected, setExternalChangeDetected] = useState(false);
+  const openedUpdatedAtRef = useRef(null);
+
+  const isDirty = useMemo(() => {
+    if (!originalData) return false;
+    return JSON.stringify(formData) !== JSON.stringify(originalData);
+  }, [formData, originalData]);
+
+  const isDirtyRef = useRef(false);
+  isDirtyRef.current = isDirty;
+
   const [newSubtaskListTitle, setNewSubtaskListTitle] = useState('');
   const [newSubtasks, setNewSubtasks] = useState({});
   const [editingSubtask, setEditingSubtask] = useState(null);
@@ -127,8 +140,8 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
   }, [open]);
 
   useEffect(() => {
-    if (task) {
-      setFormData({
+    if (task && open) {
+      const newData = {
         title: task.title || '',
         description: task.description || '',
         priority: task.priority || undefined,
@@ -136,15 +149,57 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
         assignedTo: task.assignedTo || [],
         subtaskLists: task.subtaskLists || [],
         attachments: task.attachments || []
-      });
-      setNewAttachment({ name: '', url: '' });
+      };
+
+      if (isDirtyRef.current) {
+        setExternalChangeDetected(true);
+      } else {
+        setFormData(newData);
+        setOriginalData(newData);
+        openedUpdatedAtRef.current = task.updatedAt || null;
+        setConflict(false);
+        setExternalChangeDetected(false);
+        setNewAttachment({ name: '', url: '' });
+      }
+    }
+
+    if (!open) {
+      setOriginalData(null);
+      setConflict(false);
+      setExternalChangeDetected(false);
     }
   }, [task, open]);
 
-  const handleSave = async () => {
+  const handleRefreshData = () => {
+    if (!task) return;
+    const newData = {
+      title: task.title || '',
+      description: task.description || '',
+      priority: task.priority || undefined,
+      dueDate: task.dueDate || null,
+      assignedTo: task.assignedTo || [],
+      subtaskLists: task.subtaskLists || [],
+      attachments: task.attachments || []
+    };
+    setFormData(newData);
+    setOriginalData(newData);
+    openedUpdatedAtRef.current = task.updatedAt || null;
+    setConflict(false);
+    setExternalChangeDetected(false);
+  };
+
+  const handleSave = async (forceOverwrite = false) => {
     if (!task || !formData.title.trim()) return;
 
     try {
+      if (!forceOverwrite && openedUpdatedAtRef.current) {
+        const currentUpdatedAt = await getTaskUpdatedAt(task.id);
+        if (currentUpdatedAt && currentUpdatedAt.getTime() > openedUpdatedAtRef.current.getTime()) {
+          setConflict(true);
+          return;
+        }
+      }
+
       await updateTask(task.id, {
         title: formData.title,
         description: formData.description,
@@ -155,6 +210,8 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
         attachments: formData.attachments
       });
 
+      setConflict(false);
+      setExternalChangeDetected(false);
       if (onSave) onSave();
       onClose();
     } catch (error) {
@@ -162,10 +219,8 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
     }
   };
 
-  // Zamknięcie dialogu (Esc / klik w tło) – automatyczny zapis
   const handleDialogClose = async (event, reason) => {
-    // Jeśli tytuł jest wypełniony, zapisz przed zamknięciem
-    if (task && formData.title.trim()) {
+    if (task && formData.title.trim() && isDirtyRef.current) {
       await handleSave();
     } else {
       onClose();
@@ -411,6 +466,39 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
         {t('taskDetails')}
       </DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
+        {conflict && (
+          <Alert
+            severity="warning"
+            sx={{ mb: 2, mt: 1 }}
+            action={
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button size="small" color="inherit" onClick={handleRefreshData}>
+                  {t('refreshData')}
+                </Button>
+                <Button size="small" color="inherit" onClick={() => handleSave(true)}>
+                  {t('overwrite')}
+                </Button>
+              </Box>
+            }
+          >
+            {t('conflictDetected')}
+          </Alert>
+        )}
+        {externalChangeDetected && !conflict && (
+          <Alert
+            severity="info"
+            sx={{ mb: 2, mt: 1 }}
+            action={
+              <Button size="small" color="inherit" onClick={handleRefreshData}>
+                {t('refreshData')}
+              </Button>
+            }
+            onClose={() => setExternalChangeDetected(false)}
+          >
+            {t('externalChangeDetected')}
+          </Alert>
+        )}
+
         {/* Tytuł */}
         <TextField
           autoFocus

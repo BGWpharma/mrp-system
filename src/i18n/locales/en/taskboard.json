@@ -129,5 +129,9 @@
   "autoSort": "Automatic sorting",
   "editSubtask": "Edit subtask",
   "assignSubtaskUser": "Assign person",
-  "unassign": "Unassigned"
+  "unassign": "Unassigned",
+  "conflictDetected": "Someone else has modified this task in the meantime",
+  "overwrite": "Overwrite anyway",
+  "refreshData": "Refresh data",
+  "externalChangeDetected": "This task has been modified by another user"
 }

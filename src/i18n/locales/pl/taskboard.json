@@ -129,5 +129,9 @@
   "autoSort": "Sortowanie automatyczne",
   "editSubtask": "Edytuj podzadanie",
   "assignSubtaskUser": "Przypisz osobę",
-  "unassign": "Brak przypisania"
+  "unassign": "Brak przypisania",
+  "conflictDetected": "Ktoś inny zmodyfikował to zadanie w międzyczasie",
+  "overwrite": "Nadpisz mimo to",
+  "refreshData": "Odśwież dane",
+  "externalChangeDetected": "Dane tego zadania zostały zmienione przez innego użytkownika"
 }

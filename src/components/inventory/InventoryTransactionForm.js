@@ -44,7 +44,7 @@ import {
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
-import { getInventoryItemById, receiveInventory, issueInventory, getItemBatches, getAllWarehouses, getExistingBatchForPOItem } from '../../services/inventory';
+import { getInventoryItemById, receiveInventory, issueInventory, getItemBatches, getAllWarehouses, getExistingBatchForPOItem, recalculateItemQuantity } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { Timestamp } from 'firebase/firestore';
@@ -220,6 +220,8 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        
+        await recalculateItemQuantity(itemId);
         
         const inventoryItem = await getInventoryItemById(itemId);
         if (cancelled) return;

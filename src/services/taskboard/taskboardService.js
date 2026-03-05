@@ -387,6 +387,18 @@ export const updateTask = async (taskId, taskData) => {
   }
 };
 
+export const getTaskUpdatedAt = async (taskId) => {
+  try {
+    const taskRef = doc(db, 'tasks', taskId);
+    const taskDoc = await getDoc(taskRef);
+    if (!taskDoc.exists()) return null;
+    return taskDoc.data()?.updatedAt?.toDate() || null;
+  } catch (error) {
+    console.error('Błąd podczas pobierania updatedAt zadania:', error);
+    return null;
+  }
+};
+
 export const deleteTask = async (taskId) => {
   try {
     const taskRef = doc(db, 'tasks', taskId);
