@@ -1244,7 +1244,8 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       orderItemId: orderItem.id,
       orderId: orderItem.orderId,
       orderNumber: orderItem.orderNumber,
-      // Dodaj informacje o potencjalnej recepturze
+      orderItemTotalQuantity: orderItem.quantity || 0,
+      orderItemShippedQuantity: orderItem.shippedQuantity || 0,
       originalOrderItem: orderItem
     };
 
@@ -1519,9 +1520,11 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   const validateForm = (skipBatchValidation = false) => {
     const errors = {};
     
-    // Walidacja powiązania z CO
+    // Walidacja powiązania z CO - dokładnie jedno zamówienie
     if (linkedOrders.length === 0 && !formData.linkedOrderId) {
-      errors.linkedOrderId = 'CMR musi być powiązany z co najmniej jednym zamówieniem klienta (CO)';
+      errors.linkedOrderId = 'CMR musi być powiązany z zamówieniem klienta (CO)';
+    } else if (linkedOrders.length > 1) {
+      errors.linkedOrderId = 'CMR może być powiązany tylko z jednym zamówieniem klienta (CO)';
     }
     
     // Wymagane pola podstawowe
@@ -1695,21 +1698,13 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       // Przygotuj podsumowanie pobranych danych
       const importedDataSummary = [];
       
-      // Uzupełnij formularz danymi z zamówienia
+      // Uzupełnij formularz danymi z zamówienia (jedno CO na CMR - zastępujemy poprzednie)
       setFormData(prev => {
-        // Zachowujemy istniejące elementy formularza i nadpisujemy tylko te, które chcemy zaktualizować
         const updatedForm = { ...prev };
         
-        // Zapisz powiązanie z zamówieniem (dodaj do istniejących)
-        if (!updatedForm.linkedOrderIds) updatedForm.linkedOrderIds = [];
-        if (!updatedForm.linkedOrderNumbers) updatedForm.linkedOrderNumbers = [];
-        
-        if (!updatedForm.linkedOrderIds.includes(orderId)) {
-          updatedForm.linkedOrderIds.push(orderId);
-          updatedForm.linkedOrderNumbers.push(order.orderNumber);
-        }
-        
-        // Zachowaj kompatybilność z poprzednim formatem
+        // Jedno CO na CMR - zastąp poprzednie powiązanie
+        updatedForm.linkedOrderIds = [orderId];
+        updatedForm.linkedOrderNumbers = [order.orderNumber];
         updatedForm.linkedOrderId = orderId;
         updatedForm.linkedOrderNumber = order.orderNumber;
         
@@ -1717,7 +1712,6 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
         if (importOptions.recipientData) {
           updatedForm.recipient = customerData.name || '';
           
-          // Użyj adresu do wysyłki jeśli dostępny, w przeciwnym razie adres do faktury, lub stary format adresu
           const recipientAddress = customerData.shippingAddress || 
                                   customerData.billingAddress || 
                                   customerData.address || '';
@@ -1733,40 +1727,28 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
           importedDataSummary.push('Miejsce dostawy');
         }
         
-
-        
         // Dodajemy numer zamówienia jako dokument załączony
         if (importOptions.documents) {
-          updatedForm.attachedDocuments = prev.attachedDocuments ? 
-            `${prev.attachedDocuments}, Zamówienie nr ${order.orderNumber}` : 
-            `Zamówienie nr ${order.orderNumber}`;
+          updatedForm.attachedDocuments = `Zamówienie nr ${order.orderNumber}`;
           importedDataSummary.push('Dokumenty');
         }
         
-        // Usunęliśmy automatyczne dodawanie pozycji - użytkownik będzie mógł je dodać ręcznie
+        // Wyczyść pozycje CMR importowane z poprzedniego zamówienia
+        updatedForm.items = [];
         
         return updatedForm;
       });
       
-      // Zapisz dane zamówienia i jego pozycje dla późniejszego użycia
-      setLinkedOrders(prev => {
-        const existing = prev.find(o => o.id === order.id);
-        if (existing) {
-          return prev; // Zamówienie już jest na liście
-        }
-        return [...prev, order];
-      });
+      // Jedno CO na CMR - zastąp poprzednie powiązanie
+      setLinkedOrders([order]);
       
-      // Zaktualizuj listę dostępnych pozycji ze wszystkich zamówień
-      setAvailableOrderItems(prev => {
-        const existingItems = prev.filter(item => item.orderId !== order.id);
-        const newItems = (order.items || []).map(item => ({
-          ...item,
-          orderId: order.id,
-          orderNumber: order.orderNumber
-        }));
-        return [...existingItems, ...newItems];
-      });
+      // Ustaw pozycje tylko z tego zamówienia
+      const newItems = (order.items || []).map(item => ({
+        ...item,
+        orderId: order.id,
+        orderNumber: order.orderNumber
+      }));
+      setAvailableOrderItems(newItems);
       
       // Wyświetl podsumowanie pobranych danych
       const summaryMessage = `Pomyślnie powiązano CMR z zamówieniem ${order.orderNumber}. 

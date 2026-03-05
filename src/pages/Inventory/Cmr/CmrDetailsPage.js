@@ -905,11 +905,33 @@ const CmrDetailsPage = () => {
               ).join('');
               addTextToField(svgDoc, 'field-marks', marksText, '6px');
 
-              // Ilość sztuk (pole 7)
+              // Ilość sztuk (pole 7) - główna ilość
               let packagesText = items.map((item, index) =>
                 index === 0 ? item.quantity?.toString() || '' : '\n\n' + (item.quantity?.toString() || '')
               ).join('');
               addTextToField(svgDoc, 'field-packages', packagesText, '6px');
+
+              // Kontekst ilości zamówionej - mniejsza czcionka, italic, pod główną ilością
+              const packagesField = svgDoc.getElementById('field-packages');
+              if (packagesField) {
+                const baseX = parseFloat(packagesField.getAttribute('x')) + 5;
+                const baseY = parseFloat(packagesField.getAttribute('y')) + 15;
+                const itemLineHeight = parseInt('6') * 1.6;
+
+                items.forEach((item, index) => {
+                  if (!item.orderItemTotalQuantity) return;
+                  const contextText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                  contextText.setAttribute('x', baseX);
+                  contextText.setAttribute('y', baseY + (index * 2 * itemLineHeight) + itemLineHeight);
+                  contextText.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
+                  contextText.setAttribute('font-size', '4.5px');
+                  contextText.setAttribute('font-style', 'italic');
+                  contextText.setAttribute('fill', '#555');
+                  contextText.textContent = `(z ${item.orderItemTotalQuantity} zam.)`;
+                  const formFields = svgDoc.getElementById('form-fields');
+                  if (formFields) formFields.appendChild(contextText);
+                });
+              }
 
               // Sposób opakowania (pole 8)
               let packingText = items.map((item, index) =>
@@ -2418,7 +2440,14 @@ const CmrDetailsPage = () => {
                                   }
                                 </Typography>
                               </TableCell>
-                              <TableCell>{item.quantity}</TableCell>
+                              <TableCell>
+                                {item.quantity}
+                                {item.orderItemTotalQuantity && (
+                                  <Typography variant="caption" display="block" color="text.secondary">
+                                    z {item.orderItemTotalQuantity} {item.unit || 'szt.'} zamówionych
+                                  </Typography>
+                                )}
+                              </TableCell>
                               <TableCell>{item.unit}</TableCell>
                               <TableCell>{item.weight}</TableCell>
                                 <TableCell>
@@ -2630,6 +2659,9 @@ const CmrDetailsPage = () => {
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
                                       {item.quantity} {item.unit}
+                                      {item.orderItemTotalQuantity && (
+                                        <> (z {item.orderItemTotalQuantity} zamówionych)</>
+                                      )}
                                     </Typography>
                                   </TableCell>
                                   <TableCell>
@@ -3721,7 +3753,14 @@ const CmrDetailsPage = () => {
                   <TableRow key={item.id || index}>
                     <TableCell>{index + 1}</TableCell>
                     <TableCell>{item.description}</TableCell>
-                    <TableCell>{item.quantity}</TableCell>
+                    <TableCell>
+                      {item.quantity}
+                      {item.orderItemTotalQuantity && (
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          z {item.orderItemTotalQuantity} zam.
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell>{item.unit}</TableCell>
                     <TableCell>{item.weight}</TableCell>
                       <TableCell>{weightDetail?.palletsCount || 0}</TableCell>

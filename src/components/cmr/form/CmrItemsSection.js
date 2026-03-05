@@ -117,7 +117,12 @@ const CmrItemsSection = React.memo(({
                       fullWidth
                       type="number"
                       error={formErrors.items && formErrors.items[index]?.quantity}
-                      helperText={formErrors.items && formErrors.items[index]?.quantity}
+                      helperText={
+                        (formErrors.items && formErrors.items[index]?.quantity) ||
+                        (item.orderItemTotalQuantity
+                          ? `z ${item.orderItemTotalQuantity} ${item.unit || 'szt.'} zamówionych`
+                          : undefined)
+                      }
                     />
                   </Grid>
 

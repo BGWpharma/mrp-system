@@ -78,9 +78,17 @@ const OrderItemsSelectorDialog = React.memo(({
                     {orderItem.name || 'Bez nazwy'}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Ilość: {orderItem.quantity} {orderItem.unit || 'szt.'}
+                    Ilość zamówiona: {orderItem.quantity} {orderItem.unit || 'szt.'}
+                    {orderItem.shippedQuantity > 0 && (
+                      <> (wysłano: {orderItem.shippedQuantity} {orderItem.unit || 'szt.'})</>
+                    )}
                   </Typography>
-                  <Typography variant="caption" color="primary" sx={{ fontWeight: 500 }}>
+                  {orderItem.shippedQuantity > 0 && (
+                    <Typography variant="caption" color="text.secondary">
+                      Pozostało: {(parseFloat(orderItem.quantity) || 0) - (parseFloat(orderItem.shippedQuantity) || 0)} {orderItem.unit || 'szt.'}
+                    </Typography>
+                  )}
+                  <Typography variant="caption" display="block" color="primary" sx={{ fontWeight: 500 }}>
                     CO: {orderItem.orderNumber}
                   </Typography>
                 </Grid>

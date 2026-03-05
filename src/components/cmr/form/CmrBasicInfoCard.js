@@ -132,8 +132,8 @@ const CmrBasicInfoCard = React.memo(({
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
                 <Button
-                  variant={formData.linkedOrderId ? "contained" : "outlined"}
-                  color={formData.linkedOrderId ? "success" : "primary"}
+                  variant={linkedOrders.length > 0 ? "contained" : "outlined"}
+                  color={linkedOrders.length > 0 ? "success" : "primary"}
                   size="large"
                   onClick={handleOpenOrderDialog}
                   fullWidth
@@ -145,7 +145,7 @@ const CmrBasicInfoCard = React.memo(({
                   }}
                 >
                   {linkedOrders.length > 0
-                    ? `✓ Powiązano z ${linkedOrders.length} CO`
+                    ? `Zmień powiązane CO (${linkedOrders[0].orderNumber})`
                     : 'Powiąż z CO (wymagane)'
                   }
                 </Button>
@@ -154,7 +154,7 @@ const CmrBasicInfoCard = React.memo(({
               {linkedOrders.length > 0 && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Powiązane zamówienia klienta:
+                    Powiązane zamówienie klienta:
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                     {linkedOrders.map((order) => (
