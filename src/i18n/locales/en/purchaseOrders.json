@@ -410,5 +410,22 @@
     "warnings": {
       "amountMismatch": "Invoice amount differs from order value"
     }
+  },
+  "kanban": {
+    "viewList": "List",
+    "viewKanban": "Kanban",
+    "loading": "Loading board...",
+    "error": "Error loading data",
+    "refresh": "Refresh",
+    "noOrders": "No orders",
+    "dropHere": "Drop here",
+    "tabs": {
+      "details": "Details",
+      "items": "Items",
+      "receiving": "Receiving",
+      "documents": "Documents"
+    },
+    "statusTransitionError": "Cannot change status from \"{{from}}\" to \"{{to}}\"",
+    "statusUpdated": "Order status updated"
   }
 }

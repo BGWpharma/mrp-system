@@ -410,5 +410,22 @@
     "warnings": {
       "amountMismatch": "Kwota faktury różni się od wartości zamówienia"
     }
+  },
+  "kanban": {
+    "viewList": "Lista",
+    "viewKanban": "Kanban",
+    "loading": "Ładowanie tablicy...",
+    "error": "Błąd podczas ładowania",
+    "refresh": "Odśwież",
+    "noOrders": "Brak zamówień",
+    "dropHere": "Upuść tutaj",
+    "tabs": {
+      "details": "Szczegóły",
+      "items": "Pozycje",
+      "receiving": "Przyjęcie",
+      "documents": "Dokumenty"
+    },
+    "statusTransitionError": "Nie można zmienić statusu z \"{{from}}\" na \"{{to}}\"",
+    "statusUpdated": "Status zamówienia został zaktualizowany"
   }
 }

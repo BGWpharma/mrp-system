@@ -44,7 +44,11 @@ export {
   getRecentPurchaseOrders,
   archivePurchaseOrder,
   unarchivePurchaseOrder,
-  recalculatePOPaymentFromInvoices
+  recalculatePOPaymentFromInvoices,
+  KANBAN_COLUMN_ORDER,
+  KANBAN_COLUMN_COLORS,
+  validateStatusTransition,
+  getAlowedTransitions
 } from './purchaseOrderService';
 
 // purchaseOrderReportService

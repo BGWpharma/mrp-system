@@ -1533,6 +1533,47 @@ export const PURCHASE_ORDER_STATUSES = {
   CONFIRMED: 'confirmed'
 };
 
+export const KANBAN_COLUMN_ORDER = [
+  'draft', 'ordered', 'shipped', 'partial', 'delivered', 'completed', 'cancelled'
+];
+
+export const KANBAN_COLUMN_COLORS = {
+  draft: '#9E9E9E',
+  pending: '#FF9800',
+  approved: '#2196F3',
+  ordered: '#3F51B5',
+  confirmed: '#00BCD4',
+  shipped: '#7C4DFF',
+  delivered: '#4CAF50',
+  partial: '#FFC107',
+  completed: '#388E3C',
+  cancelled: '#F44336'
+};
+
+const STATUS_TRANSITIONS = {
+  draft:     ['ordered', 'cancelled'],
+  pending:   ['ordered', 'cancelled', 'draft'],
+  approved:  ['ordered', 'cancelled'],
+  ordered:   ['shipped', 'delivered', 'partial', 'cancelled'],
+  confirmed: ['shipped', 'delivered', 'partial', 'cancelled', 'ordered'],
+  shipped:   ['delivered', 'partial', 'cancelled'],
+  delivered: ['partial', 'completed', 'cancelled'],
+  partial:   ['delivered', 'completed', 'cancelled'],
+  completed: [],
+  cancelled: ['draft']
+};
+
+export const validateStatusTransition = (currentStatus, newStatus) => {
+  if (!currentStatus || !newStatus) return false;
+  if (currentStatus === newStatus) return false;
+  const allowed = STATUS_TRANSITIONS[currentStatus];
+  return allowed ? allowed.includes(newStatus) : false;
+};
+
+export const getAlowedTransitions = (currentStatus) => {
+  return STATUS_TRANSITIONS[currentStatus] || [];
+};
+
 // Stałe dla statusów płatności zamówień zakupowych
 export const PURCHASE_ORDER_PAYMENT_STATUSES = {
   UNPAID: 'unpaid',
