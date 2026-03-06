@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container, Paper, Typography, TextField, Button, Box,
   Alert, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Chip, Divider, Fade, Grow, CircularProgress, InputAdornment, Grid, Avatar
+  Chip, Divider, Fade, Grow, CircularProgress, InputAdornment, Grid, Avatar,
+  IconButton
 } from '@mui/material';
 import { StaticTimePicker } from '@mui/x-date-pickers/StaticTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -21,6 +22,8 @@ import SaveIcon from '@mui/icons-material/Save';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CelebrationIcon from '@mui/icons-material/Celebration';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../contexts/AuthContext';
@@ -78,6 +81,8 @@ const WorkTimePage = () => {
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyMonth, setHistoryMonth] = useState(new Date().getMonth());
+  const [historyYear, setHistoryYear] = useState(new Date().getFullYear());
 
   // Walidacja - błędy
   const [startError, setStartError] = useState('');
@@ -250,6 +255,8 @@ const WorkTimePage = () => {
     setEndError('');
     setShowHistory(false);
     setHistory([]);
+    setHistoryMonth(new Date().getMonth());
+    setHistoryYear(new Date().getFullYear());
   };
 
   const handleNewEntry = () => {
@@ -264,20 +271,46 @@ const WorkTimePage = () => {
   };
 
   // Historia
-  const handleShowHistory = async () => {
-    if (showHistory) { setShowHistory(false); return; }
+  const fetchHistory = useCallback(async (month, year) => {
+    if (!employee) return;
     setHistoryLoading(true);
     try {
-      const n = new Date();
-      const entries = await getWorkTimeEntries(employee.employeeId, n.getMonth(), n.getFullYear());
+      const entries = await getWorkTimeEntries(employee.employeeId, month, year);
       setHistory(entries);
-      setShowHistory(true);
     } catch (err) {
       showError(t('historyError'));
     } finally {
       setHistoryLoading(false);
     }
+  }, [employee, showError, t]);
+
+  const handleShowHistory = async () => {
+    if (showHistory) { setShowHistory(false); return; }
+    await fetchHistory(historyMonth, historyYear);
+    setShowHistory(true);
   };
+
+  const handlePrevMonth = async () => {
+    let newMonth = historyMonth - 1;
+    let newYear = historyYear;
+    if (newMonth < 0) { newMonth = 11; newYear--; }
+    setHistoryMonth(newMonth);
+    setHistoryYear(newYear);
+    await fetchHistory(newMonth, newYear);
+  };
+
+  const handleNextMonth = async () => {
+    const now = new Date();
+    if (historyMonth === now.getMonth() && historyYear === now.getFullYear()) return;
+    let newMonth = historyMonth + 1;
+    let newYear = historyYear;
+    if (newMonth > 11) { newMonth = 0; newYear++; }
+    setHistoryMonth(newMonth);
+    setHistoryYear(newYear);
+    await fetchHistory(newMonth, newYear);
+  };
+
+  const totalMonthHours = history.reduce((sum, entry) => sum + (entry.totalHours || 0), 0);
 
   const formatEntryDate = (timestamp) => {
     if (!timestamp) return '-';
@@ -605,10 +638,46 @@ const WorkTimePage = () => {
                 <Fade in>
                   <Box sx={{ mt: 2 }}>
                     <Divider sx={{ mb: 2 }} />
-                    <Typography variant="subtitle2" gutterBottom color="text.secondary">
-                      {t('historyTitle', { count: history.length })}
-                    </Typography>
-                    {history.length === 0 ? (
+
+                    {/* Nawigacja miesięcy */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 2 }}>
+                      <IconButton onClick={handlePrevMonth} disabled={historyLoading} size="small">
+                        <ChevronLeftIcon />
+                      </IconButton>
+                      <Typography
+                        variant="subtitle1"
+                        fontWeight={600}
+                        sx={{ minWidth: 160, textAlign: 'center', textTransform: 'capitalize' }}
+                      >
+                        {format(new Date(historyYear, historyMonth, 1), 'LLLL yyyy', { locale: pl })}
+                      </Typography>
+                      <IconButton
+                        onClick={handleNextMonth}
+                        disabled={historyLoading || (historyMonth === new Date().getMonth() && historyYear === new Date().getFullYear())}
+                        size="small"
+                      >
+                        <ChevronRightIcon />
+                      </IconButton>
+                    </Box>
+
+                    {/* Suma godzin + liczba wpisów */}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        {t('historyTitle', { count: history.length })}
+                      </Typography>
+                      <Chip
+                        label={`${Math.round(totalMonthHours * 100) / 100}h`}
+                        color="primary"
+                        size="small"
+                        icon={<AccessTimeIcon />}
+                      />
+                    </Box>
+
+                    {historyLoading ? (
+                      <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                        <CircularProgress size={28} />
+                      </Box>
+                    ) : history.length === 0 ? (
                       <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
                         {t('noEntries')}
                       </Typography>

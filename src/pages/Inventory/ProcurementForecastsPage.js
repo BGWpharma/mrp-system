@@ -11,6 +11,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   Button,
   Chip,
   IconButton,
@@ -27,7 +28,11 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Divider,
-  Stack
+  Stack,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -41,9 +46,11 @@ import {
   Info as InfoIcon,
   LocalShipping as ShippingIcon,
   Edit as EditIcon,
-    Save as SaveIcon,
-    Close as CloseIcon,
-    Refresh as RefreshIcon
+  Save as SaveIcon,
+  Close as CloseIcon,
+  Refresh as RefreshIcon,
+  Assignment as MoIcon,
+  FilterList as FilterListIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -75,6 +82,10 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
   const [showShortageOnly, setShowShortageOnly] = useState(false);
   const [editingNotesId, setEditingNotesId] = useState(null);
   const [editNotesValue, setEditNotesValue] = useState('');
+  const [materialSortField, setMaterialSortField] = useState('balanceWithFutureDeliveries');
+  const [materialSortDirection, setMaterialSortDirection] = useState('asc');
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState('');
+  const [expandedMaterialId, setExpandedMaterialId] = useState(null);
 
   const fetchForecasts = useCallback(async () => {
     try {
@@ -197,6 +208,18 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
     return <Chip size="small" label={t('states.procurementForecasts.active')} color="primary" />;
   };
 
+  const poStatusLabels = {
+    draft: t('states.procurementForecasts.details.poStatusDraft', 'Szkic'),
+    pending: t('states.procurementForecasts.details.poStatusPending', 'Oczekujące'),
+    approved: t('states.procurementForecasts.details.poStatusApproved', 'Zatwierdzone'),
+    ordered: t('states.procurementForecasts.details.poStatusOrdered', 'Zamówione'),
+    partial: t('states.procurementForecasts.details.poStatusPartial', 'Częściowo przyjęte'),
+    shipped: t('states.procurementForecasts.details.poStatusShipped', 'Wysłane'),
+    delivered: t('states.procurementForecasts.details.poStatusDelivered', 'Dostarczone'),
+    completed: t('states.procurementForecasts.details.poStatusCompleted', 'Zakończone'),
+    cancelled: t('states.procurementForecasts.details.poStatusCancelled', 'Anulowane')
+  };
+
   const getPoStatusChip = (status) => {
     const statusColors = {
       draft: 'default',
@@ -209,7 +232,22 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
       completed: 'success',
       cancelled: 'error'
     };
-    return <Chip size="small" label={status} color={statusColors[status] || 'default'} variant="outlined" />;
+    return <Chip size="small" label={poStatusLabels[status] || status} color={statusColors[status] || 'default'} variant="outlined" />;
+  };
+
+  const handleMaterialSort = (field) => {
+    if (field === materialSortField) {
+      setMaterialSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setMaterialSortField(field);
+      setMaterialSortDirection('asc');
+    }
+  };
+
+  const getMaterialCategories = (forecast) => {
+    const cats = new Set();
+    (forecast.materials || []).forEach(m => { if (m.category) cats.add(m.category); });
+    return Array.from(cats).sort();
   };
 
   const renderMaterialsTable = (forecast) => {
@@ -223,15 +261,60 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
       );
     }
 
+    if (materialCategoryFilter) {
+      materials = materials.filter(m => m.category === materialCategoryFilter);
+    }
+
     if (showShortageOnly) {
       materials = materials.filter(m => m.balanceWithFutureDeliveries < 0);
     }
 
-    materials.sort((a, b) => a.balanceWithFutureDeliveries - b.balanceWithFutureDeliveries);
+    materials.sort((a, b) => {
+      let comparison = 0;
+      switch (materialSortField) {
+        case 'materialName':
+          comparison = (a.materialName || '').localeCompare(b.materialName || '');
+          break;
+        case 'category':
+          comparison = (a.category || '').localeCompare(b.category || '');
+          break;
+        case 'requiredQuantity':
+          comparison = (a.requiredQuantity || 0) - (b.requiredQuantity || 0);
+          break;
+        case 'availableQuantity':
+          comparison = (a.availableQuantity || 0) - (b.availableQuantity || 0);
+          break;
+        case 'balance':
+          comparison = (a.balance || 0) - (b.balance || 0);
+          break;
+        case 'futureDeliveriesTotal':
+          comparison = (a.futureDeliveriesTotal || 0) - (b.futureDeliveriesTotal || 0);
+          break;
+        case 'balanceWithFutureDeliveries':
+        default:
+          comparison = (a.balanceWithFutureDeliveries || 0) - (b.balanceWithFutureDeliveries || 0);
+          break;
+      }
+      return materialSortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    const sortableHeader = (field, label, align = 'left') => (
+      <TableCell align={align} sx={{ fontWeight: 'bold', ...(field === 'materialName' ? { minWidth: 200 } : {}) }}>
+        <TableSortLabel
+          active={materialSortField === field}
+          direction={materialSortField === field ? materialSortDirection : 'asc'}
+          onClick={() => handleMaterialSort(field)}
+        >
+          {label}
+        </TableSortLabel>
+      </TableCell>
+    );
+
+    const categories = getMaterialCategories(forecast);
 
     return (
       <Box sx={{ mt: 2 }}>
-        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
           <TextField
             size="small"
             placeholder={t('states.procurementForecasts.details.search')}
@@ -246,6 +329,21 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
             }}
             sx={{ minWidth: 250 }}
           />
+          {categories.length > 1 && (
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel>{t('states.procurementForecasts.details.category')}</InputLabel>
+              <Select
+                value={materialCategoryFilter}
+                onChange={(e) => setMaterialCategoryFilter(e.target.value)}
+                label={t('states.procurementForecasts.details.category')}
+              >
+                <MenuItem value="">{t('states.procurementForecasts.filterAll')}</MenuItem>
+                {categories.map(cat => (
+                  <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
           <Button
             size="small"
             variant={showShortageOnly ? 'contained' : 'outlined'}
@@ -262,31 +360,33 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
           </Typography>
         </Stack>
 
+        {forecast.appliedFilter?.categoryFilter && (
+          <Alert severity="info" icon={<FilterListIcon />} sx={{ mb: 2, py: 0 }}>
+            <Typography variant="body2">
+              {t('states.procurementForecasts.details.appliedFilter', 'Zastosowany filtr przy zapisie')}: <strong>{forecast.appliedFilter.categoryFilter}</strong>
+            </Typography>
+          </Alert>
+        )}
+
         <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 500 }}>
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 'bold', minWidth: 200 }}>
-                  {t('states.procurementForecasts.details.material')}
+                <TableCell sx={{ fontWeight: 'bold', width: 40 }} />
+                {sortableHeader('materialName', t('states.procurementForecasts.details.material'))}
+                {sortableHeader('category', t('states.procurementForecasts.details.category'))}
+                <TableCell align="center" sx={{ fontWeight: 'bold', width: 70 }}>
+                  <Tooltip title={t('states.procurementForecasts.details.relatedMO', 'Powiązane MO')}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                      <MoIcon sx={{ fontSize: 16 }} /> MO
+                    </Box>
+                  </Tooltip>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>
-                  {t('states.procurementForecasts.details.category')}
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  {t('states.procurementForecasts.details.required')}
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  {t('states.procurementForecasts.details.available')}
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  {t('states.procurementForecasts.details.balance')}
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  {t('states.procurementForecasts.details.futureDeliveries')}
-                </TableCell>
-                <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                  {t('states.procurementForecasts.details.balanceWithDeliveries')}
-                </TableCell>
+                {sortableHeader('requiredQuantity', t('states.procurementForecasts.details.required'), 'right')}
+                {sortableHeader('availableQuantity', t('states.procurementForecasts.details.available'), 'right')}
+                {sortableHeader('balance', t('states.procurementForecasts.details.balance'), 'right')}
+                {sortableHeader('futureDeliveriesTotal', t('states.procurementForecasts.details.futureDeliveries'), 'right')}
+                {sortableHeader('balanceWithFutureDeliveries', t('states.procurementForecasts.details.balanceWithDeliveries'), 'center')}
                 <TableCell sx={{ fontWeight: 'bold', minWidth: 140 }}>
                   {t('states.procurementForecasts.details.notes')}
                 </TableCell>
@@ -296,12 +396,17 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
               {materials.map((material, index) => {
                 const materialIdx = forecast.materials.findIndex(m => m.materialId === material.materialId);
                 const isEditing = editingNotesId === `${forecast.id}-${materialIdx}`;
+                const isMaterialExpanded = expandedMaterialId === `${forecast.id}-${material.materialId}`;
+                const hasMO = material.relatedTasks?.length > 0 || material.relatedTaskIds?.length > 0;
+                const hasPO = material.futureDeliveries?.length > 0;
+                const hasExpandableContent = hasMO || hasPO;
 
                 return (
                   <React.Fragment key={material.materialId}>
                     <TableRow
                       hover
                       sx={{
+                        cursor: hasExpandableContent ? 'pointer' : 'default',
                         backgroundColor: material.balanceWithFutureDeliveries < 0
                           ? 'error.50'
                           : 'inherit',
@@ -309,9 +414,18 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                           backgroundColor: material.balanceWithFutureDeliveries < 0
                             ? 'error.100'
                             : undefined
-                        }
+                        },
+                        '& > *': { borderBottom: isMaterialExpanded ? 'none' : undefined }
                       }}
+                      onClick={() => hasExpandableContent && setExpandedMaterialId(isMaterialExpanded ? null : `${forecast.id}-${material.materialId}`)}
                     >
+                      <TableCell sx={{ width: 40 }}>
+                        {hasExpandableContent && (
+                          <IconButton size="small">
+                            {isMaterialExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                          </IconButton>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Typography variant="body2" fontWeight={500}>
                           {material.materialName}
@@ -319,6 +433,25 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                       </TableCell>
                       <TableCell>
                         <Chip size="small" label={material.category} variant="outlined" />
+                      </TableCell>
+                      <TableCell align="center">
+                        {hasMO ? (
+                          <Tooltip title={
+                            (material.relatedTasks || []).map(t => t.number || t.name).filter(Boolean).join(', ') ||
+                            `${material.relatedTaskIds?.length || 0} MO`
+                          }>
+                            <Chip
+                              size="small"
+                              icon={<MoIcon />}
+                              label={material.relatedTasks?.length || material.relatedTaskIds?.length || 0}
+                              color="primary"
+                              variant="outlined"
+                              sx={{ cursor: 'pointer' }}
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Typography variant="body2" color="text.disabled">-</Typography>
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         {material.requiredQuantity.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} {material.unit}
@@ -336,32 +469,14 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        {material.futureDeliveries && material.futureDeliveries.length > 0 ? (
-                          <Tooltip
-                            title={
-                              <Box>
-                                {material.futureDeliveries.map((d, i) => (
-                                  <Box key={i} sx={{ mb: 0.5 }}>
-                                    <Typography variant="caption" display="block">
-                                      {d.poNumber} - {d.quantity} {material.unit}
-                                    </Typography>
-                                    <Typography variant="caption" color="grey.400">
-                                      {d.supplierName} | {formatDateDisplay(d.expectedDeliveryDate)} | {d.status}
-                                    </Typography>
-                                  </Box>
-                                ))}
-                              </Box>
-                            }
-                            arrow
-                          >
-                            <Chip
-                              size="small"
-                              icon={<ShippingIcon />}
-                              label={`${material.futureDeliveriesTotal.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} ${material.unit}`}
-                              color="info"
-                              variant="outlined"
-                            />
-                          </Tooltip>
+                        {hasPO ? (
+                          <Chip
+                            size="small"
+                            icon={<ShippingIcon />}
+                            label={`${material.futureDeliveriesTotal.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} ${material.unit}`}
+                            color="info"
+                            variant="outlined"
+                          />
                         ) : (
                           <Typography variant="body2" color="text.disabled">
                             {t('states.procurementForecasts.details.noDeliveries')}
@@ -371,7 +486,7 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                       <TableCell align="center">
                         {getBalanceChip(material.balanceWithFutureDeliveries)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         {isEditing ? (
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <TextField
@@ -412,6 +527,116 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                         )}
                       </TableCell>
                     </TableRow>
+                    {hasExpandableContent && (
+                      <TableRow>
+                        <TableCell colSpan={10} sx={{ py: 0, px: 0, borderBottom: isMaterialExpanded ? undefined : 'none' }}>
+                          <Collapse in={isMaterialExpanded} timeout="auto" unmountOnExit>
+                            <Box sx={{ px: 3, py: 2, bgcolor: 'action.hover' }}>
+                              <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap', gap: 2 }}>
+                                {hasMO && (
+                                  <Paper variant="outlined" sx={{ flex: 1, minWidth: 260, p: 1.5 }}>
+                                    <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                      <MoIcon sx={{ fontSize: 16 }} />
+                                      {t('states.procurementForecasts.details.relatedMO', 'Powiązane MO')} ({material.relatedTasks?.length || material.relatedTaskIds?.length || 0})
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                      {(material.relatedTasks || []).map((task, i) => (
+                                        <Chip
+                                          key={task.id || i}
+                                          size="small"
+                                          icon={<MoIcon />}
+                                          label={task.number || task.name || task.id?.slice(0, 8)}
+                                          color="primary"
+                                          variant="outlined"
+                                          clickable
+                                          onClick={(e) => { e.stopPropagation(); navigate(`/production/tasks/${task.id}`); }}
+                                          {...(task.name ? { title: task.name } : {})}
+                                        />
+                                      ))}
+                                      {(!material.relatedTasks || material.relatedTasks.length === 0) && material.relatedTaskIds?.map((taskId, idx) => (
+                                        <Tooltip key={taskId} title={taskId}>
+                                          <Chip
+                                            size="small"
+                                            icon={<MoIcon />}
+                                            label={`MO #${idx + 1}`}
+                                            variant="outlined"
+                                            clickable
+                                            onClick={(e) => { e.stopPropagation(); navigate(`/production/tasks/${taskId}`); }}
+                                          />
+                                        </Tooltip>
+                                      ))}
+                                    </Box>
+                                  </Paper>
+                                )}
+                                {hasPO && (
+                                  <Paper variant="outlined" sx={{ flex: 2, minWidth: 380, p: 0, overflow: 'hidden' }}>
+                                    <Typography variant="subtitle2" sx={{ px: 1.5, pt: 1.5, pb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                      <ShippingIcon sx={{ fontSize: 16 }} />
+                                      {t('states.procurementForecasts.details.futureDeliveries')} ({material.futureDeliveries.length})
+                                    </Typography>
+                                    <Table size="small">
+                                      <TableHead>
+                                        <TableRow>
+                                          <TableCell sx={{ fontWeight: 'bold', py: 0.5, fontSize: '0.75rem' }}>{t('states.procurementForecasts.details.poNumber', 'Nr PO')}</TableCell>
+                                          <TableCell sx={{ fontWeight: 'bold', py: 0.5, fontSize: '0.75rem' }}>{t('states.procurementForecasts.details.supplier', 'Dostawca')}</TableCell>
+                                          <TableCell align="right" sx={{ fontWeight: 'bold', py: 0.5, fontSize: '0.75rem' }}>{t('states.procurementForecasts.details.poQuantity', 'Ilość')}</TableCell>
+                                          <TableCell align="center" sx={{ fontWeight: 'bold', py: 0.5, fontSize: '0.75rem' }}>{t('states.procurementForecasts.details.poReceived', 'Przyjęto')}</TableCell>
+                                          <TableCell sx={{ fontWeight: 'bold', py: 0.5, fontSize: '0.75rem' }}>{t('states.procurementForecasts.details.poDeliveryDate', 'Data dostawy')}</TableCell>
+                                          <TableCell sx={{ fontWeight: 'bold', py: 0.5, fontSize: '0.75rem' }}>{t('states.procurementForecasts.details.poStatus', 'Status')}</TableCell>
+                                        </TableRow>
+                                      </TableHead>
+                                      <TableBody>
+                                        {material.futureDeliveries.map((d, i) => (
+                                          <TableRow key={d.poId || i} hover>
+                                            <TableCell sx={{ py: 0.5 }}>
+                                              <Typography
+                                                variant="body2"
+                                                color="primary"
+                                                sx={{ cursor: 'pointer', fontWeight: 500, '&:hover': { textDecoration: 'underline' } }}
+                                                onClick={(e) => { e.stopPropagation(); navigate(`/purchase-orders/${d.poId}`); }}
+                                              >
+                                                {d.poNumber || '-'}
+                                              </Typography>
+                                            </TableCell>
+                                            <TableCell sx={{ py: 0.5 }}>
+                                              <Typography variant="body2" noWrap sx={{ maxWidth: 160 }}>{d.supplierName || '-'}</Typography>
+                                            </TableCell>
+                                            <TableCell align="right" sx={{ py: 0.5 }}>
+                                              <Typography variant="body2" fontWeight={500}>{d.quantity?.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} {material.unit}</Typography>
+                                            </TableCell>
+                                            <TableCell align="center" sx={{ py: 0.5 }}>
+                                              {d.originalQuantity != null ? (
+                                                <Chip
+                                                  size="small"
+                                                  variant="outlined"
+                                                  color={
+                                                    d.receivedQuantity >= d.originalQuantity ? 'success' :
+                                                    d.receivedQuantity > 0 ? 'warning' : 'default'
+                                                  }
+                                                  label={`${(d.receivedQuantity || 0).toLocaleString('pl-PL', { maximumFractionDigits: 2 })} ${t('states.procurementForecasts.details.poReceivedOf', 'z')} ${d.originalQuantity.toLocaleString('pl-PL', { maximumFractionDigits: 2 })}`}
+                                                />
+                                              ) : (
+                                                <Typography variant="body2" color="text.disabled">-</Typography>
+                                              )}
+                                            </TableCell>
+                                            <TableCell sx={{ py: 0.5 }}>
+                                              <Typography variant="body2">{formatDateDisplay(d.expectedDeliveryDate)}</Typography>
+                                            </TableCell>
+                                            <TableCell sx={{ py: 0.5 }}>
+                                              {getPoStatusChip(d.status)}
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </Paper>
+                                )}
+                              </Stack>
+                            </Box>
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </React.Fragment>
                 );
               })}
@@ -600,7 +825,7 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell colSpan={8} sx={{ py: 0, px: 2 }}>
+                    <TableCell colSpan={9} sx={{ py: 0, px: 2 }}>
                       <Collapse in={expandedId === forecast.id} timeout="auto" unmountOnExit>
                         <Box sx={{ py: 2 }}>
                           <Divider sx={{ mb: 2 }} />

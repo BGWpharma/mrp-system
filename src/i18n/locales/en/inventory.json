@@ -181,7 +181,20 @@
         "noDeliveries": "None",
         "showAll": "Show all",
         "showShortageOnly": "Shortages only",
-        "search": "Search material..."
+        "search": "Search material...",
+        "relatedMO": "Related MO",
+        "appliedFilter": "Filter applied at save",
+        "poReceived": "Received",
+        "poReceivedOf": "of",
+        "poStatusDraft": "Draft",
+        "poStatusPending": "Pending",
+        "poStatusApproved": "Approved",
+        "poStatusOrdered": "Ordered",
+        "poStatusPartial": "Partially received",
+        "poStatusShipped": "Shipped",
+        "poStatusDelivered": "Delivered",
+        "poStatusCompleted": "Completed",
+        "poStatusCancelled": "Cancelled"
       }
     }
   },

@@ -45,6 +45,20 @@ const STORAGE_BUCKET = "bgw-mrp-system.firebasestorage.app";
 // ============================================================================
 
 /**
+ * Safely parse a date string from OCR output to a Firestore Timestamp.
+ * Returns null if the string is missing or produces an invalid Date.
+ */
+const safeParseDateToTimestamp = (dateStr) => {
+  if (!dateStr) return null;
+  const parsed = new Date(dateStr);
+  if (isNaN(parsed.getTime())) {
+    logger.warn(`[OCR] Invalid date format: ${dateStr}`);
+    return null;
+  }
+  return admin.firestore.Timestamp.fromDate(parsed);
+};
+
+/**
  * Download file from Storage and convert to base64
  * @param {Object} bucket - Storage bucket reference
  * @param {string} filePath - Path to file in Storage
@@ -102,11 +116,16 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
 
   if (ocrData.currency && ocrData.currency !== "PLN") {
     try {
-      logger.info(`[OCR] Fetching exchange rate for ${ocrData.currency}`);
-      const invoiceDate = ocrData.invoiceDate ? new Date(ocrData.invoiceDate) : new Date();
-      // Polish tax law (Art. 31a VAT): use NBP rate from day BEFORE invoice date
-      const rateDateForNBP = new Date(invoiceDate);
+      // Art. 31a VAT: use NBP rate from day BEFORE tax obligation date
+      // Tax obligation = serviceDate (if set), else invoiceDate
+      const taxObligationDate = ocrData.serviceDate ?
+        new Date(ocrData.serviceDate) :
+        (ocrData.invoiceDate ? new Date(ocrData.invoiceDate) : new Date());
+      const rateDateForNBP = new Date(taxObligationDate);
       rateDateForNBP.setDate(rateDateForNBP.getDate() - 1);
+      logger.info(`[OCR] Fetching exchange rate for ${ocrData.currency}, ` +
+        `taxObligationDate: ${taxObligationDate.toISOString().slice(0, 10)}, ` +
+        `rateDate: ${rateDateForNBP.toISOString().slice(0, 10)}`);
       exchangeRateData = await convertToPLN(totalGross, ocrData.currency, rateDateForNBP);
       logger.info(`[OCR] Rate: ${exchangeRateData.rate}, Total in PLN: ${exchangeRateData.amountInPLN.toFixed(2)}`);
     } catch (error) {
@@ -214,12 +233,8 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
   const purchaseInvoice = {
     // Invoice data from OCR
     invoiceNumber: ocrData.invoiceNumber,
-    invoiceDate: ocrData.invoiceDate ?
-      admin.firestore.Timestamp.fromDate(new Date(ocrData.invoiceDate)) :
-      null,
-    dueDate: ocrData.dueDate ?
-      admin.firestore.Timestamp.fromDate(new Date(ocrData.dueDate)) :
-      null,
+    invoiceDate: safeParseDateToTimestamp(ocrData.invoiceDate),
+    dueDate: safeParseDateToTimestamp(ocrData.dueDate),
 
     // Supplier
     supplier: ocrData.supplier,
@@ -242,9 +257,14 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
       exchangeRateSource: "nbp",
       totalInPLN: exchangeRateData.amountInPLN,
     }),
-    ...(!exchangeRateData && {
+    ...(!exchangeRateData && (!ocrData.currency || ocrData.currency === "PLN") && {
       exchangeRate: 1,
       totalInPLN: totalGross,
+    }),
+    ...(!exchangeRateData && ocrData.currency && ocrData.currency !== "PLN" && {
+      exchangeRate: null,
+      totalInPLN: null,
+      exchangeRateError: "Failed to fetch NBP rate",
     }),
 
     // Source tracking
@@ -273,8 +293,10 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
       duplicateStatus: "none",
     }),
 
-    // Workflow status: duplicate → "rejected", proforma → "proforma", normal → "pending_review"
-    status: shouldAutoReject ? "rejected" : (isProforma ? "proforma" : "pending_review"),
+    // Workflow status: duplicate → "rejected", everything else → "pending_review"
+    // Proformas also start as pending_review (isProforma flag distinguishes them)
+    // and move to "proforma" status only after manual acceptance
+    status: shouldAutoReject ? "rejected" : "pending_review",
 
     journalEntryId: null,
 
@@ -754,21 +776,57 @@ const onInvoiceAttachmentDeleted = onObjectDeleted(
           return null;
         }
 
-        // Delete all matching invoices (should be only one)
         const batch = db.batch();
-        invoicesQuery.forEach((doc) => {
-          logger.info("[OCR Cleanup] Deleting purchaseInvoice", {id: doc.id});
-          batch.delete(doc.ref);
-        });
+        let deletedCount = 0;
+        let protectedCount = 0;
+
+        for (const docSnap of invoicesQuery.docs) {
+          const data = docSnap.data();
+
+          if (data.status === "posted" || data.status === "proforma_posted") {
+            // Posted invoices must not be deleted — mark source as removed
+            logger.warn("[OCR Cleanup] Cannot delete posted invoice, marking source as deleted", {
+              id: docSnap.id, status: data.status,
+            });
+            batch.update(docSnap.ref, {
+              "sourceFile.deleted": true,
+              ocrWarnings: admin.firestore.FieldValue.arrayUnion(
+                  "Source file was deleted from storage",
+              ),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            protectedCount++;
+          } else {
+            // Safe to delete — clean up linked data first
+            if (data.proformaSettlements && data.proformaSettlements.length > 0) {
+              try {
+                await unlinkAllProformasFromInvoice(db, "purchaseInvoices", docSnap.id);
+              } catch (unlinkErr) {
+                logger.warn("[OCR Cleanup] Failed to unlink proformas", {error: unlinkErr.message});
+              }
+            }
+            if (data.sourceId && data.sourceType === "po") {
+              try {
+                await db.collection("purchaseOrders").doc(data.sourceId).update({
+                  linkedPurchaseInvoices: admin.firestore.FieldValue.arrayRemove(docSnap.id),
+                });
+              } catch (poErr) {
+                logger.warn("[OCR Cleanup] Failed to remove PO reference", {error: poErr.message});
+              }
+            }
+            logger.info("[OCR Cleanup] Deleting purchaseInvoice", {id: docSnap.id});
+            batch.delete(docSnap.ref);
+            deletedCount++;
+          }
+        }
 
         await batch.commit();
 
-        logger.info("[OCR Cleanup] ✅ Deleted purchaseInvoice(s)", {
-          count: invoicesQuery.size,
-          filePath,
+        logger.info("[OCR Cleanup] ✅ Cleanup complete", {
+          deleted: deletedCount, protected: protectedCount, filePath,
         });
 
-        return {success: true, deleted: invoicesQuery.size};
+        return {success: true, deleted: deletedCount, protected: protectedCount};
       } catch (error) {
         logger.error("[OCR Cleanup] ❌ Error deleting purchaseInvoice", {
           error: error.message,
@@ -804,6 +862,32 @@ const onCmrInvoiceDeleted = onDocumentDeleted(
 
       const db = admin.firestore();
 
+      const safeDeleteOrProtect = async (docSnap) => {
+        const data = docSnap.data();
+        if (data.status === "posted" || data.status === "proforma_posted") {
+          logger.warn("[OCR Cleanup] Cannot delete posted invoice (CMR), marking source as deleted", {
+            id: docSnap.id, status: data.status,
+          });
+          await docSnap.ref.update({
+            "sourceFile.deleted": true,
+            ocrWarnings: admin.firestore.FieldValue.arrayUnion(
+                "Source CMR invoice was deleted",
+            ),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return "protected";
+        }
+        if (data.proformaSettlements && data.proformaSettlements.length > 0) {
+          try {
+            await unlinkAllProformasFromInvoice(db, "purchaseInvoices", docSnap.id);
+          } catch (e) {
+            logger.warn("[OCR Cleanup] Failed to unlink proformas (CMR)", {error: e.message});
+          }
+        }
+        await docSnap.ref.delete();
+        return "deleted";
+      };
+
       try {
         // If we have direct link to purchaseInvoice, use it
         if (deletedData?.linkedPurchaseInvoiceId) {
@@ -813,11 +897,11 @@ const onCmrInvoiceDeleted = onDocumentDeleted(
 
           const docSnap = await docRef.get();
           if (docSnap.exists) {
-            await docRef.delete();
-            logger.info("[OCR Cleanup] ✅ Deleted linked purchaseInvoice", {
+            const result = await safeDeleteOrProtect(docSnap);
+            logger.info(`[OCR Cleanup] ✅ ${result} linked purchaseInvoice`, {
               id: deletedData.linkedPurchaseInvoiceId,
             });
-            return {success: true, deleted: 1};
+            return {success: true, [result]: 1};
           }
         }
 
@@ -829,16 +913,18 @@ const onCmrInvoiceDeleted = onDocumentDeleted(
               .get();
 
           if (!invoicesQuery.empty) {
-            const batch = db.batch();
-            invoicesQuery.forEach((doc) => {
-              batch.delete(doc.ref);
-            });
-            await batch.commit();
+            let deletedCount = 0;
+            let protectedCount = 0;
+            for (const docSnap of invoicesQuery.docs) {
+              const result = await safeDeleteOrProtect(docSnap);
+              if (result === "deleted") deletedCount++;
+              else protectedCount++;
+            }
 
-            logger.info("[OCR Cleanup] ✅ Deleted purchaseInvoice(s) by path", {
-              count: invoicesQuery.size,
+            logger.info("[OCR Cleanup] ✅ CMR cleanup complete", {
+              deleted: deletedCount, protected: protectedCount,
             });
-            return {success: true, deleted: invoicesQuery.size};
+            return {success: true, deleted: deletedCount, protected: protectedCount};
           }
         }
 
@@ -954,11 +1040,16 @@ const retryInvoiceOcr = onCall(
 
         if (ocrData.currency && ocrData.currency !== "PLN") {
           try {
-            logger.info(`[OCR Retry] Fetching exchange rate for ${ocrData.currency}`);
-            const invoiceDate = ocrData.invoiceDate ? new Date(ocrData.invoiceDate) : new Date();
-            // Polish tax law (Art. 31a VAT): use NBP rate from day BEFORE invoice date
-            const rateDateForNBP = new Date(invoiceDate);
+            // Art. 31a VAT: use NBP rate from day BEFORE tax obligation date
+            // Tax obligation = serviceDate (if set), else invoiceDate
+            const taxObligationDate = ocrData.serviceDate ?
+              new Date(ocrData.serviceDate) :
+              (ocrData.invoiceDate ? new Date(ocrData.invoiceDate) : new Date());
+            const rateDateForNBP = new Date(taxObligationDate);
             rateDateForNBP.setDate(rateDateForNBP.getDate() - 1);
+            logger.info(`[OCR Retry] Fetching exchange rate for ${ocrData.currency}, ` +
+              `taxObligationDate: ${taxObligationDate.toISOString().slice(0, 10)}, ` +
+              `rateDate: ${rateDateForNBP.toISOString().slice(0, 10)}`);
             exchangeRateData = await convertToPLN(totalGross, ocrData.currency, rateDateForNBP);
             logger.info(`[OCR Retry] Rate: ${exchangeRateData.rate}, Total in PLN: ${exchangeRateData.amountInPLN.toFixed(2)}`);
           } catch (rateError) {
@@ -1079,14 +1170,8 @@ const retryInvoiceOcr = onCall(
         // Update the invoice with new OCR data
         const updateData = {
           invoiceNumber: ocrData.invoiceNumber,
-          invoiceDate: ocrData.invoiceDate ?
-            admin.firestore.Timestamp.fromDate(
-                new Date(ocrData.invoiceDate)) :
-            null,
-          dueDate: ocrData.dueDate ?
-            admin.firestore.Timestamp.fromDate(
-                new Date(ocrData.dueDate)) :
-            null,
+          invoiceDate: safeParseDateToTimestamp(ocrData.invoiceDate),
+          dueDate: safeParseDateToTimestamp(ocrData.dueDate),
           supplier: ocrData.supplier,
           currency: ocrData.currency,
           items: ocrData.items,
@@ -1102,9 +1187,9 @@ const retryInvoiceOcr = onCall(
             ocrData.warnings,
           ocrError: admin.firestore.FieldValue.delete(),
           ocrRawData: JSON.stringify(ocrData),
-          // duplicate → "rejected", proforma → "proforma", normal → "pending_review"
-          status: shouldAutoReject ? "rejected" :
-            (isProforma ? "proforma" : "pending_review"),
+          // duplicate → "rejected", everything else → "pending_review"
+          // Proformas move to "proforma" only after manual acceptance
+          status: shouldAutoReject ? "rejected" : "pending_review",
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryBy: request.auth.uid,
@@ -1122,10 +1207,17 @@ const retryInvoiceOcr = onCall(
           ...(retrySourceNumber && {sourceNumber: retrySourceNumber}),
 
           // Payment tracking (preserve manual payments, reset proforma fields)
-          // paymentStatus will be recalculated by linkProformaToInvoice if autoLink
-          paymentStatus: "unpaid",
-          payments: invoiceData.payments || [], // Preserve manual payments
-          totalPaid: invoiceData.totalPaid || 0, // Preserve manual payments
+          // paymentStatus recalculated from preserved payments;
+          // linkProformaToInvoice will update again if autoLink
+          payments: invoiceData.payments || [],
+          totalPaid: invoiceData.totalPaid || 0,
+          paymentStatus: (() => {
+            const existingPaid = invoiceData.totalPaid || 0;
+            const invoiceGross = ocrData.summary?.totalGross || 0;
+            if (existingPaid >= invoiceGross - 0.01 && existingPaid > 0) return "paid";
+            if (existingPaid > 0.01) return "partially_paid";
+            return "unpaid";
+          })(),
           paymentDate: null,
 
           // Reset proforma fields (linkProformaToInvoice will set them for autoLink)
@@ -1164,9 +1256,14 @@ const retryInvoiceOcr = onCall(
           );
           updateData.exchangeRateSource = "nbp";
           updateData.totalInPLN = exchangeRateData.amountInPLN;
-        } else {
+          updateData.exchangeRateError = admin.firestore.FieldValue.delete();
+        } else if (!ocrData.currency || ocrData.currency === "PLN") {
           updateData.exchangeRate = 1;
           updateData.totalInPLN = totalGross;
+        } else {
+          updateData.exchangeRate = null;
+          updateData.totalInPLN = null;
+          updateData.exchangeRateError = "Failed to fetch NBP rate";
         }
 
         await db.collection("purchaseInvoices").doc(invoiceId).update(updateData);

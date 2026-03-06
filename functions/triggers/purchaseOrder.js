@@ -181,73 +181,120 @@ async function updateProcurementForecasts(db, orderId, beforeData, afterData) {
 
       const updatedMaterials = materials.map((material) => {
         const deliveries = material.futureDeliveries || [];
-        if (deliveries.length === 0) return material;
 
-        // Sprawdź czy jakiekolwiek dostawy odnoszą się do tego PO
         const hasMatchingDelivery = deliveries.some(
             (d) => d.poId === orderId,
         );
-        if (!hasMatchingDelivery) return material;
 
-        // Aktualizuj dostawy powiązane z tym PO
-        let updatedDeliveries = deliveries.map((delivery) => {
-          if (delivery.poId !== orderId) return delivery;
+        // --- Aktualizacja istniejących dostaw powiązanych z tym PO ---
+        let updatedDeliveries = [...deliveries];
+        if (hasMatchingDelivery) {
+          updatedDeliveries = deliveries.map((delivery) => {
+            if (delivery.poId !== orderId) return delivery;
 
-          // Znajdź odpowiednią pozycję w PO dla tego materiału
+            const matchingPoItem = poItems.find(
+                (item) => item.inventoryItemId === material.materialId,
+            );
+
+            if (!matchingPoItem) {
+              forecastChanged = true;
+              return {
+                ...delivery,
+                status: "cancelled",
+                quantity: 0,
+                poNumber: poNumber || delivery.poNumber,
+              };
+            }
+
+            const quantityOrdered = parseFloat(matchingPoItem.quantity) || 0;
+            const quantityReceived =
+              parseFloat(matchingPoItem.received) || 0;
+            const quantityRemaining = Math.max(
+                0, quantityOrdered - quantityReceived,
+            );
+            const deliveryDate = matchingPoItem.plannedDeliveryDate ||
+              matchingPoItem.expectedDeliveryDate ||
+              poExpectedDeliveryDate;
+
+            const oldQuantity = parseFloat(delivery.quantity) || 0;
+            const oldStatus = delivery.status || "";
+
+            if (
+              oldQuantity !== quantityRemaining ||
+              oldStatus !== poStatus ||
+              delivery.expectedDeliveryDate !== deliveryDate ||
+              delivery.supplierName !== supplierName
+            ) {
+              forecastChanged = true;
+            }
+
+            return {
+              ...delivery,
+              status: poStatus,
+              quantity: quantityRemaining,
+              originalQuantity: quantityOrdered,
+              receivedQuantity: quantityReceived,
+              poNumber: poNumber || delivery.poNumber,
+              expectedDeliveryDate:
+                deliveryDate || delivery.expectedDeliveryDate,
+              supplierName: supplierName || delivery.supplierName,
+            };
+          });
+
+          updatedDeliveries = updatedDeliveries.filter((d) => {
+            if (terminalStatuses.includes(d.status) && d.quantity <= 0) {
+              forecastChanged = true;
+              return false;
+            }
+            return true;
+          });
+        }
+
+        // --- Dodawanie NOWYCH PO dla materiałów w prognozie ---
+        if (!hasMatchingDelivery && !terminalStatuses.includes(poStatus)) {
           const matchingPoItem = poItems.find(
               (item) => item.inventoryItemId === material.materialId,
           );
 
-          if (!matchingPoItem) {
-            // Pozycja została usunięta z PO - oznacz dostawę jako cancelled
-            forecastChanged = true;
-            return {
-              ...delivery,
-              status: "cancelled",
-              quantity: 0,
-              poNumber: poNumber || delivery.poNumber,
-            };
+          if (matchingPoItem) {
+            const quantityOrdered =
+              parseFloat(matchingPoItem.quantity) || 0;
+            const quantityReceived =
+              parseFloat(matchingPoItem.received) || 0;
+            const quantityRemaining = Math.max(
+                0, quantityOrdered - quantityReceived,
+            );
+
+            if (quantityRemaining > 0) {
+              const deliveryDate = matchingPoItem.plannedDeliveryDate ||
+                matchingPoItem.expectedDeliveryDate ||
+                poExpectedDeliveryDate;
+
+              updatedDeliveries.push({
+                poId: orderId,
+                poNumber: poNumber || "",
+                status: poStatus,
+                quantity: quantityRemaining,
+                originalQuantity: quantityOrdered,
+                receivedQuantity: quantityReceived,
+                expectedDeliveryDate: deliveryDate || null,
+                supplierName: supplierName || "",
+              });
+              forecastChanged = true;
+
+              logger.info(
+                  `New PO ${poNumber} added to forecast material ` +
+                  `${material.materialId}`,
+              );
+            }
           }
+        }
 
-          const quantityOrdered = parseFloat(matchingPoItem.quantity) || 0;
-          const quantityReceived = parseFloat(matchingPoItem.received) || 0;
-          const quantityRemaining = Math.max(
-              0, quantityOrdered - quantityReceived,
-          );
-          const deliveryDate = matchingPoItem.plannedDeliveryDate ||
-            poExpectedDeliveryDate;
-
-          // Sprawdź czy coś się zmieniło
-          const oldQuantity = parseFloat(delivery.quantity) || 0;
-          const oldStatus = delivery.status || "";
-
-          if (
-            oldQuantity !== quantityRemaining ||
-            oldStatus !== poStatus ||
-            delivery.expectedDeliveryDate !== deliveryDate ||
-            delivery.supplierName !== supplierName
-          ) {
-            forecastChanged = true;
-          }
-
-          return {
-            ...delivery,
-            status: poStatus,
-            quantity: quantityRemaining,
-            poNumber: poNumber || delivery.poNumber,
-            expectedDeliveryDate: deliveryDate || delivery.expectedDeliveryDate,
-            supplierName: supplierName || delivery.supplierName,
-          };
-        });
-
-        // Usuń dostawy z terminalnych statusów gdzie remaining = 0
-        updatedDeliveries = updatedDeliveries.filter((d) => {
-          if (terminalStatuses.includes(d.status) && d.quantity <= 0) {
-            forecastChanged = true;
-            return false;
-          }
-          return true;
-        });
+        if (!forecastChanged &&
+            JSON.stringify(deliveries) ===
+            JSON.stringify(updatedDeliveries)) {
+          return material;
+        }
 
         // Przelicz sumy i bilanse
         const newFutureDeliveriesTotal = updatedDeliveries.reduce(

@@ -32,13 +32,15 @@ TASK: Extract complete invoice information including:
 IMPORTANT: Identify document type carefully:
 - "invoice" = standard invoice / faktura VAT
 - "proforma" = pro forma invoice / faktura pro forma / advance invoice
-- "credit_note" = nota kredytowa
+- "credit_note" = nota kredytowa / korekta
 - "debit_note" = nota obciążeniowa
+- "delivery_note" = WZ (Wydanie Zewnętrzne) / delivery note / dispatch note / packing slip / list przewozowy / CMR
+- "other" = any document that does not fit the above categories
 
 RETURN JSON in this EXACT format:
 \`\`\`json
 {
-  "documentType": "invoice" or "proforma" or "credit_note" or "debit_note",
+  "documentType": "invoice" or "proforma" or "credit_note" or "debit_note" or "delivery_note" or "other",
   "invoiceNumber": "EXACT number from document",
   "invoiceDate": "YYYY-MM-DD",
   "serviceDate": "YYYY-MM-DD or null - date of service/delivery/sale. Look for: 'Data wykonania usługi', 'Data sprzedaży', 'Data dostawy', 'Service date', 'Delivery date', 'Datum der Leistung'. If not found or same as invoiceDate, set null.",
@@ -94,6 +96,13 @@ CRITICAL RULES:
   * "Faktura Pro Forma", "Invoice Proforma"
   * "Advance Invoice", "Faktura Zaliczkowa"
   * Document number contains "PRO", "PROF", "PF"
+- Set documentType to "delivery_note" for:
+  * WZ (Wydanie Zewnętrzne), delivery notes, dispatch notes, packing slips
+  * Documents with "WZ" in the number (e.g. "WZ nr 01/0009/26")
+  * CMR documents, transport documents (list przewozowy)
+  * Documents WITHOUT prices, VAT, or financial totals that describe goods delivery
+- NEVER classify a WZ/delivery note/dispatch note as "proforma" - use "delivery_note" instead
+- Set documentType to "other" for documents that don't match any category above
 - ALL numeric values MUST be numbers (not strings)
 - Dates in YYYY-MM-DD format
 - quantity, unitPriceNet, vatRate, totalNet, totalGross - all NUMBERS
@@ -210,6 +219,8 @@ const callGeminiVision = async (apiKey, base64Data, mimeType) => {
  * @param {Object} ocrData - Normalized OCR data
  * @return {boolean} True if document appears to be proforma
  */
+const NON_PROFORMA_DOC_TYPES = ["invoice", "credit_note", "debit_note", "delivery_note", "other"];
+
 const checkIfProforma = (ocrData) => {
   const proformaKeywords = [
     "proforma", "pro forma", "pro-forma",
@@ -218,9 +229,12 @@ const checkIfProforma = (ocrData) => {
     "proforma invoice", "profaktura",
   ];
 
-  // Check document type from OCR
+  // If OCR explicitly set a non-proforma document type, trust it
   if (ocrData.documentType) {
     const docType = ocrData.documentType.toLowerCase().trim();
+    if (NON_PROFORMA_DOC_TYPES.includes(docType)) {
+      return false;
+    }
     if (docType === "proforma") {
       return true;
     }
@@ -236,7 +250,8 @@ const checkIfProforma = (ocrData) => {
       return true;
     }
     // Check for common proforma number patterns: PRO/2024/001, PF-123, etc.
-    if (/\b(pro|pf|prof)\b/i.test(invoiceNum)) {
+    // Exclude false positives: WZ numbers, transport docs, etc.
+    if (/\b(pf|prof)\b/i.test(invoiceNum) && !/\bwz\b/i.test(invoiceNum)) {
       return true;
     }
   }
@@ -293,7 +308,7 @@ const normalizeOcrResult = (ocrData) => {
       phone: ocrData.supplier?.phone || null,
       bankName: ocrData.supplier?.bankName || null,
     },
-    currency: ocrData.currency || "EUR",
+    currency: ocrData.currency || "PLN",
     items: (ocrData.items || []).map((item, idx) => ({
       id: `item_${idx}`,
       name: item.name || item.documentProductName || "Unknown Item",

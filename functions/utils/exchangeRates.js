@@ -42,10 +42,10 @@ const getNBPExchangeRate = async (currency, date) => {
     const response = await fetch(url);
 
     if (!response.ok) {
-      // If rate not found for exact date (weekend/holiday), try current rate
+      // If rate not found for exact date (weekend/holiday), walk back to last business day
       if (response.status === 404 && date) {
-        logger.warn(`[NBP] No rate found for ${dateStr}, trying current rate`);
-        return getNBPCurrentExchangeRate(currency);
+        logger.warn(`[NBP] No rate for ${dateStr}, searching previous business days`);
+        return getNBPPreviousBusinessDayRate(currency, date);
       }
       throw new Error(`NBP API error: ${response.status} ${response.statusText}`);
     }
@@ -70,6 +70,49 @@ const getNBPExchangeRate = async (currency, date) => {
     logger.error(`[NBP] Error fetching exchange rate for ${currency}:`, error);
     throw new Error(`Failed to fetch exchange rate for ${currency}: ${error.message}`);
   }
+};
+
+/**
+ * Walk back from given date to find the last published NBP rate.
+ * NBP does not publish rates on weekends and public holidays;
+ * Art. 31a VAT requires using the rate from the last business day
+ * before the tax obligation date.
+ * @param {string} currency - Currency code (EUR, USD, etc.)
+ * @param {Date|string} startDate - Date that returned 404
+ * @param {number} [maxRetries=7] - Max days to walk back
+ * @return {Promise<{rate: number, date: string, currency: string}>}
+ */
+const getNBPPreviousBusinessDayRate = async (currency, startDate, maxRetries = 7) => {
+  let dateObj = typeof startDate === "string" ? new Date(startDate) : new Date(startDate);
+
+  for (let i = 1; i <= maxRetries; i++) {
+    dateObj.setDate(dateObj.getDate() - 1);
+    const dateStr = formatDateForNBP(dateObj);
+    const url = `${NBP_API_BASE}/${currency}/${dateStr}/?format=json`;
+
+    logger.info(`[NBP] Retry ${i}/${maxRetries}: trying ${currency} on ${dateStr}`);
+
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        const rateData = data.rates?.[0];
+        if (rateData && rateData.mid) {
+          logger.info(`[NBP] Found rate on ${rateData.effectiveDate}: ${rateData.mid}`);
+          return {
+            currency,
+            rate: rateData.mid,
+            date: rateData.effectiveDate,
+          };
+        }
+      }
+    } catch (err) {
+      logger.warn(`[NBP] Retry ${i} error: ${err.message}`);
+    }
+  }
+
+  logger.warn(`[NBP] No rate found in last ${maxRetries} days, falling back to current rate`);
+  return getNBPCurrentExchangeRate(currency);
 };
 
 /**

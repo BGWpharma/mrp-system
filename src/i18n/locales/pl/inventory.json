@@ -181,7 +181,20 @@
         "noDeliveries": "Brak",
         "showAll": "Pokaż wszystkie",
         "showShortageOnly": "Tylko niedobory",
-        "search": "Szukaj materiału..."
+        "search": "Szukaj materiału...",
+        "relatedMO": "Powiązane MO",
+        "appliedFilter": "Zastosowany filtr przy zapisie",
+        "poReceived": "Przyjęto",
+        "poReceivedOf": "z",
+        "poStatusDraft": "Szkic",
+        "poStatusPending": "Oczekujące",
+        "poStatusApproved": "Zatwierdzone",
+        "poStatusOrdered": "Zamówione",
+        "poStatusPartial": "Częściowo przyjęte",
+        "poStatusShipped": "Wysłane",
+        "poStatusDelivered": "Dostarczone",
+        "poStatusCompleted": "Zakończone",
+        "poStatusCancelled": "Anulowane"
       }
     }
   },

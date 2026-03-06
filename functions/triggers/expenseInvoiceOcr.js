@@ -35,6 +35,9 @@ const {checkForDuplicateInvoice} = require("../utils/duplicateDetection");
 const {
   matchProformaForExpenseInvoice,
 } = require("../utils/proformaMatchingService");
+const {
+  suggestBudgetForExpenseInvoice,
+} = require("../utils/budgetSuggestionService");
 
 // Define secret for Gemini API key
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -44,6 +47,20 @@ const STORAGE_BUCKET = "bgw-mrp-system.firebasestorage.app";
 
 // Collection name for expense invoices
 const COLLECTION = "expenseInvoices";
+
+/**
+ * Safely parse a date string from OCR output to a Firestore Timestamp.
+ * Returns null if the string is missing or produces an invalid Date.
+ */
+const safeParseDateToTimestamp = (dateStr) => {
+  if (!dateStr) return null;
+  const parsed = new Date(dateStr);
+  if (isNaN(parsed.getTime())) {
+    logger.warn(`[Expense OCR] Invalid date format: ${dateStr}`);
+    return null;
+  }
+  return admin.firestore.Timestamp.fromDate(parsed);
+};
 
 /**
  * Check if file path is an expense invoice
@@ -98,7 +115,7 @@ const getSignedUrl = async (bucket, filePath) => {
  * @param {Object} ocrData - Normalized OCR data
  * @param {string} downloadUrl - Signed download URL
  */
-const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) => {
+const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl, apiKey) => {
   // Get exchange rate if currency is not PLN
   let exchangeRateData = null;
   const totalGross = ocrData.summary?.totalGross || 0;
@@ -175,21 +192,34 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
     }
   }
 
+  // BUDGET SUGGESTION - AI matches invoice to budget item
+  let budgetSuggestion = null;
+  if (!shouldAutoReject && !isProforma && apiKey) {
+    try {
+      budgetSuggestion = await suggestBudgetForExpenseInvoice(apiKey, ocrData);
+      if (budgetSuggestion) {
+        logger.info("[Expense OCR] Budget suggestion found", {
+          itemId: budgetSuggestion.suggestedBudgetItemId,
+          itemName: budgetSuggestion.suggestedBudgetItemName,
+        });
+      }
+    } catch (budgetError) {
+      logger.warn("[Expense OCR] Budget suggestion failed (non-critical)", {
+        error: budgetError.message,
+      });
+    }
+  }
+
+  // Read current document to preserve existing payments
+  const currentDoc = await db.collection(COLLECTION).doc(invoiceId).get();
+  const currentData = currentDoc.exists ? currentDoc.data() : {};
+
   const updateData = {
     // Invoice data from OCR
     "invoiceNumber": ocrData.invoiceNumber,
-    "invoiceDate": ocrData.invoiceDate ?
-      admin.firestore.Timestamp.fromDate(
-          new Date(ocrData.invoiceDate)) :
-      null,
-    "serviceDate": ocrData.serviceDate ?
-      admin.firestore.Timestamp.fromDate(
-          new Date(ocrData.serviceDate)) :
-      null,
-    "dueDate": ocrData.dueDate ?
-      admin.firestore.Timestamp.fromDate(
-          new Date(ocrData.dueDate)) :
-      null,
+    "invoiceDate": safeParseDateToTimestamp(ocrData.invoiceDate),
+    "serviceDate": safeParseDateToTimestamp(ocrData.serviceDate),
+    "dueDate": safeParseDateToTimestamp(ocrData.dueDate),
 
     // Supplier
     "supplier": ocrData.supplier,
@@ -213,10 +243,14 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
       "exchangeRateSource": "nbp",
       "totalInPLN": exchangeRateData.amountInPLN,
     }),
-    // If PLN or no exchange rate, set totalInPLN = totalGross
-    ...(!exchangeRateData && {
+    ...(!exchangeRateData && (!ocrData.currency || ocrData.currency === "PLN") && {
       "exchangeRate": 1,
       "totalInPLN": totalGross,
+    }),
+    ...(!exchangeRateData && ocrData.currency && ocrData.currency !== "PLN" && {
+      "exchangeRate": null,
+      "totalInPLN": null,
+      "exchangeRateError": "Failed to fetch NBP rate",
     }),
 
     // OCR metadata
@@ -240,15 +274,21 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
     // Update download URL with signed version
     "sourceFile.downloadUrl": downloadUrl,
 
-    // proforma → "proforma", duplicate → "rejected", normal → "pending_review"
-    "status": isProforma ? "proforma" :
-      (shouldAutoReject ? "rejected" : "pending_review"),
+    // duplicate → "rejected", everything else → "pending_review"
+    // Proformas move to "proforma" only after manual acceptance
+    "status": shouldAutoReject ? "rejected" : "pending_review",
 
-    // === Payment tracking ===
-    "paymentStatus": "unpaid",
-    "payments": [],
-    "totalPaid": 0,
-    "paymentDate": null,
+    // === Payment tracking (preserve existing payments) ===
+    "payments": currentData.payments || [],
+    "totalPaid": currentData.totalPaid || 0,
+    "paymentStatus": (() => {
+      const existingPaid = currentData.totalPaid || 0;
+      const invoiceGross = ocrData.summary?.totalGross || 0;
+      if (existingPaid >= invoiceGross - 0.01 && existingPaid > 0) return "paid";
+      if (existingPaid > 0.01) return "partially_paid";
+      return "unpaid";
+    })(),
+    "paymentDate": currentData.paymentDate || null,
 
     // === Proforma suggestion (expense invoices never autoLink) ===
     ...(expenseProformaMatch.matched && {
@@ -263,6 +303,12 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
     ...(!expenseProformaMatch.matched && {
       "suggestedProformaMatch": null,
     }),
+
+    // === Budget suggestion (AI dopasowanie do pozycji budżetowej) ===
+    "suggestedBudgetItemId": budgetSuggestion?.suggestedBudgetItemId || null,
+    "suggestedBudgetItemName": budgetSuggestion?.suggestedBudgetItemName || null,
+    "suggestedBudgetSectionName": budgetSuggestion?.suggestedBudgetSectionName || null,
+    "budgetSuggestionReasoning": budgetSuggestion?.budgetSuggestionReasoning || null,
 
     // Review tracking (for auto-rejected)
     ...(shouldAutoReject && {
@@ -283,6 +329,7 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
     duplicateType: duplicateResult.duplicateType,
     autoRejected: shouldAutoReject,
     proformaMatch: expenseProformaMatch.matched,
+    budgetSuggestion: budgetSuggestion?.suggestedBudgetItemId || null,
   });
 };
 
@@ -511,6 +558,7 @@ const onExpenseInvoiceUploaded = onObjectFinalized(
             expenseInvoice.id,
             ocrData,
             downloadUrl,
+            apiKey,
         );
 
         logger.info("[Expense OCR] ✅ Expense invoice processed successfully", {
@@ -590,7 +638,24 @@ const onExpenseInvoiceDeleted = onObjectDeleted(
           return null;
         }
 
-        // Delete the document
+        const data = expenseInvoice.data ? expenseInvoice.data : expenseInvoice;
+
+        // Protect posted invoices
+        if (data.status === "posted" || data.status === "proforma_posted") {
+          logger.warn("[Expense OCR Cleanup] Cannot delete posted expense invoice, marking source as deleted", {
+            id: expenseInvoice.id, status: data.status,
+          });
+          await db.collection(COLLECTION).doc(expenseInvoice.id).update({
+            "sourceFile.deleted": true,
+            ocrWarnings: admin.firestore.FieldValue.arrayUnion(
+                "Source file was deleted from storage",
+            ),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return {success: true, protected: 1};
+        }
+
+        // Safe to delete
         await db.collection(COLLECTION).doc(expenseInvoice.id).delete();
 
         logger.info("[Expense OCR Cleanup] ✅ Deleted expenseInvoice", {
@@ -781,21 +846,32 @@ const processExpenseInvoiceOcr = onCall(
           }
         }
 
+        // BUDGET SUGGESTION on retry
+        let retryBudgetSuggestion = null;
+        if (!retryAutoReject && !isProforma) {
+          try {
+            retryBudgetSuggestion = await suggestBudgetForExpenseInvoice(
+                apiKey, ocrData,
+            );
+            if (retryBudgetSuggestion) {
+              logger.info("[Expense OCR Retry] Budget suggestion found", {
+                itemId: retryBudgetSuggestion.suggestedBudgetItemId,
+                itemName: retryBudgetSuggestion.suggestedBudgetItemName,
+              });
+            }
+          } catch (budgetError) {
+            logger.warn("[Expense OCR Retry] Budget suggestion failed (non-critical)", {
+              error: budgetError.message,
+            });
+          }
+        }
+
         // Update the invoice with new OCR data
         const updateData = {
           "invoiceNumber": ocrData.invoiceNumber,
-          "invoiceDate": ocrData.invoiceDate ?
-            admin.firestore.Timestamp.fromDate(
-                new Date(ocrData.invoiceDate)) :
-            null,
-          "serviceDate": ocrData.serviceDate ?
-            admin.firestore.Timestamp.fromDate(
-                new Date(ocrData.serviceDate)) :
-            null,
-          "dueDate": ocrData.dueDate ?
-            admin.firestore.Timestamp.fromDate(
-                new Date(ocrData.dueDate)) :
-            null,
+          "invoiceDate": safeParseDateToTimestamp(ocrData.invoiceDate),
+          "serviceDate": safeParseDateToTimestamp(ocrData.serviceDate),
+          "dueDate": safeParseDateToTimestamp(ocrData.dueDate),
           "supplier": ocrData.supplier,
           "currency": ocrData.currency,
           "items": ocrData.items,
@@ -814,9 +890,9 @@ const processExpenseInvoiceOcr = onCall(
           "ocrProcessedAt":
             admin.firestore.FieldValue.serverTimestamp(),
           "sourceFile.downloadUrl": downloadUrl,
-          // proforma → "proforma", duplicate → "rejected", normal → "pending_review"
-          "status": isProforma ? "proforma" :
-            (retryAutoReject ? "rejected" : "pending_review"),
+          // duplicate → "rejected", everything else → "pending_review"
+          // Proformas move to "proforma" only after manual acceptance
+          "status": retryAutoReject ? "rejected" : "pending_review",
           "updatedAt":
             admin.firestore.FieldValue.serverTimestamp(),
           "lastOcrRetryAt":
@@ -851,6 +927,12 @@ const processExpenseInvoiceOcr = onCall(
             "suggestedProformaMatch": null,
           }),
 
+          // === Budget suggestion (AI dopasowanie do pozycji budżetowej) ===
+          "suggestedBudgetItemId": retryBudgetSuggestion?.suggestedBudgetItemId || null,
+          "suggestedBudgetItemName": retryBudgetSuggestion?.suggestedBudgetItemName || null,
+          "suggestedBudgetSectionName": retryBudgetSuggestion?.suggestedBudgetSectionName || null,
+          "budgetSuggestionReasoning": retryBudgetSuggestion?.budgetSuggestionReasoning || null,
+
           // Review tracking (for auto-rejected)
           ...(retryAutoReject && {
             "reviewedBy": "cloud_function_ocr_auto_reject",
@@ -868,9 +950,14 @@ const processExpenseInvoiceOcr = onCall(
           );
           updateData.exchangeRateSource = "nbp";
           updateData.totalInPLN = exchangeRateData.amountInPLN;
-        } else {
+          updateData.exchangeRateError = admin.firestore.FieldValue.delete();
+        } else if (!ocrData.currency || ocrData.currency === "PLN") {
           updateData.exchangeRate = 1;
           updateData.totalInPLN = totalGross;
+        } else {
+          updateData.exchangeRate = null;
+          updateData.totalInPLN = null;
+          updateData.exchangeRateError = "Failed to fetch NBP rate";
         }
 
         await db.collection(COLLECTION).doc(invoiceId).update(updateData);

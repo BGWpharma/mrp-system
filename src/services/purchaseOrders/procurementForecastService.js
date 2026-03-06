@@ -48,7 +48,7 @@ const generateForecastNumber = async () => {
 /**
  * Tworzy nową prognozę zakupową (snapshot z ForecastPage)
  */
-export const createProcurementForecast = async (forecastData, period, userId, userName, name = '', notes = '') => {
+export const createProcurementForecast = async (forecastData, period, userId, userName, name = '', notes = '', filterInfo = null) => {
   try {
     const number = await generateForecastNumber();
     
@@ -72,6 +72,11 @@ export const createProcurementForecast = async (forecastData, period, userId, us
       supplierId: item.supplierId || null,
       supplierName: item.supplier || null,
       relatedTaskIds: item.tasks || [],
+      relatedTasks: (item.taskDetails || []).map(t => ({
+        id: t.id || '',
+        number: t.number || '',
+        name: t.name || ''
+      })),
       futureDeliveries: (item.futureDeliveries || []).map(d => ({
         poId: d.poId || '',
         poNumber: d.poNumber || '',
@@ -100,7 +105,8 @@ export const createProcurementForecast = async (forecastData, period, userId, us
       createdBy: userId,
       createdByName: userName || '',
       updatedAt: serverTimestamp(),
-      notes: notes || ''
+      notes: notes || '',
+      appliedFilter: filterInfo || null
     };
     
     const docRef = await addDoc(collection(db, COLLECTION), forecastDoc);

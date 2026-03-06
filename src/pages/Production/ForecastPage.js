@@ -341,6 +341,7 @@ const ForecastPage = () => {
               consumedQuantity: 0, // Dodaj pole do śledzenia całkowitej skonsumowanej ilości
               availableQuantity: inventoryItem ? parseFloat(inventoryItem.quantity) || 0 : 0,
               tasks: [], // Lista zadań, w których materiał jest używany
+              taskDetails: [], // Lista zadań z numerami/nazwami
               perUnitQuantity: materialQuantityPerUnit, // Zapamiętaj ilość na jednostkę
               price: inventoryItem?.price || 0
             };
@@ -355,6 +356,11 @@ const ForecastPage = () => {
           // Dodaj to zadanie do listy zadań, gdzie materiał jest używany
           if (!materialRequirements[materialId].tasks.includes(task.id)) {
             materialRequirements[materialId].tasks.push(task.id);
+            materialRequirements[materialId].taskDetails.push({
+              id: task.id,
+              number: task.number || task.taskNumber || '',
+              name: task.name || task.productName || ''
+            });
           }
         }
       }
@@ -575,13 +581,15 @@ const ForecastPage = () => {
     try {
       setSavingToCrm(true);
       
+      const dataToSave = filteredData();
       await createProcurementForecast(
-        forecastData,
+        dataToSave,
         { startDate, endDate },
         currentUser?.uid,
         currentUser?.displayName || currentUser?.email || '',
         saveToCrmName,
-        saveToCrmNotes
+        saveToCrmNotes,
+        { categoryFilter: categoryFilter || null, searchTerm: searchTerm || null }
       );
       
       showSuccess('Prognoza została zapisana do CRM');
@@ -2423,7 +2431,7 @@ const ForecastPage = () => {
         notes={saveToCrmNotes}
         onNotesChange={setSaveToCrmNotes}
         saving={savingToCrm}
-        forecastData={forecastData}
+        forecastData={filteredData()}
         startDate={startDate}
         endDate={endDate}
       />
