@@ -145,7 +145,7 @@ const CmrBasicInfoCard = React.memo(({
                   }}
                 >
                   {linkedOrders.length > 0
-                    ? `Zmień powiązane CO (${linkedOrders[0].orderNumber})`
+                    ? `✓ Powiązano z ${linkedOrders.length} CO`
                     : 'Powiąż z CO (wymagane)'
                   }
                 </Button>
@@ -154,7 +154,7 @@ const CmrBasicInfoCard = React.memo(({
               {linkedOrders.length > 0 && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Powiązane zamówienie klienta:
+                    Powiązane zamówienia klienta:
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                     {linkedOrders.map((order) => (
