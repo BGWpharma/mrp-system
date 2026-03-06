@@ -281,11 +281,6 @@ export const calculateCustomerOrderProfitability = (customerOrder, productCostsM
  * @returns {Number} - Szacowany czas trwania w minutach
  */
 export const calculateEstimatedProductionTime = (recipe, taskQuantity = 1, options = {}) => {
-  const { 
-    excludeWeekends = true,
-    workingHoursPerDay = 16 
-  } = options;
-
   if (!recipe) {
     return 0;
   }

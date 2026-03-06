@@ -16,25 +16,17 @@ import {
     increment,
     arrayUnion,
     limit,
-    onSnapshot,
     writeBatch,
     deleteField
   } from 'firebase/firestore';
   import { db } from '../firebase/config';
-  import { format } from 'date-fns';
-  import { generateMONumber, generateLOTNumber } from '../../utils/calculations';
-  import { fixFloatingPointPrecision, preciseMultiply, preciseAdd, preciseSubtract, preciseDivide } from '../../utils/calculations';
+  
+  import { generateMONumber } from '../../utils/calculations';
+  
   import { 
-    getInventoryItemByName, 
-    getInventoryItemById,
-    receiveInventory, 
-    createInventoryItem, 
-    getAllInventoryItems,
     bookInventoryForTask,
     cancelBooking,
-    getItemBatches,
     recalculateItemQuantity,
-    getInventoryBatch,
     calculateEstimatedPricesForMultipleMaterials
   } from '../inventory';
   import { updateIngredientConsumption } from './mixingPlanReservationService';
@@ -1264,8 +1256,6 @@ import {
     }
 
     try {
-      const startTime = performance.now();
-      
       // Firestore batch get - maksymalnie 500 dokumentów na raz
       const batchSize = 500;
       const taskDocsMap = {};
@@ -1350,7 +1340,7 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
       console.log(`[DEBUG-MO] Wygenerowano numer MO: ${moNumber}`);
       
       // Przygotuj dane zadania z metadanymi
-      const taskWithMeta = {
+      let taskWithMeta = {
         ...taskData,
         moNumber, // Dodaj numer MO
         createdBy: userId,
@@ -1500,9 +1490,6 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
       // Rezerwuj materiały tylko jeśli autoReserveMaterials jest true
       if (autoReserveMaterials && taskWithMeta.materials && taskWithMeta.materials.length > 0) {
         console.log(`Automatyczne rezerwowanie materiałów dla MO: ${moNumber}`);
-        // Określ metodę rezerwacji (domyślnie według daty ważności)
-        const reservationMethod = taskWithMeta.reservationMethod || 'expiry';
-        
         for (const material of taskWithMeta.materials) {
           try {
             // Sprawdź, czy materiał jest oznaczony jako brakujący
@@ -2005,7 +1992,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       }
       
       // OPTYMALIZACJA 4: Równoległe wykonanie operacji sprawdzania partii i pobierania transakcji
-      const [batchesCheck, transactionsSnapshot, orderRemovalResult, productionHistoryResult] = await Promise.allSettled([
+      const [, transactionsSnapshot, , productionHistoryResult] = await Promise.allSettled([
         // Sprawdź partie produktów
         (async () => {
           try {
@@ -3685,12 +3672,6 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
     }
   };
 
-  // Pomocnicza funkcja do pobierania aktualnego ID użytkownika
-  const getCurrentUserId = () => {
-    // W prawdziwej aplikacji należałoby pobrać ID z kontekstu Auth
-    // Na potrzeby tego kodu zwracamy stałą wartość
-    return 'system';
-  };
 
   // Rozpoczęcie produkcji
   export const startProduction = async (taskId, userId, expiryDate = null) => {
@@ -3823,8 +3804,6 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         throw new Error('Zadanie nie istnieje');
       }
       
-      const task = taskDoc.data();
-      
       // Wstrzymaj produkcję bez dodawania sesji - tylko zmień status
       const updates = {
         status: 'Wstrzymane',
@@ -3860,7 +3839,6 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
     
     // Tworzymy wpisy w kolekcji productionHistory jeśli nie istnieją
     // i upewniamy się, że zawierają wszystkie potrzebne dane
-    const historyCollectionRef = collection(db, 'productionHistory');
     const historyItems = [];
     
     // Dla każdej sesji, sprawdź czy istnieje już w kolekcji productionHistory
@@ -4484,7 +4462,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         // Kopiuj materiały do wyniku
         for (const material of task.materials) {
           const materialId = material.inventoryItemId || material.id;
-          const materialBatches = task.materialBatches && task.materialBatches[materialId] || [];
+          const materialBatches = (task.materialBatches && task.materialBatches[materialId]) || [];
           
           // Pobierz szczegóły materiału z inwentarza
           const inventoryDetails = inventoryItemsDetails[materialId] || {};
@@ -4952,7 +4930,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       }
 
       // Wyodrębnij jednostkę z obecnych details
-      const detailsMatch = ingredient.details.match(/Ilość:\s*[\d,\.]+\s*(\w+)/);
+      const detailsMatch = ingredient.details.match(/Ilość:\s*[\d,.]+\s*(\w+)/);
       const unit = detailsMatch ? detailsMatch[1] : 'kg';
 
       // Zaktualizuj składnik
@@ -4980,7 +4958,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           );
 
           const totalWeight = ingredientsInMixing.reduce((sum, ing) => {
-            const quantityMatch = ing.details.match(/Ilość:\s*([\d,\.]+)/);
+            const quantityMatch = ing.details.match(/Ilość:\s*([\d,.]+)/);
             if (quantityMatch) {
               return sum + parseFloat(quantityMatch[1]);
             }
@@ -5061,7 +5039,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       );
 
       const totalWeight = ingredientsInMixing.reduce((sum, ing) => {
-        const quantityMatch = ing.details.match(/Ilość:\s*([\d,\.]+)/);
+        const quantityMatch = ing.details.match(/Ilość:\s*([\d,.]+)/);
         if (quantityMatch) {
           return sum + parseFloat(quantityMatch[1]);
         }
@@ -5830,7 +5808,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
 
     // 4. DODATKOWE KOSZTY (przeliczone na EUR kursem NBP z dnia przed datą faktury)
     if (task.additionalCosts && Array.isArray(task.additionalCosts) && task.additionalCosts.length > 0) {
-      const { convertAdditionalCostToEUR } = await import('../utils/nbpExchangeRates');
+      const { convertAdditionalCostToEUR } = await import('../../utils/nbpExchangeRates');
       let totalAdditionalCostsInEUR = 0;
       for (const item of task.additionalCosts) {
         const amount = parseFloat(item.amount) || 0;

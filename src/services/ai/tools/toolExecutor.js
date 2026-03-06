@@ -2094,7 +2094,6 @@ export class ToolExecutor {
           'reservation': 'booking',      // POPRAWIONE - reservation to booking
           'booking': 'booking',          // DODANE - bezpośredni typ
           'booking_cancel': 'booking_cancel',  // DODANE - bezpośredni typ
-          'transfer': 'TRANSFER',        // DODANE - bezpośredni typ
           
           // Dodatkowe aliasy dla lepszego rozpoznawania
           'produkcja': 'production_start',
@@ -2504,7 +2503,6 @@ export class ToolExecutor {
     
     // Filtr po nazwie produktu
     if (params.productName) {
-      const searchTerm = params.productName.toLowerCase();
       // Pobierzemy wszystkie i przefiltrujemy po stronie klienta
     }
     

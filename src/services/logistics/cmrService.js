@@ -22,10 +22,10 @@ import {
 } from 'firebase/storage';
 import * as Sentry from '@sentry/react';
 import { format } from 'date-fns';
-import { updateOrderItemShippedQuantity, updateOrderItemShippedQuantityPrecise } from '../orders';
+import { updateOrderItemShippedQuantityPrecise } from '../orders';
 import { createRealtimeStatusChangeNotification } from '../notificationService';
 import { safeParseDate } from '../../utils/dateUtils';
-import { withFirebaseErrorHandling } from '../../utils/errors';
+
 
 // Kolekcje
 const CMR_COLLECTION = 'cmrDocuments';
@@ -2077,16 +2077,17 @@ export const cleanNegativeCmrHistoryEntries = async (userId = 'system') => {
         }
         
         // Usuń ujemne wpisy z cmrHistory
-        const positiveEntries = item.cmrHistory.filter(entry => {
+        const positiveEntries = [];
+        for (const entry of item.cmrHistory) {
           const quantity = parseFloat(entry.quantity) || 0;
           if (quantity < 0) {
             console.log(`🗑️ Usuwanie ujemnego wpisu z pozycji "${item.name}": CMR ${entry.cmrNumber}, ilość: ${quantity}`);
             cleanedEntries++;
             needsUpdate = true;
-            return false;
+          } else {
+            positiveEntries.push(entry);
           }
-          return true;
-        });
+        }
         
         if (needsUpdate && positiveEntries.length !== item.cmrHistory.length) {
           // Przelicz ilość wysłaną na podstawie pozytywnych wpisów
@@ -3071,7 +3072,6 @@ export const uploadCmrAttachment = async (file, cmrId, userId) => {
 
     // Tworzymy ścieżkę do pliku w Firebase Storage
     const timestamp = new Date().getTime();
-    const fileExtension = file.name.split('.').pop();
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const fileName = `${timestamp}_${sanitizedFileName}`;
     const storagePath = `cmr-attachments/${cmrId}/${fileName}`;
@@ -3357,19 +3357,6 @@ export const uploadCmrOtherAttachment = async (file, cmrId, userId) => {
     }
 
     // Dozwolone typy plików (takie same jak dla faktur + ewentualnie inne)
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'image/jpeg',
-      'image/png',
-      'text/plain',
-      'application/zip',
-      'application/x-zip-compressed'
-    ];
-
     // Sprawdzenie typu (opcjonalne, można pominąć jeśli chcemy wszystkie)
     // if (!allowedTypes.includes(file.type)) { ... }
 

@@ -10,7 +10,6 @@ import {
   deleteDoc,
   query, 
   where,
-  orderBy,
   serverTimestamp,
   increment,
   Timestamp
@@ -18,13 +17,11 @@ import {
 import { db } from '../firebase/config';
 import { 
   COLLECTIONS, 
-  TRANSACTION_TYPES,
-  FIREBASE_LIMITS 
+  TRANSACTION_TYPES 
 } from './config/constants.js';
 import { 
   validateId, 
   validatePositiveNumber,
-  validateTransactionData,
   ValidationError 
 } from './utils/validators.js';
 import { 

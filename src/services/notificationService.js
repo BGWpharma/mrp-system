@@ -23,8 +23,6 @@ import {
   get, 
   query as rtdbQuery, 
   limitToLast, 
-  remove,
-  serverTimestamp as rtdbServerTimestamp 
 } from 'firebase/database';
 import { db, rtdb } from './firebase/config';
 import { getUserById } from './userService';
@@ -113,9 +111,6 @@ export const createNotification = async (notification) => {
     // Aktualizuj cache dla list powiadomień - dodaj nowe powiadomienie na początek listy
     Object.keys(notificationsCache.notifications).forEach(key => {
       if (key.startsWith(`notifications-${userId}`)) {
-        // Sprawdź czy ta lista zawiera tylko nieprzeczytane
-        const onlyUnread = key.includes('-true-');
-        
         // Do aktualnego czasu dodajemy 1ms, aby nowe powiadomienie było na górze listy
         const now = new Date();
         

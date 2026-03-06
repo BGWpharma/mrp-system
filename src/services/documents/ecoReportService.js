@@ -635,31 +635,6 @@ const generateSuppliersData = (suppliers, purchaseOrders, inventoryItems, transa
 };
 
 /**
- * Konwertuje ilość na tony
- */
-const convertToTons = (quantity, unit) => {
-  if (!quantity) return 0;
-  const q = parseFloat(quantity);
-  switch ((unit || '').toLowerCase()) {
-    case 'kg':
-      return parseFloat((q / 1000).toFixed(4));
-    case 't':
-    case 'tona':
-    case 'tony':
-      return parseFloat(q.toFixed(4));
-    case 'g':
-      return parseFloat((q / 1000000).toFixed(6));
-    case 'l':
-    case 'litr':
-      // Przybliżona konwersja - 1l ≈ 1kg
-      return parseFloat((q / 1000).toFixed(4));
-    default:
-      // Dla szt, op, etc. - zwracamy surową ilość z uwagą
-      return q;
-  }
-};
-
-/**
  * Generuje dane Tab.2 - Surowce (rozliczenie przepływu)
  * 
  * Kolumny: surowce | początkowy stan magazynowy | zakup surowca | 

@@ -257,7 +257,6 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       productionHistory = [],
       formResponses = {},
       clinicalAttachments = [],
-      ingredientAttachments = {},
       ingredientBatchAttachments = {},
       materials = [],
       currentUser = {},

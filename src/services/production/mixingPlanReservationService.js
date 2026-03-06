@@ -12,7 +12,6 @@ import {
   deleteDoc, 
   query, 
   where,
-  orderBy,
   serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
@@ -186,8 +185,6 @@ export const getStandardReservationsForTask = async (taskId) => {
     }
     
     // Pobierz wszystkie szczegóły partii równolegle w jednym czasie
-    // Pobieranie ${allBatchIds.size} partii równolegle
-    const startTime = performance.now();
     const batchDetailsMap = new Map();
     
     if (allBatchIds.size > 0) {
@@ -204,8 +201,6 @@ export const getStandardReservationsForTask = async (taskId) => {
       });
       
       await Promise.all(batchPromises);
-      const endTime = performance.now();
-      // Pobrano ${batchDetailsMap.size} partii w ${Math.round(endTime - startTime)}ms
     }
     
     const reservations = [];

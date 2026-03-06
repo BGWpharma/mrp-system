@@ -371,7 +371,7 @@ export const updateWorkTimeEntry = async (entryId, updates, adminUserId, adminNa
   }
 };
 
-export default {
+const workTimeService = {
   getEmployeeByCode,
   addWorkTimeEntry,
   addWorkTimeEntryAdmin,
@@ -384,3 +384,5 @@ export default {
   updateWorkTimeStatus,
   deleteWorkTimeEntry
 };
+
+export default workTimeService;

@@ -1,6 +1,6 @@
 // src/services/shiftService.js
 import {
-  collection, addDoc, getDocs, doc, updateDoc, deleteDoc, setDoc,
+  collection, addDoc, getDocs, doc, deleteDoc, setDoc,
   query, where, orderBy, serverTimestamp, Timestamp, writeBatch
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -198,7 +198,7 @@ export const getMonday = (date) => {
   return d;
 };
 
-export default {
+const shiftService = {
   SHIFT_TYPES,
   SHIFT_PRESETS,
   getShiftTemplates,
@@ -211,3 +211,5 @@ export default {
   getShiftsForWeek,
   getMonday,
 };
+
+export default shiftService;

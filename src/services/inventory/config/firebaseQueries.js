@@ -8,10 +8,6 @@ import {
   orderBy,
   limit,
   startAfter,
-  endBefore,
-  limitToLast,
-  startAt,
-  endAt,
   Timestamp
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';

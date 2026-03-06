@@ -15,11 +15,10 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 import { formatDateForInput } from '../../utils/dateUtils';
-import { preciseCompare, preciseIsLessOrEqual } from '../../utils/calculations';
+import { preciseCompare } from '../../utils/calculations';
 import { generateFSNumber, generateFPFNumber, generateFKNumber } from '../../utils/calculations';
 
 const INVOICES_COLLECTION = 'invoices';
-const INVOICE_ITEMS_COLLECTION = 'invoiceItems';
 
 /**
  * Sprawdza czy obiekt jest specjalnym obiektem Firestore (FieldValue, serverTimestamp itp.)
@@ -605,11 +604,6 @@ const calculateOrderTotal = (orderData) => {
   // Wartość wysyłki
   const shippingCost = parseFloat(orderData.shippingCost) || 0;
   
-  // Wartość z powiązanych zamówień zakupowych - nie dodajemy do sumy, odejmujemy
-  const purchaseOrdersTotal = Array.isArray(orderData.linkedPurchaseOrders)
-    ? orderData.linkedPurchaseOrders.reduce((sum, po) => sum + (parseFloat(po.totalGross) || 0), 0)
-    : 0;
-  
   // Zwracamy tylko sumę wartości produktów i kosztów wysyłki, bez dodawania kosztów PO
   return itemsTotal + shippingCost;
 };
@@ -897,7 +891,7 @@ export const generateAndSaveInvoicePdf = async (invoiceId, userId) => {
     const pdfBlob = pdfDoc.output('blob');
     
     // Przygotuj stałą nazwę pliku (bez timestamp)
-    const cleanInvoiceNumber = invoice.number.replace(/[\/\\:*?"<>|]/g, '_');
+    const cleanInvoiceNumber = invoice.number.replace(/[/\\:*?"<>|]/g, '_');
     let fileName;
     if (invoice.isProforma && invoice.isRefInvoice) {
       fileName = `Invoice_Proforma_Reinvoice_${cleanInvoiceNumber}.pdf`;

@@ -166,9 +166,7 @@ const generateInvoiceDocumentContent = async (invoice, companyData) => {
   const rodzajDokumentu = invoice.originalOrderType === 'purchase' ? '303000' : '302000';
   
   // Oblicz sumy
-  let sumaNetto = 0;
   let sumaNettoWal = 0;
-  let sumaVAT = 0;
   let sumaVATWal = 0;
   let sumaBrutto = 0;
   let sumaBruttoWal = 0;
@@ -195,9 +193,7 @@ const generateInvoiceDocumentContent = async (invoice, companyData) => {
     const wartoscVATWal = wartoscNettoWal * (vatRate / 100);
     const wartoscBruttoWal = wartoscNettoWal + wartoscVATWal;
     
-    sumaNetto += wartoscNettoPLN;
     sumaNettoWal += wartoscNettoWal;
-    sumaVAT += wartoscVATPLN;
     sumaVATWal += wartoscVATWal;
     sumaBrutto += wartoscBruttoPLN;
     sumaBruttoWal += wartoscBruttoWal;

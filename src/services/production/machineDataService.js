@@ -1,6 +1,6 @@
-import { ref, get, query, orderByChild, limitToLast, onValue } from 'firebase/database';
+import { ref, get } from 'firebase/database';
 import { rtdb } from '../firebase/config';
-import { parseISO, isValid, format, differenceInMinutes, isAfter, isBefore } from 'date-fns';
+import { parseISO, isValid, format, differenceInMinutes } from 'date-fns';
 
 /**
  * Serwis do obsługi danych z maszyn z Realtime Database

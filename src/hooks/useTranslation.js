@@ -59,7 +59,6 @@ export const useTranslation = (namespace) => {
         'purchaseInteractions': 'interactions',
         'interactionDetails': 'interactions',
         'opportunities': 'interactions',
-        'dashboard': 'interactions',
         'sidebar': 'sidebar',
         'productionForms': 'forms',
         'inventoryForms': 'forms',

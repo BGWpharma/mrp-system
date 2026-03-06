@@ -16,7 +16,6 @@ import {
 } from 'firebase/firestore';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
-import { createNotification } from '../notificationService';
 import { ServiceCacheManager } from '../cache/serviceCacheManager';
 
 const PURCHASE_ORDERS_COLLECTION = 'purchaseOrders';
@@ -511,7 +510,6 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             
             // Sprawdź cache dla wyszukiwania pozycji magazynowych
             const inventoryCacheKey = searchTerm.toLowerCase().trim();
-            const now = Date.now();
             let matchingInventoryItemIds = new Set();
             
             const cachedInvSearch = ServiceCacheManager.get(`${PO_INV_SEARCH_PREFIX}${inventoryCacheKey}`);
@@ -4151,6 +4149,7 @@ export const searchPurchaseOrdersQuick = async (searchTerm, maxResults = 20) => 
               case 'supplierCompany': score += 25; break;
               case 'notes': score += 10; break;
               case 'deliveryAddress': score += 5; break;
+              default: break;
             }
           }
         });

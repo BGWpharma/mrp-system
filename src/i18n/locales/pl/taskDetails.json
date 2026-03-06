@@ -551,7 +551,23 @@
         "manualBatchSelection": "Ręczna (wybór partii)",
         "restoreReservationAfterDeletion": "Przywróć rezerwację materiału po usunięciu konsumpcji",
         "quantityToAdd": "Ilość do dodania",
-        "confirmConsumptionDeletion": "Potwierdź usunięcie konsumpcji"
+        "confirmConsumptionDeletion": "Potwierdź usunięcie konsumpcji",
+        "dialogTitle": "Konsumuj materiały",
+        "dialogDescription": "Wybierz partie materiałów i ilości, które chcesz skonsumować. Konsumpcja zmniejszy dostępną ilość w magazynie.",
+        "noReservedMaterials": "Brak zarezerwowanych materiałów do konsumpcji.",
+        "autoFillFromIssued": "Uzupełnij na bazie wydania",
+        "issued": "Wydano",
+        "alreadyConsumed": "Skonsumowano",
+        "remaining": "Pozostało",
+        "tableHeaders": {
+            "consume": "Konsumuj",
+            "batchNumber": "Numer partii",
+            "reservedQuantity": "Zarezerwowana ilość",
+            "quantityToConsume": "Ilość do konsumpcji"
+        },
+        "cancel": "Anuluj",
+        "consuming": "Konsumowanie...",
+        "confirmConsume": "Konsumuj materiały"
     },
     "errors": {
         "recipeNotFound": "Nie znaleziono receptury",

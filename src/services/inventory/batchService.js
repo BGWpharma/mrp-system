@@ -21,7 +21,6 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'fi
 import { 
   COLLECTIONS, 
   TRANSACTION_TYPES, 
-  DATE_DEFAULTS,
   FIREBASE_LIMITS 
 } from './config/constants.js';
 import { 

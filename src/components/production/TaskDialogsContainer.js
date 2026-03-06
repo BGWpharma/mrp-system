@@ -36,8 +36,10 @@ import {
   Refresh as RefreshIcon,
   BuildCircle as BuildCircleIcon,
   BugReport as BugReportIcon,
+  AutoFixHigh as AutoFixHighIcon,
 } from '@mui/icons-material';
 import { formatDate } from '../../utils/formatting';
+import { getConsumedQuantityForMaterial } from '../../utils/productionUtils';
 import { StartProductionDialog, AddHistoryDialog, DeleteConfirmDialog, AdditionalCostDialog } from './dialogs';
 import { CommentsDrawer } from './shared';
 import ManualBatchSelection from './ManualBatchSelection';
@@ -139,6 +141,8 @@ const TaskDialogsContainer = memo(({
   handleBatchToConsumeSelection,
   handleConsumeQuantityChange,
   handleConfirmConsumeMaterials,
+  handleAutoFillConsumption,
+  calculateIssuedQuantityForMaterial,
 
   // Reserve dialog
   reserveDialogOpen,
@@ -599,35 +603,68 @@ const TaskDialogsContainer = memo(({
         maxWidth="lg"
         fullWidth
       >
-        <DialogTitle>Konsumuj materiały</DialogTitle>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {t('consumption.dialogTitle')}
+          {calculateIssuedQuantityForMaterial && (
+            <Button
+              onClick={handleAutoFillConsumption}
+              variant="outlined"
+              size="small"
+              startIcon={<AutoFixHighIcon />}
+              disabled={consumingMaterials}
+            >
+              {t('consumption.autoFillFromIssued')}
+            </Button>
+          )}
+        </DialogTitle>
         <DialogContent>
           <DialogContentText sx={mb2}>
-            Wybierz partie materiałów i ilości, które chcesz skonsumować. Konsumpcja zmniejszy dostępną ilość w magazynie.
+            {t('consumption.dialogDescription')}
           </DialogContentText>
           
           {consumedMaterials.length === 0 ? (
             <Alert severity="info">
-              Brak zarezerwowanych materiałów do konsumpcji.
+              {t('consumption.noReservedMaterials')}
             </Alert>
           ) : (
             consumedMaterials.map((material) => {
               const materialId = material.inventoryItemId || material.id;
               const reservedBatches = task.materialBatches[materialId] || [];
+              const issuedQty = calculateIssuedQuantityForMaterial ? calculateIssuedQuantityForMaterial(materialId) : 0;
+              const alreadyConsumed = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
+              const remainingToConsume = Math.max(0, parseFloat((issuedQty - alreadyConsumed).toFixed(3)));
               
               return (
                 <Box key={materialId} sx={mb3}>
                   <Typography variant="h6" gutterBottom>
                     {material.name} ({material.unit})
                   </Typography>
+                  {issuedQty > 0 && (
+                    <Box sx={{ display: 'flex', gap: 2, mb: 1, flexWrap: 'wrap' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('consumption.issued')}: <strong>{issuedQty.toFixed(3)}</strong> {material.unit}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('consumption.alreadyConsumed')}: <strong>{alreadyConsumed.toFixed(3)}</strong> {material.unit}
+                      </Typography>
+                      <Typography 
+                        variant="body2" 
+                        color={remainingToConsume > 0 ? 'warning.main' : 'success.main'}
+                        fontWeight="bold"
+                      >
+                        {t('consumption.remaining')}: {remainingToConsume.toFixed(3)} {material.unit}
+                      </Typography>
+                    </Box>
+                  )}
                   
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell padding="checkbox">Konsumuj</TableCell>
-                          <TableCell>Numer partii</TableCell>
-                          <TableCell>Zarezerwowana ilość</TableCell>
-                          <TableCell>Ilość do konsumpcji</TableCell>
+                          <TableCell padding="checkbox">{t('consumption.tableHeaders.consume')}</TableCell>
+                          <TableCell>{t('consumption.tableHeaders.batchNumber')}</TableCell>
+                          <TableCell>{t('consumption.tableHeaders.reservedQuantity')}</TableCell>
+                          <TableCell>{t('consumption.tableHeaders.quantityToConsume')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -685,7 +722,7 @@ const TaskDialogsContainer = memo(({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConsumeMaterialsDialogOpen(false)} disabled={consumingMaterials}>
-            Anuluj
+            {t('consumption.cancel')}
           </Button>
           <Button 
             onClick={handleConfirmConsumeMaterials} 
@@ -694,7 +731,7 @@ const TaskDialogsContainer = memo(({
             disabled={consumingMaterials || consumedMaterials.length === 0}
             startIcon={consumingMaterials ? <CircularProgress size={20} /> : null}
           >
-            {consumingMaterials ? 'Konsumowanie...' : 'Konsumuj materiały'}
+            {consumingMaterials ? t('consumption.consuming') : t('consumption.confirmConsume')}
           </Button>
         </DialogActions>
       </Dialog>

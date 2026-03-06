@@ -46,7 +46,6 @@ export const getHallDataFormResponsesWithPagination = async (
   lastVisible = null
 ) => {
   try {
-    const pageNum = Math.max(1, page);
     const limit_val = Math.max(1, itemsPerPage);
     
     // Wybierz odpowiednią kolekcję

@@ -1,6 +1,6 @@
 // src/services/scheduleService.js
 import { 
-  collection, addDoc, getDocs, getDoc, doc, updateDoc, deleteDoc,
+  collection, addDoc, getDocs, doc, updateDoc, deleteDoc,
   query, where, orderBy, serverTimestamp, Timestamp 
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -227,7 +227,7 @@ export const deleteScheduleRequest = async (requestId) => {
   }
 };
 
-export default {
+const scheduleService = {
   REQUEST_TYPES,
   REQUEST_TYPE_LABELS,
   REQUEST_STATUSES,
@@ -240,3 +240,5 @@ export default {
   updateRequestStatus,
   deleteScheduleRequest
 };
+
+export default scheduleService;

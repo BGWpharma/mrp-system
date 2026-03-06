@@ -876,7 +876,7 @@ export class QueryParser {
 
     // Usuń potencjalnie niebezpieczne znaki
     normalized = normalized.replace(/<[^>]*>/g, ''); // HTML tags
-    normalized = normalized.replace(/[<>\"']/g, ''); // Potencjalnie niebezpieczne znaki
+    normalized = normalized.replace(/[<>"']/g, ''); // Potencjalnie niebezpieczne znaki
 
     // Normalizuj białe znaki
     normalized = normalized.replace(/\s+/g, ' '); // Wielokrotne spacje na jedną
@@ -1011,7 +1011,6 @@ export class QueryParser {
    */
   static analyzeQuerySafety(query) {
     const issues = [];
-    const lowerQuery = query.toLowerCase();
 
     // Sprawdź długość
     if (query.length > 500) {

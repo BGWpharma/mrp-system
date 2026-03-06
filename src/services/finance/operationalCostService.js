@@ -1,17 +1,10 @@
 // src/services/operationalCostService.js
 import { 
-  collection, 
   doc, 
   getDoc, 
-  getDocs, 
   setDoc, 
   updateDoc, 
-  query,
-  where,
-  orderBy,
-  Timestamp,
-  arrayUnion,
-  arrayRemove
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { v4 as uuidv4 } from 'uuid';

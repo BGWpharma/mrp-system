@@ -9,7 +9,6 @@ import {
   query, 
   where, 
   orderBy, 
-  limit, 
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '../firebase/config';

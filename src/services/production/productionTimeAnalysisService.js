@@ -1,8 +1,6 @@
 // src/services/productionTimeAnalysisService.js
 import { 
   collection, 
-  doc, 
-  getDoc,
   getDocs, 
   query, 
   where,
@@ -631,12 +629,12 @@ export const analyzeProductionGaps = async (startDate, endDate, options = {}) =>
       }
 
       // Oblicz łączny czas produkcji w dniu
-      daysSessions.forEach(session => {
+      for (const session of daysSessions) {
         if (session.timeSpent) {
           dailyAnalysis[dayKey].productionMinutes += session.timeSpent;
           totalProductionMinutes += session.timeSpent;
         }
-      });
+      }
 
       // Oblicz pokrycie procentowe
       dailyAnalysis[dayKey].coverage = dailyAnalysis[dayKey].productionMinutes > 0 
@@ -701,9 +699,8 @@ export const analyzeProductionGaps = async (startDate, endDate, options = {}) =>
  * @param {Object} options - Opcje analizy
  * @returns {Array} - Lista zaleceń
  */
-const generateProductionRecommendations = (gaps, dailyAnalysis, options) => {
+const generateProductionRecommendations = (gaps, dailyAnalysis) => {
   const recommendations = [];
-  const { workStartHour, workEndHour, minGapMinutes } = options;
 
   // Sprawdź czy są długie luki
   const longGaps = gaps.filter(gap => gap.gapMinutes > 120); // Powyżej 2 godzin

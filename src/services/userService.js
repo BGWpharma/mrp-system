@@ -904,7 +904,7 @@ export const unarchiveUser = async (userId, adminId) => {
   }
 };
 
-export default {
+const userService = {
   getUserById,
   updateUserData,
   getUsersDisplayNames,
@@ -929,4 +929,6 @@ export default {
   clearUserCache,
   AVAILABLE_PERMISSIONS,
   TAB_PERMISSION_MAP
-}; 
+};
+
+export default userService;

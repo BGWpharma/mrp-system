@@ -390,7 +390,6 @@ export const useTaskReportFetcher = ({
         formResponses,
         clinicalAttachments,
         additionalAttachments,
-        ingredientBatchAttachments, // Zmienione z ingredientAttachments
         ingredientBatchAttachments,
         materials,
         currentUser,

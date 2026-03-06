@@ -11,18 +11,14 @@ import {
   collection, 
   query, 
   where, 
-  getDocs,
-  doc,
-  getDoc
+  getDocs
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { 
-  updatePOReservationsOnDelivery,
-  getPOReservationsForItem
+  updatePOReservationsOnDelivery
 } from './poReservationService';
 
 const PO_RESERVATIONS_COLLECTION = 'poReservations';
-const PURCHASE_ORDERS_COLLECTION = 'purchaseOrders';
 
 /**
  * Sprawdza czy PO ma aktywne rezerwacje i wysyła powiadomienia
@@ -322,10 +318,12 @@ export const getDeliveryAlerts = async (daysThreshold = 7) => {
   }
 };
 
-export default {
+const poDeliveryNotificationService = {
   handlePODeliveryNotification,
   shouldSendDeliveryNotification,
   getPOReservationsSummary,
   taskHasPendingPOReservations,
   getDeliveryAlerts
-}; 
+};
+
+export default poDeliveryNotificationService;

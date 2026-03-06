@@ -1512,11 +1512,7 @@ export const removeProductionTaskFromOrder = async (orderId, taskId) => {
     
     const order = orderDoc.data();
     const productionTasks = order.productionTasks || [];
-    
-    // Zapisz informację o orderItemId przed usunięciem zadania
-    let removedTask = productionTasks.find(task => task.id === taskId);
-    let orderItemId = removedTask ? removedTask.orderItemId : null;
-    
+
     // Filtrujemy listę zadań, usuwając to z podanym ID
     const updatedTasks = productionTasks.filter(task => task.id !== taskId);
     
@@ -2836,7 +2832,7 @@ export const cleanupObsoleteCMRConnections = async (obsoleteItems, userId = 'sys
   try {
     console.log(`🧹 Rozpoczynanie oczyszczania ${obsoleteItems.length} nieaktualnych powiązań CMR...`);
     
-    const { updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
+    const { updateDoc, serverTimestamp } = await import('firebase/firestore');
     const { db } = await import('../firebase/config');
     const { getCmrDocumentById, CMR_ITEMS_COLLECTION } = await import('../logistics/cmrService');
     
@@ -2864,21 +2860,24 @@ export const cleanupObsoleteCMRConnections = async (obsoleteItems, userId = 'sys
         }
         
         // Usuń nieaktualne powiązania orderItemId z pozycji CMR
-        const updatedItems = cmr.items.map((item, index) => {
+        const updatedItems = [];
+        for (let index = 0; index < cmr.items.length; index++) {
+          const item = cmr.items[index];
           const obsoleteItem = items.find(obs => obs.itemIndex === index);
           if (obsoleteItem) {
             console.log(`🧹 Usuwanie nieaktualnego orderItemId ${obsoleteItem.obsoleteOrderItemId} z pozycji "${item.description}"`);
             const { orderItemId, orderId, migratedAt, migratedBy, migrationPath, ...cleanedItem } = item;
             cleanedItems++;
-            return {
+            updatedItems.push({
               ...cleanedItem,
               cleanedAt: serverTimestamp(),
               cleanedBy: userId,
               cleanedReason: `Nieaktualne powiązanie orderItemId: ${obsoleteItem.obsoleteOrderItemId}`
-            };
+            });
+          } else {
+            updatedItems.push(item);
           }
-          return item;
-        });
+        }
         
         // Zaktualizuj wszystkie pozycje CMR w głównej kolekcji
         const { collection, query, where, getDocs } = await import('firebase/firestore');

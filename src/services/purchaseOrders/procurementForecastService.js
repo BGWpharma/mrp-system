@@ -237,7 +237,7 @@ export const subscribeToProcurementForecasts = (callback) => {
   });
 };
 
-export default {
+const procurementForecastService = {
   createProcurementForecast,
   getAllProcurementForecasts,
   getProcurementForecastById,
@@ -246,3 +246,5 @@ export default {
   deleteProcurementForecast,
   subscribeToProcurementForecasts
 };
+
+export default procurementForecastService;

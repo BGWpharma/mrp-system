@@ -19,8 +19,7 @@ import {
   query, 
   where, 
   orderBy, 
-  serverTimestamp,
-  writeBatch
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
@@ -1203,7 +1202,7 @@ export const updatePOReservationsDeliveryDateOnPOChange = async (purchaseOrderId
   }
 };
 
-export default {
+const poReservationService = {
   createPOReservation,
   getPOReservationsForTask,
   getPOReservationsForItem,
@@ -1217,4 +1216,6 @@ export default {
   refreshLinkedBatchesQuantities,
   updatePOReservationsPricesOnPOChange,
   updatePOReservationsDeliveryDateOnPOChange
-}; 
+};
+
+export default poReservationService;

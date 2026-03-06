@@ -1,8 +1,6 @@
 // src/services/inventory/warehouseService.js
 
 import { 
-  collection, 
-  doc, 
   addDoc, 
   updateDoc, 
   getDoc, 
@@ -10,10 +8,8 @@ import {
   deleteDoc, 
   query, 
   where,
-  orderBy,
   serverTimestamp
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
 import { COLLECTIONS } from './config/constants.js';
 import { 
   validateId, 

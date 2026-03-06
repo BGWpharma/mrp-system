@@ -148,6 +148,8 @@ export class SmartModelSelector {
       case 'very_long':
         outputTokens = 4000; // Dla list i bardzo długich odpowiedzi
         break;
+      default:
+        break;
     }
 
     return {

@@ -1,20 +1,16 @@
 // src/services/inventory/stocktakingService.js
 
 import { 
-  collection, 
-  doc, 
   addDoc,
   updateDoc,
   deleteDoc,
   getDoc,
   getDocs,
-  setDoc,
   query, 
   where,
   orderBy,
   serverTimestamp
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
 import { 
   COLLECTIONS,
   STOCKTAKING_STATUS,
@@ -22,7 +18,6 @@ import {
 } from './config/constants.js';
 import { 
   validateId, 
-  validatePositiveNumber,
   validateNonNegativeNumber,
   validateStocktakingData,
   ValidationError 
@@ -1433,7 +1428,7 @@ export const checkStocktakingReservationImpact = async (items) => {
  */
 const updateMaterialBatchesAfterCancellation = async (results, batchId) => {
   try {
-    const { getDocs, collection, updateDoc, getDoc, serverTimestamp } = await import('firebase/firestore');
+    const { getDocs, collection, updateDoc, serverTimestamp } = await import('firebase/firestore');
     const { db } = await import('../firebase/config');
     
     // Grupuj rezerwacje według taskId
@@ -2467,11 +2462,6 @@ export const generateStocktakingSheetPDF = async (stocktaking, items, options = 
   // Limity pozycji na stronę (10 kolumn z EUR i PLN)
   const itemsPerFirstPage = 6;  // Mniej pozycji na pierwszej stronie (sekcja info)
   const itemsPerNextPage = 16;  // Więcej pozycji na kolejnych stronach
-  
-  let totalPages = 1;
-  if (enrichedItems.length > itemsPerFirstPage) {
-    totalPages = 1 + Math.ceil((enrichedItems.length - itemsPerFirstPage) / itemsPerNextPage);
-  }
   
   // Funkcja do rysowania nagłówka strony
   const drawPageHeader = (pageNum) => {

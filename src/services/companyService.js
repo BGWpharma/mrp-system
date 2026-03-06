@@ -3,8 +3,7 @@ import {
   getDoc, 
   setDoc,
   updateDoc,
-  serverTimestamp,
-  collection
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { COMPANY_INFO } from '../config';

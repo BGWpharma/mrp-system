@@ -19,8 +19,7 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { getProductionHistoryByDateRange } from '../production/productionTimeAnalysisService';
-import { format, parseISO, isWithinInterval } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 
 const FACTORY_COSTS_COLLECTION = 'factoryCosts';
 

@@ -20,7 +20,6 @@ import {
   validateId, 
   validateInventoryItemData,
   validatePaginationParams,
-  validateIdList,
   validateRequiredString,
   ValidationError 
 } from './utils/validators.js';
@@ -80,9 +79,6 @@ export const getAllInventoryItems = async (
     
     // Określ pole do sortowania - domyślnie 'name'
     const fieldToSort = SORT_FIELD_MAPPING[sortField] || 'name';
-    
-    // Określ kierunek sortowania - domyślnie 'asc'
-    const direction = sortOrder === 'desc' ? 'desc' : 'asc';
     
     // POPRAWKA: Pobierz wszystkie dokumenty bez sortowania Firebase
     // Firebase orderBy pomija dokumenty które nie mają danego pola!
@@ -908,7 +904,6 @@ export const getAllAwaitingOrdersIndexed = async () => {
     });
     
     // Indeksuj zamówienia po inventoryItemId
-    const indexStart = performance.now();
     const ordersIndex = {};
     
     posWithItems.forEach(({ docRef, poData }) => {

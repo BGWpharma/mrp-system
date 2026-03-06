@@ -300,7 +300,6 @@ export const addProductionTime = (startDate, productionMinutes, options = {}) =>
     return new Date(startDate);
   }
   
-  const workingMinutesPerDay = workingHoursPerDay * 60;
   const result = new Date(startDate);
   let remainingMinutes = productionMinutes;
   
@@ -360,7 +359,6 @@ export const addProductionTime = (startDate, productionMinutes, options = {}) =>
  */
 export const getProductionTimeBetween = (startDate, endDate, options = {}) => {
   const {
-    workingHoursPerDay = 8,
     startHour = 8,
     endHour = 16
   } = options;

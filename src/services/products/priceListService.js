@@ -513,7 +513,7 @@ export const exportPriceListToCSV = async (priceListId) => {
     }
     
     // Import funkcji eksportu - dynamiczny import, aby unikn???ç problem??w z cyklicznymi zale??no??ciami
-    const { exportToCSV } = await import('../utils/exportUtils');
+    const { exportToCSV } = await import('../../utils/exportUtils');
     
     // Nag?é??wki CSV zgodnie z wymaganiami
     const headers = [

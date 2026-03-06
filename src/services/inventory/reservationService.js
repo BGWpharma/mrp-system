@@ -9,7 +9,6 @@
 
 import { 
   collection, 
-  doc, 
   addDoc, 
   updateDoc, 
   getDoc, 
@@ -19,12 +18,10 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  writeBatch,
-  Timestamp
+  writeBatch
 } from 'firebase/firestore';
 import * as Sentry from '@sentry/react';
 import { db } from '../firebase/config';
-import { withFirebaseErrorHandling } from '../../utils/errors';
 import { 
   COLLECTIONS, 
   TRANSACTION_TYPES,
@@ -249,7 +246,7 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
     }
     
     // Upewnij się, że wszystkie zarezerwowane partie mają numery
-    const formattedBatches = formatReservedBatches(reservationResult.reservedBatches);
+    formatReservedBatches(reservationResult.reservedBatches);
     
     // 🔧 POPRAWKA: Utwórz osobną transakcję dla każdej zarezerwowanej partii
     // Gdy automatyczna rezerwacja FIFO wybiera wiele partii (np. 5kg z partii A + 3kg z partii B),
@@ -428,7 +425,6 @@ export const cancelBooking = async (itemId, quantity, taskId, userId) => {
     });
     
     // Zawsze anuluj całą rezerwację po potwierdzeniu zużycia
-    const shouldCancelAllBooking = true;
     const quantityToCancel = formatQuantityPrecision(item.bookedQuantity || 0, 3);
     
     // Aktualizuj pole bookedQuantity - zawsze wyzeruj
@@ -759,11 +755,11 @@ export const cleanupTaskReservations = async (taskId, itemIds = null) => {
         }
         
         // Usuń rezerwacje fizycznie (tak jak w starej implementacji)
-        itemReservations.forEach(reservation => {
+        for (const reservation of itemReservations) {
           const reservationRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_TRANSACTIONS, reservation.id);
           batch.delete(reservationRef);
           cleanedCount++;
-        });
+        }
         
       } catch (error) {
         console.error(`Błąd podczas czyszczenia rezerwacji dla pozycji ${itemId}:`, error);

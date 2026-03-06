@@ -172,7 +172,7 @@ export class GeminiQueryOrchestrator {
         };
       }
       
-      const { model, enableThinking, reason } = modelSelection;
+      const { model, reason } = modelSelection;
       
       console.log(`[GeminiQueryOrchestrator] ${reason}`);
       console.log(`[GeminiQueryOrchestrator] 📱 Model: ${model}`);

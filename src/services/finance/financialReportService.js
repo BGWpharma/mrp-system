@@ -5,8 +5,6 @@ import {
   getDocs, 
   where,
   orderBy,
-  getDoc,
-  doc,
   Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -246,12 +244,12 @@ export const generateFinancialReport = async (filters = {}, onProgress = null) =
       );
       
       // Dodaj wyniki (flat aby spłaszczyć tablice)
-      chunkResults.forEach(result => {
+      for (const result of chunkResults) {
         if (Array.isArray(result)) {
           reportData.push(...result);
           processedCount += result.length;
         }
-      });
+      }
       
       // Raportuj postęp
       if (onProgress) {

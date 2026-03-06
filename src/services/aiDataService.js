@@ -6,28 +6,15 @@ import {
   where, 
   orderBy, 
   limit,
-  startAfter,
-  Timestamp,
-  getDoc,
-  doc,
-  onSnapshot,
-  setDoc
+  startAfter
 } from 'firebase/firestore';
 import { getAllCustomers } from './crm';
-import { getOrdersStats } from './orders';
-import { getAllInventoryItems, getExpiredBatches, getExpiringBatches, getInventoryTransactionsPaginated } from './inventory';
-import { getAllTasks, getTasksByStatus } from './production/productionService';
+import { getInventoryTransactionsPaginated } from './inventory';
 import { ServiceCacheManager } from './cache/serviceCacheManager';
 
 const AI_CACHE_PREFIX = 'ai:';
 const AI_CACHE_TTL = 30 * 60 * 1000; // 30 minut
 const AI_RECIPES_TTL = 1 * 60 * 1000; // 1 minuta
-
-const AI_CACHE_KEYS = [
-  'inventory', 'orders', 'productionTasks', 'recipes',
-  'suppliers', 'purchaseOrders', 'materialBatches',
-  'batchReservations', 'inventoryBatches'
-];
 
 const getTtlForKey = (cacheKey) =>
   cacheKey === 'recipes' ? AI_RECIPES_TTL : AI_CACHE_TTL;
@@ -1251,7 +1238,7 @@ export const analyzeTrendsAndPredictions = (data) => {
     };
   }
   
-  const { inventory, orders, productionTasks, purchaseOrders } = data;
+  const { inventory, orders, productionTasks } = data;
   const results = {
     inventory: { trends: {}, predictions: {} },
     orders: { trends: {}, predictions: {} },
@@ -1652,32 +1639,6 @@ export const getMRPSystemSummary = async () => {
     };
   }
 }; 
-
-/**
- * Wyciąga nazwę receptury z zapytania użytkownika
- * @param {string} query - Zapytanie użytkownika
- * @returns {string|null} - Znaleziona nazwa receptury lub null
- */
-const extractRecipeNameFromQuery = (query) => {
-  // Wzorce do rozpoznawania zapytań o konkretne receptury
-  const patterns = [
-    /receptur[aęy][\s\w]*"([^"]+)"/i,       // receptura "nazwa"
-    /receptur[aęy][\s\w]*„([^"]+)"/i,        // receptura „nazwa"
-    /receptur[aęy][\s\w]+([a-zżźćńółęąś]{3,})/i,  // receptura nazwa
-    /przepis[\s\w]+([a-zżźćńółęąś]{3,})/i,   // przepis nazwa
-    /receptur[aęy][\s\w]+dla[\s\w]+([a-zżźćńółęąś]{3,})/i, // receptura dla nazwa
-    /receptur[aęy][\s\w]+produktu[\s\w]+([a-zżźćńółęąś]{3,})/i // receptura produktu nazwa
-  ];
-  
-  for (const pattern of patterns) {
-    const match = query.match(pattern);
-    if (match && match[1] && match[1].length > 2) {
-      return match[1].trim();
-    }
-  }
-  
-  return null;
-};
 
 /**
  * Pobiera dane o partiach materiałów i ich powiązaniach z zamówieniami zakupowymi
@@ -2474,7 +2435,6 @@ export const analyzeDataCompleteness = (businessData) => {
     orders = [],
     invoices = [],
     materialBatches = [],
-    purchaseOrders = [],
     cmrDocuments = []
   } = businessData.data;
 

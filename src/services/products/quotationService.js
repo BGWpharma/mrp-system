@@ -23,7 +23,6 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { getInventoryItemsByCategory, getIngredientPrices } from '../inventory/inventoryItemsService';
-import { getBestSupplierPricesForItems } from '../inventory/supplierPriceService';
 import { getFactoryCosts } from '../finance';
 
 const QUOTATIONS_COLLECTION = 'quotations';
@@ -723,7 +722,7 @@ const mapRecipeDoc = (docSnap) => {
 
 // ==================== EKSPORT ====================
 
-export default {
+const quotationService = {
   // Konwersje i obliczenia
   convertToGrams,
   calculateTotalWeight,
@@ -756,3 +755,5 @@ export default {
   searchRecipesForQuotation,
   getRecipeForQuotation
 };
+
+export default quotationService;

@@ -42,14 +42,14 @@ export const exportToCSV = (data, headers, filename) => {
         } else if (typeof value === 'string') {
           // Check if string represents a number
           const numValue = parseFloat(value);
-          // Jeśli string zawiera liczbę z miejscami dziesiętnymi (np. "5.00"), zachowaj format
+          // JeĹ›li string zawiera liczbÄ™ z miejscami dziesiÄ™tnymi (np. "5.00"), zachowaj format
           if (!isNaN(numValue) && isFinite(numValue)) {
-            // Sprawdź czy ma miejsca dziesiętne w stringu
+            // SprawdĹş czy ma miejsca dziesiÄ™tne w stringu
             if (value.includes('.')) {
-              // Zachowaj dokładny format z miejscami dziesiętnymi
+              // Zachowaj dokĹ‚adny format z miejscami dziesiÄ™tnymi
               return value.trim();
             } else if (value.trim() === numValue.toString()) {
-              // Jeśli to liczba całkowita bez kropki, eksportuj bez cudzysłowów
+              // JeĹ›li to liczba caĹ‚kowita bez kropki, eksportuj bez cudzysĹ‚owĂłw
               return numValue.toString();
             }
           }
@@ -338,7 +338,7 @@ export const exportToExcel = async (worksheets, filename) => {
       }
 
       // Add worksheet to workbook with proper name
-      const sheetName = name.replace(/[[\]\\\/\?\*\:]/g, '_').substring(0, 31);
+      const sheetName = name.replace(/[[\]\\/?*:]/g, '_').substring(0, 31);
       XLSX.utils.book_append_sheet(workbook, ws, sheetName);
     });
 

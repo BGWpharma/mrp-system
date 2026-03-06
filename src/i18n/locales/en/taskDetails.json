@@ -551,7 +551,23 @@
         "manualBatchSelection": "Manual (batch selection)",
         "restoreReservationAfterDeletion": "Restore material reservation after consumption deletion",
         "quantityToAdd": "Quantity to add",
-        "confirmConsumptionDeletion": "Confirm consumption deletion"
+        "confirmConsumptionDeletion": "Confirm consumption deletion",
+        "dialogTitle": "Consume Materials",
+        "dialogDescription": "Select material batches and quantities you want to consume. Consumption will decrease the available quantity in inventory.",
+        "noReservedMaterials": "No reserved materials for consumption.",
+        "autoFillFromIssued": "Auto-fill from issued",
+        "issued": "Issued",
+        "alreadyConsumed": "Consumed",
+        "remaining": "Remaining",
+        "tableHeaders": {
+            "consume": "Consume",
+            "batchNumber": "Batch Number",
+            "reservedQuantity": "Reserved Quantity",
+            "quantityToConsume": "Quantity to Consume"
+        },
+        "cancel": "Cancel",
+        "consuming": "Consuming...",
+        "confirmConsume": "Consume Materials"
     },
     "errors": {
         "recipeNotFound": "Recipe not found",

@@ -41,11 +41,9 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
   Divider,
   Card,
   CardContent,
-  CardActions,
   CircularProgress
 } from '@mui/material';
 import {
@@ -55,10 +53,8 @@ import {
   Visibility as ViewIcon,
   LocalShipping as DeliveryIcon,
   Inventory as BatchIcon,
-  Info as InfoIcon,
   CheckCircle as CheckIcon,
   HourglassEmpty as PendingIcon,
-  Error as ErrorIcon,
   Refresh as RefreshIcon,
   BugReport as BugReportIcon
 } from '@mui/icons-material';
@@ -110,6 +106,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
   const [batchAvailableQuantities, setBatchAvailableQuantities] = useState({});
   
   // Pobierz dane początkowe lub po zmianie refreshTrigger
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     let cancelled = false;
     loadReservations().then(() => { if (cancelled) return; });
@@ -163,6 +160,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
       cancelled = true;
       clearInterval(backgroundSyncInterval);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, backgroundSyncEnabled, onUpdate]);
   
   const loadReservations = async () => {
@@ -511,7 +509,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
       
       // Sprawdź partie w różnych formatach
       const { getDocs, query, collection, where } = await import('firebase/firestore');
-      const { db } = await import('../../firebase');
+      const { db } = await import('../../services/firebase/config');
       
       console.log('Szukam partii dla:');
       console.log('- PO ID:', reservation.poId);

@@ -756,7 +756,7 @@ export const conditionalStyles = (baseStyles, condition, conditionalStyles) => {
     : baseStyles;
 };
 
-export default {
+const muiCommonStyles = {
   // Flexbox
   flexCenter,
   flexBetween,
@@ -910,4 +910,6 @@ export default {
   combineStyles,
   conditionalStyles,
 };
+
+export default muiCommonStyles;
 

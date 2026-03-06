@@ -4,12 +4,10 @@ import {
   where, 
   orderBy, 
   getDocs,
-  doc,
-  getDoc,
   Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { formatDateForExport, formatCurrencyForExport } from '../../utils/exportUtils';
+import { formatDateForExport } from '../../utils/exportUtils';
 
 const PURCHASE_ORDERS_COLLECTION = 'purchaseOrders';
 const SUPPLIERS_COLLECTION = 'suppliers';
@@ -357,7 +355,7 @@ export const generatePurchaseOrderReport = async (filters) => {
     ];
 
     // Eksportuj jeden plik Excel z arkuszami
-    const { exportToExcel } = await import('../utils/exportUtils');
+    const { exportToExcel } = await import('../../utils/exportUtils');
     const success = await exportToExcel(
       worksheets,
       `PO_Export_${dateRange}${itemSuffix}`

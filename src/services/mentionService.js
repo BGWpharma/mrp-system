@@ -1,7 +1,7 @@
 // src/services/mentionService.js
 // Serwis do wyszukiwania dokumentów dla funkcjonalności @mentions
 
-import { collection, query, where, getDocs, orderBy, limit, startAt, endAt } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, limit, startAt, endAt } from 'firebase/firestore';
 import { db } from './firebase/config';
 
 // Typy dokumentów obsługiwanych przez mentions
@@ -246,7 +246,7 @@ const getNestedField = (obj, path) => {
   return path.split('.').reduce((current, key) => current?.[key], obj);
 };
 
-export default {
+const mentionService = {
   MENTION_TYPES,
   searchDocumentsByNumber,
   searchAllDocuments,
@@ -255,3 +255,5 @@ export default {
   createMentionString,
   getMentionUrl
 };
+
+export default mentionService;

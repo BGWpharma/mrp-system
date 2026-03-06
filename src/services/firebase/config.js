@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
-import { getDatabase, connectDatabaseEmulator, goOnline, goOffline, ref, onValue } from 'firebase/database';
+import { getDatabase, goOnline, goOffline } from 'firebase/database';
 
 // Zastąp poniższe dane danymi z Twojego projektu Firebase
 const firebaseConfig = {
@@ -133,25 +133,7 @@ const deleteFileFromStorage = async (path) => {
 // Konfiguracja trwałości danych Realtime Database (offline persistence)
 // Ta konfiguracja pomaga obsłużyć problemy z trybem offline
 try {
-  // Opcje konfiguracyjne dla bazy danych
-  const rtdbConfig = {
-    // Włączenie trwałości - działa automatycznie, ale możemy sterować opcjami
-  };
-  
-  // Inicjalizacja obsługi błędów dla Realtime Database
-  const handleRTDBConnectionStatus = () => {
-    const connectedRef = ref(rtdb, '.info/connected');
-    onValue(connectedRef, (snap) => {
-      if (snap.val() === true) {
-        console.log('Połączono z Realtime Database');
-      } else {
-        console.log('Brak połączenia z Realtime Database - działanie w trybie offline');
-      }
-    });
-  };
-  
-  // Nie trzeba wywoływać tej funkcji natychmiast, można ją wywołać z komponentu,
-  // lub ustawić jako część inicjalizacji aplikacji
+  // RTDB persistence - działa automatycznie; obsługa błędów połączenia może być dodana w przyszłości
 } catch (error) {
   console.error('Błąd podczas konfiguracji trwałości Realtime Database:', error);
 }

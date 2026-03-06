@@ -3,7 +3,6 @@ import { db } from './firebase/config';
 
 // Stałe dla dokumentów
 const SYSTEM_SETTINGS_DOC = 'settings/system';
-const OPENAI_SETTINGS_DOC = 'settings/openai';
 const GEMINI_SETTINGS_DOC = 'settings/gemini'; 
 
 /**

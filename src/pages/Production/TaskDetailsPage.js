@@ -63,16 +63,11 @@ import React, { useState, useEffect, useCallback, useRef, Suspense, lazy, useMem
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import {
   Typography,
-  Paper,
-  Grid,
-  Chip,
   Box,
   Button,
   CircularProgress,
   IconButton,
-  Alert,
   Tooltip,
-  Divider,
   Tabs,
   Tab,
   Container,
@@ -92,34 +87,11 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Comment as CommentIcon,
-  Save as SaveIcon,
-  Cancel as CancelIcon,
-  Warning as WarningIcon,
-  CheckCircle as CheckCircleIcon,
-  Inventory as InventoryIcon,
-  PlayArrow as PlayArrowIcon,
-  Stop as StopIcon,
-  // ✅ Print przeniesione do utils/taskFormatters
-  Business as BusinessIcon,
-  Schedule as ScheduleIcon,
-  History as HistoryIcon,
-  Add as AddIcon,
   ArrowBack as ArrowBackIcon,
-  Settings as SettingsIcon,
-  Check as CheckIcon,
   Inventory2 as PackagingIcon,
-  BookmarkAdd as BookmarkAddIcon,
-  // ✅ REFAKTORYZACJA: ExpandMore, Search, ArrowForward, BuildCircle, Refresh, Calculate, Close
-  // przeniesione do ManualBatchSelection / TaskDialogsContainer
-  Visibility as VisibilityIcon,
   Info as InfoIcon,
   Science as RawMaterialsIcon,
   Assessment as AssessmentIcon,
-  AttachFile as AttachFileIcon,
-  CloudUpload as CloudUploadIcon,
-  // ✅ Description, Image, PictureAsPdf przeniesione do utils/taskFormatters
-  Download as DownloadIcon,
-  Storage as StorageIcon,
   Inventory2 as Materials2Icon,
   Factory as ProductionIcon,
   Assignment as FormIcon,
@@ -127,15 +99,11 @@ import {
 } from '@mui/icons-material';
 import { getTaskById, deleteTask, updateActualMaterialUsage, getProductionHistory, addTaskComment, deleteTaskComment, markTaskCommentsAsRead } from '../../services/production/productionService';
 // ✅ REFAKTORYZACJA: getProductionDataForHistory, getAvailableMachines przeniesione do useTaskFetcher
-import { sortIngredientsByQuantity } from '../../services/products';
-import { bookInventoryForTask, cancelBooking, getBatchReservations, getInventoryBatch, updateBatch } from '../../services/inventory';
+import { bookInventoryForTask } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 // ✅ REFAKTORYZACJA: formatDate przeniesione do ManualBatchSelection / TaskDialogsContainer
 import {
-  formatQuantityPrecision,
-  formatDateToLocal,
-  formatDateTime,
   toLocalDateTimeString,
   fromLocalDateTimeString,
   getStatusColor,
@@ -148,63 +116,29 @@ import {
   validateConsumeQuantities as validateConsumeQuantitiesPure,
   getRequiredQuantityForReservation as getRequiredQuantityForReservationPure,
 } from '../../utils/validation';
-import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants';
-import { format, parseISO } from 'date-fns';
-import TaskDetails from '../../components/production/TaskDetails';
 import { db } from '../../services/firebase/config';
-import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query, where, getDocs, limit, orderBy, runTransaction, writeBatch } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, serverTimestamp, collection, query, where, getDocs, limit, orderBy, runTransaction } from 'firebase/firestore';
 import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 // ✅ FAZA A: firebase/storage imports przeniesione do useFileHandlers
-import { getUsersDisplayNames } from '../../services/userService';
 // ✅ FAZA 2+: generateEndProductReportPDF przeniesione do useTaskReportFetcher
 // ✅ REFAKTORYZACJA: ProductionControlFormDialog, CompletedMOFormDialog, ProductionShiftFormDialog
 // przeniesione do TaskDialogsContainer
-import POReservationManager from '../../components/production/POReservationManager';
 import { useTranslation } from '../../hooks/useTranslation';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { pl, enUS } from 'date-fns/locale';
-import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial, isConsumptionExceedingIssued, calculateConsumptionExcess } from '../../utils/productionUtils';
 import { preciseMultiply } from '../../utils/calculations';
 // ✅ REFAKTORYZACJA: getIngredientReservationLinks przeniesione do useTaskFetcher
 import { useUserNames } from '../../hooks/useUserNames';
 
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI (eliminuje tworzenie obiektów sx przy każdym renderze)
 import { 
-  flexCenter, 
-  flexBetween, 
-  loadingContainer, 
-  sectionHeader, 
-  actionButtons,
-  buttonRow,
   mr1, 
-  ml1, 
-  mb1, 
   mb2, 
   mb3, 
-  mt1, 
   mt2, 
-  mt3,
-  p2,
-  p3,
   boxP2,
-  textRight,
-  captionWithMargin,
-  skeletonStyle,
-  flexEndMt2,
-  flexEndMt3,
-  width130,
-  width140,
-  borderBottom,
-  textSecondary,
-  fontMedium
 } from '../../styles/muiCommonStyles';
 
 // ✅ Import hooków refaktoryzowanych
 import { useTaskDialogs } from '../../hooks/production/useTaskDialogs';
-import { useTaskComments } from '../../hooks/production/useTaskComments';
-import { useTaskActions } from '../../hooks/production/useTaskActions';
 
 // ✅ FAZA 1: Import hooków konsolidujących stany
 import { 
@@ -224,6 +158,7 @@ import { useTaskRealTimeSync } from '../../hooks/production/useTaskRealTimeSync'
 // ✅ FAZA A: Import hooków handlerów
 import { useMaterialHandlers } from '../../hooks/production/useMaterialHandlers';
 import { useConsumptionHandlers } from '../../hooks/production/useConsumptionHandlers';
+import { getConsumedQuantityForMaterial } from '../../utils/productionUtils';
 import { useReservationHandlers } from '../../hooks/production/useReservationHandlers';
 import { useHistoryHandlers } from '../../hooks/production/useHistoryHandlers';
 import { useFormHandlers } from '../../hooks/production/useFormHandlers';
@@ -233,11 +168,7 @@ import { useTaskFetcher } from '../../hooks/production/useTaskFetcher';
 import { useTaskMaterialFetcher } from '../../hooks/production/useTaskMaterialFetcher';
 
 // ✅ Import komponentów dialogów refaktoryzowanych
-import { StartProductionDialog, AddHistoryDialog, DeleteConfirmDialog, RawMaterialsDialog, AdditionalCostDialog } from '../../components/production/dialogs';
-import { CommentsDrawer } from '../../components/production/shared';
-
 // ✅ REFAKTORYZACJA: Wydzielone komponenty renderujące
-import ManualBatchSelection from '../../components/production/ManualBatchSelection';
 import MaterialCostsSummary from '../../components/production/MaterialCostsSummary';
 import TaskDialogsContainer from '../../components/production/TaskDialogsContainer';
 
@@ -267,7 +198,7 @@ const normalizeQuantity = (value) => {
 };
 
 const TaskDetailsPage = () => {
-  const { t, currentLanguage } = useTranslation('taskDetails');
+  const { t } = useTranslation('taskDetails');
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -277,12 +208,8 @@ const TaskDetailsPage = () => {
   // ✅ REFAKTORYZACJA: Inicjalizacja hooków zarządzających dialogami
   const {
     dialogs,
-    dialogContext,
     openDialog,
     closeDialog,
-    closeAllDialogs,
-    isDialogOpen,
-    updateDialogContext
   } = useTaskDialogs();
   
   const [task, setTask] = useState(null);
@@ -291,7 +218,7 @@ const TaskDetailsPage = () => {
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [materials, setMaterials] = useState([]);
   const [batches, setBatches] = useState({});
-  const [productionData, setProductionData] = useState({
+  const [productionData] = useState({
     completedQuantity: '',
     timeSpent: '',
     startTime: new Date(),
@@ -308,15 +235,11 @@ const TaskDetailsPage = () => {
     packagingDialogOpen,
     packagingItems,
     loadingPackaging,
-    selectedPackaging,
-    packagingQuantities,
     searchPackaging,
     consumePackagingImmediately,
     setPackagingDialogOpen,
     setPackagingItems,
     setLoadingPackaging,
-    setSelectedPackaging,
-    setPackagingQuantities,
     setSearchPackaging,
     setConsumePackagingImmediately
   } = usePackagingState();
@@ -327,10 +250,7 @@ const TaskDetailsPage = () => {
     reservationMethod,
     reservingMaterials,
     autoCreatePOReservations,
-    manualBatchQuantities,
-    reservationErrors,
     selectedBatches,
-    manualBatchSelectionActive,
     expandedMaterial,
     showExhaustedBatches,
     deletingReservation,
@@ -338,10 +258,8 @@ const TaskDetailsPage = () => {
     setReservationMethod,
     setReservingMaterials,
     setAutoCreatePOReservations,
-    setManualBatchQuantities,
-    setReservationErrors,
-    setSelectedBatches,
     setManualBatchSelectionActive,
+    setSelectedBatches,
     setExpandedMaterial,
     setShowExhaustedBatches,
     setDeletingReservation
@@ -397,24 +315,18 @@ const TaskDetailsPage = () => {
     enrichedProductionHistory,
     editingHistoryItem,
     editedHistoryItem,
-    editedHistoryNote,
-    editedHistoryQuantity,
     addHistoryDialogOpen,
     deleteHistoryDialogOpen,
     deleteHistoryItem,
-    historyItemToDelete,
     availableMachines,
     selectedMachineId,
     setProductionHistory,
     setEnrichedProductionHistory,
     setEditingHistoryItem,
     setEditedHistoryItem,
-    setEditedHistoryNote,
-    setEditedHistoryQuantity,
     setAddHistoryDialogOpen,
     setDeleteHistoryDialogOpen,
     setDeleteHistoryItem,
-    setHistoryItemToDelete,
     setAvailableMachines,
     setSelectedMachineId
   } = useProductionHistoryState();
@@ -430,16 +342,12 @@ const TaskDetailsPage = () => {
   
   // ✅ FAZA 1+: Hook konsolidujący stany UI materiałów (8 stanów → 1 hook)
   const {
-    materialTab,
-    materialAwaitingOrders,
     awaitingOrders,
     awaitingOrdersLoading,
     materialBatchesLoading,
     includeInCosts,
     consumedBatchPrices,
     consumedIncludeInCosts,
-    setMaterialTab,
-    setMaterialAwaitingOrders,
     setAwaitingOrders,
     setAwaitingOrdersLoading,
     setMaterialBatchesLoading,
@@ -462,24 +370,18 @@ const TaskDetailsPage = () => {
   // ✅ FAZA 1.3: Hook do zarządzania kosztami (calculateAllCosts, compareCostsWithDatabase, BroadcastChannel, etc.)
   const {
     costsSummary,
-    setCostsSummary,
     calculateAllCosts,
     invalidateCache: invalidateCostsCache,
-    compareCostsWithDatabase,
     calculateWeightedUnitPrice,
     calculateMaterialReservationCoverage,
     getPriceBreakdownTooltip,
-    isEstimatedPrice,
     getPOReservationsForMaterial,
-    taskCostDependencies
   } = useTaskCosts(task, materials, materialQuantities, includeInCosts, poReservations);
   
   // ✅ POPRAWKA: editedHistoryNote, editedHistoryQuantity, historyItemToDelete 
   // przeniesione do useProductionHistoryState
   
-  // Stan komunikatu błędu
-  const [errorMessage, setErrorMessage] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(null);
+  // ✅ FAZA 1+: errorMessage, successMessage przeniesione
 
   // ✅ FAZA 1+: materialTab, materialAwaitingOrders przeniesione do useTaskMaterialUIState
 
@@ -513,16 +415,15 @@ const TaskDetailsPage = () => {
   // Zamykanie: closeDialog('startProduction')
 
   // Nowe stany dla opcji dodawania do magazynu w dialogu historii produkcji
-  const [addToInventoryOnHistory, setAddToInventoryOnHistory] = useState(true); // domyślnie włączone
-  const [historyInventoryData, setHistoryInventoryData] = useState({
+  const [addToInventoryOnHistory] = useState(true); // domyślnie włączone
+  const [, setHistoryInventoryData] = useState({
     expiryDate: null,
     lotNumber: '',
     finalQuantity: '',
     warehouseId: ''
   });
-  const [historyInventoryError, setHistoryInventoryError] = useState(null);
   const [warehouses, setWarehouses] = useState([]);
-  const [warehousesLoading, setWarehousesLoading] = useState(false);
+  const [, setWarehousesLoading] = useState(false);
 
   // ✅ FAZA 1: Stany surowców przeniesione do useRawMaterialsState
 
@@ -594,13 +495,7 @@ const TaskDetailsPage = () => {
 
   const {
     handleStatusChange,
-    handleConfirmConsumption,
-    handleReceiveClick,
-    handleReceiveItem,
-    handleAddToInventory,
-    handleStartProduction,
     handleStartProductionWithExpiry,
-    handleStopProduction,
     handlePrintMaterialsAndLots,
     handlePrintMODetails
   } = useProductionControlHandlers({
@@ -675,6 +570,7 @@ const TaskDetailsPage = () => {
     setEditedHistoryItem(editedItem);
     setHistoryInventoryData(historyData);
     setAddHistoryDialogOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const statusActionsGetter = useCallback(
@@ -741,6 +637,7 @@ const TaskDetailsPage = () => {
         error: error.message
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedTabs.productionPlan, task?.id, availableMachines.length, fetchUserNames]);
 
   const loadFormsData = useCallback(async () => {
@@ -771,6 +668,7 @@ const TaskDetailsPage = () => {
       });
       setFormResponses({ completedMO: [], productionControl: [], productionShift: [] });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedTabs.forms, task?.moNumber]);
 
   const loadEndProductReportData = useCallback(async () => {
@@ -860,6 +758,7 @@ const TaskDetailsPage = () => {
     } catch (error) {
       console.error('❌ Error loading End Product Report data:', error);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedTabs.endProductReport, loadedTabs.productionPlan, loadedTabs.forms, task?.id, task?.moNumber, fetchUserNames]);
 
   // Funkcja do zmiany głównej zakładki z selective loading
@@ -901,6 +800,8 @@ const TaskDetailsPage = () => {
           loadEndProductReportData();
         }
         break;
+      default:
+        break;
     }
   }, [loadedTabs, task?.id, task?.moNumber, loadProductionPlanData, loadFormsData, loadEndProductReportData]);
 
@@ -911,10 +812,7 @@ const TaskDetailsPage = () => {
   const {
     fetchFormResponsesOptimized,
     fetchAllTaskData,
-    fetchTask,
-    refreshTaskReservations,
     fetchPOReservations,
-    fetchIngredientReservationLinks,
     fetchTaskBasicData,
     fetchProductionHistory,
     fetchWarehouses,
@@ -958,9 +856,6 @@ const TaskDetailsPage = () => {
     fetchBatchesForMaterials,
     fetchAvailablePackaging,
     fetchAwaitingOrdersForMaterials,
-    updateMaterialPricesFromBatches,
-    updateConsumedMaterialPricesFromBatches,
-    fetchConsumedBatchPrices,
     enrichConsumedMaterialsData,
     updateRelatedCustomerOrders,
   } = useTaskMaterialFetcher({
@@ -1026,6 +921,7 @@ const TaskDetailsPage = () => {
   // Wzbogacanie historii produkcji o dane z maszyn
   useEffect(() => {
     enrichProductionHistoryWithMachineData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productionHistory, selectedMachineId]);
 
   // Automatyczne pobieranie nazw użytkowników gdy historia produkcji się zmieni
@@ -1106,6 +1002,47 @@ const TaskDetailsPage = () => {
   const calculateIssuedQuantityForMaterial = useCallback((materialId) => {
     return issuedQuantitiesMap[materialId] || 0;
   }, [issuedQuantitiesMap]);
+
+  const handleAutoFillConsumption = useCallback(() => {
+    const reservedMaterials = materials.filter(material => {
+      const materialId = material.inventoryItemId || material.id;
+      return task?.materialBatches?.[materialId]?.length > 0;
+    });
+
+    const newQuantities = {};
+    const newSelections = {};
+
+    reservedMaterials.forEach(material => {
+      const materialId = material.inventoryItemId || material.id;
+      const reservedBatches = task.materialBatches[materialId] || [];
+
+      // eslint-disable-next-line no-use-before-define
+      const issuedQty = calculateIssuedQuantityForMaterial(materialId);
+      const alreadyConsumed = getConsumedQuantityForMaterial(
+        task.consumedMaterials, materialId
+      );
+
+      let remaining = Math.max(0, issuedQty - alreadyConsumed);
+      newSelections[materialId] = {};
+
+      reservedBatches.forEach(batch => {
+        const batchKey = `${materialId}_${batch.batchId}`;
+        if (remaining > 0) {
+          const toConsume = Math.min(remaining, batch.quantity);
+          newQuantities[batchKey] = Math.round(toConsume * 1000) / 1000;
+          newSelections[materialId][batch.batchId] = true;
+          remaining = Math.round((remaining - toConsume) * 1000) / 1000;
+        } else {
+          newQuantities[batchKey] = 0;
+          newSelections[materialId][batch.batchId] = false;
+        }
+      });
+    });
+
+    setConsumeQuantities(newQuantities);
+    setSelectedBatchesToConsume(newSelections);
+    setConsumeErrors({});
+  }, [task, materials, calculateIssuedQuantityForMaterial, setConsumeQuantities, setSelectedBatchesToConsume, setConsumeErrors]);
 
   // ✅ REFAKTORYZACJA: fetchTaskBasicData przeniesione do useTaskFetcher
   
@@ -1530,7 +1467,7 @@ const TaskDetailsPage = () => {
             // Nie pomijamy partii z quantity = 0, bo może to oznaczać usunięcie rezerwacji
             
             // Utwórz/zaktualizuj/usuń rezerwację dla konkretnej partii
-            const result = await bookInventoryForTask(
+            await bookInventoryForTask(
               materialId,
               batch.quantity,
               id, // ID zadania
@@ -1658,81 +1595,6 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Nowa funkcja do automatycznej aktualizacji kosztów w tle po zmianach
-  const updateMaterialCostsAutomatically = async (reason = 'Automatyczna aktualizacja po zmianie materiałów') => {
-    if (!task || !materials.length) return;
-    
-    try {
-      const {
-        totalMaterialCost,
-        unitMaterialCost,
-        totalFullProductionCost,
-        unitFullProductionCost
-      } = await calculateAllCosts();
-      
-
-      
-      // Sprawdź czy koszty się rzeczywiście zmieniły (niższy próg dla automatycznej aktualizacji)
-      const costChanged = 
-        Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.001 ||
-        Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.001 ||
-        Math.abs((task.totalFullProductionCost || 0) - totalFullProductionCost) > 0.001 ||
-        Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.001;
-
-      if (!costChanged) {
-        return false;
-      }
-      
-      // Wykonaj aktualizację w bazie danych
-      const taskRef = doc(db, 'productionTasks', id);
-      await updateDoc(taskRef, {
-        totalMaterialCost,
-        unitMaterialCost,
-        totalFullProductionCost,
-        unitFullProductionCost,
-        costLastUpdatedAt: serverTimestamp(),
-        costLastUpdatedBy: currentUser.uid,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid,
-        // Dodaj wpis do historii kosztów
-        costHistory: arrayUnion({
-          timestamp: new Date().toISOString(),
-          userId: currentUser.uid,
-          userName: currentUser.displayName || currentUser.email || 'System',
-          previousTotalCost: task.totalMaterialCost || 0,
-          newTotalCost: totalMaterialCost,
-          previousUnitCost: task.unitMaterialCost || 0,
-          newUnitCost: unitMaterialCost,
-          previousFullProductionCost: task.totalFullProductionCost || 0,
-          newFullProductionCost: totalFullProductionCost,
-          previousUnitFullProductionCost: task.unitFullProductionCost || 0,
-          newUnitFullProductionCost: unitFullProductionCost,
-          reason: reason
-        })
-      });
-      
-      // Automatycznie aktualizuj związane zamówienia klientów
-      await updateRelatedCustomerOrders(task, totalMaterialCost, totalFullProductionCost, unitMaterialCost, unitFullProductionCost);
-      
-      // Aktualizuj lokalny stan zadania
-      setTask(prevTask => ({
-        ...prevTask,
-        totalMaterialCost,
-        unitMaterialCost,
-        totalFullProductionCost,
-        unitFullProductionCost,
-        costLastUpdatedAt: new Date(),
-        costLastUpdatedBy: currentUser.uid
-      }));
-
-      return true;
-    } catch (error) {
-      console.error('[AUTO] Błąd podczas automatycznej aktualizacji kosztów materiałów:', error);
-      return false;
-    }
-  };
-
-
   // FAZA 1.3: calculateAllCosts, compareCostsWithDatabase, syncCostsOnce,
   // calculateConsumedMaterialsCost, calculateReservedMaterialsCost, costsSummary state
   // => przeniesione do useTaskCosts hook
@@ -1762,25 +1624,6 @@ const TaskDetailsPage = () => {
 
   // Funkcja pomocnicza do formatowania daty
   // ✅ REFAKTORYZACJA: formatDateToLocal przeniesione do utils/taskFormatters
-
-  // Funkcja obsługująca zmianę zakładki materiałów
-  const handleMaterialTabChange = (event, newValue) => {
-    setMaterialTab(newValue);
-  };
-
-  // Funkcja do obsługi zmiany ilości partii
-  const handleBatchQuantityChange = (materialId, batchId, value) => {
-    const numValue = value === '' ? '' : Number(value);
-    if (value === '' || (!isNaN(numValue) && numValue >= 0)) {
-      setManualBatchQuantities(prev => ({
-        ...prev,
-        [materialId]: {
-          ...(prev[materialId] || {}),
-          [batchId]: numValue
-        }
-      }));
-    }
-  };
 
   // ✅ FAZA A: handleProductionControlFormSuccess, handleCompletedMOFormSuccess,
   // handleProductionShiftFormSuccess przeniesione do useFormHandlers
@@ -3241,6 +3084,7 @@ const TaskDetailsPage = () => {
         setConsumedIncludeInCosts(consumedSettings);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.consumedMaterials?.length, materials.length, includeInCosts]); // Kontrolowane zależności
 
   // ✅ FAZA 2+: useEffect pobierania danych firmy/stanowiska + lazy loading załączników przeniesione do useTaskReportFetcher
@@ -3595,6 +3439,8 @@ const TaskDetailsPage = () => {
             handleBatchToConsumeSelection={handleBatchToConsumeSelection}
             handleConsumeQuantityChange={handleConsumeQuantityChange}
             handleConfirmConsumeMaterials={handleConfirmConsumeMaterials}
+            handleAutoFillConsumption={handleAutoFillConsumption}
+            calculateIssuedQuantityForMaterial={calculateIssuedQuantityForMaterial}
             // Reserve dialog
             reserveDialogOpen={reserveDialogOpen}
             setReserveDialogOpen={setReserveDialogOpen}

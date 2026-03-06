@@ -150,7 +150,7 @@ export const checkComponentExists = async (code) => {
   }
 };
 
-export default {
+const nutritionalComponentsService = {
   getNutritionalComponents,
   getNutritionalComponentsByCategory,
   addNutritionalComponent,
@@ -158,4 +158,6 @@ export default {
   deleteNutritionalComponent,
   setNutritionalComponentWithId,
   checkComponentExists
-}; 
+};
+
+export default nutritionalComponentsService;

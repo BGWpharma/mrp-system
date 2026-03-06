@@ -8,8 +8,7 @@ import {
   query, 
   where,
   writeBatch,
-  serverTimestamp,
-  updateDoc
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { COLLECTIONS, TRANSACTION_TYPES } from './config/constants.js';

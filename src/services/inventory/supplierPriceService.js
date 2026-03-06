@@ -1,8 +1,6 @@
 // src/services/inventory/supplierPriceService.js
 
 import { 
-  collection, 
-  doc, 
   addDoc,
   updateDoc,
   deleteDoc,
@@ -18,7 +16,6 @@ import {
 import { db } from '../firebase/config';
 import { 
   COLLECTIONS,
-  FIREBASE_LIMITS,
   PAGINATION_DEFAULTS
 } from './config/constants.js';
 import { 

@@ -63,9 +63,6 @@ export const validateManualBatchSelection = (task, selectedBatches, materialQuan
     if (task.materialConsumptionConfirmed && requiredQuantity <= 0) {
       continue;
     }
-    
-    const materialBatches = selectedBatches[materialId] || [];
-    const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
   }
   
   return { valid: true };
@@ -79,7 +76,6 @@ export const validateManualBatchSelection = (task, selectedBatches, materialQuan
  * @returns {{ valid: boolean, error?: string }}
  */
 export const validateManualBatchSelectionForMaterial = (materialId, task, selectedBatches, materialQuantities) => {
-  const materialBatches = selectedBatches[materialId] || [];
   const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
   
   if (!material) {
@@ -91,8 +87,6 @@ export const validateManualBatchSelectionForMaterial = (materialId, task, select
   if (task.materialConsumptionConfirmed && requiredQuantity <= 0) {
     return { valid: true };
   }
-  
-  const totalSelectedQuantity = materialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
   
   return { valid: true };
 };

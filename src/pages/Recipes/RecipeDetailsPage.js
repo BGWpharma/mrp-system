@@ -518,7 +518,7 @@ const RecipeDetailsPage = () => {
               <Typography variant="h4" gutterBottom>
                 {recipe.name}
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' } }}>
+              <Box sx={{ display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
                 <Chip 
                   label={recipe.status || 'Robocza'} 
                   color={recipe.status === 'Zatwierdzona' ? 'success' : 'default'} 
