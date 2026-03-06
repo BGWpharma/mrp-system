@@ -28,6 +28,7 @@ import {
 } from 'firebase/database';
 import { db, rtdb } from './firebase/config';
 import { getUserById } from './userService';
+import { logger } from '../utils/logger';
 
 // Stałe dla kolekcji w Firebase
 const NOTIFICATIONS_COLLECTION = 'notifications';
@@ -49,17 +50,15 @@ const notificationsCache = {
 };
 
 /**
- * Singleton dla subskrypcji - zapobiega duplikatom subskrypcji
+ * Manager subskrypcji z reference counting — zapobiega duplikatom
+ * i poprawnie obsługuje wielu subskrybentów
  */
 const subscriptionManager = {
-  // Aktywne subskrypcje per userId
   unreadCountSubscriptions: new Map(),
+  unreadCountCallbacks: new Map(),
   userNotificationsSubscriptions: new Map(),
-  // Ostatnia znana wartość (dla debouncing)
   lastUnreadCount: new Map(),
-  // Timery debounce
   debounceTimers: new Map(),
-  // Flaga czy strona jest widoczna
   isPageVisible: true
 };
 
@@ -67,7 +66,7 @@ const subscriptionManager = {
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     subscriptionManager.isPageVisible = !document.hidden;
-    console.log(`[RTDB] Widoczność strony: ${subscriptionManager.isPageVisible ? 'widoczna' : 'ukryta'}`);
+    logger.debug(`[RTDB] Widoczność strony: ${subscriptionManager.isPageVisible ? 'widoczna' : 'ukryta'}`);
   });
 }
 
@@ -171,7 +170,7 @@ export const getUserNotifications = async (userId, onlyUnread = false, limitCoun
       now - lastFetched < notificationsCache.cacheExpiration && 
       notificationsCache.notifications[cacheKey]
     ) {
-      console.log('Użyto cache dla listy powiadomień');
+      logger.debug('Użyto cache dla listy powiadomień');
       return notificationsCache.notifications[cacheKey];
     }
     
@@ -390,7 +389,7 @@ export const getUnreadNotificationsCount = async (userId) => {
       now - lastFetched < notificationsCache.cacheExpiration && 
       notificationsCache.unreadCount[userId] !== undefined
     ) {
-      console.log('Użyto cache dla liczby nieprzeczytanych powiadomień');
+      logger.debug('Użyto cache dla liczby nieprzeczytanych powiadomień');
       return notificationsCache.unreadCount[userId];
     }
     
@@ -666,67 +665,31 @@ export const markRealtimeNotificationAsRead = async (notificationId, userId) => 
  */
 export const markAllRealtimeNotificationsAsRead = async (userId) => {
   try {
-    // console.log(`[RTDB] Oznaczanie wszystkich powiadomień jako przeczytane dla użytkownika ${userId}`);
-    // Pobierz wszystkie powiadomienia dla użytkownika
-    const userNotificationsRef = ref(rtdb, REALTIME_NOTIFICATIONS_PATH);
-    const snapshot = await get(userNotificationsRef);
+    const notificationsRef = ref(rtdb, REALTIME_NOTIFICATIONS_PATH);
+    const limitedQuery = rtdbQuery(notificationsRef, limitToLast(RTDB_NOTIFICATIONS_LIMIT));
+    const snapshot = await get(limitedQuery);
     
     if (!snapshot.exists()) {
-      // console.log(`[RTDB] Brak powiadomień do oznaczenia jako przeczytane`);
       return true;
     }
     
     const updates = {};
-    let foundUnreadCount = 0;
     
-    // Stwórz obiekt z aktualizacjami dla wszystkich nieprzeczytanych powiadomień użytkownika
     snapshot.forEach((childSnapshot) => {
       const notification = childSnapshot.val();
-      
-      // Sprawdź czy powiadomienie jest dla tego użytkownika 
       if (notification.userIds?.includes(userId)) {
-        // Zawsze oznacz jako przeczytane, nawet jeśli już było przeczytane lub brak informacji o stanie
         updates[`${REALTIME_NOTIFICATIONS_PATH}/${childSnapshot.key}/read/${userId}`] = true;
-        
-        // Liczymy znalezione powiadomienia do oznaczenia (dla logów)
-        if (!notification.read || notification.read[userId] === false) {
-          foundUnreadCount++;
-        }
       }
     });
     
-    // console.log(`[RTDB] Znaleziono ${foundUnreadCount} nieprzeczytanych powiadomień do aktualizacji`);
-    
-    // Zastosuj wszystkie zmiany w jednej operacji
     if (Object.keys(updates).length > 0) {
-      // console.log(`[RTDB] Aktualizacja ${Object.keys(updates).length} powiadomień`);
       await update(ref(rtdb), updates);
-      // console.log(`[RTDB] Powiadomienia zaktualizowane pomyślnie`);
-    } else {
-      // console.log(`[RTDB] Brak powiadomień do aktualizacji`);
     }
     
-    // Sprawdź aktualną liczbę nieprzeczytanych powiadomień po aktualizacji
-    const checkSnapshot = await get(userNotificationsRef);
-    let remainingUnread = 0;
+    // Ustaw cache bezpośrednio zamiast weryfikacyjnego drugiego pobrania
+    notificationsCache.rtdbUnreadCount[userId] = 0;
+    notificationsCache.rtdbLastFetched[`rtdb-unreadCount-${userId}`] = Date.now();
     
-    if (checkSnapshot.exists()) {
-      checkSnapshot.forEach((childSnapshot) => {
-        const notification = childSnapshot.val();
-        if (notification.userIds?.includes(userId) && 
-            (!notification.read || notification.read[userId] === false)) {
-          remainingUnread++;
-        }
-      });
-    }
-    
-    // console.log(`[RTDB] Po aktualizacji pozostało ${remainingUnread} nieprzeczytanych powiadomień`);
-    
-    // Invaliduj cache - usuń dane z cache aby wymusić ponowne pobranie
-    delete notificationsCache.rtdbUnreadCount[userId];
-    delete notificationsCache.rtdbLastFetched[`rtdb-unreadCount-${userId}`];
-    
-    // Invaliduj cache dla wszystkich wariantów listy powiadomień tego użytkownika
     Object.keys(notificationsCache.rtdbNotifications).forEach(key => {
       if (key.startsWith(`rtdb-notifications-${userId}`)) {
         delete notificationsCache.rtdbNotifications[key];
@@ -753,7 +716,7 @@ export const markAllRealtimeNotificationsAsRead = async (userId) => {
  * @returns {Function} - Funkcja do anulowania nasłuchiwania
  */
 export const subscribeToUserNotifications = (userId, callback) => {
-  console.log(`[RTDB] Tworzenie subskrypcji userNotifications dla użytkownika ${userId}`);
+  logger.debug(`[RTDB] Tworzenie subskrypcji userNotifications dla użytkownika ${userId}`);
   
   const notificationsRef = ref(rtdb, REALTIME_NOTIFICATIONS_PATH);
   // OPTYMALIZACJA: Pobierz tylko ostatnie N powiadomień (bez orderByChild - nie wymaga indeksu)
@@ -800,7 +763,7 @@ export const subscribeToUserNotifications = (userId, callback) => {
   });
   
   return () => {
-    console.log(`[RTDB] Usuwanie subskrypcji userNotifications dla ${userId}`);
+    logger.debug(`[RTDB] Usuwanie subskrypcji userNotifications dla ${userId}`);
     unsubscribe();
   };
 };
@@ -829,7 +792,7 @@ export const getRealtimeUserNotifications = async (userId, onlyUnread = false, l
       now - lastFetched < notificationsCache.cacheExpiration && 
       notificationsCache.rtdbNotifications[cacheKey]
     ) {
-      console.log('[RTDB Cache] Użyto cache dla listy powiadomień');
+      logger.debug('[RTDB Cache] Użyto cache dla listy powiadomień');
       return notificationsCache.rtdbNotifications[cacheKey];
     }
     
@@ -887,7 +850,7 @@ export const getRealtimeUserNotifications = async (userId, onlyUnread = false, l
       
       // Zastosuj limit
       const limitedNotifications = notifications.slice(0, limitCount);
-      console.log(`[RTDB] Pobrano ${limitedNotifications.length} powiadomień (query limit: ${queryLimit})`);
+      logger.debug(`[RTDB] Pobrano ${limitedNotifications.length} powiadomień (query limit: ${queryLimit})`);
       
       // Zapisz dane w cache
       notificationsCache.rtdbNotifications[cacheKey] = limitedNotifications;
@@ -927,7 +890,7 @@ export const getUnreadRealtimeNotificationsCount = async (userId) => {
       now - lastFetched < notificationsCache.cacheExpiration && 
       notificationsCache.rtdbUnreadCount[userId] !== undefined
     ) {
-      console.log('[RTDB Cache] Użyto cache dla liczby nieprzeczytanych powiadomień');
+      logger.debug('[RTDB Cache] Użyto cache dla liczby nieprzeczytanych powiadomień');
       return notificationsCache.rtdbUnreadCount[userId];
     }
     
@@ -960,7 +923,7 @@ export const getUnreadRealtimeNotificationsCount = async (userId) => {
         }
       });
       
-      console.log(`[RTDB] Liczba nieprzeczytanych dla ${userId}: ${count} (limit: ${RTDB_NOTIFICATIONS_LIMIT})`);
+      logger.debug(`[RTDB] Liczba nieprzeczytanych dla ${userId}: ${count} (limit: ${RTDB_NOTIFICATIONS_LIMIT})`);
       
       // Zapisz w cache
       notificationsCache.rtdbUnreadCount[userId] = count;
@@ -991,38 +954,56 @@ export const getUnreadRealtimeNotificationsCount = async (userId) => {
  * @returns {Function} - Funkcja do anulowania nasłuchiwania
  */
 export const subscribeToUnreadCount = (userId, callback) => {
-  // Singleton - jeśli subskrypcja już istnieje dla tego użytkownika, użyj istniejącej
+  if (!subscriptionManager.unreadCountCallbacks.has(userId)) {
+    subscriptionManager.unreadCountCallbacks.set(userId, new Set());
+  }
+  subscriptionManager.unreadCountCallbacks.get(userId).add(callback);
+
+  const createCleanup = (cb) => () => {
+    subscriptionManager.unreadCountCallbacks.get(userId)?.delete(cb);
+    if (subscriptionManager.unreadCountCallbacks.get(userId)?.size === 0) {
+      logger.debug(`[RTDB] Ostatni subscriber odłączony — usuwanie subskrypcji unreadCount dla ${userId}`);
+      const timer = subscriptionManager.debounceTimers.get(`unread-${userId}`);
+      if (timer) {
+        clearTimeout(timer);
+        subscriptionManager.debounceTimers.delete(`unread-${userId}`);
+      }
+      const unsub = subscriptionManager.unreadCountSubscriptions.get(userId);
+      subscriptionManager.unreadCountSubscriptions.delete(userId);
+      subscriptionManager.lastUnreadCount.delete(userId);
+      subscriptionManager.unreadCountCallbacks.delete(userId);
+      unsub?.();
+    }
+  };
+
   if (subscriptionManager.unreadCountSubscriptions.has(userId)) {
-    console.log(`[RTDB] Subskrypcja unreadCount już istnieje dla użytkownika ${userId}, używam istniejącej`);
-    // Zwróć ostatnią znaną wartość z cache
+    logger.debug(`[RTDB] Subskrypcja unreadCount istnieje — dołączam nowego subskrybenta dla ${userId}`);
     const lastCount = subscriptionManager.lastUnreadCount.get(userId) || 0;
     callback(lastCount);
-    // Zwróć pustą funkcję unsubscribe - prawdziwa subskrypcja pozostaje aktywna
-    return () => {
-      console.log(`[RTDB] Ignoruję unsubscribe - singleton aktywny dla ${userId}`);
-    };
+    return createCleanup(callback);
   }
 
-  console.log(`[RTDB] Tworzenie nowej subskrypcji unreadCount dla użytkownika ${userId}`);
+  logger.debug(`[RTDB] Tworzenie nowej subskrypcji unreadCount dla użytkownika ${userId}`);
   
   const notificationsRef = ref(rtdb, REALTIME_NOTIFICATIONS_PATH);
-  // OPTYMALIZACJA: Pobierz tylko ostatnie N powiadomień (bez orderByChild - nie wymaga indeksu)
   const limitedQuery = rtdbQuery(notificationsRef, limitToLast(RTDB_NOTIFICATIONS_LIMIT));
-  
-  // Debounce time w milisekundach
   const DEBOUNCE_TIME = 2000;
+  
+  const notifyAllCallbacks = (count) => {
+    subscriptionManager.unreadCountCallbacks.get(userId)?.forEach(cb => {
+      try { cb(count); } catch { /* ignore */ }
+    });
+  };
   
   const unsubscribe = onValue(limitedQuery, (snapshot) => {
     try {
-      // OPTYMALIZACJA: Nie aktualizuj gdy strona jest ukryta
       if (!subscriptionManager.isPageVisible) {
-        console.log(`[RTDB] Strona ukryta - pomijam aktualizację unreadCount`);
         return;
       }
       
       if (!snapshot.exists()) {
         subscriptionManager.lastUnreadCount.set(userId, 0);
-        callback(0);
+        notifyAllCallbacks(0);
         return;
       }
       
@@ -1031,29 +1012,22 @@ export const subscribeToUnreadCount = (userId, callback) => {
       snapshot.forEach((childSnapshot) => {
         try {
           const notification = childSnapshot.val();
-          
-          // Sprawdź czy powiadomienie jest dla tego użytkownika
           if (notification && notification.userIds && notification.userIds.includes(userId)) {
-            // Warunek nieprzeczytania
             const isRead = notification.read && notification.read[userId] === true;
-            
             if (!isRead) {
               count++;
             }
           }
-        } catch (itemError) {
-          // Kontynuuj przetwarzanie pozostałych powiadomień
+        } catch {
+          // Kontynuuj przetwarzanie
         }
       });
       
-      // OPTYMALIZACJA: Debouncing - nie aktualizuj jeśli wartość się nie zmieniła
       const lastCount = subscriptionManager.lastUnreadCount.get(userId);
       if (lastCount === count) {
-        return; // Bez zmian, pomiń callback
+        return;
       }
       
-      // OPTYMALIZACJA: Debounce - opóźnij callback o 2 sekundy
-      // Anuluj poprzedni timer jeśli istnieje
       const existingTimer = subscriptionManager.debounceTimers.get(`unread-${userId}`);
       if (existingTimer) {
         clearTimeout(existingTimer);
@@ -1061,8 +1035,8 @@ export const subscribeToUnreadCount = (userId, callback) => {
       
       const timer = setTimeout(() => {
         subscriptionManager.lastUnreadCount.set(userId, count);
-        console.log(`[RTDB] Aktualizacja unreadCount dla ${userId}: ${count} (limit: ${RTDB_NOTIFICATIONS_LIMIT})`);
-        callback(count);
+        logger.debug(`[RTDB] Aktualizacja unreadCount dla ${userId}: ${count}`);
+        notifyAllCallbacks(count);
         subscriptionManager.debounceTimers.delete(`unread-${userId}`);
       }, DEBOUNCE_TIME);
       
@@ -1075,24 +1049,9 @@ export const subscribeToUnreadCount = (userId, callback) => {
     console.error(`[RTDB] [Subskrypcja] Błąd w nasłuchiwaniu powiadomień:`, error);
   });
   
-  // Zapisz subskrypcję w managerze
   subscriptionManager.unreadCountSubscriptions.set(userId, unsubscribe);
   
-  // Zwróć funkcję cleanup
-  return () => {
-    console.log(`[RTDB] Usuwanie subskrypcji unreadCount dla ${userId}`);
-    // Anuluj timer debounce
-    const timer = subscriptionManager.debounceTimers.get(`unread-${userId}`);
-    if (timer) {
-      clearTimeout(timer);
-      subscriptionManager.debounceTimers.delete(`unread-${userId}`);
-    }
-    // Usuń subskrypcję z managera
-    subscriptionManager.unreadCountSubscriptions.delete(userId);
-    subscriptionManager.lastUnreadCount.delete(userId);
-    // Anuluj subskrypcję Firebase
-    unsubscribe();
-  };
+  return createCleanup(callback);
 };
 
 /**
@@ -1175,7 +1134,7 @@ export const clearNotificationsCache = (userId) => {
     }
   });
   
-  console.log(`[Cache] Wyczyszczono cache powiadomień dla użytkownika ${userId}`);
+  logger.debug(`[Cache] Wyczyszczono cache powiadomień dla użytkownika ${userId}`);
 };
 
 /**
@@ -1189,5 +1148,5 @@ export const clearAllNotificationsCache = () => {
   notificationsCache.rtdbNotifications = {};
   notificationsCache.rtdbLastFetched = {};
   
-  console.log('[Cache] Wyczyszczono cały cache powiadomień');
+  logger.debug('[Cache] Wyczyszczono cały cache powiadomień');
 }; 

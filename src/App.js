@@ -4,8 +4,10 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'rea
 import * as Sentry from "@sentry/react";
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
-import { useTheme } from './contexts/ThemeContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { ColumnPreferencesProvider } from './contexts/ColumnPreferencesContext';
+import CssBaseline from '@mui/material/CssBaseline';
+import { composeProviders } from './utils/composeProviders';
 import { InventoryListStateProvider } from './contexts/InventoryListStateContext';
 import { TaskListStateProvider } from './contexts/TaskListStateContext';
 import { CmrListStateProvider } from './contexts/CmrListStateContext';
@@ -339,6 +341,25 @@ const initializeConnectionMonitoring = () => {
 initializeConnectionMonitoring();
 
 // ============================================================================
+// COMPOSED PROVIDERS
+// ============================================================================
+
+const AppProviders = composeProviders(
+  ThemeProvider,
+  AuthProvider,
+  NotificationProvider,
+  LocalizationWrapper,
+  ColumnPreferencesProvider,
+  InventoryListStateProvider,
+  TaskListStateProvider,
+  CmrListStateProvider,
+  RecipeListStateProvider,
+  InvoiceListStateProvider,
+  OrderListStateProvider,
+  SidebarProvider,
+);
+
+// ============================================================================
 // GŁÓWNY KOMPONENT APLIKACJI
 // ============================================================================
 
@@ -349,20 +370,11 @@ function App() {
       showDialog={false}
     >
       <Router>
-        <AuthProvider>
-          <NotificationProvider>
-            <LocalizationWrapper>
-              <ColumnPreferencesProvider>
-                <InventoryListStateProvider>
-                  <TaskListStateProvider>
-                    <CmrListStateProvider>
-                      <RecipeListStateProvider>
-                        <InvoiceListStateProvider>
-                          <OrderListStateProvider>
-                            <SidebarProvider>
-                              <div className="app-container">
-                                <Notifications />
-                                <Routes>
+        <AppProviders>
+          <CssBaseline />
+          <div className="app-container">
+            <Notifications />
+            <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     
@@ -559,20 +571,10 @@ function App() {
                     <Route path="/schedule" element={<PermissionRoute permission="canAccessDashboard"><PrivateLayout><SchedulePage /></PrivateLayout></PermissionRoute>} />
                     
                     <Route path="*" element={<Navigate to="/" replace />} />
-                          </Routes>
-                        </div>
-                        </SidebarProvider>
-                      </OrderListStateProvider>
-                    </InvoiceListStateProvider>
-                  </RecipeListStateProvider>
-                </CmrListStateProvider>
-              </TaskListStateProvider>
-            </InventoryListStateProvider>
-          </ColumnPreferencesProvider>
-          </LocalizationWrapper>
-        </NotificationProvider>
-      </AuthProvider>
-    </Router>
+            </Routes>
+          </div>
+        </AppProviders>
+      </Router>
     </Sentry.ErrorBoundary>
   );
 }

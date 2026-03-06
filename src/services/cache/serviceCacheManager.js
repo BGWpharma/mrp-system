@@ -2,11 +2,13 @@
  * Centralny menedżer cache dla serwisów
  * 
  * Zapewnia:
- * - In-memory cache z TTL
+ * - In-memory cache z TTL i LRU eviction
  * - Deduplikację równoległych zapytań (getOrFetch)
  * - Event-based invalidację (subscribe/notify)
  * - Atomowe operacje get-or-fetch
  */
+
+const MAX_CACHE_SIZE = 500;
 
 const cacheStore = new Map();
 const listeners = new Map();
@@ -25,6 +27,7 @@ export const ServiceCacheManager = {
       cacheStore.delete(key);
       return null;
     }
+    entry.lastAccessed = Date.now();
     return entry.data;
   },
 
@@ -35,7 +38,9 @@ export const ServiceCacheManager = {
    * @param {number} ttl - Czas życia w ms (domyślnie 5 min)
    */
   set(key, data, ttl = 5 * 60 * 1000) {
-    cacheStore.set(key, { data, timestamp: Date.now(), ttl });
+    const now = Date.now();
+    cacheStore.set(key, { data, timestamp: now, lastAccessed: now, ttl });
+    this._evictIfNeeded();
     this._notify(key, data);
   },
 
@@ -71,16 +76,13 @@ export const ServiceCacheManager = {
    * @returns {Promise<*>} - Dane z cache lub świeżo pobrane
    */
   async getOrFetch(key, fetchFn, ttl = 5 * 60 * 1000) {
-    // 1. Sprawdź cache
     const cached = this.get(key);
     if (cached) return cached;
 
-    // 2. Deduplikacja — jeśli fetch już trwa, czekaj na niego
     if (pendingFetches.has(key)) {
       return pendingFetches.get(key);
     }
 
-    // 3. Rozpocznij nowy fetch
     const promise = fetchFn().then(data => {
       this.set(key, data, ttl);
       pendingFetches.delete(key);
@@ -139,10 +141,10 @@ export const ServiceCacheManager = {
 
   /**
    * Zwraca statystyki cache (do diagnostyki/monitoringu)
-   * @returns {{ total: number, keys: Array<{ key: string, ageMs: number, ttlMs: number, expired: boolean }> }}
+   * @returns {{ total: number, maxSize: number, keys: Array<{ key: string, ageMs: number, ttlMs: number, expired: boolean }> }}
    */
   getStats() {
-    const stats = { total: cacheStore.size, keys: [] };
+    const stats = { total: cacheStore.size, maxSize: MAX_CACHE_SIZE, keys: [] };
     for (const [key, entry] of cacheStore.entries()) {
       const age = Date.now() - entry.timestamp;
       stats.keys.push({
@@ -155,10 +157,21 @@ export const ServiceCacheManager = {
     return stats;
   },
 
-  /**
-   * Powiadamia subskrybentów o zmianie
-   * @private
-   */
+  /** @private */
+  _evictIfNeeded() {
+    if (cacheStore.size <= MAX_CACHE_SIZE) return;
+    let oldestKey = null;
+    let oldestAccess = Infinity;
+    for (const [key, entry] of cacheStore) {
+      if (entry.lastAccessed < oldestAccess) {
+        oldestAccess = entry.lastAccessed;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey) cacheStore.delete(oldestKey);
+  },
+
+  /** @private */
   _notify(key, data) {
     const keyListeners = listeners.get(key);
     if (keyListeners) {

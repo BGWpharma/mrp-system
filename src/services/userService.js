@@ -2,9 +2,10 @@
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase/config';
 
-// Cache dla danych użytkowników
+// Cache dla danych użytkowników z LRU eviction
 const userCache = new Map();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minut
+const MAX_USER_CACHE_SIZE = 200;
 
 /**
  * Czyści cache dla danego użytkownika (lub cały cache jeśli nie podano userId).
@@ -25,9 +26,9 @@ export const clearUserCache = (userId) => {
  */
 export const getUserById = async (userId) => {
   try {
-    // Sprawdź cache
     const cached = userCache.get(userId);
     if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+      cached.lastAccessed = Date.now();
       return cached.data;
     }
 
@@ -36,11 +37,20 @@ export const getUserById = async (userId) => {
     
     if (userDoc.exists()) {
       const userData = userDoc.data();
-      // Zapisz w cache
-      userCache.set(userId, {
-        data: userData,
-        timestamp: Date.now()
-      });
+      const now = Date.now();
+      userCache.set(userId, { data: userData, timestamp: now, lastAccessed: now });
+      // LRU eviction
+      if (userCache.size > MAX_USER_CACHE_SIZE) {
+        let oldestKey = null;
+        let oldestAccess = Infinity;
+        for (const [key, entry] of userCache) {
+          if (entry.lastAccessed < oldestAccess) {
+            oldestAccess = entry.lastAccessed;
+            oldestKey = key;
+          }
+        }
+        if (oldestKey) userCache.delete(oldestKey);
+      }
       return userData;
     }
     

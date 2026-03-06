@@ -91,9 +91,17 @@ export const AuthProvider = ({ children }) => {
 
   // ⚡ OPTYMALIZACJA: useCallback - stabilna referencja funkcji logout
   const logout = useCallback(() => {
-    // Wyczyść użytkownika w Sentry przy wylogowaniu
     Sentry.setUser(null);
     return signOut(auth);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) return;
+    const userDocSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+    if (userDocSnap.exists()) {
+      setCurrentUser({ ...firebaseUser, ...userDocSnap.data() });
+    }
   }, []);
 
   useEffect(() => {
@@ -155,8 +163,9 @@ export const AuthProvider = ({ children }) => {
     login,
     loginWithGoogle,
     logout,
+    refreshUser,
     loading
-  }), [currentUser, loading, signup, login, loginWithGoogle, logout]);
+  }), [currentUser, loading, signup, login, loginWithGoogle, logout, refreshUser]);
 
   return (
     <AuthContext.Provider value={value}>
