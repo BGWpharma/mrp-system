@@ -82,27 +82,6 @@ const getPoolConfig = async (db) => {
   }
 };
 
-/**
- * Inicjalizuje domyślną konfigurację w Firestore (jeśli nie istnieje)
- * @param {FirebaseFirestore.Firestore} db - Instancja Firestore
- * @return {Promise<void>}
- */
-const initializePoolConfig = async (db) => {
-  const configRef = db
-      .collection(BGW_POOL_CONFIG_COLLECTION)
-      .doc(BGW_POOL_CONFIG_DOC_ID);
-
-  const configDoc = await configRef.get();
-  if (!configDoc.exists) {
-    await configRef.set({
-      ...DEFAULT_POOL_CONFIG,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    logger.info("[BGW Pool] Utworzono domyślną konfigurację w Firestore");
-  }
-};
-
 // ============================================================================
 // DOPASOWYWANIE KONT
 // ============================================================================
@@ -590,7 +569,6 @@ module.exports = {
   BGW_POOL_CONFIG_COLLECTION,
   BGW_POOL_CONFIG_DOC_ID,
   getPoolConfig,
-  initializePoolConfig,
   matchesPool,
   calculateBGWPoolForMonth,
   syncFactoryCostWithAccounting,

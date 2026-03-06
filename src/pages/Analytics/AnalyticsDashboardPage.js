@@ -13,21 +13,15 @@ import {
   useTheme
 } from '@mui/material';
 import {
-  Assessment as AssessmentIcon,
   TrendingUp as TrendingUpIcon,
-  AccountBalance as AccountBalanceIcon,
-  Factory as FactoryIcon,
-  ShoppingCart as ShoppingCartIcon,
   Inventory as InventoryIcon,
   Timeline as TimelineIcon,
   PieChart as PieChartIcon,
   BarChart as BarChartIcon,
-  ShowChart as ShowChartIcon,
   Schedule as ScheduleIcon,
   LocalDining as ConsumptionIcon,
   MonetizationOn as CostsIcon,
   Savings as CashflowIcon,
-  Blender as BlenderIcon,
   EnergySavingsLeaf as EcoIcon
 } from '@mui/icons-material';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -70,16 +64,6 @@ const getReportTiles = (t) => [
     gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
     iconBg: 'rgba(255, 255, 255, 0.2)'
   },
-  // TYMCZASOWO UKRYTY - Raport postępu produkcji (nieużywany)
-  // {
-  //   id: 'production-progress',
-  //   title: t('analyticsDashboard.tiles.productionProgress.title'),
-  //   description: t('analyticsDashboard.tiles.productionProgress.description'),
-  //   icon: ProgressIcon,
-  //   path: '/analytics/production-progress',
-  //   gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  //   iconBg: 'rgba(255, 255, 255, 0.2)'
-  // },
   {
     id: 'inventory-expiry',
     title: t('analyticsDashboard.tiles.inventoryExpiry.title'),
@@ -116,16 +100,6 @@ const getReportTiles = (t) => [
     gradient: 'linear-gradient(135deg, #56ab2f 0%, #a8e063 100%)',
     iconBg: 'rgba(255, 255, 255, 0.2)'
   },
-  // TYMCZASOWO UKRYTY - Raport mieszań
-  // {
-  //   id: 'mixing-analytics',
-  //   title: t('analyticsDashboard.tiles.mixingAnalytics.title'),
-  //   description: t('analyticsDashboard.tiles.mixingAnalytics.description'),
-  //   icon: BlenderIcon,
-  //   path: '/analytics/mixing',
-  //   gradient: 'linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)',
-  //   iconBg: 'rgba(255, 255, 255, 0.2)'
-  // }
 ];
 
 // Komponent kafelka raportu

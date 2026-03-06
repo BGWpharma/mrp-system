@@ -20,7 +20,3 @@ export {
   getStatusActions
 } from './taskFormatters';
 
-export {
-  formatUnitPrice,
-  formatPercent
-} from './formatUtils';

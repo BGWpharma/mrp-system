@@ -11,14 +11,6 @@ export {
 } from './customerService';
 
 export {
-  getAllClients,
-  getClientById,
-  createClient,
-  updateClient,
-  deleteClient
-} from './clientService';
-
-export {
   CONTACTS_COLLECTION,
   INTERACTIONS_COLLECTION,
   CAMPAIGNS_COLLECTION,

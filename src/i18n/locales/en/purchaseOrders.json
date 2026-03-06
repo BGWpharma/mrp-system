@@ -429,6 +429,8 @@
     "noItems": "No items",
     "itemFallback": "Item {{index}}",
     "edit": "Edit",
+    "visibleColumns": "Visible columns",
+    "showAll": "Show all",
     "orderNotFound": "Order not found",
     "loadError": "Error loading order",
     "statusChangeError": "Error changing status",

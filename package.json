@@ -15,23 +15,17 @@
     "@firebase/firestore": "^4.7.11",
     "@firebase/functions": "^0.13.1",
     "@firebase/storage": "^0.13.7",
-    "@google-cloud/storage": "^7.16.0",
     "@mui/icons-material": "^6.4.5",
     "@mui/material": "^6.4.5",
     "@mui/x-date-pickers": "^6.20.2",
-    "@mui/x-internals": "^7.28.0",
     "@react-pdf/renderer": "^4.3.0",
     "@sentry/react": "^10.32.1",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^13.5.0",
-    "apexcharts": "^4.7.0",
     "axios": "^1.8.1",
-    "chart.js": "^3.9.1",
-    "chartjs-adapter-date-fns": "^2.0.0",
     "date-fns": "^2.30.0",
-    "eu-vat-validation": "^1.0.17",
     "exceljs": "^4.4.0",
     "firebase": "^10.7.1",
     "html2canvas": "^1.4.1",
@@ -45,18 +39,12 @@
     "jspdf-autotable": "^5.0.2",
     "lodash.debounce": "^4.0.8",
     "nanoid": "^5.1.5",
-    "notistack": "^3.0.2",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
-    "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
-    "react-apexcharts": "^1.7.0",
     "react-barcode": "^1.6.1",
-    "react-beautiful-dnd": "^13.1.1",
     "react-calendar-timeline": "^0.30.0-beta.3",
-    "react-chartjs-2": "^4.3.1",
     "react-dom": "^19.0.0",
-    "react-grid-layout": "^1.5.0",
     "react-hot-toast": "^2.5.2",
     "react-i18next": "^15.6.0",
     "react-markdown": "^10.1.0",
@@ -67,9 +55,8 @@
     "react-window": "^2.2.3",
     "recharts": "^2.15.3",
     "remark-gfm": "^4.0.1",
-    "svg2pdf.js": "^2.5.0",
-    "web-vitals": "^2.1.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0"
   },
   "scripts": {
     "prebuild": "node scripts/generate-meta.js",
@@ -102,7 +89,6 @@
   },
   "devDependencies": {
     "@sentry/cli": "^3.0.3",
-    "i18next-scanner": "^4.6.0",
-    "xlsx-js-style": "^1.2.0"
+    "i18next-scanner": "^4.6.0"
   }
 }

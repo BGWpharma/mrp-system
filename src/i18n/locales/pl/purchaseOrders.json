@@ -429,6 +429,8 @@
     "noItems": "Brak pozycji",
     "itemFallback": "Pozycja {{index}}",
     "edit": "Edytuj",
+    "visibleColumns": "Widoczne kolumny",
+    "showAll": "Pokaż wszystkie",
     "orderNotFound": "Nie znaleziono zamówienia",
     "loadError": "Błąd ładowania zamówienia",
     "statusChangeError": "Błąd zmiany statusu",

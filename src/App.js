@@ -58,11 +58,8 @@ const AnalyticsDashboardPage = lazy(() => import('./pages/Analytics/AnalyticsDas
 const FinancialReportPage = lazy(() => import('./pages/Analytics/FinancialReportPage'));
 const ProductionTimePage = lazy(() => import('./pages/Analytics/ProductionTimePage'));
 const MOConsumptionPage = lazy(() => import('./pages/Analytics/MOConsumptionPage'));
-const ProductionProgressPage = lazy(() => import('./pages/Analytics/ProductionProgressPage'));
 const ProductionCostsPage = lazy(() => import('./pages/Analytics/ProductionCostsPage'));
 const CashflowPage = lazy(() => import('./pages/Analytics/CashflowPage'));
-const MixingAnalyticsPage = lazy(() => import('./pages/Analytics/MixingAnalyticsPage'));
-// WeeklySprintPage przeniesiony jako zakładka do ProductionTimePage
 
 // Recipes
 const RecipesPage = lazy(() => import('./pages/Recipes/RecipesPage'));
@@ -137,7 +134,6 @@ const WarehousesList = lazy(() => import('./components/inventory/WarehousesList'
 
 // Invoices
 const InvoicesPage = lazy(() => import('./pages/Invoices/InvoicesPage'));
-const InvoicesListPage = lazy(() => import('./pages/Invoices/InvoicesListPage'));
 const InvoiceFormPage = lazy(() => import('./pages/Invoices/InvoiceFormPage'));
 const InvoiceDetailsPage = lazy(() => import('./pages/Invoices/InvoiceDetailsPage'));
 const CompanySettingsPage = lazy(() => import('./pages/Invoices/CompanySettingsPage'));
@@ -377,10 +373,8 @@ function App() {
                     <Route path="/analytics/financial-report" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><FinancialReportPage /></PrivateLayout></PermissionRoute>} />
                     <Route path="/analytics/production-time" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><ProductionTimePage /></PrivateLayout></PermissionRoute>} />
                     <Route path="/analytics/mo-consumption" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><MOConsumptionPage /></PrivateLayout></PermissionRoute>} />
-                    <Route path="/analytics/production-progress" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><ProductionProgressPage /></PrivateLayout></PermissionRoute>} />
                     <Route path="/analytics/production-costs" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><ProductionCostsPage /></PrivateLayout></PermissionRoute>} />
                     <Route path="/analytics/cashflow" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><CashflowPage /></PrivateLayout></PermissionRoute>} />
-                    <Route path="/analytics/mixing" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><MixingAnalyticsPage /></PrivateLayout></PermissionRoute>} />
                     <Route path="/analytics/weekly-sprint" element={<Navigate to="/analytics/production-time" replace />} />
                     <Route path="/analytics/eco-report" element={<PermissionRoute permission="canAccessAnalytics"><PrivateLayout><EcoReportPage /></PrivateLayout></PermissionRoute>} />
                     
