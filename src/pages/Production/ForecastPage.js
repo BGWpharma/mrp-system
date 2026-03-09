@@ -315,11 +315,13 @@ const ForecastPage = () => {
           // Pobierz ilość już skonsumowaną dla tego materiału w tym zadaniu
           let consumedQuantity = 0;
           if (task.consumedMaterials && Array.isArray(task.consumedMaterials)) {
-            const consumedMaterial = task.consumedMaterials.find(
+            const matchingConsumed = task.consumedMaterials.filter(
               cm => (cm.materialId === materialId || cm.inventoryItemId === materialId)
             );
-            if (consumedMaterial) {
-              consumedQuantity = parseFloat(consumedMaterial.quantity) || 0;
+            if (matchingConsumed.length > 0) {
+              consumedQuantity = matchingConsumed.reduce(
+                (sum, cm) => sum + (parseFloat(cm.quantity) || 0), 0
+              );
               console.log(`📊 Materiał ${material.name} w zadaniu ${task.moNumber || task.name}: wymagane=${totalRequiredForTask}, skonsumowane=${consumedQuantity}`);
             }
           }
@@ -358,7 +360,7 @@ const ForecastPage = () => {
             materialRequirements[materialId].tasks.push(task.id);
             materialRequirements[materialId].taskDetails.push({
               id: task.id,
-              number: task.number || task.taskNumber || '',
+              number: task.moNumber || task.number || task.taskNumber || '',
               name: task.name || task.productName || ''
             });
           }
@@ -371,89 +373,75 @@ const ForecastPage = () => {
       const batchSize = 20; // Pobierz ceny dla 20 materiałów na raz
       
       try {
-        const { getBestSupplierPricesForItems, getAwaitingOrdersForInventoryItem } = await import('../../services/inventory');
+        const { getBestSupplierPricesForItems, getAwaitingOrdersForMultipleItems, invalidateActivePOCache } = await import('../../services/inventory');
         
         // Obliczanie kosztów na podstawie cen domyślnych dostawców
         for (let i = 0; i < materialIds.length; i += batchSize) {
           const batchIds = materialIds.slice(i, i + batchSize);
           
-          // Przygotuj listę materiałów do sprawdzenia w tej partii
           const itemsToCheck = batchIds.map(id => ({
             itemId: id,
             quantity: materialRequirements[id].requiredQuantity
           }));
           
           if (itemsToCheck.length > 0) {
-            // Pobierz najlepsze ceny od dostawców, priorytetyzując domyślnych dostawców
             const bestPrices = await getBestSupplierPricesForItems(itemsToCheck, { includeSupplierNames: true });
             
-            // Aktualizuj ceny i koszty w materialRequirements na podstawie domyślnych dostawców
             for (const materialId of batchIds) {
               if (bestPrices[materialId]) {
                 const bestPrice = bestPrices[materialId];
                 
-                // Jeśli mamy cenę od domyślnego dostawcy, użyj jej
                 if (bestPrice.isDefault || bestPrice.price) {
                   materialRequirements[materialId].price = bestPrice.price;
                   materialRequirements[materialId].supplier = bestPrice.supplierName || 'Nieznany dostawca';
                   materialRequirements[materialId].supplierId = bestPrice.supplierId;
                   materialRequirements[materialId].isDefaultSupplier = bestPrice.isDefault;
-                  materialRequirements[materialId].priceSource = 'supplier'; // Oznacz źródło ceny
+                  materialRequirements[materialId].priceSource = 'supplier';
                 }
               }
               
-              // Jeśli nie ma źródła ceny, oznacz jako magazynową
               if (!materialRequirements[materialId].priceSource) {
                 materialRequirements[materialId].priceSource = 'inventory';
               }
               
-              // Zawsze obliczaj koszt - albo na podstawie ceny dostawcy, albo magazynowej
               materialRequirements[materialId].cost = materialRequirements[materialId].price * 
                 materialRequirements[materialId].requiredQuantity;
             }
           }
         }
         
-        // Pobierz informacje o zamówieniach komponentów (PO) dla materiałów w partiach
-        const promises = materialIds.map(async (materialId) => {
+        // Invalidate cache i pobierz PO dla wszystkich materiałów jednym zapytaniem
+        invalidateActivePOCache();
+        const allPurchaseOrders = await getAwaitingOrdersForMultipleItems(materialIds);
+        
+        for (const materialId of materialIds) {
           try {
-            const purchaseOrders = await getAwaitingOrdersForInventoryItem(materialId);
+            const purchaseOrders = allPurchaseOrders[materialId] || [];
             
-            // 💰 NOWE: Oblicz średnią ważoną cenę z PO
             const weightedPriceFromPO = calculateWeightedPriceFromPO(purchaseOrders, materialId);
             
-            // Jeśli mamy cenę z PO, użyj jej (ma najwyższy priorytet)
             if (weightedPriceFromPO !== null && weightedPriceFromPO > 0) {
               materialRequirements[materialId].price = weightedPriceFromPO;
-              materialRequirements[materialId].priceSource = 'PO'; // Oznacz źródło ceny
+              materialRequirements[materialId].priceSource = 'PO';
               materialRequirements[materialId].cost = materialRequirements[materialId].price * 
                 materialRequirements[materialId].requiredQuantity;
-              
-              console.log(`💰 Materiał ${materialId}: użyto ceny z PO = ${weightedPriceFromPO.toFixed(4)}`);
             }
             
-            // Dodaj informacje o przyszłych dostawach do prognozy
-            if (purchaseOrders && purchaseOrders.length > 0) {
-              // Inicjalizuj tablicę przyszłych dostaw, jeśli nie istnieje
+            if (purchaseOrders.length > 0) {
               if (!materialRequirements[materialId].futureDeliveries) {
                 materialRequirements[materialId].futureDeliveries = [];
               }
               
-              // Dodaj informacje o wszystkich przyszłych dostawach
               for (const po of purchaseOrders) {
                 for (const item of po.items) {
-                  // ⚠️ WAŻNE: Najpierw bierz datę z pozycji PO, jeśli nie ma to z całego PO
                   const deliveryDate = item.expectedDeliveryDate || po.expectedDeliveryDate;
                   
-                  // 🔥 FILTROWANIE: Uwzględniaj tylko dostawy w zakresie prognozy (do endDate)
                   if (deliveryDate) {
                     const deliveryDateObj = new Date(deliveryDate);
                     const endDateObj = new Date(endDate);
                     
-                    // Pomijaj dostawy planowane po zakończeniu okresu prognozy
                     if (deliveryDateObj > endDateObj) {
-                      console.log(`⏭️ Pomijam PO ${po.number} dla materiału ${materialId} - dostawa planowana na ${formatDateDisplay(deliveryDateObj)} (poza zakresem do ${formatDateDisplay(endDateObj)})`);
-                      continue; // Pomijaj tę pozycję
+                      continue;
                     }
                   }
                   
@@ -469,21 +457,18 @@ const ForecastPage = () => {
                 }
               }
               
-              // Sortuj dostawy według daty (od najwcześniejszej)
               materialRequirements[materialId].futureDeliveries.sort((a, b) => {
                 if (!a.expectedDeliveryDate) return 1;
                 if (!b.expectedDeliveryDate) return -1;
                 return new Date(a.expectedDeliveryDate) - new Date(b.expectedDeliveryDate);
               });
               
-              // Oblicz sumę przyszłych dostaw
               const totalFutureDeliveries = materialRequirements[materialId].futureDeliveries.reduce(
                 (sum, delivery) => sum + parseFloat(delivery.quantity || 0), 0
               );
               
               materialRequirements[materialId].futureDeliveriesTotal = totalFutureDeliveries;
               
-              // Zaktualizuj bilans uwzględniając przyszłe dostawy
               materialRequirements[materialId].balanceWithFutureDeliveries = 
                 materialRequirements[materialId].availableQuantity + 
                 totalFutureDeliveries - 
@@ -495,16 +480,13 @@ const ForecastPage = () => {
                 materialRequirements[materialId].requiredQuantity;
             }
           } catch (error) {
-            console.error(`Błąd podczas pobierania zamówień dla materiału ${materialId}:`, error);
+            console.error(`Błąd podczas przetwarzania zamówień dla materiału ${materialId}:`, error);
             materialRequirements[materialId].futureDeliveriesTotal = 0;
             materialRequirements[materialId].balanceWithFutureDeliveries = 
               materialRequirements[materialId].availableQuantity - 
               materialRequirements[materialId].requiredQuantity;
           }
-        });
-        
-        // Poczekaj na zakończenie wszystkich zapytań o zamówienia
-        await Promise.allSettled(promises);
+        }
         
       } catch (error) {
         console.error('Błąd podczas pobierania cen lub zamówień:', error);

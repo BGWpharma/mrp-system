@@ -754,10 +754,10 @@ const onInvoiceAttachmentDeleted = onObjectDeleted(
             });
             batch.update(docSnap.ref, {
               "sourceFile.deleted": true,
-              ocrWarnings: admin.firestore.FieldValue.arrayUnion(
+              "ocrWarnings": admin.firestore.FieldValue.arrayUnion(
                   "Source file was deleted from storage",
               ),
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              "updatedAt": admin.firestore.FieldValue.serverTimestamp(),
             });
             protectedCount++;
           } else {
@@ -834,10 +834,10 @@ const onCmrInvoiceDeleted = onDocumentDeleted(
           });
           await docSnap.ref.update({
             "sourceFile.deleted": true,
-            ocrWarnings: admin.firestore.FieldValue.arrayUnion(
+            "ocrWarnings": admin.firestore.FieldValue.arrayUnion(
                 "Source CMR invoice was deleted",
             ),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            "updatedAt": admin.firestore.FieldValue.serverTimestamp(),
           });
           return "protected";
         }

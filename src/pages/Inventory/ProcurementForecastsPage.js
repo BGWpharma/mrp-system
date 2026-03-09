@@ -50,7 +50,8 @@ import {
   Close as CloseIcon,
   Refresh as RefreshIcon,
   Assignment as MoIcon,
-  FilterList as FilterListIcon
+  FilterList as FilterListIcon,
+  Calculate as CalculateIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -59,12 +60,64 @@ import {
   deleteProcurementForecast,
   archiveProcurementForecast,
   updateProcurementForecast,
-  subscribeToProcurementForecasts
+  subscribeToProcurementForecasts,
+  recalculateProcurementForecast
 } from '../../services/purchaseOrders';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatCurrency } from '../../utils/formatting';
+
+const NotesCell = React.memo(({ forecastId, materialIdx, notes, onSave, editLabel }) => {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(notes || '');
+
+  const handleOpen = () => {
+    setValue(notes || '');
+    setEditing(true);
+  };
+
+  const handleSave = () => {
+    onSave(forecastId, materialIdx, value);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+        <TextField
+          size="small"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          autoFocus
+          multiline
+          maxRows={3}
+          sx={{ width: 120 }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSave(); } if (e.key === 'Escape') setEditing(false); }}
+        />
+        <IconButton size="small" color="primary" onClick={handleSave} sx={{ p: 0.25 }}><SaveIcon sx={{ fontSize: 16 }} /></IconButton>
+        <IconButton size="small" onClick={() => setEditing(false)} sx={{ p: 0.25 }}><CloseIcon sx={{ fontSize: 16 }} /></IconButton>
+      </Box>
+    );
+  }
+
+  if (notes) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, cursor: 'pointer' }} onClick={handleOpen}>
+        <Tooltip title={notes} placement="left">
+          <Typography variant="caption" color="text.primary" noWrap sx={{ maxWidth: 100 }}>{notes}</Typography>
+        </Tooltip>
+        <EditIcon sx={{ fontSize: 13, color: 'text.disabled', flexShrink: 0 }} />
+      </Box>
+    );
+  }
+
+  return (
+    <IconButton size="small" onClick={handleOpen} sx={{ p: 0.25 }}>
+      <EditIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+    </IconButton>
+  );
+});
 
 const ProcurementForecastsPage = ({ embedded = false }) => {
   const { t } = useTranslation('inventory');
@@ -80,12 +133,11 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
   const [expandedId, setExpandedId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showShortageOnly, setShowShortageOnly] = useState(false);
-  const [editingNotesId, setEditingNotesId] = useState(null);
-  const [editNotesValue, setEditNotesValue] = useState('');
   const [materialSortField, setMaterialSortField] = useState('balanceWithFutureDeliveries');
   const [materialSortDirection, setMaterialSortDirection] = useState('asc');
   const [materialCategoryFilter, setMaterialCategoryFilter] = useState('');
   const [expandedMaterialId, setExpandedMaterialId] = useState(null);
+  const [recalculatingId, setRecalculatingId] = useState(null);
 
   const fetchForecasts = useCallback(async () => {
     try {
@@ -144,9 +196,21 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
     }
   };
 
+  const handleRecalculate = async (forecast) => {
+    try {
+      setRecalculatingId(forecast.id);
+      await recalculateProcurementForecast(forecast.id, currentUser?.uid);
+      showSuccess('Prognoza została przeliczona z aktualnymi danymi');
+      fetchForecasts();
+    } catch (error) {
+      showError('Błąd podczas przeliczania prognozy');
+    } finally {
+      setRecalculatingId(null);
+    }
+  };
+
   const handleToggleExpand = (id) => {
     setExpandedId(expandedId === id ? null : id);
-    setEditingNotesId(null);
   };
 
   const handleSaveNotes = async (forecastId, materialIndex, notes) => {
@@ -162,7 +226,6 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
 
       await updateProcurementForecast(forecastId, { materials: updatedMaterials }, currentUser?.uid);
       showSuccess(t('states.procurementForecasts.details.notesUpdated'));
-      setEditingNotesId(null);
       fetchForecasts();
     } catch (error) {
       showError('Błąd podczas zapisywania notatek');
@@ -275,17 +338,11 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
         case 'materialName':
           comparison = (a.materialName || '').localeCompare(b.materialName || '');
           break;
-        case 'category':
-          comparison = (a.category || '').localeCompare(b.category || '');
-          break;
         case 'requiredQuantity':
           comparison = (a.requiredQuantity || 0) - (b.requiredQuantity || 0);
           break;
         case 'availableQuantity':
           comparison = (a.availableQuantity || 0) - (b.availableQuantity || 0);
-          break;
-        case 'balance':
-          comparison = (a.balance || 0) - (b.balance || 0);
           break;
         case 'futureDeliveriesTotal':
           comparison = (a.futureDeliveriesTotal || 0) - (b.futureDeliveriesTotal || 0);
@@ -299,7 +356,7 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
     });
 
     const sortableHeader = (field, label, align = 'left') => (
-      <TableCell align={align} sx={{ fontWeight: 'bold', ...(field === 'materialName' ? { minWidth: 200 } : {}) }}>
+      <TableCell align={align} sx={{ fontWeight: 'bold', py: 0.75, px: 1, whiteSpace: 'nowrap', fontSize: '0.75rem' }}>
         <TableSortLabel
           active={materialSortField === field}
           direction={materialSortField === field ? materialSortDirection : 'asc'}
@@ -311,6 +368,8 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
     );
 
     const categories = getMaterialCategories(forecast);
+
+    const fmtQty = (val) => (val || 0).toLocaleString('pl-PL', { maximumFractionDigits: 2 });
 
     return (
       <Box sx={{ mt: 2 }}>
@@ -327,10 +386,10 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                 </InputAdornment>
               )
             }}
-            sx={{ minWidth: 250 }}
+            sx={{ minWidth: 220 }}
           />
           {categories.length > 1 && (
-            <FormControl size="small" sx={{ minWidth: 160 }}>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
               <InputLabel>{t('states.procurementForecasts.details.category')}</InputLabel>
               <Select
                 value={materialCategoryFilter}
@@ -369,25 +428,20 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
         )}
 
         <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 500 }}>
-          <Table size="small" stickyHeader>
+          <Table size="small" stickyHeader sx={{ tableLayout: 'auto' }}>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 'bold', width: 40 }} />
+                <TableCell sx={{ fontWeight: 'bold', width: 32, px: 0.5 }} />
                 {sortableHeader('materialName', t('states.procurementForecasts.details.material'))}
-                {sortableHeader('category', t('states.procurementForecasts.details.category'))}
-                <TableCell align="center" sx={{ fontWeight: 'bold', width: 70 }}>
-                  <Tooltip title={t('states.procurementForecasts.details.relatedMO', 'Powiązane MO')}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-                      <MoIcon sx={{ fontSize: 16 }} /> MO
-                    </Box>
-                  </Tooltip>
-                </TableCell>
+                <TableCell align="center" sx={{ fontWeight: 'bold', py: 0.75, px: 1, fontSize: '0.75rem', width: 50 }}>MO</TableCell>
                 {sortableHeader('requiredQuantity', t('states.procurementForecasts.details.required'), 'right')}
+                <TableCell align="right" sx={{ fontWeight: 'bold', py: 0.75, px: 1, whiteSpace: 'nowrap', fontSize: '0.75rem' }}>
+                  {t('states.procurementForecasts.details.consumed', 'Skonsumowano')}
+                </TableCell>
                 {sortableHeader('availableQuantity', t('states.procurementForecasts.details.available'), 'right')}
-                {sortableHeader('balance', t('states.procurementForecasts.details.balance'), 'right')}
                 {sortableHeader('futureDeliveriesTotal', t('states.procurementForecasts.details.futureDeliveries'), 'right')}
                 {sortableHeader('balanceWithFutureDeliveries', t('states.procurementForecasts.details.balanceWithDeliveries'), 'center')}
-                <TableCell sx={{ fontWeight: 'bold', minWidth: 140 }}>
+                <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, fontSize: '0.75rem', width: 60 }}>
                   {t('states.procurementForecasts.details.notes')}
                 </TableCell>
               </TableRow>
@@ -395,11 +449,12 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
             <TableBody>
               {materials.map((material, index) => {
                 const materialIdx = forecast.materials.findIndex(m => m.materialId === material.materialId);
-                const isEditing = editingNotesId === `${forecast.id}-${materialIdx}`;
                 const isMaterialExpanded = expandedMaterialId === `${forecast.id}-${material.materialId}`;
                 const hasMO = material.relatedTasks?.length > 0 || material.relatedTaskIds?.length > 0;
                 const hasPO = material.futureDeliveries?.length > 0;
                 const hasExpandableContent = hasMO || hasPO;
+                const moCount = material.relatedTasks?.length || material.relatedTaskIds?.length || 0;
+                const moNumbers = (material.relatedTasks || []).map(t => t.number).filter(Boolean);
 
                 return (
                   <React.Fragment key={material.materialId}>
@@ -407,151 +462,97 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                       hover
                       sx={{
                         cursor: hasExpandableContent ? 'pointer' : 'default',
-                        backgroundColor: material.balanceWithFutureDeliveries < 0
-                          ? 'error.50'
-                          : 'inherit',
-                        '&:hover': {
-                          backgroundColor: material.balanceWithFutureDeliveries < 0
-                            ? 'error.100'
-                            : undefined
-                        },
+                        backgroundColor: material.balanceWithFutureDeliveries < 0 ? 'error.50' : 'inherit',
+                        '&:hover': { backgroundColor: material.balanceWithFutureDeliveries < 0 ? 'error.100' : undefined },
                         '& > *': { borderBottom: isMaterialExpanded ? 'none' : undefined }
                       }}
                       onClick={() => hasExpandableContent && setExpandedMaterialId(isMaterialExpanded ? null : `${forecast.id}-${material.materialId}`)}
                     >
-                      <TableCell sx={{ width: 40 }}>
+                      <TableCell sx={{ width: 32, px: 0.5 }}>
                         {hasExpandableContent && (
-                          <IconButton size="small">
+                          <IconButton size="small" sx={{ p: 0.25 }}>
                             {isMaterialExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                           </IconButton>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>
-                          {material.materialName}
-                        </Typography>
+                      <TableCell sx={{ px: 1 }}>
+                        <Typography variant="body2" fontWeight={500} noWrap>{material.materialName}</Typography>
+                        <Typography variant="caption" color="text.secondary">{material.category}</Typography>
                       </TableCell>
-                      <TableCell>
-                        <Chip size="small" label={material.category} variant="outlined" />
-                      </TableCell>
-                      <TableCell align="center">
+                      <TableCell align="center" sx={{ px: 0.5 }}>
                         {hasMO ? (
-                          <Tooltip title={
-                            (material.relatedTasks || []).map(t => t.number || t.name).filter(Boolean).join(', ') ||
-                            `${material.relatedTaskIds?.length || 0} MO`
-                          }>
-                            <Chip
-                              size="small"
-                              icon={<MoIcon />}
-                              label={material.relatedTasks?.length || material.relatedTaskIds?.length || 0}
-                              color="primary"
-                              variant="outlined"
-                              sx={{ cursor: 'pointer' }}
-                            />
+                          <Tooltip title={moNumbers.length > 0 ? moNumbers.join(', ') : `${moCount} MO`}>
+                            <Chip size="small" label={moCount} color="primary" variant="outlined" sx={{ height: 22, '& .MuiChip-label': { px: 0.75 } }} />
                           </Tooltip>
                         ) : (
                           <Typography variant="body2" color="text.disabled">-</Typography>
                         )}
                       </TableCell>
-                      <TableCell align="right">
-                        {material.requiredQuantity.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} {material.unit}
+                      <TableCell align="right" sx={{ px: 1, whiteSpace: 'nowrap' }}>
+                        <Typography variant="body2">{fmtQty(material.requiredQuantity)}</Typography>
                       </TableCell>
-                      <TableCell align="right">
-                        {material.availableQuantity.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} {material.unit}
+                      <TableCell align="right" sx={{ px: 1, whiteSpace: 'nowrap' }}>
+                        {(material.consumedQuantity || 0) > 0 ? (
+                          <Typography variant="body2" color="success.main" fontWeight={500}>{fmtQty(material.consumedQuantity)}</Typography>
+                        ) : (
+                          <Typography variant="body2" color="text.disabled">—</Typography>
+                        )}
                       </TableCell>
-                      <TableCell align="right">
-                        <Typography
-                          variant="body2"
-                          color={getBalanceColor(material.balance)}
-                          fontWeight={material.balance < 0 ? 600 : 400}
-                        >
-                          {material.balance.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} {material.unit}
-                        </Typography>
+                      <TableCell align="right" sx={{ px: 1, whiteSpace: 'nowrap' }}>
+                        <Typography variant="body2">{fmtQty(material.availableQuantity)}</Typography>
                       </TableCell>
-                      <TableCell align="right">
+                      <TableCell align="right" sx={{ px: 1, whiteSpace: 'nowrap' }}>
                         {hasPO ? (
                           <Chip
                             size="small"
-                            icon={<ShippingIcon />}
-                            label={`${material.futureDeliveriesTotal.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} ${material.unit}`}
+                            icon={<ShippingIcon sx={{ fontSize: 14 }} />}
+                            label={fmtQty(material.futureDeliveriesTotal)}
                             color="info"
                             variant="outlined"
+                            sx={{ height: 22, '& .MuiChip-label': { px: 0.5 } }}
                           />
                         ) : (
-                          <Typography variant="body2" color="text.disabled">
-                            {t('states.procurementForecasts.details.noDeliveries')}
-                          </Typography>
+                          <Typography variant="body2" color="text.disabled">—</Typography>
                         )}
                       </TableCell>
-                      <TableCell align="center">
+                      <TableCell align="center" sx={{ px: 0.5 }}>
                         {getBalanceChip(material.balanceWithFutureDeliveries)}
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        {isEditing ? (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <TextField
-                              size="small"
-                              value={editNotesValue}
-                              onChange={(e) => setEditNotesValue(e.target.value)}
-                              multiline
-                              maxRows={3}
-                              sx={{ minWidth: 120 }}
-                            />
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => handleSaveNotes(forecast.id, materialIdx, editNotesValue)}
-                            >
-                              <SaveIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => setEditingNotesId(null)}
-                            >
-                              <CloseIcon fontSize="small" />
-                            </IconButton>
-                          </Box>
-                        ) : (
-                          <Box
-                            sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                            onClick={() => {
-                              setEditingNotesId(`${forecast.id}-${materialIdx}`);
-                              setEditNotesValue(material.notes || '');
-                            }}
-                          >
-                            <Typography variant="body2" color={material.notes ? 'text.primary' : 'text.disabled'} noWrap sx={{ maxWidth: 120 }}>
-                              {material.notes || t('states.procurementForecasts.details.editNotes')}
-                            </Typography>
-                            <EditIcon sx={{ fontSize: 14, ml: 0.5, color: 'text.disabled' }} />
-                          </Box>
-                        )}
+                      <TableCell sx={{ px: 0.5, width: 60 }} onClick={(e) => e.stopPropagation()}>
+                        <NotesCell
+                          forecastId={forecast.id}
+                          materialIdx={materialIdx}
+                          notes={material.notes}
+                          onSave={handleSaveNotes}
+                          editLabel={t('states.procurementForecasts.details.editNotes')}
+                        />
                       </TableCell>
                     </TableRow>
                     {hasExpandableContent && (
                       <TableRow>
-                        <TableCell colSpan={10} sx={{ py: 0, px: 0, borderBottom: isMaterialExpanded ? undefined : 'none' }}>
+                        <TableCell colSpan={9} sx={{ py: 0, px: 0, borderBottom: isMaterialExpanded ? undefined : 'none' }}>
                           <Collapse in={isMaterialExpanded} timeout="auto" unmountOnExit>
                             <Box sx={{ px: 3, py: 2, bgcolor: 'action.hover' }}>
                               <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap', gap: 2 }}>
                                 {hasMO && (
-                                  <Paper variant="outlined" sx={{ flex: 1, minWidth: 260, p: 1.5 }}>
+                                  <Paper variant="outlined" sx={{ flex: 1, minWidth: 240, p: 1.5 }}>
                                     <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                       <MoIcon sx={{ fontSize: 16 }} />
-                                      {t('states.procurementForecasts.details.relatedMO', 'Powiązane MO')} ({material.relatedTasks?.length || material.relatedTaskIds?.length || 0})
+                                      {t('states.procurementForecasts.details.relatedMO', 'Powiązane MO')} ({moCount})
                                     </Typography>
                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                                       {(material.relatedTasks || []).map((task, i) => (
-                                        <Chip
-                                          key={task.id || i}
-                                          size="small"
-                                          icon={<MoIcon />}
-                                          label={task.number || task.name || task.id?.slice(0, 8)}
-                                          color="primary"
-                                          variant="outlined"
-                                          clickable
-                                          onClick={(e) => { e.stopPropagation(); navigate(`/production/tasks/${task.id}`); }}
-                                          {...(task.name ? { title: task.name } : {})}
-                                        />
+                                        <Tooltip key={task.id || i} title={task.name || ''}>
+                                          <Chip
+                                            size="small"
+                                            icon={<MoIcon />}
+                                            label={task.number || task.name || task.id?.slice(0, 8)}
+                                            color="primary"
+                                            variant="outlined"
+                                            clickable
+                                            onClick={(e) => { e.stopPropagation(); navigate(`/production/tasks/${task.id}`); }}
+                                          />
+                                        </Tooltip>
                                       ))}
                                       {(!material.relatedTasks || material.relatedTasks.length === 0) && material.relatedTaskIds?.map((taskId, idx) => (
                                         <Tooltip key={taskId} title={taskId}>
@@ -602,7 +603,7 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                                               <Typography variant="body2" noWrap sx={{ maxWidth: 160 }}>{d.supplierName || '-'}</Typography>
                                             </TableCell>
                                             <TableCell align="right" sx={{ py: 0.5 }}>
-                                              <Typography variant="body2" fontWeight={500}>{d.quantity?.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} {material.unit}</Typography>
+                                              <Typography variant="body2" fontWeight={500}>{fmtQty(d.quantity)} {material.unit}</Typography>
                                             </TableCell>
                                             <TableCell align="center" sx={{ py: 0.5 }}>
                                               {d.originalQuantity != null ? (
@@ -613,7 +614,7 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                                                     d.receivedQuantity >= d.originalQuantity ? 'success' :
                                                     d.receivedQuantity > 0 ? 'warning' : 'default'
                                                   }
-                                                  label={`${(d.receivedQuantity || 0).toLocaleString('pl-PL', { maximumFractionDigits: 2 })} ${t('states.procurementForecasts.details.poReceivedOf', 'z')} ${d.originalQuantity.toLocaleString('pl-PL', { maximumFractionDigits: 2 })}`}
+                                                  label={`${fmtQty(d.receivedQuantity)} ${t('states.procurementForecasts.details.poReceivedOf', 'z')} ${fmtQty(d.originalQuantity)}`}
                                                 />
                                               ) : (
                                                 <Typography variant="body2" color="text.disabled">-</Typography>
@@ -799,6 +800,20 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                     </TableCell>
                     <TableCell>{getStatusChip(forecast.status)}</TableCell>
                     <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                      <Tooltip title="Przelicz prognozę z aktualnymi danymi">
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => handleRecalculate(forecast)}
+                            disabled={recalculatingId === forecast.id}
+                          >
+                            {recalculatingId === forecast.id
+                              ? <CircularProgress size={18} />
+                              : <CalculateIcon />}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                       <Tooltip title={forecast.status === 'archived'
                         ? t('states.procurementForecasts.unarchive')
                         : t('states.procurementForecasts.archive')}

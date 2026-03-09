@@ -6,6 +6,7 @@
 
 const logger = require("firebase-functions/logger");
 const {admin} = require("../config");
+const {v4: uuidv4} = require("uuid");
 
 /**
  * Safely parse a date string from OCR output to a Firestore Timestamp.
@@ -37,18 +38,27 @@ const getFileAsBase64 = async (bucket, filePath) => {
 };
 
 /**
- * Get signed download URL for file
+ * Get a persistent Firebase download URL for a file.
+ * Uses Firebase Storage download tokens instead of GCS signed URLs,
+ * because signed URLs break when Google rotates the managed signing keys.
  * @param {Object} bucket - Storage bucket reference
  * @param {string} filePath - Path to file in Storage
- * @return {Promise<string>} Signed URL
+ * @return {Promise<string>} Firebase download URL (token-based, never expires)
  */
 const getSignedUrl = async (bucket, filePath) => {
   const file = bucket.file(filePath);
-  const [url] = await file.getSignedUrl({
-    action: "read",
-    expires: "03-01-2500",
-  });
-  return url;
+  const [metadata] = await file.getMetadata();
+  let token = metadata.metadata?.firebaseStorageDownloadTokens;
+
+  if (!token) {
+    token = uuidv4();
+    await file.setMetadata({
+      metadata: {firebaseStorageDownloadTokens: token},
+    });
+  }
+
+  const encodedPath = encodeURIComponent(filePath);
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`;
 };
 
 module.exports = {

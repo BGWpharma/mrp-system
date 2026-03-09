@@ -10,7 +10,7 @@ import { StaticTimePicker } from '@mui/x-date-pickers/StaticTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { format, addMinutes, subMinutes } from 'date-fns';
+import { format } from 'date-fns';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import BadgeIcon from '@mui/icons-material/Badge';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -35,9 +35,6 @@ import {
   getWorkTimeEntries,
 } from '../../services/production/workTimeService';
 
-// Margines walidacji: max ±30 minut od obecnej godziny
-const TIME_MARGIN_MINUTES = 30;
-
 const getDeviceInfo = () => {
   const ua = navigator.userAgent;
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(ua);
@@ -59,18 +56,25 @@ const WorkTimePage = () => {
   const [savingStart, setSavingStart] = useState(false);
   const [savingEnd, setSavingEnd] = useState(false);
 
-  // Zaokrąglenie do najbliższego kwadransu (00/15/30/45)
-  const roundToQuarter = (date) => {
+  const roundUp30 = (date) => {
     const d = new Date(date);
     const minutes = d.getMinutes();
-    const rounded = Math.round(minutes / 15) * 15;
+    const rounded = Math.ceil(minutes / 30) * 30;
     d.setMinutes(rounded, 0, 0);
     return d;
   };
 
-  // Zegary
-  const [startTime, setStartTime] = useState(() => roundToQuarter(new Date()));
-  const [endTime, setEndTime] = useState(() => roundToQuarter(new Date()));
+  const roundDown30 = (date) => {
+    const d = new Date(date);
+    const minutes = d.getMinutes();
+    const rounded = Math.floor(minutes / 30) * 30;
+    d.setMinutes(rounded, 0, 0);
+    return d;
+  };
+
+  // Zegary — start zaokrąglony w górę, koniec w dół
+  const [startTime, setStartTime] = useState(() => roundUp30(new Date()));
+  const [endTime, setEndTime] = useState(() => roundDown30(new Date()));
   const [startSaved, setStartSaved] = useState(false); // czy start został już zapisany
 
   // Otwarty wpis (rozpoczęta praca bez zakończenia)
@@ -96,9 +100,11 @@ const WorkTimePage = () => {
   const formattedDate = format(today, 'EEEE, d MMMM yyyy', { locale: pl });
 
   // Granice czasu
+  // Start: nie wcześniej niż teraz (nie cofasz czasu)
+  // Koniec: nie później niż teraz (nie kończysz w przyszłości), ale nie wcześniej niż start
   const now = new Date();
-  const minStartTime = subMinutes(now, TIME_MARGIN_MINUTES);
-  const maxEndTime = addMinutes(now, TIME_MARGIN_MINUTES);
+  const minStartTime = now;
+  const maxEndTime = now;
 
   const minEndTime = (() => {
     if (openEntry) {
@@ -158,31 +164,23 @@ const WorkTimePage = () => {
     if (e.key === 'Enter') handleVerifyId();
   };
 
-  // Walidacja startu: max 30 min wstecz od teraz
+  // Walidacja startu: nie wcześniej niż teraz
   const validateStartTime = (time) => {
     if (!time || isNaN(time.getTime())) return t('validation.selectValidTime');
     const nowCheck = new Date();
-    const min = subMinutes(nowCheck, TIME_MARGIN_MINUTES);
-    if (time < min) {
-      return t('validation.tooEarly', { time: format(min, 'HH:mm'), margin: TIME_MARGIN_MINUTES });
-    }
-    // Start nie powinien być w przyszłości (z marginesem 5 min)
-    const maxStart = addMinutes(nowCheck, 5);
-    if (time > maxStart) {
-      return t('validation.startNotFuture');
+    if (time < nowCheck) {
+      return t('validation.tooEarly', { time: format(nowCheck, 'HH:mm'), margin: 0 });
     }
     return '';
   };
 
-  // Walidacja końca: max 30 min do przodu od teraz, musi być > start
+  // Walidacja końca: nie później niż teraz i musi być > start
   const validateEndTime = (time) => {
     if (!time || isNaN(time.getTime())) return t('validation.selectValidTime');
     const nowCheck = new Date();
-    const max = addMinutes(nowCheck, TIME_MARGIN_MINUTES);
-    if (time > max) {
-      return t('validation.tooLate', { time: format(max, 'HH:mm'), margin: TIME_MARGIN_MINUTES });
+    if (time > nowCheck) {
+      return t('validation.tooLate', { time: format(nowCheck, 'HH:mm'), margin: 0 });
     }
-    // Sprawdź czy end > start
     const startRef = openEntry 
       ? (() => { const [h,m] = openEntry.startTime.split(':').map(Number); const d = new Date(); d.setHours(h,m,0,0); return d; })()
       : startTime;
@@ -249,8 +247,8 @@ const WorkTimePage = () => {
     setEmployee(null);
     setOpenEntry(null);
     setStartSaved(false);
-    setStartTime(roundToQuarter(new Date()));
-    setEndTime(roundToQuarter(new Date()));
+    setStartTime(roundUp30(new Date()));
+    setEndTime(roundDown30(new Date()));
     setStartError('');
     setEndError('');
     setShowHistory(false);
@@ -262,8 +260,8 @@ const WorkTimePage = () => {
   const handleNewEntry = () => {
     setOpenEntry(null);
     setStartSaved(false);
-    setStartTime(roundToQuarter(new Date()));
-    setEndTime(roundToQuarter(new Date()));
+    setStartTime(roundUp30(new Date()));
+    setEndTime(roundDown30(new Date()));
     setStartError('');
     setEndError('');
     setStep('clocks');
@@ -500,7 +498,7 @@ const WorkTimePage = () => {
                                   }
                                 }}
                                 ampm={false}
-                                minutesStep={15}
+                                minutesStep={30}
                                 minTime={minStartTime}
                                 slotProps={{ actionBar: { sx: { display: 'none' } } }}
                               />
@@ -579,7 +577,7 @@ const WorkTimePage = () => {
                                   }
                                 }}
                                 ampm={false}
-                                minutesStep={15}
+                                minutesStep={30}
                                 minTime={minEndTime}
                                 maxTime={maxEndTime}
                                 slotProps={{ actionBar: { sx: { display: 'none' } } }}

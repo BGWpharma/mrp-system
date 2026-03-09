@@ -78,6 +78,7 @@ const getExpenseInvoiceSource = (filePath) => {
  * @param {string} invoiceId - Document ID
  * @param {Object} ocrData - Normalized OCR data
  * @param {string} downloadUrl - Signed download URL
+ * @param {string} apiKey - API key for external services
  */
 const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl, apiKey) => {
   // Get exchange rate if currency is not PLN
@@ -611,10 +612,10 @@ const onExpenseInvoiceDeleted = onObjectDeleted(
           });
           await db.collection(COLLECTION).doc(expenseInvoice.id).update({
             "sourceFile.deleted": true,
-            ocrWarnings: admin.firestore.FieldValue.arrayUnion(
+            "ocrWarnings": admin.firestore.FieldValue.arrayUnion(
                 "Source file was deleted from storage",
             ),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            "updatedAt": admin.firestore.FieldValue.serverTimestamp(),
           });
           return {success: true, protected: 1};
         }

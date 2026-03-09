@@ -153,7 +153,6 @@ async function updateSupplierProductCatalog(db, orderId, poData, logger) {
  */
 async function updateProcurementForecasts(db, orderId, beforeData, afterData) {
   try {
-    // Pobierz tylko aktywne prognozy
     const forecastsQuery = db.collection("procurementForecasts")
         .where("status", "==", "active");
     const forecastsSnapshot = await forecastsQuery.get();
@@ -169,14 +168,54 @@ async function updateProcurementForecasts(db, orderId, beforeData, afterData) {
     const poExpectedDeliveryDate = afterData.expectedDeliveryDate || null;
     const supplierName = afterData.supplierName || "";
 
-    // Statusy PO które oznaczają "nie będzie już dostawy"
-    const terminalStatuses = ["completed", "cancelled"];
+    const terminalStatuses = ["completed", "cancelled", "draft"];
+
+    // Oblicz delty przyjętych ilości per materiał (before vs after)
+    const receivedDeltas = {};
+    const beforeItems = beforeData.items || [];
+    for (const afterItem of poItems) {
+      const itemInvId = afterItem.inventoryItemId || afterItem.itemId;
+      if (!itemInvId) continue;
+
+      const beforeItem = beforeItems.find(
+          (bi) => (bi.inventoryItemId || bi.itemId) === itemInvId,
+      );
+      const beforeReceived = parseFloat(beforeItem?.received || 0);
+      const afterReceived = parseFloat(afterItem.received || 0);
+      const delta = afterReceived - beforeReceived;
+
+      if (delta !== 0) {
+        receivedDeltas[itemInvId] =
+          (receivedDeltas[itemInvId] || 0) + delta;
+      }
+    }
+
+    // Helper: dopasuj pozycję PO do materiału prognozy
+    const findPoItem = (materialId) => poItems.find(
+        (item) => (item.inventoryItemId || item.itemId) === materialId,
+    );
+
+    // Helper: sprawdź czy data mieści się w zakresie prognozy
+    const isWithinForecastRange = (deliveryDate, forecastPeriod) => {
+      if (!deliveryDate || !forecastPeriod?.endDate) return true;
+      try {
+        const dDate = deliveryDate instanceof Date ?
+          deliveryDate : new Date(deliveryDate);
+        const endDate = forecastPeriod.endDate instanceof Date ?
+          forecastPeriod.endDate : new Date(forecastPeriod.endDate);
+        if (isNaN(dDate.getTime()) || isNaN(endDate.getTime())) return true;
+        return dDate <= endDate;
+      } catch {
+        return true;
+      }
+    };
 
     let updatedForecastsCount = 0;
 
     for (const forecastDoc of forecastsSnapshot.docs) {
       const forecast = forecastDoc.data();
       const materials = forecast.materials || [];
+      const forecastPeriod = forecast.forecastPeriod || null;
       let forecastChanged = false;
 
       const updatedMaterials = materials.map((material) => {
@@ -186,15 +225,21 @@ async function updateProcurementForecasts(db, orderId, beforeData, afterData) {
             (d) => d.poId === orderId,
         );
 
+        // Aktualizuj availableQuantity jeśli przyjęto dostawę
+        const receivedDelta = receivedDeltas[material.materialId] || 0;
+        let updatedAvailableQuantity = material.availableQuantity || 0;
+        if (receivedDelta > 0) {
+          updatedAvailableQuantity += receivedDelta;
+          forecastChanged = true;
+        }
+
         // --- Aktualizacja istniejących dostaw powiązanych z tym PO ---
         let updatedDeliveries = [...deliveries];
         if (hasMatchingDelivery) {
           updatedDeliveries = deliveries.map((delivery) => {
             if (delivery.poId !== orderId) return delivery;
 
-            const matchingPoItem = poItems.find(
-                (item) => item.inventoryItemId === material.materialId,
-            );
+            const matchingPoItem = findPoItem(material.materialId);
 
             if (!matchingPoItem) {
               forecastChanged = true;
@@ -242,7 +287,7 @@ async function updateProcurementForecasts(db, orderId, beforeData, afterData) {
           });
 
           updatedDeliveries = updatedDeliveries.filter((d) => {
-            if (terminalStatuses.includes(d.status) && d.quantity <= 0) {
+            if (d.status === "cancelled" && d.quantity <= 0) {
               forecastChanged = true;
               return false;
             }
@@ -252,9 +297,7 @@ async function updateProcurementForecasts(db, orderId, beforeData, afterData) {
 
         // --- Dodawanie NOWYCH PO dla materiałów w prognozie ---
         if (!hasMatchingDelivery && !terminalStatuses.includes(poStatus)) {
-          const matchingPoItem = poItems.find(
-              (item) => item.inventoryItemId === material.materialId,
-          );
+          const matchingPoItem = findPoItem(material.materialId);
 
           if (matchingPoItem) {
             const quantityOrdered =
@@ -270,27 +313,35 @@ async function updateProcurementForecasts(db, orderId, beforeData, afterData) {
                 matchingPoItem.expectedDeliveryDate ||
                 poExpectedDeliveryDate;
 
-              updatedDeliveries.push({
-                poId: orderId,
-                poNumber: poNumber || "",
-                status: poStatus,
-                quantity: quantityRemaining,
-                originalQuantity: quantityOrdered,
-                receivedQuantity: quantityReceived,
-                expectedDeliveryDate: deliveryDate || null,
-                supplierName: supplierName || "",
-              });
-              forecastChanged = true;
+              if (isWithinForecastRange(deliveryDate, forecastPeriod)) {
+                updatedDeliveries.push({
+                  poId: orderId,
+                  poNumber: poNumber || "",
+                  status: poStatus,
+                  quantity: quantityRemaining,
+                  originalQuantity: quantityOrdered,
+                  receivedQuantity: quantityReceived,
+                  expectedDeliveryDate: deliveryDate || null,
+                  supplierName: supplierName || "",
+                });
+                forecastChanged = true;
 
-              logger.info(
-                  `New PO ${poNumber} added to forecast material ` +
-                  `${material.materialId}`,
-              );
+                logger.info(
+                    `New PO ${poNumber} added to forecast material ` +
+                    `${material.materialId}`,
+                );
+              } else {
+                logger.info(
+                    `PO ${poNumber} delivery date outside forecast range` +
+                    ` for material ${material.materialId}, skipping`,
+                );
+              }
             }
           }
         }
 
         if (!forecastChanged &&
+            updatedAvailableQuantity === (material.availableQuantity || 0) &&
             JSON.stringify(deliveries) ===
             JSON.stringify(updatedDeliveries)) {
           return material;
@@ -300,13 +351,19 @@ async function updateProcurementForecasts(db, orderId, beforeData, afterData) {
         const newFutureDeliveriesTotal = updatedDeliveries.reduce(
             (sum, d) => sum + (parseFloat(d.quantity) || 0), 0,
         );
+        const newBalance = updatedAvailableQuantity -
+          (material.requiredQuantity || 0);
         const newBalanceWithFutureDeliveries =
-          (material.availableQuantity || 0) +
+          updatedAvailableQuantity +
           newFutureDeliveriesTotal -
           (material.requiredQuantity || 0);
 
         return {
           ...material,
+          availableQuantity: parseFloat(
+              updatedAvailableQuantity.toFixed(2),
+          ),
+          balance: parseFloat(newBalance.toFixed(2)),
           futureDeliveries: updatedDeliveries,
           futureDeliveriesTotal: parseFloat(
               newFutureDeliveriesTotal.toFixed(2),
@@ -319,7 +376,6 @@ async function updateProcurementForecasts(db, orderId, beforeData, afterData) {
 
       if (!forecastChanged) continue;
 
-      // Przelicz podsumowanie prognozy
       const materialsWithShortage = updatedMaterials.filter(
           (m) => m.balanceWithFutureDeliveries < 0,
       ).length;
@@ -358,8 +414,6 @@ async function updateProcurementForecasts(db, orderId, beforeData, afterData) {
       error: error.message,
       stack: error.stack,
     });
-    // Nie rzucamy błędu - aktualizacja prognoz nie powinna blokować
-    // głównego triggera (ceny partii, katalog dostawcy)
   }
 }
 

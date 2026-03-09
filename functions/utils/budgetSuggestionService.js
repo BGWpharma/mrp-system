@@ -180,7 +180,9 @@ const callGeminiForBudget = async (apiKey, userPrompt) => {
       }
 
       const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
-      const parsed = jsonMatch ? JSON.parse(jsonMatch[1]) : JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || text);
+      const rawJson = jsonMatch ?
+        jsonMatch[1] : (text.match(/\{[\s\S]*\}/)?.[0] || text);
+      const parsed = JSON.parse(rawJson);
 
       logger.info(`[BudgetSuggestion] Success with model: ${model}`);
       return parsed;

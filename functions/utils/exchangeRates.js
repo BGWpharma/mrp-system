@@ -83,7 +83,7 @@ const getNBPExchangeRate = async (currency, date) => {
  * @return {Promise<{rate: number, date: string, currency: string}>}
  */
 const getNBPPreviousBusinessDayRate = async (currency, startDate, maxRetries = 7) => {
-  let dateObj = typeof startDate === "string" ? new Date(startDate) : new Date(startDate);
+  const dateObj = typeof startDate === "string" ? new Date(startDate) : new Date(startDate);
 
   for (let i = 1; i <= maxRetries; i++) {
     dateObj.setDate(dateObj.getDate() - 1);

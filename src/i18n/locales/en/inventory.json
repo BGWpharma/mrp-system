@@ -194,7 +194,8 @@
         "poStatusShipped": "Shipped",
         "poStatusDelivered": "Delivered",
         "poStatusCompleted": "Completed",
-        "poStatusCancelled": "Cancelled"
+        "poStatusCancelled": "Cancelled",
+        "consumed": "Consumed"
       }
     }
   },

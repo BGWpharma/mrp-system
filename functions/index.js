@@ -46,6 +46,7 @@ const {getRandomBatch} = require("./callable/randomBatch");
 const {recalculateShippedQuantities} = require("./callable/recalculateShipped");
 const {suggestAccountsForPosting} = require("./callable/suggestAccounts");
 const {runAutoArchive} = require("./callable/runAutoArchive");
+const {migrateSignedUrls} = require("./callable/migrateSignedUrls");
 
 // ============================================================================
 // FIRESTORE TRIGGERS - Automatyczne aktualizacje danych
@@ -95,6 +96,7 @@ exports.getRandomBatch = getRandomBatch;
 exports.recalculateShippedQuantities = recalculateShippedQuantities;
 exports.suggestAccountsForPosting = suggestAccountsForPosting;
 exports.runAutoArchive = runAutoArchive;
+exports.migrateSignedUrls = migrateSignedUrls;
 exports.onPurchaseOrderUpdate = onPurchaseOrderUpdate;
 exports.onBatchPriceUpdate = onBatchPriceUpdate;
 exports.onProductionTaskCostUpdate = onProductionTaskCostUpdate;

@@ -98,7 +98,8 @@ export {
   updateProcurementForecast,
   archiveProcurementForecast,
   deleteProcurementForecast,
-  subscribeToProcurementForecasts
+  subscribeToProcurementForecasts,
+  recalculateProcurementForecast
 } from './procurementForecastService';
 
 // forecastExcelExport
