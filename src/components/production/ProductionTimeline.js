@@ -650,7 +650,7 @@ const PODeliveryTooltip = React.memo(({ reservation, position, visible, themeMod
   if (!visible || !reservation) return null;
 
   const res = reservation;
-  const isDelivered = res.status === 'delivered';
+  const isDelivered = res.status === 'delivered' || res.status === 'converted';
   const isPending = res.status === 'pending';
 
   const formatDate = (date) => {
@@ -660,12 +660,15 @@ const PODeliveryTooltip = React.memo(({ reservation, position, visible, themeMod
     return format(d, 'dd.MM.yyyy', { locale: pl });
   };
 
+  const isConverted = res.status === 'converted';
   const statusColor = isDelivered ? '#4caf50' : isPending ? '#ff9800' : '#9e9e9e';
-  const statusLabel = isDelivered
-    ? t('production.timeline.poTooltip.statusDelivered')
-    : isPending
-      ? t('production.timeline.poTooltip.statusPending')
-      : res.status;
+  const statusLabel = isConverted
+    ? t('production.timeline.poTooltip.statusConverted')
+    : isDelivered
+      ? t('production.timeline.poTooltip.statusDelivered')
+      : isPending
+        ? t('production.timeline.poTooltip.statusPending')
+        : res.status;
 
   const labelColor = themeMode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
 
@@ -867,6 +870,8 @@ const ProductionTimeline = React.memo(({
   const loadedRangeRef = useRef({ start: null, end: null });
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const fetchInProgressRef = useRef(false);
+  const productionHistoryCacheRef = useRef(new Map());
+  const rafIdRef = useRef(null);
   
   const { showError, showSuccess } = useNotification();
   const { currentUser } = useAuth();
@@ -1099,23 +1104,29 @@ const ProductionTimeline = React.memo(({
     }
   }, [deliveryInfoEnriched]);
 
-  // Funkcja do pobierania historii produkcji dla zadań zakończonych
-  const fetchProductionHistoryForCompletedTasks = useCallback(async () => {
-    const completedTasks = tasks.filter(task => task.status === 'Zakończone');
+  // Funkcja do pobierania historii produkcji dla zadań zakończonych (z cache)
+  const fetchProductionHistoryForCompletedTasks = useCallback(async (currentTasks) => {
+    const completedTasks = currentTasks.filter(task => task.status === 'Zakończone');
     
     if (completedTasks.length === 0) {
       return;
     }
 
-    const historyMap = new Map();
+    const newTasks = completedTasks.filter(
+      task => !productionHistoryCacheRef.current.has(task.id)
+    );
+
+    if (newTasks.length === 0) {
+      setProductionHistoryMap(new Map(productionHistoryCacheRef.current));
+      return;
+    }
     
-    // Pobierz historię produkcji dla każdego zakończonego zadania
     await Promise.all(
-      completedTasks.map(async (task) => {
+      newTasks.map(async (task) => {
         try {
           const history = await getProductionHistory(task.id);
-          if (history && history.length > 0) {
-            historyMap.set(task.id, history);
+          if (history?.length > 0) {
+            productionHistoryCacheRef.current.set(task.id, history);
           }
         } catch (error) {
           console.error(`Błąd podczas pobierania historii produkcji dla zadania ${task.id}:`, error);
@@ -1123,13 +1134,13 @@ const ProductionTimeline = React.memo(({
       })
     );
 
-    setProductionHistoryMap(historyMap);
-  }, [tasks]);
+    setProductionHistoryMap(new Map(productionHistoryCacheRef.current));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     if (tasks.length > 0) {
-      fetchProductionHistoryForCompletedTasks().then(() => { if (cancelled) return; });
+      fetchProductionHistoryForCompletedTasks(tasks).then(() => { if (cancelled) return; });
     }
     return () => { cancelled = true; };
   }, [tasks, fetchProductionHistoryForCompletedTasks]);
@@ -1260,9 +1271,9 @@ const ProductionTimeline = React.memo(({
     }
   };
 
-  const getWorkstationColor = (workstationId) => {
+  const getWorkstationColor = useCallback((workstationId) => {
     const workstation = workstations.find(w => w.id === workstationId);
-    if (workstation && workstation.color) {
+    if (workstation?.color) {
       return workstation.color;
     }
     
@@ -1275,14 +1286,14 @@ const ProductionTimeline = React.memo(({
     };
     
     return defaultColors[workstationId] || '#7986cb';
-  };
+  }, [workstations]);
 
-  const getItemColor = (task) => {
+  const getItemColor = useCallback((task) => {
     if (useWorkstationColors && task.workstationId) {
       return getWorkstationColor(task.workstationId);
     }
     return getStatusColor(task.status);
-  };
+  }, [useWorkstationColors, getWorkstationColor]);
 
   // Przygotowanie grup dla timeline
   const groups = useMemo(() => {
@@ -1506,6 +1517,12 @@ const ProductionTimeline = React.memo(({
       // Oblicz rzeczywisty czas produkcji (pomijając weekendy)
       const productionTimeMinutes = task.estimatedDuration || Math.round((endTime - startTime) / (1000 * 60));
       
+      const reservationStatus = calculateMaterialReservationStatus(taskForTooltip);
+      const deliveryDelayInfo = checkPODeliveryDelays(taskForTooltip);
+      const unreadCommentsCount = taskForTooltip.comments?.length > 0
+        ? taskForTooltip.comments.filter(c => !(c.readBy || []).includes(currentUser?.uid)).length
+        : 0;
+
       return {
         id: task.id,
         group: groupId,
@@ -1513,43 +1530,56 @@ const ProductionTimeline = React.memo(({
         start_time: startTime.getTime(),
         end_time: endTime.getTime(),
         canMove: canEditTask,
-        canResize: false, // Całkowicie wyłączone rozciąganie/skracanie kafelków
+        canResize: false,
         canChangeGroup: false,
-        // Dodatkowe dane
         task: taskForTooltip,
         backgroundColor: getItemColor(task),
-        // Metadane do zachowania rozmiaru podczas przeciągania
         originalDuration: productionTimeMinutes,
-        workingHoursPerDay: task.workingHoursPerDay || 16
+        workingHoursPerDay: task.workingHoursPerDay || 16,
+        reservationStatus,
+        deliveryDelayInfo,
+        unreadCommentsCount
       };
     });
     
     return finalItems;
-  }, [tasks, selectedCustomers, selectedWorkstations, groupBy, useWorkstationColors, workstations, getItemColor, advancedFilters, editMode, productionHistoryMap, calculateActualDatesFromHistory]);
+  }, [tasks, selectedCustomers, selectedWorkstations, groupBy, useWorkstationColors, workstations, getItemColor, advancedFilters, editMode, productionHistoryMap, calculateActualDatesFromHistory, currentUser?.uid]);
 
   // Kafelki dostaw PO na timeline (widoczne tylko w trybie fokusowania na MO)
   const poDeliveryItems = useMemo(() => {
     if (!focusedMOId || focusedMOReservations.length === 0) return [];
     
     return focusedMOReservations
-      .filter(r => r.expectedDeliveryDate)
       .map(reservation => {
-        const deliveryDate = reservation.expectedDeliveryDate instanceof Date
-          ? reservation.expectedDeliveryDate
-          : reservation.expectedDeliveryDate?.toDate
-            ? reservation.expectedDeliveryDate.toDate()
-            : new Date(reservation.expectedDeliveryDate);
+        const isDelivered = reservation.status === 'delivered';
+        const isConverted = reservation.status === 'converted';
+        const isDone = isDelivered || isConverted;
+
+        // Użyj deliveredAt dla dostarczonych/przekształconych, expectedDeliveryDate dla oczekujących
+        const rawDate = isDone
+          ? (reservation.deliveredAt || reservation.expectedDeliveryDate)
+          : reservation.expectedDeliveryDate;
+        
+        if (!rawDate) return null;
+
+        const deliveryDate = rawDate instanceof Date
+          ? rawDate
+          : rawDate?.toDate
+            ? rawDate.toDate()
+            : new Date(rawDate);
         
         if (isNaN(deliveryDate.getTime())) return null;
         
-        const isDelivered = reservation.status === 'delivered';
         const startMs = startOfDay(deliveryDate).getTime();
         const endMs = endOfDay(deliveryDate).getTime();
+
+        const statusSuffix = isDone ? ' ✓' : '';
+        const bgColor = isDone ? '#4caf50' : '#ff9800';
         
         return {
           id: `po-res-${reservation.id}`,
           group: `po-mat-${reservation.materialId}`,
-          title: `PO: ${reservation.poNumber} — ${reservation.reservedQuantity} ${reservation.unit}${isDelivered ? ' ✓' : ''}`,
+          title: `PO: ${reservation.poNumber} — ${reservation.reservedQuantity} ${reservation.unit}${statusSuffix}`,
           start_time: startMs,
           end_time: endMs,
           canMove: false,
@@ -1557,7 +1587,7 @@ const ProductionTimeline = React.memo(({
           canChangeGroup: false,
           isPODelivery: true,
           reservation,
-          backgroundColor: isDelivered ? '#4caf50' : '#ff9800'
+          backgroundColor: bgColor
         };
       })
       .filter(Boolean);
@@ -1579,7 +1609,7 @@ const ProductionTimeline = React.memo(({
     
     const uniqueMaterials = [...new Map(
       focusedMOReservations
-        .filter(r => r.expectedDeliveryDate)
+        .filter(r => r.expectedDeliveryDate || r.deliveredAt)
         .map(r => [r.materialId, { id: r.materialId, name: r.materialName }])
     ).values()];
     
@@ -2035,27 +2065,32 @@ const ProductionTimeline = React.memo(({
   // Globalny listener dla ruchu myszy dla tooltip i przeciągania
   useEffect(() => {
     const handleGlobalMouseMove = (e) => {
-      if (tooltipVisible || poTooltipVisible) {
-        setTooltipPosition({
-          x: e.clientX + 10,
-          y: e.clientY - 10
-        });
-      }
-      
-      if (dragInfo.isDragging) {
-        setDragInfo(prev => ({
-          ...prev,
-          position: {
-            x: e.clientX,
-            y: e.clientY
-          }
-        }));
-      }
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = requestAnimationFrame(() => {
+        if (tooltipVisible || poTooltipVisible) {
+          setTooltipPosition({
+            x: e.clientX + 10,
+            y: e.clientY - 10
+          });
+        }
+        if (dragInfo.isDragging) {
+          setDragInfo(prev => ({
+            ...prev,
+            position: {
+              x: e.clientX,
+              y: e.clientY
+            }
+          }));
+        }
+      });
     };
 
     if (tooltipVisible || poTooltipVisible || dragInfo.isDragging) {
       document.addEventListener('mousemove', handleGlobalMouseMove);
-      return () => document.removeEventListener('mousemove', handleGlobalMouseMove);
+      return () => {
+        document.removeEventListener('mousemove', handleGlobalMouseMove);
+        if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      };
     }
   }, [tooltipVisible, poTooltipVisible, dragInfo.isDragging]);
 
@@ -2064,7 +2099,7 @@ const ProductionTimeline = React.memo(({
     setLoadingPOReservations(true);
     try {
       const reservations = await getPOReservationsForTask(taskId);
-      setFocusedMOReservations(reservations.filter(r => r.status !== 'converted'));
+      setFocusedMOReservations(reservations);
     } catch (error) {
       showError(t('production.timeline.poDeliveryLoadError'));
       setFocusedMOReservations([]);
@@ -2073,15 +2108,22 @@ const ProductionTimeline = React.memo(({
     }
   }, [showError, t]);
 
-  // Obsługa kliknięcia w element
-  const handleItemSelect = (itemId) => {
-    // Nie rób nic jeśli jest w trakcie przeciągania
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  const itemsMapRef = useRef(new Map());
+  useMemo(() => {
+    const map = new Map();
+    items.forEach(item => map.set(item.id, item));
+    itemsMapRef.current = map;
+  }, [items]);
+
+  const handleItemSelect = useCallback((itemId) => {
     if (isDragging) return;
     
-    // W trybie dostaw PO - kafelki PO nie reagują na kliknięcie
     if (String(itemId).startsWith('po-res-')) return;
     
-    const item = items.find(i => i.id === itemId);
+    const item = itemsRef.current.find(i => i.id === itemId);
     if (!item) return;
     
     if (poDeliveryMode) {
@@ -2096,13 +2138,11 @@ const ProductionTimeline = React.memo(({
     }
     
     if (editMode) {
-      // Sprawdź czy zadanie można edytować (nie jest zakończone)
       if (item.task?.status === 'Zakończone') {
         showError(t('production.timeline.tooltip.cannotEdit'));
         return;
       }
       
-      // W trybie edycji otwórz dialog edycji tylko dla zadań, które można edytować
       setSelectedItem(item);
       setEditForm({
         start: new Date(item.start_time),
@@ -2110,11 +2150,10 @@ const ProductionTimeline = React.memo(({
       });
       setEditDialog(true);
     } else {
-      // Gdy tryb edycji jest wyłączony, otwórz szczegóły zadania w nowej karcie
       const taskId = item.task?.id || itemId;
       window.open(`/production/tasks/${taskId}`, '_blank');
     }
-  };
+  }, [isDragging, poDeliveryMode, focusedMOId, editMode, showError, t, loadPOReservationsForMO]);
 
   // Obsługa zapisywania zmian w dialogu
   const handleSaveEdit = async () => {
@@ -2311,25 +2350,16 @@ const ProductionTimeline = React.memo(({
     }
   }, [canvasTimeStart, canvasTimeEnd, visibleTimeEnd, visibleTimeStart]);
 
-  // Obsługa zmiany widoku czasowego
-  const handleTimeChange = (visibleTimeStart, visibleTimeEnd, updateScrollCanvas) => {
-    // Zabezpieczenia dla nieprawidłowych wartości
+  const handleTimeChange = useCallback((visibleTimeStart, visibleTimeEnd, updateScrollCanvas) => {
     if (!visibleTimeStart || !visibleTimeEnd || visibleTimeEnd <= visibleTimeStart) {
       console.warn('Nieprawidłowe wartości czasu:', { visibleTimeStart, visibleTimeEnd });
       return;
     }
     
-    // Zachowaj referencję do funkcji updateScrollCanvas
     updateScrollCanvasRef.current = updateScrollCanvas;
     
-    // Wywołaj synchronizację tylko jeśli funkcja jest dostępna
     if (updateScrollCanvas && typeof updateScrollCanvas === 'function') {
       updateScrollCanvas(visibleTimeStart, visibleTimeEnd);
-      
-      // Dodatkowa synchronizacja dla scrollowania poziomego
-      setTimeout(() => {
-        updateScrollCanvas(visibleTimeStart, visibleTimeEnd);
-      }, 10);
       
       setTimeout(() => {
         updateScrollCanvas(visibleTimeStart, visibleTimeEnd);
@@ -2339,7 +2369,6 @@ const ProductionTimeline = React.memo(({
     setVisibleTimeStart(visibleTimeStart);
     setVisibleTimeEnd(visibleTimeEnd);
     
-    // Aktualizuj suwak tylko jeśli wartości są poprawne
     try {
       const newSliderValue = calculateSliderValue();
       if (isFinite(newSliderValue)) {
@@ -2348,7 +2377,56 @@ const ProductionTimeline = React.memo(({
     } catch (error) {
       console.warn('Błąd podczas obliczania wartości suwaka:', error);
     }
-  };
+  }, [calculateSliderValue]);
+
+  const moveResizeValidator = useCallback((action, item, time, resizeEdge) => {
+    if (readOnly) {
+      return false;
+    }
+    
+    if (performanceMode) {
+      if (action === 'move') {
+        return roundToMinute(new Date(time)).getTime();
+      }
+      if (action === 'resize') {
+        return false;
+      }
+      return time;
+    }
+    
+    if (action === 'move') {
+      const newStartTime = roundToMinute(new Date(time));
+      return newStartTime.getTime();
+    }
+    
+    if (action === 'resize') {
+      return false;
+    }
+    
+    return time;
+  }, [readOnly, performanceMode, roundToMinute]);
+
+  const handleItemDrag = useCallback(({ itemId, time, edge }) => {
+    setIsDragging(true);
+    
+    const item = itemsMapRef.current.get(itemId);
+    if (item) {
+      const originalDurationMinutes = item.originalDuration || Math.round((item.end_time - item.start_time) / (1000 * 60));
+      const newStartTime = roundToMinute(new Date(time));
+      
+      const workingHours = item.workingHoursPerDay || 16;
+      const newEndTime = calculateEndDateWithWorkingHours(newStartTime, originalDurationMinutes, workingHours);
+      
+      setDragInfo({
+        isDragging: true,
+        itemId: itemId,
+        currentTime: newStartTime,
+        startTime: newStartTime,
+        endTime: newEndTime,
+        position: { x: 0, y: 0 }
+      });
+    }
+  }, [roundToMinute]);
 
   // Funkcje zoom
   const zoomIn = () => {
@@ -3710,83 +3788,15 @@ const ProductionTimeline = React.memo(({
               setFocusedMOReservations([]);
             }
           }}
-          moveResizeValidator={(action, item, time, resizeEdge) => {
-            // ✅ LAZY LOADING - Wyłącz walidację w trybie readonly lub performance
-            if (readOnly) {
-              return false; // Blokuj wszystkie operacje move/resize w trybie readonly
-            }
-            
-            if (performanceMode) {
-              // W trybie performance używaj tylko podstawowej walidacji bez heavy calculations
-              if (action === 'move') {
-                return roundToMinute(new Date(time)).getTime();
-              }
-              if (action === 'resize') {
-                return false; // Blokuj resize w trybie performance
-              }
-              return time;
-            }
-            
-            // Pełna walidacja tylko w trybie normalnym
-            if (action === 'move') {
-              const originalDurationMinutes = item.originalDuration || Math.round((item.end_time - item.start_time) / (1000 * 60));
-              const newStartTime = roundToMinute(new Date(time));
-              const workingHours = item.workingHoursPerDay || 16;
-              const newEndTime = calculateEndDateWithWorkingHours(newStartTime, originalDurationMinutes, workingHours);
-              
-              // Pozwól na płynne przeciąganie - korekta weekendu nastąpi w handleItemMove
-              
-              // Zwróć oryginalny czas bez korekty - pozwól na płynne przeciąganie
-              return newStartTime.getTime();
-            }
-            
-            if (action === 'resize') {
-              // Blokuj resize - nie zmieniaj rozmiaru
-              return false;
-            }
-            
-            return time;
-          }}
-          onItemDrag={({ itemId, time, edge }) => {
-            setIsDragging(true);
-            
-            const item = items.find(i => i.id === itemId);
-            if (item) {
-              // Zachowaj oryginalny czas produkcji w minutach (pomijając weekendy)
-              const originalDurationMinutes = item.originalDuration || Math.round((item.end_time - item.start_time) / (1000 * 60));
-              const newStartTime = roundToMinute(new Date(time));
-              
-              // Oblicz nową datę zakończenia uwzględniając godziny pracy zadania
-              const workingHours = item.workingHoursPerDay || 16;
-              const newEndTime = calculateEndDateWithWorkingHours(newStartTime, originalDurationMinutes, workingHours);
-              
-              // Debug log można usunąć w produkcji
-              if (process.env.NODE_ENV === 'development') {
-                console.log('onItemDrag:', {
-                  itemId,
-                  originalDuration: originalDurationMinutes,
-                  newStart: newStartTime,
-                  newEnd: newEndTime
-                });
-              }
-              
-              setDragInfo({
-                isDragging: true,
-                itemId: itemId,
-                currentTime: newStartTime,
-                startTime: newStartTime,
-                endTime: newEndTime,
-                position: { x: 0, y: 0 } // Will be updated by mouse move
-              });
-            }
-          }}
+          moveResizeValidator={moveResizeValidator}
+          onItemDrag={handleItemDrag}
           itemRenderer={({ item, itemContext, getItemProps }) => {
             const { key, ...itemProps } = getItemProps();
             
             // Renderowanie kafelka dostawy PO
             if (item.isPODelivery) {
               const res = item.reservation;
-              const isDelivered = res.status === 'delivered';
+              const isDelivered = res.status === 'delivered' || res.status === 'converted';
               return (
                 <div
                   key={key}
@@ -3833,35 +3843,18 @@ const ProductionTimeline = React.memo(({
               );
             }
             
-            // Oblicz status rezerwacji i kolor czcionki
-            const reservationStatus = calculateMaterialReservationStatus(item.task);
-            let textColor = '#fff'; // domyślny biały kolor
+            const { reservationStatus, deliveryDelayInfo, unreadCommentsCount } = item;
+            let textColor = '#fff';
             
-            // Ustaw kolor czcionki na podstawie statusu rezerwacji
-            // ALE TYLKO jeśli zadanie NIE jest zakończone
             if (item.task.status !== 'Zakończone' && item.task.status !== 'completed') {
               if (reservationStatus.status === 'fully_reserved') {
-                const statusColors = getReservationStatusColors('fully_reserved');
-                textColor = statusColors.main;
+                textColor = getReservationStatusColors('fully_reserved').main;
               } else if (reservationStatus.status === 'partially_reserved') {
-                const statusColors = getReservationStatusColors('partially_reserved');
-                textColor = statusColors.main;
+                textColor = getReservationStatusColors('partially_reserved').main;
               } else if (reservationStatus.status === 'not_reserved') {
-                const statusColors = getReservationStatusColors('not_reserved');
-                textColor = statusColors.main;
+                textColor = getReservationStatusColors('not_reserved').main;
               }
             }
-            
-            // Oblicz liczbę nieprzeczytanych komentarzy
-            const unreadCommentsCount = item.task?.comments?.length > 0 
-              ? item.task.comments.filter(comment => {
-                  const readBy = comment.readBy || [];
-                  return !readBy.includes(currentUser?.uid);
-                }).length 
-              : 0;
-            
-            // Sprawdź opóźnienia dostaw PO
-            const deliveryDelayInfo = checkPODeliveryDelays(item.task);
             
             // Przygotuj tooltip dla opóźnień
             const deliveryDelayTooltip = deliveryDelayInfo.hasDelay

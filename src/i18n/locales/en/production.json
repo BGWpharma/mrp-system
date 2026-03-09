@@ -772,6 +772,7 @@
     "poTooltip": {
       "status": "Status",
       "statusDelivered": "Delivered",
+      "statusConverted": "Converted",
       "statusPending": "Pending",
       "po": "PO",
       "quantity": "Quantity",

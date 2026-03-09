@@ -843,6 +843,7 @@
     "poTooltip": {
       "status": "Status",
       "statusDelivered": "Dostarczone",
+      "statusConverted": "Przekształcone",
       "statusPending": "Oczekujące",
       "po": "PO",
       "quantity": "Ilość",
