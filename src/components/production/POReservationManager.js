@@ -239,20 +239,24 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
         
         // Odśwież dane po krótkim opóźnieniu
         setTimeout(async () => {
-          const [updatedReservations, updatedStats] = await Promise.all([
-            getPOReservationsForTask(taskId),
-            getPOReservationStats(taskId)
-          ]);
-          
-          setReservations(updatedReservations);
-          setStats(updatedStats);
-          
-          if (updatedReservations.length > 0) {
-            await calculateBatchAvailableQuantities(updatedReservations);
-          }
-          
-          if (onUpdate) {
-            onUpdate();
+          try {
+            const [updatedReservations, updatedStats] = await Promise.all([
+              getPOReservationsForTask(taskId),
+              getPOReservationStats(taskId)
+            ]);
+            
+            setReservations(updatedReservations);
+            setStats(updatedStats);
+            
+            if (updatedReservations.length > 0) {
+              await calculateBatchAvailableQuantities(updatedReservations);
+            }
+            
+            if (onUpdate) {
+              onUpdate();
+            }
+          } catch (error) {
+            console.error('Błąd podczas odświeżania rezerwacji PO:', error);
           }
         }, 500);
       } else {

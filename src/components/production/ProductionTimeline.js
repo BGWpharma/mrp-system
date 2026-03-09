@@ -872,6 +872,7 @@ const ProductionTimeline = React.memo(({
   const fetchInProgressRef = useRef(false);
   const productionHistoryCacheRef = useRef(new Map());
   const rafIdRef = useRef(null);
+  const poRequestIdRef = useRef(0);
   
   const { showError, showSuccess } = useNotification();
   const { currentUser } = useAuth();
@@ -1602,10 +1603,14 @@ const ProductionTimeline = React.memo(({
 
   // Grupy w trybie fokusowania: stanowisko MO + wiersze per materiał
   const displayGroups = useMemo(() => {
-    if (!focusedMOId || focusedMOReservations.length === 0) return groups;
+    if (!focusedMOId) return groups;
     
     const focusedItem = items.find(i => i.id === focusedMOId);
     const moGroup = groups.find(g => g.id === focusedItem?.group);
+    
+    if (focusedMOReservations.length === 0) {
+      return moGroup ? [moGroup] : groups;
+    }
     
     const uniqueMaterials = [...new Map(
       focusedMOReservations
@@ -2094,17 +2099,23 @@ const ProductionTimeline = React.memo(({
     }
   }, [tooltipVisible, poTooltipVisible, dragInfo.isDragging]);
 
-  // Ładowanie rezerwacji PO dla wybranego MO
+  // Ładowanie rezerwacji PO dla wybranego MO (z ochroną przed stale response)
   const loadPOReservationsForMO = useCallback(async (taskId) => {
+    const requestId = ++poRequestIdRef.current;
+    setFocusedMOReservations([]);
     setLoadingPOReservations(true);
     try {
       const reservations = await getPOReservationsForTask(taskId);
+      if (poRequestIdRef.current !== requestId) return;
       setFocusedMOReservations(reservations);
     } catch (error) {
+      if (poRequestIdRef.current !== requestId) return;
       showError(t('production.timeline.poDeliveryLoadError'));
       setFocusedMOReservations([]);
     } finally {
-      setLoadingPOReservations(false);
+      if (poRequestIdRef.current === requestId) {
+        setLoadingPOReservations(false);
+      }
     }
   }, [showError, t]);
 

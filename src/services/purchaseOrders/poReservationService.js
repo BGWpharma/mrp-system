@@ -196,7 +196,7 @@ export const getPOReservationsForTask = async (taskId) => {
     }));
   } catch (error) {
     console.error('Błąd podczas pobierania rezerwacji z PO:', error);
-    return [];
+    throw error;
   }
 };
 
