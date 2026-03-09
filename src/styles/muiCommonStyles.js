@@ -912,4 +912,3 @@ const muiCommonStyles = {
 };
 
 export default muiCommonStyles;
-

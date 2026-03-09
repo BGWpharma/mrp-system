@@ -87,7 +87,8 @@ import {
   Tune as TuneIcon,
   Palette as PaletteIcon,
   ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon
+  ExpandLess as ExpandLessIcon,
+  LocalShipping as LocalShippingIcon
 } from '@mui/icons-material';
 import Timeline, {
   DateHeader,
@@ -111,6 +112,7 @@ import {
   enrichTasksWithPODeliveryInfo
 } from '../../services/production/productionService';
 import { getAllWorkstations } from '../../services/production/workstationService';
+import { getPOReservationsForTask } from '../../services/purchaseOrders/poReservationService';
 import { getAllCustomers } from '../../services/crm';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
@@ -643,6 +645,128 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
   );
 });
 
+// Tooltip dla kafelków dostaw PO
+const PODeliveryTooltip = React.memo(({ reservation, position, visible, themeMode, t }) => {
+  if (!visible || !reservation) return null;
+
+  const res = reservation;
+  const isDelivered = res.status === 'delivered';
+  const isPending = res.status === 'pending';
+
+  const formatDate = (date) => {
+    if (!date) return '-';
+    const d = date instanceof Date ? date : date?.toDate ? date.toDate() : new Date(date);
+    if (isNaN(d.getTime())) return '-';
+    return format(d, 'dd.MM.yyyy', { locale: pl });
+  };
+
+  const statusColor = isDelivered ? '#4caf50' : isPending ? '#ff9800' : '#9e9e9e';
+  const statusLabel = isDelivered
+    ? t('production.timeline.poTooltip.statusDelivered')
+    : isPending
+      ? t('production.timeline.poTooltip.statusPending')
+      : res.status;
+
+  const labelColor = themeMode === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
+
+  return (
+    <div style={{
+      position: 'fixed',
+      left: position.x,
+      top: position.y,
+      backgroundColor: themeMode === 'dark' ? '#1e293b' : '#ffffff',
+      color: themeMode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.87)',
+      border: themeMode === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)',
+      borderRadius: '8px',
+      padding: '12px',
+      boxShadow: themeMode === 'dark'
+        ? '0px 4px 16px rgba(0, 0, 0, 0.3)'
+        : '0px 4px 16px rgba(0, 0, 0, 0.1)',
+      fontSize: '0.875rem',
+      lineHeight: '1.4',
+      maxWidth: '320px',
+      minWidth: '220px',
+      zIndex: 10000,
+      pointerEvents: 'none'
+    }}>
+      <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '8px' }}>
+        {res.materialName}
+      </div>
+
+      <div style={{ marginBottom: '6px', display: 'flex', alignItems: 'center' }}>
+        <span style={{ color: labelColor, marginRight: 8 }}>
+          {t('production.timeline.poTooltip.status')}:
+        </span>
+        <span style={{
+          color: statusColor,
+          fontWeight: 500,
+          backgroundColor: `${statusColor}20`,
+          padding: '2px 6px',
+          borderRadius: '4px',
+          fontSize: '0.8rem'
+        }}>
+          {statusLabel}
+        </span>
+      </div>
+
+      <div style={{ marginBottom: '6px' }}>
+        <span style={{ color: labelColor }}>
+          {t('production.timeline.poTooltip.po')}:
+        </span>
+        <span style={{ marginLeft: 8, fontWeight: 500 }}>{res.poNumber}</span>
+      </div>
+
+      <div style={{ marginBottom: '6px' }}>
+        <span style={{ color: labelColor }}>
+          {t('production.timeline.poTooltip.quantity')}:
+        </span>
+        <span style={{ marginLeft: 8, fontWeight: 500 }}>
+          {res.reservedQuantity} {res.unit}
+          {isDelivered && res.deliveredQuantity != null && ` (${t('production.timeline.poTooltip.quantityDelivered', { quantity: res.deliveredQuantity, unit: res.unit })})`}
+        </span>
+      </div>
+
+      {res.supplier?.name && (
+        <div style={{ marginBottom: '6px' }}>
+          <span style={{ color: labelColor }}>
+            {t('production.timeline.poTooltip.supplier')}:
+          </span>
+          <span style={{ marginLeft: 8, fontWeight: 500 }}>{res.supplier.name}</span>
+        </div>
+      )}
+
+      <div style={{
+        fontSize: '0.8rem',
+        borderTop: themeMode === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.1)',
+        paddingTop: '8px',
+        color: themeMode === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)'
+      }}>
+        <div style={{ marginBottom: '4px' }}>
+          <strong>{t('production.timeline.poTooltip.plannedDelivery')}:</strong> {formatDate(res.expectedDeliveryDate)}
+        </div>
+        {isDelivered && res.deliveredAt && (
+          <div>
+            <strong>{t('production.timeline.poTooltip.deliveredAt')}:</strong> {formatDate(res.deliveredAt)}
+          </div>
+        )}
+        {res.linkedBatches?.length > 0 && (
+          <div style={{ marginTop: 4 }}>
+            <strong>{t('production.timeline.poTooltip.batches')}:</strong> {res.linkedBatches.map(b => b.batchNumber).join(', ')}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.visible === nextProps.visible &&
+    prevProps.themeMode === nextProps.themeMode &&
+    prevProps.position.x === nextProps.position.x &&
+    prevProps.position.y === nextProps.position.y &&
+    prevProps.reservation?.id === nextProps.reservation?.id
+  );
+});
+
 // Zoptymalizowany główny komponent z debouncing
 const ProductionTimeline = React.memo(({ 
   readOnly = false, 
@@ -692,6 +816,10 @@ const ProductionTimeline = React.memo(({
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [tooltipVisible, setTooltipVisible] = useState(false);
   
+  // Stany dla tooltip dostaw PO
+  const [poTooltipData, setPOTooltipData] = useState(null);
+  const [poTooltipVisible, setPOTooltipVisible] = useState(false);
+  
   // Stan dla suwaka poziomego
   const [sliderValue, setSliderValue] = useState(0);
   
@@ -711,6 +839,12 @@ const ProductionTimeline = React.memo(({
   const [enrichmentInProgress, setEnrichmentInProgress] = useState(false);
   // Stan dla szybkiego wzbogacania o dane dostawowe PO (ETA)
   const [deliveryInfoEnriched, setDeliveryInfoEnriched] = useState(false);
+  
+  // Stan dla trybu dostaw PO
+  const [poDeliveryMode, setPODeliveryMode] = useState(false);
+  const [focusedMOId, setFocusedMOId] = useState(null);
+  const [focusedMOReservations, setFocusedMOReservations] = useState([]);
+  const [loadingPOReservations, setLoadingPOReservations] = useState(false);
   
   // Stan dla trybu edycji
   const [editMode, setEditMode] = useState(false);
@@ -1095,6 +1229,18 @@ const ProductionTimeline = React.memo(({
     };
   }, []); // Usuń zależność od handleUndo
 
+  // Escape zamyka tryb fokusowania na dostawach PO
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && focusedMOId) {
+        setFocusedMOId(null);
+        setFocusedMOReservations([]);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [focusedMOId]);
+
   // Funkcje pomocnicze dla kolorów
   const getStatusColor = (status) => {
     switch (status) {
@@ -1380,6 +1526,71 @@ const ProductionTimeline = React.memo(({
     
     return finalItems;
   }, [tasks, selectedCustomers, selectedWorkstations, groupBy, useWorkstationColors, workstations, getItemColor, advancedFilters, editMode, productionHistoryMap, calculateActualDatesFromHistory]);
+
+  // Kafelki dostaw PO na timeline (widoczne tylko w trybie fokusowania na MO)
+  const poDeliveryItems = useMemo(() => {
+    if (!focusedMOId || focusedMOReservations.length === 0) return [];
+    
+    return focusedMOReservations
+      .filter(r => r.expectedDeliveryDate)
+      .map(reservation => {
+        const deliveryDate = reservation.expectedDeliveryDate instanceof Date
+          ? reservation.expectedDeliveryDate
+          : reservation.expectedDeliveryDate?.toDate
+            ? reservation.expectedDeliveryDate.toDate()
+            : new Date(reservation.expectedDeliveryDate);
+        
+        if (isNaN(deliveryDate.getTime())) return null;
+        
+        const isDelivered = reservation.status === 'delivered';
+        const startMs = startOfDay(deliveryDate).getTime();
+        const endMs = endOfDay(deliveryDate).getTime();
+        
+        return {
+          id: `po-res-${reservation.id}`,
+          group: `po-mat-${reservation.materialId}`,
+          title: `PO: ${reservation.poNumber} — ${reservation.reservedQuantity} ${reservation.unit}${isDelivered ? ' ✓' : ''}`,
+          start_time: startMs,
+          end_time: endMs,
+          canMove: false,
+          canResize: false,
+          canChangeGroup: false,
+          isPODelivery: true,
+          reservation,
+          backgroundColor: isDelivered ? '#4caf50' : '#ff9800'
+        };
+      })
+      .filter(Boolean);
+  }, [focusedMOId, focusedMOReservations]);
+
+  // Połączone items: w trybie fokusowania tylko wybrane MO + kafelki PO
+  const displayItems = useMemo(() => {
+    if (!focusedMOId) return items;
+    const focused = items.filter(i => i.id === focusedMOId);
+    return [...focused, ...poDeliveryItems];
+  }, [items, focusedMOId, poDeliveryItems]);
+
+  // Grupy w trybie fokusowania: stanowisko MO + wiersze per materiał
+  const displayGroups = useMemo(() => {
+    if (!focusedMOId || focusedMOReservations.length === 0) return groups;
+    
+    const focusedItem = items.find(i => i.id === focusedMOId);
+    const moGroup = groups.find(g => g.id === focusedItem?.group);
+    
+    const uniqueMaterials = [...new Map(
+      focusedMOReservations
+        .filter(r => r.expectedDeliveryDate)
+        .map(r => [r.materialId, { id: r.materialId, name: r.materialName }])
+    ).values()];
+    
+    const materialGroups = uniqueMaterials.map(mat => ({
+      id: `po-mat-${mat.id}`,
+      title: mat.name,
+      rightTitle: 'PO'
+    }));
+    
+    return [moGroup, ...materialGroups].filter(Boolean);
+  }, [focusedMOId, focusedMOReservations, groups, items]);
 
   // Funkcja pomocnicza do zaokrąglania do pełnych minut
   const roundToMinute = useCallback((date) => {
@@ -1824,7 +2035,7 @@ const ProductionTimeline = React.memo(({
   // Globalny listener dla ruchu myszy dla tooltip i przeciągania
   useEffect(() => {
     const handleGlobalMouseMove = (e) => {
-      if (tooltipVisible) {
+      if (tooltipVisible || poTooltipVisible) {
         setTooltipPosition({
           x: e.clientX + 10,
           y: e.clientY - 10
@@ -1842,19 +2053,47 @@ const ProductionTimeline = React.memo(({
       }
     };
 
-    if (tooltipVisible || dragInfo.isDragging) {
+    if (tooltipVisible || poTooltipVisible || dragInfo.isDragging) {
       document.addEventListener('mousemove', handleGlobalMouseMove);
       return () => document.removeEventListener('mousemove', handleGlobalMouseMove);
     }
-  }, [tooltipVisible, dragInfo.isDragging]);
+  }, [tooltipVisible, poTooltipVisible, dragInfo.isDragging]);
+
+  // Ładowanie rezerwacji PO dla wybranego MO
+  const loadPOReservationsForMO = useCallback(async (taskId) => {
+    setLoadingPOReservations(true);
+    try {
+      const reservations = await getPOReservationsForTask(taskId);
+      setFocusedMOReservations(reservations.filter(r => r.status !== 'converted'));
+    } catch (error) {
+      showError(t('production.timeline.poDeliveryLoadError'));
+      setFocusedMOReservations([]);
+    } finally {
+      setLoadingPOReservations(false);
+    }
+  }, [showError, t]);
 
   // Obsługa kliknięcia w element
   const handleItemSelect = (itemId) => {
     // Nie rób nic jeśli jest w trakcie przeciągania
     if (isDragging) return;
     
+    // W trybie dostaw PO - kafelki PO nie reagują na kliknięcie
+    if (String(itemId).startsWith('po-res-')) return;
+    
     const item = items.find(i => i.id === itemId);
     if (!item) return;
+    
+    if (poDeliveryMode) {
+      if (focusedMOId === itemId) {
+        setFocusedMOId(null);
+        setFocusedMOReservations([]);
+      } else {
+        setFocusedMOId(itemId);
+        loadPOReservationsForMO(item.task?.id || itemId);
+      }
+      return;
+    }
     
     if (editMode) {
       // Sprawdź czy zadanie można edytować (nie jest zakończone)
@@ -2811,6 +3050,24 @@ const ProductionTimeline = React.memo(({
               <Box sx={mt1}>
                 <Button
                   fullWidth
+                  variant={poDeliveryMode ? "contained" : "outlined"}
+                  size="small"
+                  onClick={() => {
+                    const newMode = !poDeliveryMode;
+                    setPODeliveryMode(newMode);
+                    if (!newMode) {
+                      setFocusedMOId(null);
+                      setFocusedMOReservations([]);
+                    }
+                  }}
+                  startIcon={<LocalShippingIcon />}
+                  color={poDeliveryMode ? "warning" : "inherit"}
+                  sx={mb1}
+                >
+                  {t('production.timeline.poDeliveryMode')}
+                </Button>
+                <Button
+                  fullWidth
                   variant={editMode ? "contained" : "outlined"}
                   size="small"
                   onClick={() => { handleEditModeToggle(); }}
@@ -3004,6 +3261,36 @@ const ProductionTimeline = React.memo(({
               </Tooltip>
             )}
           
+            <Tooltip
+              title={poDeliveryMode
+                ? t('production.timeline.poDeliveryClickHint')
+                : t('production.timeline.poDeliveryMode')
+              }
+              arrow
+              disableInteractive
+              enterDelay={500}
+              leaveDelay={200}
+            >
+              <Button
+                className={`timeline-action-button ${poDeliveryMode ? 'active' : ''}`}
+                variant={poDeliveryMode ? "contained" : "outlined"}
+                size="small"
+                onClick={() => {
+                  const newMode = !poDeliveryMode;
+                  setPODeliveryMode(newMode);
+                  if (!newMode) {
+                    setFocusedMOId(null);
+                    setFocusedMOReservations([]);
+                  }
+                }}
+                startIcon={<LocalShippingIcon />}
+                color={poDeliveryMode ? "warning" : "inherit"}
+                title=""
+              >
+                {t('production.timeline.poDeliveryMode')}
+              </Button>
+            </Tooltip>
+
             <Tooltip 
               title={t('production.timeline.editModeTooltip')} 
             arrow
@@ -3200,6 +3487,29 @@ const ProductionTimeline = React.memo(({
         {/* Mobile/Tablet: kompaktowe kontrolki */}
         {(isMobile || isTablet) && (
           <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+            {/* Tryb dostaw PO - kompaktowy */}
+            <Tooltip title={t('production.timeline.poDeliveryMode')} arrow>
+              <IconButton
+                size="small"
+                onClick={() => {
+                  const newMode = !poDeliveryMode;
+                  setPODeliveryMode(newMode);
+                  if (!newMode) {
+                    setFocusedMOId(null);
+                    setFocusedMOReservations([]);
+                  }
+                }}
+                color={poDeliveryMode ? "warning" : "default"}
+                sx={{ 
+                  bgcolor: poDeliveryMode ? 'warning.main' : 'transparent',
+                  color: poDeliveryMode ? 'white' : 'inherit',
+                  '&:hover': { bgcolor: poDeliveryMode ? 'warning.dark' : 'action.hover' }
+                }}
+              >
+                <LocalShippingIcon />
+              </IconButton>
+            </Tooltip>
+            
             {/* Tryb edycji - kompaktowy */}
             <IconButton
               size="small"
@@ -3328,9 +3638,65 @@ const ProductionTimeline = React.memo(({
           />
         )}
         
+        {/* Banner trybu dostaw PO */}
+        {focusedMOId && (
+          <Paper sx={{ 
+            p: 1, 
+            mb: 1, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1, 
+            bgcolor: 'warning.light',
+            color: 'warning.contrastText',
+            borderRadius: 1
+          }}>
+            <LocalShippingIcon fontSize="small" />
+            <Typography variant="body2" sx={{ flex: 1, fontWeight: 500 }}>
+              {t('production.timeline.poDeliveryBanner', { 
+                moName: items.find(i => i.id === focusedMOId)?.title || '' 
+              })}
+              {focusedMOReservations.length === 0 && !loadingPOReservations && (
+                <span style={{ fontStyle: 'italic', marginLeft: 8, opacity: 0.8 }}>
+                  ({t('production.timeline.poDeliveryNoReservations')})
+                </span>
+              )}
+            </Typography>
+            {loadingPOReservations && <CircularProgress size={16} />}
+            <IconButton 
+              size="small" 
+              onClick={() => { 
+                setFocusedMOId(null); 
+                setFocusedMOReservations([]); 
+              }}
+              sx={{ color: 'warning.contrastText' }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Paper>
+        )}
+
+        {poDeliveryMode && !focusedMOId && (
+          <Paper sx={{ 
+            p: 1, 
+            mb: 1, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1, 
+            bgcolor: themeMode === 'dark' ? 'rgba(255, 152, 0, 0.15)' : 'rgba(255, 152, 0, 0.1)',
+            border: '1px dashed',
+            borderColor: 'warning.main',
+            borderRadius: 1
+          }}>
+            <LocalShippingIcon fontSize="small" color="warning" />
+            <Typography variant="body2" sx={{ opacity: 0.85 }}>
+              {t('production.timeline.poDeliveryClickHint')}
+            </Typography>
+          </Paper>
+        )}
+        
         <Timeline
-          groups={groups}
-          items={items}
+          groups={displayGroups}
+          items={displayItems}
           visibleTimeStart={visibleTimeStart}
           visibleTimeEnd={visibleTimeEnd}
           canvasTimeStart={canvasTimeStart}
@@ -3338,6 +3704,12 @@ const ProductionTimeline = React.memo(({
           onTimeChange={handleTimeChange}
           onItemMove={handleItemMove}
           onItemSelect={handleItemSelect}
+          onItemDeselect={() => {
+            if (poDeliveryMode && focusedMOId) {
+              setFocusedMOId(null);
+              setFocusedMOReservations([]);
+            }
+          }}
           moveResizeValidator={(action, item, time, resizeEdge) => {
             // ✅ LAZY LOADING - Wyłącz walidację w trybie readonly lub performance
             if (readOnly) {
@@ -3410,6 +3782,56 @@ const ProductionTimeline = React.memo(({
           }}
           itemRenderer={({ item, itemContext, getItemProps }) => {
             const { key, ...itemProps } = getItemProps();
+            
+            // Renderowanie kafelka dostawy PO
+            if (item.isPODelivery) {
+              const res = item.reservation;
+              const isDelivered = res.status === 'delivered';
+              return (
+                <div
+                  key={key}
+                  {...itemProps}
+                  onMouseEnter={(e) => {
+                    setPOTooltipData(res);
+                    setTooltipPosition({ x: e.clientX + 10, y: e.clientY - 10 });
+                    setPOTooltipVisible(true);
+                  }}
+                  onMouseLeave={() => {
+                    setPOTooltipVisible(false);
+                    setPOTooltipData(null);
+                  }}
+                  style={{
+                    ...itemProps.style,
+                    background: isDelivered
+                      ? 'linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)'
+                      : 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                    border: isDelivered ? '2px solid #2e7d32' : '2px dashed #e65100',
+                    borderRadius: '6px',
+                    padding: '2px 8px',
+                    fontSize: '11px',
+                    color: '#fff',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    overflow: 'hidden',
+                    cursor: 'default'
+                  }}
+                >
+                  <span style={{ fontSize: '13px', flexShrink: 0 }}>
+                    {isDelivered ? '✓' : '⏳'}
+                  </span>
+                  <span style={{
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {itemContext.title}
+                  </span>
+                </div>
+              );
+            }
             
             // Oblicz status rezerwacji i kolor czcionki
             const reservationStatus = calculateMaterialReservationStatus(item.task);
@@ -4072,6 +4494,15 @@ const ProductionTimeline = React.memo(({
         visible={tooltipVisible}
         themeMode={themeMode}
         workstations={workstations}
+        t={t}
+      />
+
+      {/* PO Delivery Tooltip */}
+      <PODeliveryTooltip
+        reservation={poTooltipData}
+        position={tooltipPosition}
+        visible={poTooltipVisible}
+        themeMode={themeMode}
         t={t}
       />
 
