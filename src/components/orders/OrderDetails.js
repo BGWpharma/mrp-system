@@ -73,7 +73,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { useAuth } from '../../contexts/AuthContext';
 import { getAllPurchaseOrders } from '../../services/purchaseOrders';
 import { db } from '../../services/firebase/config';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, updateDoc, runTransaction, doc, serverTimestamp } from 'firebase/firestore';
 import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 import { getUsersDisplayNames } from '../../services/userService';
 import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '../../utils/calculations';
@@ -328,17 +328,47 @@ const verifyProductionTasks = async (orderToVerify) => {
         }
       }
       
-      // Zapisz zaktualizowane dane zadań do zamówienia w bazie
+      // Zapisz TYLKO productionTasks + pola produkcyjne w items.
+      // Użyj transakcji, aby atomowo odczytać najświeższe items i nadpisać
+      // jedynie pola produkcyjne — bez ryzyka nadpisania shippedQuantity/cmrHistory
+      // ustawionych równocześnie przez cloud functions (onCmrStatusUpdate).
       if (orderToVerify.id && verifiedTasks.length > 0) {
         try {
-          const { updateOrder } = await import('../../services/orders');
-          const updatedOrderData = {
-            ...orderToVerify,
-            productionTasks: verifiedTasks,
-            updatedAt: new Date().toISOString()
-          };
-          
-          await updateOrder(orderToVerify.id, updatedOrderData, 'system');
+          const orderRef = doc(db, 'orders', orderToVerify.id);
+          const productionFields = [
+            'productionTaskId', 'productionTaskNumber', 'productionStatus',
+            'productionCost', 'fullProductionCost', 'productionUnitCost',
+            'fullProductionUnitCost', 'factoryCostIncluded'
+          ];
+
+          const mergedItems = await runTransaction(db, async (transaction) => {
+            const latestSnap = await transaction.get(orderRef);
+            const latestItems = latestSnap.data()?.items || [];
+
+            const merged = latestItems.map((latestItem, index) => {
+              const verifiedItem = orderToVerify.items?.[index];
+              if (!verifiedItem) return latestItem;
+              const updates = {};
+              for (const field of productionFields) {
+                if (verifiedItem[field] !== undefined) {
+                  updates[field] = verifiedItem[field];
+                } else if (verifiedItem[field] === null) {
+                  updates[field] = null;
+                }
+              }
+              return { ...latestItem, ...updates };
+            });
+
+            transaction.update(orderRef, {
+              productionTasks: verifiedTasks,
+              items: merged,
+              updatedAt: serverTimestamp()
+            });
+
+            return merged;
+          });
+
+          orderToVerify.items = mergedItems;
         } catch (error) {
           console.error('Błąd podczas zapisywania zaktualizowanych zadań:', error);
         }
@@ -717,22 +747,19 @@ const OrderDetails = () => {
   }, [order, loadInvoices, loadCmrDocuments]);
 
   // Funkcja do ręcznego odświeżania danych zamówienia
-  const refreshOrderData = async (retries = 3, delay = 1000) => {
+  const refreshOrderData = async (retries = 3, delay = 1000, { forceServer = false } = {}) => {
     try {
       setLoading(true);
       
-      // Sprawdź, czy jesteśmy na właściwej trasie dla zamówień klientów
       if (location.pathname.includes('/purchase-orders/')) {
         setLoading(false);
         return;
       }
       
-      // 🗑️ Wyczyść cache dla tego zamówienia przed odświeżeniem
       invalidateCache(orderId);
       
-      const freshOrder = await getOrderById(orderId);
+      const freshOrder = await getOrderById(orderId, { forceServer });
       
-      // Zweryfikuj, czy powiązane zadania produkcyjne istnieją
       const { order: verifiedOrder, removedCount } = await verifyProductionTasks(freshOrder);
       
       if (removedCount > 0) {
@@ -1064,17 +1091,14 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     try {
       setIsRefreshingCmr(true);
 
-      // Wywołaj Cloud Function przez serwis (z prawidłowym regionem europe-central2)
       const result = await recalculateShippedQuantities(order.id);
 
       if (result.success) {
         showSuccess(result.message);
 
-        // Odśwież dane zamówienia i wyczyść cache
         invalidateCache(order.id);
-        await refreshOrderData();
+        await refreshOrderData(3, 1000, { forceServer: true });
 
-        // Odśwież też dokumenty CMR
         invalidateCache(`orderCmr_${order.id}`);
         setCmrDocuments([]);
         setLoadingCmrDocuments(false);
@@ -1083,7 +1107,6 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
         throw new Error('Nie udało się przeliczyć ilości wysłanych');
       }
     } catch (error) {
-      console.error('❌ Błąd podczas przeliczania ilości wysłanych:', error);
       showError(`Nie udało się przeliczyć ilości wysłanych: ${error.message}`);
     } finally {
       setIsRefreshingCmr(false);

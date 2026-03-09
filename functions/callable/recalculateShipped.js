@@ -57,7 +57,7 @@ const recalculateShippedQuantities = onCall(
 
         // Przefiltruj tylko CMR w odpowiednich statusach
         const filteredCmrs = allCmrDocs.filter((cmr) =>
-          ["W transporcie", "Dostarczone", "Zakończone"].includes(cmr.status),
+          ["W transporcie", "Dostarczone", "Zakończony"].includes(cmr.status),
         );
 
         // Pobierz pozycje dla każdego CMR z kolekcji cmrItems

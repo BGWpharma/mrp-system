@@ -266,18 +266,16 @@ const OrdersList = () => {
         setLoading(true);
       }
       
-      const paginationFilters = {
-        ...state.filters,
-        searchTerm: state.debouncedSearchTerm,
-        showArchived: showArchived
-      };
-      
       const result = await getOrdersOptimized({
         page: state.page,
         pageSize: state.rowsPerPage,
+        searchTerm: state.debouncedSearchTerm,
         sortField: state.orderBy,
         sortOrder: state.orderDirection,
-        filters: paginationFilters
+        filters: {
+          ...state.filters,
+          showArchived: showArchived
+        }
       });
       
       const calculateItemTotalValue = (item) => {

@@ -3,7 +3,8 @@ import {
   doc, 
   addDoc, 
   updateDoc, 
-  getDoc, 
+  getDoc,
+  getDocFromServer, 
   getDocs, 
   deleteDoc, 
   query, 
@@ -293,10 +294,12 @@ export const getOrdersByDateRange = async (startDate, endDate, limitCount = 500,
 /**
  * Pobiera zamówienie po ID
  */
-export const getOrderById = async (id) => {
+export const getOrderById = async (id, { forceServer = false } = {}) => {
   try {
     const orderRef = doc(db, ORDERS_COLLECTION, id);
-    const orderDoc = await getDoc(orderRef);
+    const orderDoc = forceServer 
+      ? await getDocFromServer(orderRef) 
+      : await getDoc(orderRef);
     
     if (!orderDoc.exists()) {
       throw new Error('Zamówienie nie istnieje');
