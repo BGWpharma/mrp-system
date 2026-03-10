@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Typography, Box, Paper, CircularProgress } from '@mui/material';
+import { Typography } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNotification } from '../../../hooks/useNotification';
+import { logger } from '../../../utils/logger';
+import FormPageLayout from '../../../components/common/FormPageLayout';
 import CmrForm from './CmrForm';
 import { getCmrDocumentById, updateCmrDocument } from '../../../services/logistics';
 
@@ -35,9 +37,8 @@ const CmrEditPage = () => {
   
   const handleSubmit = async (formData) => {
     try {
-      console.log('CmrEditPage - Aktualizacja dokumentu CMR z danymi:', formData);
+      logger.log('CmrEditPage - Aktualizacja dokumentu CMR z danymi:', formData);
       
-      // Upewnij się, że wszystkie pola są określone
       const dataToSave = {
         ...formData,
         specialAgreements: formData.specialAgreements || '',
@@ -45,9 +46,9 @@ const CmrEditPage = () => {
         notes: formData.notes || ''
       };
       
-      console.log('CmrEditPage - Wywołuję updateCmrDocument z danymi:', dataToSave);
+      logger.log('CmrEditPage - Wywołuję updateCmrDocument z danymi:', dataToSave);
       const result = await updateCmrDocument(id, dataToSave, currentUser.uid);
-      console.log('CmrEditPage - Wynik updateCmrDocument:', result);
+      logger.log('CmrEditPage - Wynik updateCmrDocument:', result);
       
       showSuccess('Dokument CMR został zaktualizowany pomyślnie');
       navigate(`/inventory/cmr/${id}`);
@@ -61,34 +62,28 @@ const CmrEditPage = () => {
     navigate(`/inventory/cmr/${id}`);
   };
   
-  if (loading) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-          <CircularProgress />
-        </Box>
-      </Container>
-    );
-  }
-  
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h5">Edycja dokumentu CMR</Typography>
-        <Typography variant="subtitle1" color="text.secondary">
-          {cmrData?.cmrNumber}
-        </Typography>
-      </Box>
-      <Paper sx={{ p: 3 }}>
-        <CmrForm 
-          onSubmit={handleSubmit} 
-          onCancel={handleCancel} 
-          initialData={cmrData} 
-          isEdit={true} 
-        />
-      </Paper>
-    </Container>
+    <FormPageLayout 
+      title={
+        <>
+          Edycja dokumentu CMR
+          {cmrData?.cmrNumber && (
+            <Typography variant="subtitle1" color="text.secondary" component="span" sx={{ ml: 2 }}>
+              {cmrData.cmrNumber}
+            </Typography>
+          )}
+        </>
+      }
+      loading={loading}
+    >
+      <CmrForm 
+        onSubmit={handleSubmit} 
+        onCancel={handleCancel} 
+        initialData={cmrData} 
+        isEdit={true} 
+      />
+    </FormPageLayout>
   );
 };
 
-export default CmrEditPage; 
+export default CmrEditPage;

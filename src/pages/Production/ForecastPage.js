@@ -84,14 +84,13 @@ import { formatCurrency } from '../../utils/formatting';
 import { formatDateTime } from '../../utils/formatting';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import SaveAltIcon from '@mui/icons-material/SaveAlt';
-import { toast } from 'react-hot-toast';
 import { createProcurementForecast, generateForecastReport } from '../../services/purchaseOrders';
 
 const ForecastPage = () => {
   const { t } = useTranslation('production');
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showWarning } = useNotification();
   
   const [loading, setLoading] = useState(false);
   const [forecastData, setForecastData] = useState([]);
@@ -234,7 +233,7 @@ const ForecastPage = () => {
         console.log('Brak zadań w wybranym zakresie dat');
         setForecastData([]);
         setCalculatingForecast(false);
-        toast.warning('Brak zadań w wybranym zakresie dat. Wybierz inny zakres.');
+        showWarning('Brak zadań w wybranym zakresie dat. Wybierz inny zakres.');
         return;
       }
       

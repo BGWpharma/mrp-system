@@ -61,5 +61,7 @@ export {
   generateDeliveryNoteNumber,
   generateDeliveryNoteText,
   generateDeliveryNoteMetadata,
-  generateDeliveryNotePdf
+  generateDeliveryNotePdf,
+  generateAllDeliveryNoteData,
+  buildAttachedDocumentsWithDN
 } from './deliveryNoteService';

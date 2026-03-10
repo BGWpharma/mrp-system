@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -357,7 +357,7 @@ const InvoiceForm = ({ invoiceId }) => {
   };
 
 
-  const handleChange = (e) => {
+  const handleChange = useCallback((e) => {
     const { name, value, checked, type } = e.target;
     
     if (name === 'settledAdvancePayments') {
@@ -408,17 +408,17 @@ const InvoiceForm = ({ invoiceId }) => {
         [name]: value
       }));
     }
-  };
+  }, [availableProformas, setAvailableProformaAmount]);
 
-  const handleDateChange = (name, value) => {
+  const handleDateChange = useCallback((name, value) => {
     setInvoice(prev => ({
       ...prev,
       [name]: value ? formatDateForInput(value) : null
     }));
-  };
+  }, []);
 
 
-  const handleCustomerSelect = (customerId) => {
+  const handleCustomerSelect = useCallback((customerId) => {
     setSelectedCustomerId(null);
     setCustomerDialogOpen(false);
     
@@ -452,10 +452,10 @@ const InvoiceForm = ({ invoiceId }) => {
       // Zamówienia dla klienta są pobierane automatycznie przez useEffect
       // który reaguje na zmianę invoice.customer?.id
     }
-  };
+  }, [customers]);
 
   // Funkcja do odświeżania danych wybranego klienta
-  const refreshCustomerData = async () => {
+  const refreshCustomerData = useCallback(async () => {
     if (!invoice.customer?.id) {
       showError('Nie wybrano klienta do odświeżenia');
       return;
@@ -496,7 +496,7 @@ const InvoiceForm = ({ invoiceId }) => {
     } finally {
       setRefreshingCustomer(false);
     }
-  };
+  }, [invoice.customer?.id, showError, showSuccess]);
 
   // Funkcja do automatycznego utworzenia faktury korygującej z przekierowania z CO
   const handleCorrectionInvoiceFromOrder = async (preselectedOrder) => {
@@ -635,7 +635,7 @@ const InvoiceForm = ({ invoiceId }) => {
     }
   };
 
-  const handleOrderSelect = async (orderId, orderType = 'customer') => {
+  const handleOrderSelect = useCallback(async (orderId, orderType = 'customer') => {
     if (!orderId) return;
     
     setSelectedOrderType(orderType);
@@ -859,9 +859,9 @@ const InvoiceForm = ({ invoiceId }) => {
       showError('Błąd podczas wczytywania danych zamówienia: ' + error.message);
       console.error('Error loading order data:', error);
     }
-  };
+  }, [orders, invoice.isRefInvoice, invoice.customer, selectedCustomerId, fetchRelatedInvoices, showError]);
 
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     // Sprawdź czy klient jest wybrany (wymagane dla wszystkich faktur)
     if (!invoice.customer?.id) {
       showError('Wybierz klienta dla faktury');
@@ -960,9 +960,9 @@ const InvoiceForm = ({ invoiceId }) => {
     }
     
     return true;
-  };
+  }, [invoice, selectedOrderId, availableProformas, availableProformaAmount, showError, t]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     
     if (!validateForm()) {
@@ -1095,7 +1095,7 @@ const InvoiceForm = ({ invoiceId }) => {
     } finally {
       setSaving(false);
     }
-  };
+  }, [validateForm, invoice, calculateTotalWithAdvancePayments, selectedOrder, selectedOrderId, selectedOrderType, currentUser, invoiceId, redirectToList, navigate, showSuccess, showError]);
 
   // Aktualizuj wartość całkowitą przy zmianie selectedOrder
   useEffect(() => {
@@ -1106,6 +1106,11 @@ const InvoiceForm = ({ invoiceId }) => {
       }));
     }
   }, [selectedOrder]);
+
+  const handleNavigateBack = useCallback(() => navigate('/invoices'), [navigate]);
+  const handleCloseCustomerDialog = useCallback(() => setCustomerDialogOpen(false), []);
+  const handleCloseOrderItemsDialog = useCallback(() => setOrderItemsDialogOpen(false), []);
+  const handleNavigateToCustomers = useCallback(() => navigate('/customers'), [navigate]);
 
   if (loading) {
     return (
@@ -1121,7 +1126,7 @@ const InvoiceForm = ({ invoiceId }) => {
         <Button
           variant="outlined"
           startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/invoices')}
+          onClick={handleNavigateBack}
         >
           {t('invoices.details.buttons.backToList')}
         </Button>
@@ -1243,19 +1248,19 @@ const InvoiceForm = ({ invoiceId }) => {
 
       <CustomerSelectionDialog
         open={customerDialogOpen}
-        onClose={() => setCustomerDialogOpen(false)}
+        onClose={handleCloseCustomerDialog}
         customers={customers}
         customersLoading={customersLoading}
         selectedCustomerId={selectedCustomerId}
         onSelectedCustomerChange={setSelectedCustomerId}
         onCustomerSelect={handleCustomerSelect}
-        onNavigateToCustomers={() => navigate('/customers')}
+        onNavigateToCustomers={handleNavigateToCustomers}
         t={t}
       />
 
       <OrderItemsSelectionDialog
         open={orderItemsDialogOpen}
-        onClose={() => setOrderItemsDialogOpen(false)}
+        onClose={handleCloseOrderItemsDialog}
         invoice={invoice}
         selectedOrder={selectedOrder}
         availableOrderItems={availableOrderItems}

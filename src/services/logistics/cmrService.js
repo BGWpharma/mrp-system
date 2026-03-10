@@ -25,6 +25,7 @@ import { format } from 'date-fns';
 import { updateOrderItemShippedQuantityPrecise } from '../orders';
 import { createRealtimeStatusChangeNotification } from '../notificationService';
 import { safeParseDate } from '../../utils/dateUtils';
+import { logger } from '../../utils/logger';
 
 
 // Kolekcje
@@ -105,7 +106,7 @@ export const getAllCmrDocuments = async () => {
           try {
             return new Date(field);
           } catch (e) {
-            console.warn('Nie można skonwertować pola na Date:', field);
+            logger.warn('Nie można skonwertować pola na Date:', field);
             return null;
           }
         }
@@ -246,12 +247,12 @@ export const createCmrDocument = async (cmrData, userId) => {
       try {
         const date = new Date(dateValue);
         if (isNaN(date.getTime())) {
-          console.warn('Nieprawidłowa data:', dateValue);
+          logger.warn('Nieprawidłowa data:', dateValue);
           return null;
         }
         return Timestamp.fromDate(date);
       } catch (e) {
-        console.warn('Błąd konwersji daty:', dateValue, e);
+        logger.warn('Błąd konwersji daty:', dateValue, e);
         return null;
       }
     };
@@ -267,7 +268,7 @@ export const createCmrDocument = async (cmrData, userId) => {
           customerAffix = order.customer.orderAffix;
         }
       } catch (error) {
-        console.warn('Nie udało się pobrać afiksu klienta z zamówienia:', error);
+        logger.warn('Nie udało się pobrać afiksu klienta z zamówienia:', error);
       }
     }
 
@@ -333,7 +334,7 @@ export const createCmrDocument = async (cmrData, userId) => {
     
     // USUNIĘTO: Automatyczne aktualizacje ilości przy tworzeniu CMR
     // Ilości są aktualizowane TYLKO przy zmianie statusu na "W transporcie"
-    console.log('📝 CMR utworzony - ilości wysłane będą zaktualizowane po zmianie statusu na "W transporcie"');
+    logger.log('📝 CMR utworzony - ilości wysłane będą zaktualizowane po zmianie statusu na "W transporcie"');
 
     const result = {
       id: cmrRef.id,
@@ -379,12 +380,12 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
       try {
         const date = new Date(dateValue);
         if (isNaN(date.getTime())) {
-          console.warn('Nieprawidłowa data:', dateValue);
+          logger.warn('Nieprawidłowa data:', dateValue);
           return null;
         }
         return Timestamp.fromDate(date);
       } catch (e) {
-        console.warn('Błąd konwersji daty:', dateValue, e);
+        logger.warn('Błąd konwersji daty:', dateValue, e);
         return null;
       }
     };
@@ -480,11 +481,11 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
 
       for (const settled of refreshResults) {
         if (settled.status === 'fulfilled' && settled.value.success) {
-          console.log(`✅ Odświeżono zamówienie ${settled.value.orderId}: ${settled.value.stats?.processedCMRs || 0} CMR, ${settled.value.stats?.shippedItems || 0} pozycji`);
+          logger.log(`✅ Odświeżono zamówienie ${settled.value.orderId}: ${settled.value.stats?.processedCMRs || 0} CMR, ${settled.value.stats?.shippedItems || 0} pozycji`);
         } else {
           const id = settled.status === 'fulfilled' ? settled.value.orderId : 'unknown';
           const err = settled.status === 'rejected' ? settled.reason : '';
-          console.warn(`⚠️ Nie udało się odświeżyć zamówienia ${id}`, err);
+          logger.warn(`⚠️ Nie udało się odświeżyć zamówienia ${id}`, err);
         }
       }
     }
@@ -501,15 +502,15 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
 // Usunięcie dokumentu CMR
 export const deleteCmrDocument = async (cmrId) => {
   try {
-    console.log(`🗑️ Rozpoczęcie usuwania CMR ${cmrId}...`);
+    logger.log(`🗑️ Rozpoczęcie usuwania CMR ${cmrId}...`);
     
     // KROK 1: Pobierz dane CMR przed usunięciem (dla anulowania ilości wysłanych)
     let cmrData = null;
     try {
       cmrData = await getCmrDocumentById(cmrId);
-      console.log(`📋 Pobrano dane CMR do usunięcia: ${cmrData.cmrNumber}`);
+      logger.log(`📋 Pobrano dane CMR do usunięcia: ${cmrData.cmrNumber}`);
     } catch (error) {
-      console.warn('Nie udało się pobrać danych CMR przed usunięciem:', error);
+      logger.warn('Nie udało się pobrać danych CMR przed usunięciem:', error);
     }
     
     // KROK 2: Anuluj ilości wysłane w powiązanych zamówieniach (jeśli CMR miał pozycje)
@@ -528,10 +529,10 @@ export const deleteCmrDocument = async (cmrId) => {
         }
         
         if (ordersToUpdate.length > 0) {
-          console.log(`🔄 Anulowanie ilości wysłanych w ${ordersToUpdate.length} zamówieniach przy usuwaniu CMR...`);
+          logger.log(`🔄 Anulowanie ilości wysłanych w ${ordersToUpdate.length} zamówieniach przy usuwaniu CMR...`);
           for (const orderId of ordersToUpdate) {
             await cancelLinkedOrderShippedQuantities(orderId, cmrData.items, cmrData.cmrNumber, 'system');
-            console.log(`✅ Anulowano ilości wysłane w zamówieniu ${orderId} na podstawie usuniętego CMR ${cmrData.cmrNumber}`);
+            logger.log(`✅ Anulowano ilości wysłane w zamówieniu ${orderId} na podstawie usuniętego CMR ${cmrData.cmrNumber}`);
           }
         }
       } catch (orderUpdateError) {
@@ -543,9 +544,9 @@ export const deleteCmrDocument = async (cmrId) => {
     // KROK 3: Anuluj rezerwacje magazynowe (jeśli CMR był w transporcie)
     if (cmrData && cmrData.status === CMR_STATUSES.IN_TRANSIT) {
       try {
-        console.log('🔓 Anulowanie rezerwacji magazynowych dla usuwanego CMR w transporcie...');
+        logger.log('🔓 Anulowanie rezerwacji magazynowych dla usuwanego CMR w transporcie...');
         const cancellationResult = await cancelCmrReservations(cmrId, 'system');
-        console.log('✅ Rezerwacje magazynowe anulowane:', cancellationResult);
+        logger.log('✅ Rezerwacje magazynowe anulowane:', cancellationResult);
       } catch (reservationError) {
         console.error('❌ Błąd podczas anulowania rezerwacji magazynowych przy usuwaniu CMR:', reservationError);
       }
@@ -556,23 +557,23 @@ export const deleteCmrDocument = async (cmrId) => {
     const q = query(itemsRef, where('cmrId', '==', cmrId));
     const itemsSnapshot = await getDocs(q);
     
-    console.log(`🗑️ Usuwanie ${itemsSnapshot.docs.length} pozycji CMR...`);
+    logger.log(`🗑️ Usuwanie ${itemsSnapshot.docs.length} pozycji CMR...`);
     const deletePromises = itemsSnapshot.docs.map(doc => deleteDoc(doc.ref));
     await Promise.all(deletePromises);
     
     // KROK 5: Usuń dokument CMR
     const cmrRef = doc(db, CMR_COLLECTION, cmrId);
     await deleteDoc(cmrRef);
-    console.log(`✅ Usunięto dokument CMR ${cmrId}`);
+    logger.log(`✅ Usunięto dokument CMR ${cmrId}`);
     
     // KROK 6: Wyczyść cache CMR i usuń dokument z cache
-    console.log('🧹 Czyszczenie cache CMR po usunięciu...');
+    logger.log('🧹 Czyszczenie cache CMR po usunięciu...');
     removeCmrDocumentFromCache(cmrId);
     
     // Opcjonalnie: wyczyść cały cache jeśli usuwanie jednego dokumentu nie wystarczy
     // clearCmrDocumentsCache();
     
-    console.log(`✅ CMR ${cmrId} został całkowicie usunięty i wyczyszczony z cache`);
+    logger.log(`✅ CMR ${cmrId} został całkowicie usunięty i wyczyszczony z cache`);
     return { success: true, cmrId: cmrId, cmrNumber: cmrData?.cmrNumber || 'UNKNOWN' };
   } catch (error) {
     console.error('❌ Błąd podczas usuwania dokumentu CMR:', error);
@@ -642,12 +643,12 @@ const validateCmrBatches = async (cmrId) => {
             const liveBatch = await getBatchById(batch.id);
             if (liveBatch) {
               liveQuantity = parseFloat(liveBatch.quantity) || 0;
-              console.log(`🔍 [VALIDATE] Partia ${batch.batchNumber || batch.lotNumber}: snapshot=${batch.quantity}, aktualna z bazy=${liveQuantity}`);
+              logger.log(`🔍 [VALIDATE] Partia ${batch.batchNumber || batch.lotNumber}: snapshot=${batch.quantity}, aktualna z bazy=${liveQuantity}`);
             } else {
-              console.warn(`⚠️ [VALIDATE] Partia ${batch.id} (${batch.batchNumber}) nie istnieje w bazie - używam snapshotu (${batch.quantity})`);
+              logger.warn(`⚠️ [VALIDATE] Partia ${batch.id} (${batch.batchNumber}) nie istnieje w bazie - używam snapshotu (${batch.quantity})`);
             }
           } catch (fetchError) {
-            console.warn(`⚠️ [VALIDATE] Nie udało się pobrać aktualnych danych partii ${batch.batchNumber}:`, fetchError.message);
+            logger.warn(`⚠️ [VALIDATE] Nie udało się pobrać aktualnych danych partii ${batch.batchNumber}:`, fetchError.message);
             // Fallback na snapshot z CMR
           }
         }
@@ -692,7 +693,7 @@ const validateCmrBatches = async (cmrId) => {
       // WALIDACJA 5: Opcjonalne ostrzeżenie o nadmiarze (nie blokuje operacji)
       if (totalBatchQuantity > cmrQuantity) {
         const surplus = totalBatchQuantity - cmrQuantity;
-        console.warn(`⚠️ Pozycja "${itemDescription}" ma nadmiar w partiach: +${surplus} ${item.unit || 'szt'} (CMR: ${cmrQuantity}, partie: ${totalBatchQuantity})`);
+        logger.warn(`⚠️ Pozycja "${itemDescription}" ma nadmiar w partiach: +${surplus} ${item.unit || 'szt'} (CMR: ${cmrQuantity}, partie: ${totalBatchQuantity})`);
       }
     }
     
@@ -784,14 +785,14 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
     // Walidacja partii przy przejściu ze statusu "Szkic" lub "Wystawiony" na "W transporcie"
     if (newStatus === CMR_STATUSES.IN_TRANSIT && 
         (currentStatus === CMR_STATUSES.DRAFT || currentStatus === CMR_STATUSES.ISSUED)) {
-      console.log('Walidacja partii przed rozpoczęciem transportu...');
+      logger.log('Walidacja partii przed rozpoczęciem transportu...');
       const validationResult = await validateCmrBatches(cmrId);
       
       if (!validationResult.isValid) {
         throw new Error(`Nie można rozpocząć transportu: ${validationResult.message}`);
       }
       
-      console.log('Walidacja partii zakończona pomyślnie');
+      logger.log('Walidacja partii zakończona pomyślnie');
     }
     
     let reservationResult = null;
@@ -799,10 +800,10 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
     
     // Jeśli przechodzi na status "W transporcie", zarezerwuj partie magazynowe
     if (newStatus === CMR_STATUSES.IN_TRANSIT) {
-      console.log('Rozpoczynanie transportu - rezerwacja partii magazynowych...');
+      logger.log('Rozpoczynanie transportu - rezerwacja partii magazynowych...');
       try {
         reservationResult = await reserveBatchesForCmr(cmrId, userId);
-        console.log('Rezultat rezerwacji partii:', reservationResult);
+        logger.log('Rezultat rezerwacji partii:', reservationResult);
       } catch (reservationError) {
         console.error('Błąd podczas rezerwacji partii:', reservationError);
         // Nie przerywamy procesu zmiany statusu - tylko logujemy błąd
@@ -832,10 +833,10 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
           if (ordersToUpdate.length > 0) {
             // WYŁĄCZONE - Cloud Function onCmrStatusUpdate automatycznie aktualizuje ilości wysłane
             // Dzięki temu unikamy podwójnych aktualizacji i problemów z wyścigami
-            console.log('ℹ️ Cloud Function onCmrStatusUpdate zajmie się aktualizacją ilości wysłanych dla zamówień:', ordersToUpdate);
+            logger.log('ℹ️ Cloud Function onCmrStatusUpdate zajmie się aktualizacją ilości wysłanych dla zamówień:', ordersToUpdate);
             
             // Dodaj usługi transportowe na podstawie palet (to nadal robimy po stronie klienta)
-            console.log('🚚 Dodawanie usług transportowych na podstawie palet z CMR...');
+            logger.log('🚚 Dodawanie usług transportowych na podstawie palet z CMR...');
             try {
               const transportResult = await addTransportServicesToOrders(
                 cmrId,
@@ -843,25 +844,25 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
                 ordersToUpdate,
                 userId
               );
-              console.log('✅ Rezultat dodawania usług transportowych:', transportResult);
+              logger.log('✅ Rezultat dodawania usług transportowych:', transportResult);
               
               if (transportResult.success && transportResult.results) {
                 const successfulUpdates = transportResult.results.filter(r => r.success);
                 const failedUpdates = transportResult.results.filter(r => !r.success);
                 
                 if (successfulUpdates.length > 0) {
-                  console.log(`✅ Pomyślnie dodano usługi transportowe do ${successfulUpdates.length} zamówień`);
+                  logger.log(`✅ Pomyślnie dodano usługi transportowe do ${successfulUpdates.length} zamówień`);
                   successfulUpdates.forEach(result => {
                     if (result.palletsCount > 0) {
-                      console.log(`   📦 ${result.orderNumber}: ${result.palletsCount} palet, wartość: ${result.totalServiceValue}`);
+                      logger.log(`   📦 ${result.orderNumber}: ${result.palletsCount} palet, wartość: ${result.totalServiceValue}`);
                     }
                   });
                 }
                 
                 if (failedUpdates.length > 0) {
-                  console.warn(`⚠️ Nie udało się dodać usług transportowych do ${failedUpdates.length} zamówień`);
+                  logger.warn(`⚠️ Nie udało się dodać usług transportowych do ${failedUpdates.length} zamówień`);
                   failedUpdates.forEach(result => {
-                    console.warn(`   ❌ ${result.orderNumber || result.orderId}: ${result.message}`);
+                    logger.warn(`   ❌ ${result.orderNumber || result.orderId}: ${result.message}`);
                   });
                 }
               }
@@ -879,7 +880,7 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
     
     // Jeśli cofamy ze statusu "W transporcie" na inny status, anuluj ilości wysłane
     if (currentStatus === CMR_STATUSES.IN_TRANSIT && newStatus !== CMR_STATUSES.IN_TRANSIT && newStatus !== CMR_STATUSES.DELIVERED) {
-      console.log('Cofanie ze statusu "W transporcie" - anulowanie ilości wysłanych...');
+      logger.log('Cofanie ze statusu "W transporcie" - anulowanie ilości wysłanych...');
       try {
         const cmrData = await getCmrDocumentById(cmrId);
         if (cmrData.items && cmrData.items.length > 0) {
@@ -896,10 +897,10 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
           }
           
           if (ordersToUpdate.length > 0) {
-            console.log('Anulowanie ilości wysłanych w zamówieniach przy cofnięciu ze statusu "W transporcie"...');
+            logger.log('Anulowanie ilości wysłanych w zamówieniach przy cofnięciu ze statusu "W transporcie"...');
             for (const orderId of ordersToUpdate) {
               await cancelLinkedOrderShippedQuantities(orderId, cmrData.items, cmrData.cmrNumber, userId);
-              console.log(`Anulowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrData.cmrNumber}`);
+              logger.log(`Anulowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrData.cmrNumber}`);
             }
           }
         }
@@ -913,10 +914,10 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
     if (newStatus === CMR_STATUSES.CANCELED) {
       // Anuluj rezerwacje tylko jeśli CMR był w statusie "W transporcie" (czyli miał aktywne rezerwacje)
       if (currentStatus === CMR_STATUSES.IN_TRANSIT) {
-        console.log('Anulowanie CMR z statusu "W transporcie" - zwalnianie rezerwacji magazynowych...');
+        logger.log('Anulowanie CMR z statusu "W transporcie" - zwalnianie rezerwacji magazynowych...');
         try {
           const cancellationResult = await cancelCmrReservations(cmrId, userId);
-          console.log('Rezultat anulowania rezerwacji:', cancellationResult);
+          logger.log('Rezultat anulowania rezerwacji:', cancellationResult);
           
           // Dodaj informacje o anulowaniu do rezultatu
           deliveryResult = {
@@ -935,7 +936,7 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
           };
         }
       } else {
-        console.log(`Anulowanie CMR z statusu "${currentStatus}" - brak aktywnych rezerwacji do anulowania`);
+        logger.log(`Anulowanie CMR z statusu "${currentStatus}" - brak aktywnych rezerwacji do anulowania`);
         deliveryResult = {
           success: true,
           message: `CMR anulowany z statusu "${currentStatus}" - brak rezerwacji do zwolnienia`
@@ -944,19 +945,19 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
     }
 
     // Jeśli przechodzi na status "Dostarczone", anuluj rezerwacje i wydaj produkty
-    console.log('🔍 [DEBUG-DELIVERY] === ZMIANA STATUSU CMR ===');
-    console.log('🔍 [DEBUG-DELIVERY] cmrId:', cmrId);
-    console.log('🔍 [DEBUG-DELIVERY] currentStatus:', currentStatus);
-    console.log('🔍 [DEBUG-DELIVERY] newStatus:', newStatus);
-    console.log('🔍 [DEBUG-DELIVERY] CMR_STATUSES.DELIVERED:', CMR_STATUSES.DELIVERED);
-    console.log('🔍 [DEBUG-DELIVERY] newStatus === DELIVERED?', newStatus === CMR_STATUSES.DELIVERED);
-    console.log('🔍 [DEBUG-DELIVERY] typeof newStatus:', typeof newStatus);
-    console.log('🔍 [DEBUG-DELIVERY] typeof DELIVERED:', typeof CMR_STATUSES.DELIVERED);
+    logger.log('🔍 [DEBUG-DELIVERY] === ZMIANA STATUSU CMR ===');
+    logger.log('🔍 [DEBUG-DELIVERY] cmrId:', cmrId);
+    logger.log('🔍 [DEBUG-DELIVERY] currentStatus:', currentStatus);
+    logger.log('🔍 [DEBUG-DELIVERY] newStatus:', newStatus);
+    logger.log('🔍 [DEBUG-DELIVERY] CMR_STATUSES.DELIVERED:', CMR_STATUSES.DELIVERED);
+    logger.log('🔍 [DEBUG-DELIVERY] newStatus === DELIVERED?', newStatus === CMR_STATUSES.DELIVERED);
+    logger.log('🔍 [DEBUG-DELIVERY] typeof newStatus:', typeof newStatus);
+    logger.log('🔍 [DEBUG-DELIVERY] typeof DELIVERED:', typeof CMR_STATUSES.DELIVERED);
     if (newStatus === CMR_STATUSES.DELIVERED) {
-      console.log('Dostarczenie CMR - usuwanie rezerwacji i wydanie produktów...');
+      logger.log('Dostarczenie CMR - usuwanie rezerwacji i wydanie produktów...');
       try {
         deliveryResult = await processCmrDelivery(cmrId, userId);
-        console.log('Rezultat dostarczenia:', deliveryResult);
+        logger.log('Rezultat dostarczenia:', deliveryResult);
       } catch (deliveryError) {
         console.error('Błąd podczas przetwarzania dostarczenia:', deliveryError);
         // Nie przerywamy procesu zmiany statusu - tylko logujemy błąd
@@ -970,10 +971,10 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
     
     // Jeśli przechodzi na status "Zakończone", usuń rezerwacje (jak deleteTask)
     if (newStatus === CMR_STATUSES.COMPLETED) {
-      console.log('Zakończenie CMR - usuwanie rezerwacji...');
+      logger.log('Zakończenie CMR - usuwanie rezerwacji...');
       try {
         deliveryResult = await cancelCmrReservations(cmrId, userId);
-        console.log('Rezultat zakończenia:', deliveryResult);
+        logger.log('Rezultat zakończenia:', deliveryResult);
       } catch (completionError) {
         console.error('Błąd podczas zakończenia CMR:', completionError);
         // Nie przerywamy procesu zmiany statusu - tylko logujemy błąd
@@ -1002,7 +1003,7 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
         userIds.push(cmrData.createdBy);
       }
       
-      console.log('Tworzenie powiadomienia o zmianie statusu CMR...');
+      logger.log('Tworzenie powiadomienia o zmianie statusu CMR...');
       await createRealtimeStatusChangeNotification(
         userIds,
         'cmr',
@@ -1012,7 +1013,7 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
         newStatus,
         userId
       );
-      console.log(`Utworzono powiadomienie o zmianie statusu CMR ${cmrData.cmrNumber} z "${currentStatus}" na "${newStatus}"`);
+      logger.log(`Utworzono powiadomienie o zmianie statusu CMR ${cmrData.cmrNumber} z "${currentStatus}" na "${newStatus}"`);
     } catch (notificationError) {
       console.error('Błąd podczas tworzenia powiadomienia o zmianie statusu CMR:', notificationError);
       // Nie przerywamy procesu zmiany statusu - tylko logujemy błąd
@@ -1057,7 +1058,7 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
     const cmrData = await getCmrDocumentById(cmrId);
     
     if (!cmrData || !cmrData.items || cmrData.items.length === 0) {
-      console.log('Brak elementów w dokumencie CMR do rezerwacji');
+      logger.log('Brak elementów w dokumencie CMR do rezerwacji');
       return { success: true, message: 'Brak elementów do rezerwacji' };
     }
     
@@ -1069,7 +1070,7 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
     // Dla każdego elementu CMR z powiązanymi partiami
     for (const item of cmrData.items) {
       if (!item.linkedBatches || item.linkedBatches.length === 0) {
-        console.log(`Element "${item.description}" nie ma powiązanych partii - pomijam`);
+        logger.log(`Element "${item.description}" nie ma powiązanych partii - pomijam`);
         continue;
       }
       
@@ -1077,7 +1078,7 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
       const cmrItemQuantity = parseFloat(item.quantity) || 0;
       
       if (cmrItemQuantity <= 0) {
-        console.log(`Element "${item.description}" ma zerową ilość - pomijam`);
+        logger.log(`Element "${item.description}" ma zerową ilość - pomijam`);
         continue;
       }
       
@@ -1092,10 +1093,10 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
             const liveBatch = await getBatchById(linkedBatch.id);
             if (liveBatch) {
               liveQuantity = parseFloat(liveBatch.quantity) || 0;
-              console.log(`🔍 [RESERVE] Partia ${linkedBatch.batchNumber}: snapshot=${linkedBatch.quantity}, aktualna z bazy=${liveQuantity}`);
+              logger.log(`🔍 [RESERVE] Partia ${linkedBatch.batchNumber}: snapshot=${linkedBatch.quantity}, aktualna z bazy=${liveQuantity}`);
             }
           } catch (fetchError) {
-            console.warn(`⚠️ [RESERVE] Nie udało się pobrać aktualnych danych partii ${linkedBatch.batchNumber}:`, fetchError.message);
+            logger.warn(`⚠️ [RESERVE] Nie udało się pobrać aktualnych danych partii ${linkedBatch.batchNumber}:`, fetchError.message);
           }
         }
         liveBatchQuantities.set(linkedBatch.id || linkedBatch.batchNumber, liveQuantity);
@@ -1103,7 +1104,7 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
       }
       
       if (totalBatchQuantity <= 0) {
-        console.log(`Element "${item.description}" ma powiązane partie z zerową ilością (po sprawdzeniu bazy) - pomijam`);
+        logger.log(`Element "${item.description}" ma powiązane partie z zerową ilością (po sprawdzeniu bazy) - pomijam`);
         continue;
       }
       
@@ -1119,11 +1120,11 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
           const finalQuantityToReserve = item.linkedBatches.length === 1 ? cmrItemQuantity : quantityToReserve;
           
           if (finalQuantityToReserve <= 0) {
-            console.log(`Pomijam partię ${linkedBatch.batchNumber} - zerowa ilość do rezerwacji`);
+            logger.log(`Pomijam partię ${linkedBatch.batchNumber} - zerowa ilość do rezerwacji`);
             continue;
           }
           
-          console.log(`Rezerwowanie partii ${linkedBatch.batchNumber} - ${finalQuantityToReserve} ${linkedBatch.unit} z pozycji CMR (${cmrItemQuantity} ${item.unit}) dla CMR ${cmrData.cmrNumber}`);
+          logger.log(`Rezerwowanie partii ${linkedBatch.batchNumber} - ${finalQuantityToReserve} ${linkedBatch.unit} z pozycji CMR (${cmrItemQuantity} ${item.unit}) dla CMR ${cmrData.cmrNumber}`);
           
           // Użyj funkcji bookInventoryForTask z określoną partią
           // Tworzymy specjalny identyfikator zadania dla CMR
@@ -1150,7 +1151,7 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
             result: reservationResult
           });
           
-          console.log(`Pomyślnie zarezerwowano ${finalQuantityToReserve} ${linkedBatch.unit} z partii ${linkedBatch.batchNumber}`);
+          logger.log(`Pomyślnie zarezerwowano ${finalQuantityToReserve} ${linkedBatch.unit} z partii ${linkedBatch.batchNumber}`);
           
         } catch (error) {
           console.error(`Błąd podczas rezerwacji partii ${linkedBatch.batchNumber}:`, error);
@@ -1196,22 +1197,22 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
 // Funkcja do przetwarzania dostarczenia CMR - usuwa rezerwacje i wydaje produkty (jak deleteTask)
 export const processCmrDelivery = async (cmrId, userId) => {
   try {
-    console.log(`Rozpoczynanie procesu dostarczenia CMR ${cmrId}...`);
+    logger.log(`Rozpoczynanie procesu dostarczenia CMR ${cmrId}...`);
     
     // Pobierz dane dokumentu CMR z elementami
     const cmrData = await getCmrDocumentById(cmrId);
     
-    console.log('🔍 [DEBUG-DELIVERY] === PROCESS CMR DELIVERY START ===');
-    console.log('🔍 [DEBUG-DELIVERY] cmrId:', cmrId);
-    console.log('🔍 [DEBUG-DELIVERY] cmrData exists?', !!cmrData);
-    console.log('🔍 [DEBUG-DELIVERY] cmrData.items?', !!cmrData?.items);
-    console.log('🔍 [DEBUG-DELIVERY] cmrData.items.length:', cmrData?.items?.length);
-    console.log('🔍 [DEBUG-DELIVERY] cmrData.cmrNumber:', cmrData?.cmrNumber);
-    console.log('🔍 [DEBUG-DELIVERY] cmrData.status:', cmrData?.status);
+    logger.log('🔍 [DEBUG-DELIVERY] === PROCESS CMR DELIVERY START ===');
+    logger.log('🔍 [DEBUG-DELIVERY] cmrId:', cmrId);
+    logger.log('🔍 [DEBUG-DELIVERY] cmrData exists?', !!cmrData);
+    logger.log('🔍 [DEBUG-DELIVERY] cmrData.items?', !!cmrData?.items);
+    logger.log('🔍 [DEBUG-DELIVERY] cmrData.items.length:', cmrData?.items?.length);
+    logger.log('🔍 [DEBUG-DELIVERY] cmrData.cmrNumber:', cmrData?.cmrNumber);
+    logger.log('🔍 [DEBUG-DELIVERY] cmrData.status:', cmrData?.status);
     
     if (cmrData?.items) {
       cmrData.items.forEach((item, idx) => {
-        console.log(`🔍 [DEBUG-DELIVERY] Item[${idx}]:`, {
+        logger.log(`🔍 [DEBUG-DELIVERY] Item[${idx}]:`, {
           description: item.description,
           quantity: item.quantity,
           unit: item.unit,
@@ -1230,8 +1231,8 @@ export const processCmrDelivery = async (cmrId, userId) => {
     }
     
     if (!cmrData || !cmrData.items || cmrData.items.length === 0) {
-      console.log('🔍 [DEBUG-DELIVERY] ❌ EARLY RETURN - brak danych/elementów CMR');
-      console.log('Brak elementów w dokumencie CMR do przetworzenia');
+      logger.log('🔍 [DEBUG-DELIVERY] ❌ EARLY RETURN - brak danych/elementów CMR');
+      logger.log('Brak elementów w dokumencie CMR do przetworzenia');
       return { success: true, message: 'Brak elementów do przetworzenia' };
     }
     
@@ -1242,15 +1243,15 @@ export const processCmrDelivery = async (cmrId, userId) => {
     // Identyfikator zadania CMR używany do rezerwacji
     const cmrTaskId = `CMR-${cmrData.cmrNumber}-${cmrId}`;
     
-    console.log(`Przetwarzanie dostarczenia dla taskId: ${cmrTaskId}`);
-    console.log('🔍 [DEBUG-DELIVERY] cmrTaskId:', cmrTaskId);
+    logger.log(`Przetwarzanie dostarczenia dla taskId: ${cmrTaskId}`);
+    logger.log('🔍 [DEBUG-DELIVERY] cmrTaskId:', cmrTaskId);
     
     // Usuń wszystkie rezerwacje związane z tym CMR (jak w deleteTask)
     try {
-      console.log('🔍 [DEBUG-DELIVERY] Wywołuję cleanupTaskReservations...');
-      console.log(`Usuwanie wszystkich rezerwacji dla CMR ${cmrTaskId} przy dostarczeniu...`);
+      logger.log('🔍 [DEBUG-DELIVERY] Wywołuję cleanupTaskReservations...');
+      logger.log(`Usuwanie wszystkich rezerwacji dla CMR ${cmrTaskId} przy dostarczeniu...`);
       const cleanupResult = await cleanupTaskReservations(cmrTaskId);
-      console.log(`Usunięto wszystkie rezerwacje związane z CMR ${cmrTaskId}:`, cleanupResult);
+      logger.log(`Usunięto wszystkie rezerwacje związane z CMR ${cmrTaskId}:`, cleanupResult);
     } catch (error) {
       console.error(`Błąd podczas usuwania rezerwacji dla CMR ${cmrTaskId}:`, error);
       errors.push({
@@ -1266,7 +1267,7 @@ export const processCmrDelivery = async (cmrId, userId) => {
     
     for (const item of cmrData.items) {
       if (!item.linkedBatches || item.linkedBatches.length === 0) {
-        console.log(`Element "${item.description}" nie ma powiązanych partii - pomijam`);
+        logger.log(`Element "${item.description}" nie ma powiązanych partii - pomijam`);
         continue;
       }
       
@@ -1274,7 +1275,7 @@ export const processCmrDelivery = async (cmrId, userId) => {
       const cmrItemQuantity = parseFloat(item.quantity) || 0;
       
       if (cmrItemQuantity <= 0) {
-        console.log(`Element "${item.description}" ma zerową ilość - pomijam`);
+        logger.log(`Element "${item.description}" ma zerową ilość - pomijam`);
         continue;
       }
       
@@ -1289,10 +1290,10 @@ export const processCmrDelivery = async (cmrId, userId) => {
             const liveBatch = await getBatchById(linkedBatch.id);
             if (liveBatch) {
               liveQuantity = parseFloat(liveBatch.quantity) || 0;
-              console.log(`🔍 [DELIVERY] Partia ${linkedBatch.batchNumber}: snapshot=${linkedBatch.quantity}, aktualna z bazy=${liveQuantity}`);
+              logger.log(`🔍 [DELIVERY] Partia ${linkedBatch.batchNumber}: snapshot=${linkedBatch.quantity}, aktualna z bazy=${liveQuantity}`);
             }
           } catch (fetchError) {
-            console.warn(`⚠️ [DELIVERY] Nie udało się pobrać aktualnych danych partii ${linkedBatch.batchNumber}:`, fetchError.message);
+            logger.warn(`⚠️ [DELIVERY] Nie udało się pobrać aktualnych danych partii ${linkedBatch.batchNumber}:`, fetchError.message);
           }
         }
         liveBatchQuantities.set(linkedBatch.id || linkedBatch.batchNumber, liveQuantity);
@@ -1300,7 +1301,7 @@ export const processCmrDelivery = async (cmrId, userId) => {
       }
       
       if (totalBatchQuantity <= 0) {
-        console.log(`Element "${item.description}" ma powiązane partie z zerową ilością (po sprawdzeniu bazy) - pomijam`);
+        logger.log(`Element "${item.description}" ma powiązane partie z zerową ilością (po sprawdzeniu bazy) - pomijam`);
         continue;
       }
       
@@ -1315,13 +1316,13 @@ export const processCmrDelivery = async (cmrId, userId) => {
         
         try {
           if (quantityToIssue <= 0) {
-            console.log(`Pomijam partię ${linkedBatch.batchNumber} - zerowa ilość do wydania`);
+            logger.log(`Pomijam partię ${linkedBatch.batchNumber} - zerowa ilość do wydania`);
             continue;
           }
           
           // ✅ WALIDACJA: Sprawdź czy linkedBatch ma wszystkie wymagane pola
           if (!linkedBatch.warehouseId) {
-            console.warn(`⚠️ Partia ${linkedBatch.batchNumber} nie ma przypisanego warehouseId`);
+            logger.warn(`⚠️ Partia ${linkedBatch.batchNumber} nie ma przypisanego warehouseId`);
             
             // Spróbuj pobrać warehouseId z bazy danych
             if (linkedBatch.id) {
@@ -1331,7 +1332,7 @@ export const processCmrDelivery = async (cmrId, userId) => {
                 
                 if (batchDoc.exists()) {
                   linkedBatch.warehouseId = batchDoc.data().warehouseId;
-                  console.log(`✅ Znaleziono warehouseId z bazy: ${linkedBatch.warehouseId}`);
+                  logger.log(`✅ Znaleziono warehouseId z bazy: ${linkedBatch.warehouseId}`);
                   
                   if (!linkedBatch.warehouseId) {
                     throw new Error(`Partia ${linkedBatch.batchNumber} istnieje w bazie, ale nie ma przypisanego warehouseId`);
@@ -1348,14 +1349,14 @@ export const processCmrDelivery = async (cmrId, userId) => {
             }
           }
           
-          console.log(`Wydawanie z partii ${linkedBatch.batchNumber} - ${quantityToIssue} ${linkedBatch.unit} dla CMR ${cmrData.cmrNumber}`);
+          logger.log(`Wydawanie z partii ${linkedBatch.batchNumber} - ${quantityToIssue} ${linkedBatch.unit} dla CMR ${cmrData.cmrNumber}`);
           
-          console.log('🔍 [DEBUG-DELIVERY] === ISSUE INVENTORY CALL ===');
-          console.log('🔍 [DEBUG-DELIVERY] linkedBatch.itemId:', linkedBatch.itemId);
-          console.log('🔍 [DEBUG-DELIVERY] quantityToIssue:', quantityToIssue);
-          console.log('🔍 [DEBUG-DELIVERY] linkedBatch.warehouseId:', linkedBatch.warehouseId);
-          console.log('🔍 [DEBUG-DELIVERY] linkedBatch.id (batchId):', linkedBatch.id);
-          console.log('🔍 [DEBUG-DELIVERY] linkedBatch.batchNumber:', linkedBatch.batchNumber);
+          logger.log('🔍 [DEBUG-DELIVERY] === ISSUE INVENTORY CALL ===');
+          logger.log('🔍 [DEBUG-DELIVERY] linkedBatch.itemId:', linkedBatch.itemId);
+          logger.log('🔍 [DEBUG-DELIVERY] quantityToIssue:', quantityToIssue);
+          logger.log('🔍 [DEBUG-DELIVERY] linkedBatch.warehouseId:', linkedBatch.warehouseId);
+          logger.log('🔍 [DEBUG-DELIVERY] linkedBatch.id (batchId):', linkedBatch.id);
+          logger.log('🔍 [DEBUG-DELIVERY] linkedBatch.batchNumber:', linkedBatch.batchNumber);
           
           // Wydaj produkt z konkretnej partii
           const issueResult = await issueInventory(
@@ -1387,7 +1388,7 @@ export const processCmrDelivery = async (cmrId, userId) => {
             result: issueResult
           });
           
-          console.log(`Pomyślnie wydano ${quantityToIssue} ${linkedBatch.unit} z partii ${linkedBatch.batchNumber}`);
+          logger.log(`Pomyślnie wydano ${quantityToIssue} ${linkedBatch.unit} z partii ${linkedBatch.batchNumber}`);
           
         } catch (error) {
           console.error(`Błąd podczas wydawania z partii ${linkedBatch.batchNumber}:`, error);
@@ -1576,7 +1577,7 @@ export const getCmrDocumentsByOrderId = async (orderId) => {
 // Generowanie raportu z dokumentów CMR
 export const generateCmrReport = async (filters = {}) => {
   try {
-    console.log('generateCmrReport - otrzymane filtry:', filters);
+    logger.log('generateCmrReport - otrzymane filtry:', filters);
     
     // Pobierz wszystkie dokumenty CMR bez filtrów
     const cmrRef = collection(db, CMR_COLLECTION);
@@ -1585,7 +1586,7 @@ export const generateCmrReport = async (filters = {}) => {
     // Pobierz dokumenty CMR
     const snapshot = await getDocs(q);
     
-    console.log('generateCmrReport - znaleziono wszystkich dokumentów:', snapshot.docs.length);
+    logger.log('generateCmrReport - znaleziono wszystkich dokumentów:', snapshot.docs.length);
     
     // Funkcja pomocnicza do konwersji pól czasowych (podobna do tej w getAllCmrDocuments)
     const convertTimestamp = (field) => {
@@ -1603,7 +1604,7 @@ export const generateCmrReport = async (filters = {}) => {
         try {
           return new Date(field);
         } catch (e) {
-          console.warn('Nie można skonwertować pola na Date:', field);
+          logger.warn('Nie można skonwertować pola na Date:', field);
           return null;
         }
       }
@@ -1616,7 +1617,7 @@ export const generateCmrReport = async (filters = {}) => {
       
       const convertedIssueDate = convertTimestamp(data.issueDate);
       
-      console.log('generateCmrReport - przetwarzanie dokumentu:', {
+      logger.log('generateCmrReport - przetwarzanie dokumentu:', {
         cmrNumber: data.cmrNumber,
         issueDate: data.issueDate,
         issueDateType: typeof data.issueDate,
@@ -1638,7 +1639,7 @@ export const generateCmrReport = async (filters = {}) => {
       };
     });
     
-    console.log('generateCmrReport - wszystkie dokumenty po mapowaniu:', allCmrDocuments.length);
+    logger.log('generateCmrReport - wszystkie dokumenty po mapowaniu:', allCmrDocuments.length);
     
     // Filtrowanie na poziomie aplikacji
     let cmrDocuments = allCmrDocuments;
@@ -1649,7 +1650,7 @@ export const generateCmrReport = async (filters = {}) => {
       const endDateObj = new Date(filters.endDate);
       endDateObj.setHours(23, 59, 59, 999);
       
-      console.log('generateCmrReport - filtrowanie według dat (aplikacja):', {
+      logger.log('generateCmrReport - filtrowanie według dat (aplikacja):', {
         originalStartDate: filters.startDate,
         originalEndDate: filters.endDate,
         startDate: startDate,
@@ -1660,7 +1661,7 @@ export const generateCmrReport = async (filters = {}) => {
         if (!doc.issueDate) return false;
         const docDate = new Date(doc.issueDate);
         const inRange = docDate >= startDate && docDate <= endDateObj;
-        console.log(`Dokument ${doc.cmrNumber} (${docDate.toISOString()}) - ${inRange ? 'WŁĄCZONY' : 'WYKLUCZONY'}`);
+        logger.log(`Dokument ${doc.cmrNumber} (${docDate.toISOString()}) - ${inRange ? 'WŁĄCZONY' : 'WYKLUCZONY'}`);
         return inRange;
       });
     }
@@ -1675,7 +1676,7 @@ export const generateCmrReport = async (filters = {}) => {
       cmrDocuments = cmrDocuments.filter(doc => doc.status === filters.status);
     }
     
-    console.log('generateCmrReport - dokumenty po filtrowaniu:', cmrDocuments.length);
+    logger.log('generateCmrReport - dokumenty po filtrowaniu:', cmrDocuments.length);
     
     // Batch fetch items dla wszystkich CMR — chunki 'in' zamiast N oddzielnych zapytań
     if (filters.includeItems) {
@@ -1751,18 +1752,18 @@ export const generateCmrReport = async (filters = {}) => {
 // ULEPSZONA WERSJA - używa tej samej logiki dopasowania co refreshShippedQuantitiesFromCMR
 const updateLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, userId) => {
   try {
-    console.log(`🔄 Rozpoczęcie inteligentnej aktualizacji ilości wysłanych dla zamówienia ${orderId} z CMR ${cmrNumber}...`);
+    logger.log(`🔄 Rozpoczęcie inteligentnej aktualizacji ilości wysłanych dla zamówienia ${orderId} z CMR ${cmrNumber}...`);
     
     // KROK 1: Pobierz aktualne dane zamówienia
     const { getOrderById } = await import('../orders');
     const orderData = await getOrderById(orderId);
     
     if (!orderData || !orderData.items || orderData.items.length === 0) {
-      console.log('❌ Zamówienie nie istnieje lub nie ma pozycji');
+      logger.log('❌ Zamówienie nie istnieje lub nie ma pozycji');
       return;
     }
     
-    console.log(`📋 Zamówienie ma ${orderData.items.length} pozycji:`, 
+    logger.log(`📋 Zamówienie ma ${orderData.items.length} pozycji:`, 
       orderData.items.map(item => ({ id: item.id, name: item.name, quantity: item.quantity })));
     
     // KROK 2: Użyj ulepszonego algorytmu dopasowania (kopiuj z refreshShippedQuantitiesFromCMR)
@@ -1772,10 +1773,10 @@ const updateLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
       const cmrItem = cmrItems[cmrItemIndex];
       const quantity = parseFloat(cmrItem.quantity) || parseFloat(cmrItem.numberOfPackages) || 0;
       
-      console.log(`🔍 Dopasowywanie CMR pozycji ${cmrItemIndex}: "${cmrItem.description}", ilość: ${quantity}`);
+      logger.log(`🔍 Dopasowywanie CMR pozycji ${cmrItemIndex}: "${cmrItem.description}", ilość: ${quantity}`);
       
       if (quantity <= 0) {
-        console.log(`⏭️ Pomijam pozycję z zerową ilością`);
+        logger.log(`⏭️ Pomijam pozycję z zerową ilością`);
         continue;
       }
       
@@ -1789,15 +1790,15 @@ const updateLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
       )) {
         orderItemIndex = orderData.items.findIndex(orderItem => orderItem.id === cmrItem.orderItemId);
         if (orderItemIndex !== -1) {
-          console.log(`✅ Dopasowano przez orderItemId: ${cmrItem.orderItemId} dla pozycji "${cmrItem.description}"`);
+          logger.log(`✅ Dopasowano przez orderItemId: ${cmrItem.orderItemId} dla pozycji "${cmrItem.description}"`);
         } else {
-          console.warn(`⚠️ NIEAKTUALNE powiązanie: orderItemId ${cmrItem.orderItemId} nie istnieje w zamówieniu "${cmrItem.description}"`);
+          logger.warn(`⚠️ NIEAKTUALNE powiązanie: orderItemId ${cmrItem.orderItemId} nie istnieje w zamówieniu "${cmrItem.description}"`);
         }
       } else if (cmrItem.orderItemId && cmrItem.orderId && cmrItem.orderId !== orderId) {
-        console.log(`⏭️ Pomijam pozycję CMR z innego zamówienia (orderId): ${cmrItem.orderId} vs ${orderId}`);
+        logger.log(`⏭️ Pomijam pozycję CMR z innego zamówienia (orderId): ${cmrItem.orderId} vs ${orderId}`);
         continue;
       } else if (cmrItem.orderItemId && cmrItem.orderNumber && cmrItem.orderNumber !== orderData.orderNumber) {
-        console.log(`⏭️ Pomijam pozycję CMR z innego zamówienia (orderNumber): ${cmrItem.orderNumber} vs ${orderData.orderNumber}`);
+        logger.log(`⏭️ Pomijam pozycję CMR z innego zamówienia (orderNumber): ${cmrItem.orderNumber} vs ${orderData.orderNumber}`);
         continue;
       }
       
@@ -1855,12 +1856,12 @@ const updateLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
         
         // 3.6. Ostatnia próba - dopasowanie według indeksu (tylko jeśli liczba pozycji się zgadza)
         if (orderItemIndex === -1 && orderData.items.length === cmrItems.length && cmrItemIndex < orderData.items.length) {
-          console.log(`🔄 Próba dopasowania według indeksu ${cmrItemIndex}`);
+          logger.log(`🔄 Próba dopasowania według indeksu ${cmrItemIndex}`);
           orderItemIndex = cmrItemIndex;
         }
       }
       
-      console.log(`🎯 Rezultat dopasowania dla "${cmrItem.description}": indeks ${orderItemIndex}`);
+      logger.log(`🎯 Rezultat dopasowania dla "${cmrItem.description}": indeks ${orderItemIndex}`);
       
       if (orderItemIndex !== -1) {
         // DOKŁADNE DOPASOWANIE - dodaj do precyzyjnych aktualizacji
@@ -1873,22 +1874,22 @@ const updateLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
           matchMethod: cmrItem.orderItemId ? 'orderItemId' : 'name_matching'
         });
         
-        console.log(`✅ Dodano precyzyjną aktualizację dla pozycji "${orderData.items[orderItemIndex].name}" (ID: ${orderData.items[orderItemIndex].id})`);
+        logger.log(`✅ Dodano precyzyjną aktualizację dla pozycji "${orderData.items[orderItemIndex].name}" (ID: ${orderData.items[orderItemIndex].id})`);
       } else {
-        console.warn(`❌ Nie znaleziono odpowiadającej pozycji w zamówieniu dla "${cmrItem.description}" z CMR ${cmrNumber}`);
-        console.log('📝 Dostępne pozycje w zamówieniu:', orderData.items.map((item, idx) => `${idx}: "${item.name}" (ID: ${item.id})`));
+        logger.warn(`❌ Nie znaleziono odpowiadającej pozycji w zamówieniu dla "${cmrItem.description}" z CMR ${cmrNumber}`);
+        logger.log('📝 Dostępne pozycje w zamówieniu:', orderData.items.map((item, idx) => `${idx}: "${item.name}" (ID: ${item.id})`));
       }
     }
     
     // KROK 3: Zastosuj precyzyjne aktualizacje
     if (preciseItemUpdates.length > 0) {
-      console.log(`🚀 Aplikowanie ${preciseItemUpdates.length} precyzyjnych aktualizacji do zamówienia ${orderId}`);
+      logger.log(`🚀 Aplikowanie ${preciseItemUpdates.length} precyzyjnych aktualizacji do zamówienia ${orderId}`);
       
       // Użyj ulepszonej funkcji aktualizacji
       await updateOrderItemShippedQuantityPrecise(orderId, preciseItemUpdates, userId);
-      console.log(`✅ Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrNumber} (precyzyjny algorytm)`);
+      logger.log(`✅ Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrNumber} (precyzyjny algorytm)`);
     } else {
-      console.log(`⚠️ Brak pozycji do aktualizacji w zamówieniu ${orderId} dla CMR ${cmrNumber}`);
+      logger.log(`⚠️ Brak pozycji do aktualizacji w zamówieniu ${orderId} dla CMR ${cmrNumber}`);
     }
     
   } catch (error) {
@@ -1900,18 +1901,18 @@ const updateLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
 // POPRAWIONA funkcja pomocnicza do anulowania ilości wysłanych - usuwa wpisy z cmrHistory zamiast dodawać ujemne wartości
 const cancelLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, userId) => {
   try {
-    console.log(`🗑️ Rozpoczęcie anulowania przez usunięcie wpisów CMR ${cmrNumber} z zamówienia ${orderId}...`);
+    logger.log(`🗑️ Rozpoczęcie anulowania przez usunięcie wpisów CMR ${cmrNumber} z zamówienia ${orderId}...`);
     
     // KROK 1: Pobierz aktualne dane zamówienia
     const { getOrderById } = await import('../orders');
     const orderData = await getOrderById(orderId);
     
     if (!orderData || !orderData.items || orderData.items.length === 0) {
-      console.log('❌ Zamówienie nie istnieje lub nie ma pozycji');
+      logger.log('❌ Zamówienie nie istnieje lub nie ma pozycji');
       return;
     }
     
-    console.log(`📋 Zamówienie ma ${orderData.items.length} pozycji do sprawdzenia dla CMR ${cmrNumber}`);
+    logger.log(`📋 Zamówienie ma ${orderData.items.length} pozycji do sprawdzenia dla CMR ${cmrNumber}`);
     
     // KROK 2: Usuń wpisy CMR z historii zamiast dodawać ujemne wartości
     const updatedItems = orderData.items.map(item => {
@@ -1927,7 +1928,7 @@ const cancelLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
         return item; // Brak wpisów dla tego CMR - zostaw bez zmian
       }
       
-      console.log(`🗑️ Usuwanie ${entriesToRemove.length} wpisów CMR ${cmrNumber} z pozycji "${item.name}"`);
+      logger.log(`🗑️ Usuwanie ${entriesToRemove.length} wpisów CMR ${cmrNumber} z pozycji "${item.name}"`);
       
       // Usuń wpisy dla tego CMR z historii
       const updatedCmrHistory = item.cmrHistory.filter(entry => entry.cmrNumber !== cmrNumber);
@@ -1947,7 +1948,7 @@ const cancelLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
         lastCmrNumber = sortedEntries[0].cmrNumber;
       }
       
-      console.log(`✅ Pozycja "${item.name}": usunięto CMR ${cmrNumber}, nowa ilość wysłana: ${newShippedQuantity} (z ${updatedCmrHistory.length} pozostałych CMR)`);
+      logger.log(`✅ Pozycja "${item.name}": usunięto CMR ${cmrNumber}, nowa ilość wysłana: ${newShippedQuantity} (z ${updatedCmrHistory.length} pozostałych CMR)`);
       
       return {
         ...item,
@@ -1978,7 +1979,7 @@ const cancelLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
       return originalItem.cmrHistory?.some(entry => entry.cmrNumber === cmrNumber);
     }).length;
     
-    console.log(`✅ Anulowano CMR ${cmrNumber} w zamówieniu ${orderId}: zaktualizowano ${updatedPositions} pozycji przez usunięcie wpisów z historii`);
+    logger.log(`✅ Anulowano CMR ${cmrNumber} w zamówieniu ${orderId}: zaktualizowano ${updatedPositions} pozycji przez usunięcie wpisów z historii`);
     
   } catch (error) {
     console.error('❌ Błąd podczas anulowania przez usunięcie wpisów CMR z historii:', error);
@@ -1993,7 +1994,7 @@ const cancelLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
  */
 export const cleanNegativeCmrHistoryEntries = async (userId = 'system') => {
   try {
-    console.log('🧹 Rozpoczynanie oczyszczania ujemnych wpisów z cmrHistory...');
+    logger.log('🧹 Rozpoczynanie oczyszczania ujemnych wpisów z cmrHistory...');
     
     const { collection, getDocs, updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
     const { db } = await import('../firebase/config');
@@ -2012,7 +2013,7 @@ export const cleanNegativeCmrHistoryEntries = async (userId = 'system') => {
       processedOrders++;
       
       if (processedOrders % 50 === 0) {
-        console.log(`📊 Przetworzono ${processedOrders} zamówień...`);
+        logger.log(`📊 Przetworzono ${processedOrders} zamówień...`);
       }
       
       const cleanedItems = items.map(item => {
@@ -2025,7 +2026,7 @@ export const cleanNegativeCmrHistoryEntries = async (userId = 'system') => {
         for (const entry of item.cmrHistory) {
           const quantity = parseFloat(entry.quantity) || 0;
           if (quantity < 0) {
-            console.log(`🗑️ Usuwanie ujemnego wpisu z pozycji "${item.name}": CMR ${entry.cmrNumber}, ilość: ${quantity}`);
+            logger.log(`🗑️ Usuwanie ujemnego wpisu z pozycji "${item.name}": CMR ${entry.cmrNumber}, ilość: ${quantity}`);
             cleanedEntries++;
             needsUpdate = true;
           } else {
@@ -2073,7 +2074,7 @@ export const cleanNegativeCmrHistoryEntries = async (userId = 'system') => {
         });
         
         cleanedOrders++;
-        console.log(`✅ Oczyszczono zamówienie ${orderData.orderNumber || orderDoc.id}`);
+        logger.log(`✅ Oczyszczono zamówienie ${orderData.orderNumber || orderDoc.id}`);
         
         // Dodaj małą pauzę co 10 zamówień, żeby nie przeciążyć bazy
         if (cleanedOrders % 10 === 0) {
@@ -2082,10 +2083,10 @@ export const cleanNegativeCmrHistoryEntries = async (userId = 'system') => {
       }
     }
     
-    console.log(`🎉 Oczyszczanie zakończone:`);
-    console.log(`   📋 Przetworzono: ${processedOrders} zamówień`);
-    console.log(`   🧹 Oczyszczono: ${cleanedOrders} zamówień`);
-    console.log(`   🗑️ Usunięto: ${cleanedEntries} ujemnych wpisów CMR`);
+    logger.log(`🎉 Oczyszczanie zakończone:`);
+    logger.log(`   📋 Przetworzono: ${processedOrders} zamówień`);
+    logger.log(`   🧹 Oczyszczono: ${cleanedOrders} zamówień`);
+    logger.log(`   🗑️ Usunięto: ${cleanedEntries} ujemnych wpisów CMR`);
     
     return { 
       success: true, 
@@ -2111,10 +2112,10 @@ export const cleanNegativeCmrHistoryEntries = async (userId = 'system') => {
  */
 export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderIds, userId) => {
   try {
-    console.log(`🚚 Rozpoczynam dodawanie usług transportowych dla CMR ${cmrId}`);
+    logger.log(`🚚 Rozpoczynam dodawanie usług transportowych dla CMR ${cmrId}`);
     
     if (!linkedOrderIds || linkedOrderIds.length === 0) {
-      console.log('Brak powiązanych zamówień - pomijam dodawanie usług transportowych');
+      logger.log('Brak powiązanych zamówień - pomijam dodawanie usług transportowych');
       return { success: true, message: 'Brak powiązanych zamówień', ordersUpdated: [] };
     }
     
@@ -2129,14 +2130,14 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
         const order = await getOrderById(orderId);
         
         if (!order) {
-          console.warn(`⚠️ Nie znaleziono zamówienia ${orderId}`);
+          logger.warn(`⚠️ Nie znaleziono zamówienia ${orderId}`);
           results.push({ orderId, success: false, message: 'Zamówienie nie istnieje' });
           continue;
         }
         
         // Zsumuj palety dla tego zamówienia
         // Priorytet: orderId, fallback: orderNumber (dla starszych danych)
-        console.log(`🔍 [ADD_TRANSPORT] Sprawdzam pozycje CMR dla zamówienia ${order.orderNumber}...`);
+        logger.log(`🔍 [ADD_TRANSPORT] Sprawdzam pozycje CMR dla zamówienia ${order.orderNumber}...`);
         
         const filteredItems = cmrItems.filter(item => {
           const belongsToOrder = 
@@ -2145,7 +2146,7 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
           return belongsToOrder && item.orderItemId;
         });
         
-        console.log(`📋 [ADD_TRANSPORT] Znaleziono ${filteredItems.length} pozycji należących do zamówienia`);
+        logger.log(`📋 [ADD_TRANSPORT] Znaleziono ${filteredItems.length} pozycji należących do zamówienia`);
         
         const palletsCount = filteredItems.reduce((sum, item) => {
           // Priorytet: volume (pracownicy wpisują tam rzeczywistą liczbę palet), fallback: palletsCount
@@ -2154,7 +2155,7 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
           const quantity = volumeValue || palletsCountValue || 0;
           const sourceField = volumeValue > 0 ? 'volume' : (palletsCountValue > 0 ? 'palletsCount' : 'brak');
           
-          console.log(`   📦 [ADD_TRANSPORT] ${item.description}:`, {
+          logger.log(`   📦 [ADD_TRANSPORT] ${item.description}:`, {
             'volume': item.volume,
             'palletsCount': item.palletsCount,
             'UŻYTA WARTOŚĆ': quantity,
@@ -2164,10 +2165,10 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
           return sum + quantity;
         }, 0);
         
-        console.log(`📊 [ADD_TRANSPORT] Zamówienie ${order.orderNumber}: SUMA = ${palletsCount} palet`);
+        logger.log(`📊 [ADD_TRANSPORT] Zamówienie ${order.orderNumber}: SUMA = ${palletsCount} palet`);
         
         if (palletsCount === 0) {
-          console.log(`⏭️ Brak palet dla zamówienia ${order.orderNumber} - pomijam`);
+          logger.log(`⏭️ Brak palet dla zamówienia ${order.orderNumber} - pomijam`);
           results.push({ orderId, orderNumber: order.orderNumber, success: true, message: 'Brak palet', palletsCount: 0 });
           continue;
         }
@@ -2179,7 +2180,7 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
         
         if (order.customer && order.customer.id) {
           try {
-            console.log(`🔍 Szukam usługi transportowej w liście cenowej klienta ${order.customer.name}...`);
+            logger.log(`🔍 Szukam usługi transportowej w liście cenowej klienta ${order.customer.name}...`);
             
             // Pobierz pozycje z listy cenowej klienta
             const { getPriceListItems, getPriceListsByCustomerId } = await import('../products');
@@ -2201,7 +2202,7 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
               );
               
               if (transportItem && transportItem.productId) {
-                console.log(`✅ Znaleziono usługę transportową w liście cenowej: ${transportItem.productName}, cena: ${transportItem.price}`);
+                logger.log(`✅ Znaleziono usługę transportową w liście cenowej: ${transportItem.productName}, cena: ${transportItem.price}`);
                 
                 // Pobierz pełne dane usługi z magazynu
                 try {
@@ -2209,21 +2210,21 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
                   servicePrice = transportItem.price || 0;
                   fromPriceList = true;
                   
-                  console.log(`💰 Użyto usługi "${transportService.name}" z listy cenowej, cena: ${servicePrice}`);
+                  logger.log(`💰 Użyto usługi "${transportService.name}" z listy cenowej, cena: ${servicePrice}`);
                   break; // Znaleziono usługę, przerwij pętlę
                 } catch (error) {
-                  console.warn(`⚠️ Nie można pobrać szczegółów usługi ${transportItem.productId}:`, error);
+                  logger.warn(`⚠️ Nie można pobrać szczegółów usługi ${transportItem.productId}:`, error);
                 }
               }
             }
           } catch (error) {
-            console.warn('Błąd podczas szukania usługi w liście cenowej:', error);
+            logger.warn('Błąd podczas szukania usługi w liście cenowej:', error);
           }
         }
         
         // FALLBACK: Jeśli nie znaleziono w liście cenowej, szukaj w magazynie
         if (!transportService) {
-          console.log(`🔍 Nie znaleziono usługi transportowej w liście cenowej - szukam w magazynie...`);
+          logger.log(`🔍 Nie znaleziono usługi transportowej w liście cenowej - szukam w magazynie...`);
           
           const { getInventoryItemsByCategory } = await import('../inventory');
           const servicesData = await getInventoryItemsByCategory('Inne');
@@ -2235,17 +2236,17 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
           );
           
           if (!transportService) {
-            console.warn(`⚠️ Nie znaleziono usługi transportowej ani w liście cenowej, ani w magazynie`);
+            logger.warn(`⚠️ Nie znaleziono usługi transportowej ani w liście cenowej, ani w magazynie`);
             results.push({ orderId, orderNumber: order.orderNumber, success: false, message: 'Brak usługi transportowej w systemie' });
             continue;
           }
           
-          console.log(`✅ Znaleziono usługę transportową w magazynie: ${transportService.name}`);
+          logger.log(`✅ Znaleziono usługę transportową w magazynie: ${transportService.name}`);
           
           // Użyj standardowej ceny z usługi
           servicePrice = transportService.standardPrice || 0;
           fromPriceList = false;
-          console.log(`💰 Użyto standardowej ceny: ${servicePrice}`);
+          logger.log(`💰 Użyto standardowej ceny: ${servicePrice}`);
         }
         
         // Sprawdź czy zamówienie już ma usługę transportową
@@ -2272,7 +2273,7 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
              notes: serviceNotes
            };
            
-           console.log(`🔄 Zaktualizowano usługę transportową: ${existingService.quantity} → ${newQuantity} palet`);
+           logger.log(`🔄 Zaktualizowano usługę transportową: ${existingService.quantity} → ${newQuantity} palet`);
         } else {
           // Dodaj nową usługę
           const newService = {
@@ -2291,7 +2292,7 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
           };
           
           updatedItems.push(newService);
-          console.log(`✨ Dodano nową usługę transportową: ${palletsCount} palet po ${servicePrice}`);
+          logger.log(`✨ Dodano nową usługę transportową: ${palletsCount} palet po ${servicePrice}`);
         }
         
         // Przelicz wartość zamówienia
@@ -2315,7 +2316,7 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
           totalServiceValue: palletsCount * servicePrice
         });
         
-        console.log(`✅ Zaktualizowano zamówienie ${order.orderNumber}`);
+        logger.log(`✅ Zaktualizowano zamówienie ${order.orderNumber}`);
         
       } catch (orderError) {
         console.error(`Błąd podczas przetwarzania zamówienia ${orderId}:`, orderError);
@@ -2349,7 +2350,7 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
  */
 export const recalculateTransportServiceForOrder = async (orderId, userId) => {
   try {
-    console.log(`🔄 Rozpoczynam przeliczanie usługi transportowej dla zamówienia ${orderId}`);
+    logger.log(`🔄 Rozpoczynam przeliczanie usługi transportowej dla zamówienia ${orderId}`);
     
     // Import potrzebnych serwisów
     const { getOrderById, updateOrder } = await import('../orders');
@@ -2362,22 +2363,22 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
     }
     
      // KROK 1: Pobierz wszystkie dokumenty CMR powiązane z tym zamówieniem
-     console.log(`🔍 [RECALCULATE] Pobieranie dokumentów CMR powiązanych z zamówieniem ${orderId}...`);
+     logger.log(`🔍 [RECALCULATE] Pobieranie dokumentów CMR powiązanych z zamówieniem ${orderId}...`);
      const allCmrDocuments = await getCmrDocumentsByOrderId(orderId);
      
      // Filtruj CMR - pomijamy szkice i wystawione (bierzemy tylko te w transporcie, dostarczone, zakończone)
      const cmrDocuments = allCmrDocuments.filter(cmr => {
        const shouldInclude = cmr.status !== CMR_STATUSES.DRAFT && cmr.status !== CMR_STATUSES.ISSUED;
        if (!shouldInclude) {
-         console.log(`⏭️ [RECALCULATE] Pomijam CMR ${cmr.cmrNumber} ze statusem "${cmr.status}"`);
+         logger.log(`⏭️ [RECALCULATE] Pomijam CMR ${cmr.cmrNumber} ze statusem "${cmr.status}"`);
        }
        return shouldInclude;
      });
      
-     console.log(`📋 [RECALCULATE] Znaleziono ${allCmrDocuments.length} dokumentów CMR, z czego ${cmrDocuments.length} w odpowiednim statusie (pomijam szkice i wystawione)`);
+     logger.log(`📋 [RECALCULATE] Znaleziono ${allCmrDocuments.length} dokumentów CMR, z czego ${cmrDocuments.length} w odpowiednim statusie (pomijam szkice i wystawione)`);
      
      if (cmrDocuments.length === 0) {
-       console.log(`⏭️ [RECALCULATE] Brak dokumentów CMR w odpowiednim statusie dla zamówienia ${order.orderNumber}`);
+       logger.log(`⏭️ [RECALCULATE] Brak dokumentów CMR w odpowiednim statusie dla zamówienia ${order.orderNumber}`);
        return { 
          success: true, 
          message: allCmrDocuments.length > 0 ? 
@@ -2399,7 +2400,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
      const itemsFromOtherOrders = [];
      
      cmrDocuments.forEach(cmrDoc => {
-       console.log(`📋 [RECALCULATE] Przetwarzam CMR ${cmrDoc.cmrNumber} z ${(cmrDoc.items || []).length} pozycjami`);
+       logger.log(`📋 [RECALCULATE] Przetwarzam CMR ${cmrDoc.cmrNumber} z ${(cmrDoc.items || []).length} pozycjami`);
        
       (cmrDoc.items || []).forEach(item => {
         // Priorytet: volume (pracownicy wpisują tam rzeczywistą liczbę palet), fallback: palletsCount
@@ -2408,7 +2409,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
         const palletsCount = volumeValue || palletsCountValue || 0;
         const sourceField = volumeValue > 0 ? 'volume' : (palletsCountValue > 0 ? 'palletsCount' : 'brak');
          
-         console.log(`   📦 [RECALCULATE] Pozycja CMR:`, {
+         logger.log(`   📦 [RECALCULATE] Pozycja CMR:`, {
            description: item.description,
            'volume (oryg.)': item.volume,
            'palletsCount (oryg.)': item.palletsCount,
@@ -2437,11 +2438,11 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
              orderId: item.orderId,
              orderNumber: item.orderNumber
            });
-           console.log(`      ⏭️ [RECALCULATE] Pominięto - pozycja należy do innego zamówienia: orderId=${item.orderId}, orderNumber=${item.orderNumber}`);
+           logger.log(`      ⏭️ [RECALCULATE] Pominięto - pozycja należy do innego zamówienia: orderId=${item.orderId}, orderNumber=${item.orderNumber}`);
            return;
          }
          
-         console.log(`      ✓ [RECALCULATE] Pozycja należy do zamówienia (dopasowano przez ${item.orderId ? 'orderId' : 'orderNumber'})`);
+         logger.log(`      ✓ [RECALCULATE] Pozycja należy do zamówienia (dopasowano przez ${item.orderId ? 'orderId' : 'orderNumber'})`);
          
          if (palletsCount > 0) {
            totalPallets += palletsCount;
@@ -2450,30 +2451,30 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
              palletsCount: palletsCount,
              cmrId: item.cmrId
            });
-           console.log(`      ✅ [RECALCULATE] Dodano ${palletsCount} palet (suma: ${totalPallets})`);
+           logger.log(`      ✅ [RECALCULATE] Dodano ${palletsCount} palet (suma: ${totalPallets})`);
          } else {
            itemsWithoutPallets.push({
              description: item.description,
              cmrId: item.cmrId
            });
-           console.log(`      ⏭️ [RECALCULATE] Pozycja bez palet`);
+           logger.log(`      ⏭️ [RECALCULATE] Pozycja bez palet`);
          }
        });
      });
      
      if (itemsWithoutPallets.length > 0) {
-       console.log(`⚠️ [RECALCULATE] Pozycje bez palet (${itemsWithoutPallets.length}):`, itemsWithoutPallets);
+       logger.log(`⚠️ [RECALCULATE] Pozycje bez palet (${itemsWithoutPallets.length}):`, itemsWithoutPallets);
      }
      
      if (itemsFromOtherOrders.length > 0) {
-       console.log(`🔀 [RECALCULATE] Pominięto ${itemsFromOtherOrders.length} pozycji z innych zamówień:`, itemsFromOtherOrders);
+       logger.log(`🔀 [RECALCULATE] Pominięto ${itemsFromOtherOrders.length} pozycji z innych zamówień:`, itemsFromOtherOrders);
      }
      
      const totalItemsForThisOrder = itemsWithPallets.length + itemsWithoutPallets.length;
-     console.log(`📊 [RECALCULATE] Zamówienie ${order.orderNumber}: ${totalPallets} palet z ${cmrDocuments.length} dokumentów CMR (${totalItemsForThisOrder} pozycji dla tego zamówienia, ${itemsWithPallets.length} z paletami, ${itemsFromOtherOrders.length} z innych zamówień)`);
+     logger.log(`📊 [RECALCULATE] Zamówienie ${order.orderNumber}: ${totalPallets} palet z ${cmrDocuments.length} dokumentów CMR (${totalItemsForThisOrder} pozycji dla tego zamówienia, ${itemsWithPallets.length} z paletami, ${itemsFromOtherOrders.length} z innych zamówień)`);
     
     if (totalPallets === 0) {
-      console.log(`⏭️ Brak palet w CMR dla zamówienia ${order.orderNumber}`);
+      logger.log(`⏭️ Brak palet w CMR dla zamówienia ${order.orderNumber}`);
       return { 
         success: true, 
         message: `Brak palet w ${cmrDocuments.length} dokumentach CMR (${totalItemsForThisOrder} pozycji dla tego zamówienia)`,
@@ -2493,7 +2494,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
     
     if (order.customer && order.customer.id) {
       try {
-        console.log(`🔍 Szukam usługi transportowej w liście cenowej klienta ${order.customer.name}...`);
+        logger.log(`🔍 Szukam usługi transportowej w liście cenowej klienta ${order.customer.name}...`);
         
         const { getPriceListItems, getPriceListsByCustomerId } = await import('../products');
         const { getInventoryItemById } = await import('../inventory');
@@ -2518,18 +2519,18 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
                  // Zapisz notatki z listy cenowej
                  transportService.priceListNotes = transportItem.notes || '';
                  
-                 console.log(`✅ Znaleziono usługę w liście cenowej: ${transportService.name}, cena: ${servicePrice}`);
+                 logger.log(`✅ Znaleziono usługę w liście cenowej: ${transportService.name}, cena: ${servicePrice}`);
                  break;
           }
         }
       } catch (error) {
-        console.warn('Błąd podczas szukania usługi w liście cenowej:', error);
+        logger.warn('Błąd podczas szukania usługi w liście cenowej:', error);
       }
     }
     
     // FALLBACK: Szukaj w magazynie
     if (!transportService) {
-      console.log(`🔍 Nie znaleziono usługi w liście cenowej - szukam w magazynie...`);
+      logger.log(`🔍 Nie znaleziono usługi w liście cenowej - szukam w magazynie...`);
       
       const { getInventoryItemsByCategory } = await import('../inventory');
       const servicesData = await getInventoryItemsByCategory('Inne');
@@ -2545,7 +2546,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
       
       servicePrice = transportService.standardPrice || 0;
       fromPriceList = false;
-      console.log(`✅ Znaleziono usługę w magazynie: ${transportService.name}, cena: ${servicePrice}`);
+      logger.log(`✅ Znaleziono usługę w magazynie: ${transportService.name}, cena: ${servicePrice}`);
     }
     
     // Zaktualizuj zamówienie
@@ -2570,7 +2571,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
          totalPrice: totalPallets * servicePrice,
          notes: serviceNotes
        };
-       console.log(`🔄 Zaktualizowano usługę transportową: ${totalPallets} palet`);
+       logger.log(`🔄 Zaktualizowano usługę transportową: ${totalPallets} palet`);
      } else {
        // Dodaj nową usługę
        action = 'added';
@@ -2594,7 +2595,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
          notes: serviceNotes,
          addedFromCmr: true
        });
-       console.log(`✨ Dodano usługę transportową: ${totalPallets} palet`);
+       logger.log(`✨ Dodano usługę transportową: ${totalPallets} palet`);
     }
     
     // Przelicz wartość zamówienia
@@ -2608,7 +2609,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
       totalValue: newTotalValue
     }, userId);
     
-    console.log(`✅ Pomyślnie zaktualizowano zamówienie ${order.orderNumber}`);
+    logger.log(`✅ Pomyślnie zaktualizowano zamówienie ${order.orderNumber}`);
     
      return {
        success: true,
@@ -2698,7 +2699,7 @@ export const updateCmrPaymentStatus = async (cmrId, newPaymentStatus, userId) =>
     
     updateCmrDocumentInCache(cmrId, updatedCacheData);
 
-    console.log(`Zaktualizowano status płatności dokumentu CMR ${cmrId} z "${oldPaymentStatus}" na "${newPaymentStatus}"`);
+    logger.log(`Zaktualizowano status płatności dokumentu CMR ${cmrId} z "${oldPaymentStatus}" na "${newPaymentStatus}"`);
 
     return { 
       success: true, 
@@ -2717,7 +2718,7 @@ export const updateCmrPaymentStatus = async (cmrId, newPaymentStatus, userId) =>
  */
 export const migrateCmrToNewFormat = async (cmrId) => {
   try {
-    console.log(`Rozpoczęcie migracji CMR ${cmrId} do nowego formatu...`);
+    logger.log(`Rozpoczęcie migracji CMR ${cmrId} do nowego formatu...`);
     
     const cmrRef = doc(db, CMR_COLLECTION, cmrId);
     const cmrDoc = await getDoc(cmrRef);
@@ -2730,13 +2731,13 @@ export const migrateCmrToNewFormat = async (cmrId) => {
     
     // Sprawdź, czy CMR już ma nowy format
     if (cmrData.linkedOrderIds && Array.isArray(cmrData.linkedOrderIds)) {
-      console.log(`CMR ${cmrId} już ma nowy format`);
+      logger.log(`CMR ${cmrId} już ma nowy format`);
       return { success: true, message: 'CMR już ma nowy format', alreadyMigrated: true };
     }
     
     // Sprawdź, czy ma stary format
     if (!cmrData.linkedOrderId) {
-      console.log(`CMR ${cmrId} nie ma powiązanych zamówień`);
+      logger.log(`CMR ${cmrId} nie ma powiązanych zamówień`);
       return { success: true, message: 'CMR nie ma powiązanych zamówień', noLinkedOrders: true };
     }
     
@@ -2750,7 +2751,7 @@ export const migrateCmrToNewFormat = async (cmrId) => {
     
     await updateDoc(cmrRef, updateData);
     
-    console.log(`Zmigrowano CMR ${cmrId} do nowego formatu`);
+    logger.log(`Zmigrowano CMR ${cmrId} do nowego formatu`);
     return { 
       success: true, 
       message: 'CMR został zmigrowany do nowego formatu',
@@ -2768,7 +2769,7 @@ export const migrateCmrToNewFormat = async (cmrId) => {
  */
 export const migrateAllCmrToNewFormat = async () => {
   try {
-    console.log('Rozpoczęcie masowej migracji wszystkich CMR do nowego formatu...');
+    logger.log('Rozpoczęcie masowej migracji wszystkich CMR do nowego formatu...');
     
     const cmrQuery = query(
       collection(db, CMR_COLLECTION),
@@ -2798,7 +2799,7 @@ export const migrateAllCmrToNewFormat = async () => {
       }
     }
     
-    console.log(`Migracja zakończona. Zmigrowano: ${migratedCount}, już zmigrowane: ${alreadyMigratedCount}, bez zamówień: ${noLinkedOrdersCount}, błędy: ${errors.length}`);
+    logger.log(`Migracja zakończona. Zmigrowano: ${migratedCount}, już zmigrowane: ${alreadyMigratedCount}, bez zamówień: ${noLinkedOrdersCount}, błędy: ${errors.length}`);
     
     return { 
       success: true, 
@@ -2820,7 +2821,7 @@ export const migrateAllCmrToNewFormat = async () => {
  */
 export const findCmrDocumentsByOrderNumber = async (orderNumber) => {
   try {
-    console.log(`Szukanie CMR przez numer zamówienia: ${orderNumber}`);
+    logger.log(`Szukanie CMR przez numer zamówienia: ${orderNumber}`);
     
     // Zapytanie wyszukujące CMR gdzie numer zamówienia może być w różnych polach tekstowych
     const cmrRef = collection(db, CMR_COLLECTION);
@@ -2861,7 +2862,7 @@ export const findCmrDocumentsByOrderNumber = async (orderNumber) => {
       }
     });
     
-    console.log(`Znaleziono ${matchingCMRs.length} CMR przez numer zamówienia ${orderNumber}`);
+    logger.log(`Znaleziono ${matchingCMRs.length} CMR przez numer zamówienia ${orderNumber}`);
     return matchingCMRs;
   } catch (error) {
     console.error('Błąd podczas wyszukiwania CMR przez numer zamówienia:', error);
@@ -2881,13 +2882,13 @@ export const findCmrDocumentsByOrderNumber = async (orderNumber) => {
 //
 export const cancelCmrReservations = async (cmrId, userId) => {
   try {
-    console.log(`Rozpoczynanie anulowania rezerwacji dla CMR ${cmrId}...`);
+    logger.log(`Rozpoczynanie anulowania rezerwacji dla CMR ${cmrId}...`);
     
     // Pobierz dane dokumentu CMR z elementami
     const cmrData = await getCmrDocumentById(cmrId);
     
     if (!cmrData || !cmrData.items || cmrData.items.length === 0) {
-      console.log('Brak elementów w dokumencie CMR do anulowania rezerwacji');
+      logger.log('Brak elementów w dokumencie CMR do anulowania rezerwacji');
       return { success: true, message: 'Brak elementów do anulowania rezerwacji' };
     }
 
@@ -2898,12 +2899,12 @@ export const cancelCmrReservations = async (cmrId, userId) => {
     // Identyfikator zadania CMR używany do rezerwacji
     const cmrTaskId = `CMR-${cmrData.cmrNumber}-${cmrId}`;
     
-    console.log(`Usuwanie wszystkich rezerwacji dla CMR taskId: ${cmrTaskId} (jak w deleteTask)`);
+    logger.log(`Usuwanie wszystkich rezerwacji dla CMR taskId: ${cmrTaskId} (jak w deleteTask)`);
     
     // Usuń wszystkie rezerwacje związane z tym CMR (identycznie jak deleteTask)
     try {
       const cleanupResult = await cleanupTaskReservations(cmrTaskId);
-      console.log(`Usunięto wszystkie rezerwacje związane z CMR ${cmrTaskId}:`, cleanupResult);
+      logger.log(`Usunięto wszystkie rezerwacje związane z CMR ${cmrTaskId}:`, cleanupResult);
       
       // Dodaj informacje o usuniętych rezerwacjach do wyników
       if (cleanupResult && cleanupResult.cleanedReservations > 0) {
@@ -2942,10 +2943,10 @@ export const cancelCmrReservations = async (cmrId, userId) => {
         }
         
         if (ordersToUpdate.length > 0) {
-          console.log('Anulowanie ilości wysłanych w zamówieniach przy anulowaniu CMR...');
+          logger.log('Anulowanie ilości wysłanych w zamówieniach przy anulowaniu CMR...');
           for (const orderId of ordersToUpdate) {
             await cancelLinkedOrderShippedQuantities(orderId, cmrData.items, cmrData.cmrNumber, userId);
-            console.log(`Anulowano ilości wysłane w zamówieniu ${orderId} na podstawie anulowanego CMR ${cmrData.cmrNumber}`);
+            logger.log(`Anulowano ilości wysłane w zamówieniu ${orderId} na podstawie anulowanego CMR ${cmrData.cmrNumber}`);
           }
         }
       }
@@ -3114,14 +3115,14 @@ export const deleteCmrAttachment = async (attachmentId, userId) => {
       try {
         await deleteObject(fileRef);
       } catch (storageError) {
-        console.warn('Nie udało się usunąć pliku z Storage (może już nie istnieć):', storageError);
+        logger.warn('Nie udało się usunąć pliku z Storage (może już nie istnieć):', storageError);
       }
     }
 
     // Usuń rekord z Firestore
     await deleteDoc(doc(db, 'cmrAttachments', attachmentId));
 
-    console.log(`Załącznik ${attachmentData.fileName} został usunięty przez użytkownika ${userId}`);
+    logger.log(`Załącznik ${attachmentData.fileName} został usunięty przez użytkownika ${userId}`);
   } catch (error) {
     console.error('Błąd podczas usuwania załącznika CMR:', error);
     throw error;
@@ -3267,14 +3268,14 @@ export const deleteCmrInvoice = async (invoiceId, userId) => {
       try {
         await deleteObject(fileRef);
       } catch (storageError) {
-        console.warn('Nie udało się usunąć pliku faktury z Storage (może już nie istnieć):', storageError);
+        logger.warn('Nie udało się usunąć pliku faktury z Storage (może już nie istnieć):', storageError);
       }
     }
 
     // Usuń rekord z Firestore
     await deleteDoc(doc(db, 'cmrInvoices', invoiceId));
 
-    console.log(`Faktura ${invoiceData.fileName} została usunięta przez użytkownika ${userId}`);
+    logger.log(`Faktura ${invoiceData.fileName} została usunięta przez użytkownika ${userId}`);
   } catch (error) {
     console.error('Błąd podczas usuwania faktury CMR:', error);
     throw error;
@@ -3405,14 +3406,14 @@ export const deleteCmrOtherAttachment = async (attachmentId, userId) => {
       try {
         await deleteObject(fileRef);
       } catch (storageError) {
-        console.warn('Nie udało się usunąć pliku załącznika z Storage (może już nie istnieć):', storageError);
+        logger.warn('Nie udało się usunąć pliku załącznika z Storage (może już nie istnieć):', storageError);
       }
     }
 
     // Usuń rekord z Firestore
     await deleteDoc(doc(db, 'cmrOtherAttachments', attachmentId));
 
-    console.log(`Załącznik ${attachmentData.fileName} został usunięty przez użytkownika ${userId}`);
+    logger.log(`Załącznik ${attachmentData.fileName} został usunięty przez użytkownika ${userId}`);
   } catch (error) {
     console.error('Błąd podczas usuwania innego załącznika CMR:', error);
     throw error;
@@ -3455,8 +3456,8 @@ export const getCmrDocumentsOptimized = async ({
   forceRefresh = false
 }) => {
   try {
-    console.log('🚀 getCmrDocumentsOptimized - rozpoczynam zoptymalizowane pobieranie');
-    console.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, itemFilter, sortField, sortOrder, forceRefresh });
+    logger.log('🚀 getCmrDocumentsOptimized - rozpoczynam zoptymalizowane pobieranie');
+    logger.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, itemFilter, sortField, sortOrder, forceRefresh });
 
     // Walidacja wymaganych parametrów
     if (!page || !pageSize) {
@@ -3476,10 +3477,10 @@ export const getCmrDocumentsOptimized = async ({
     let allDocuments;
 
     if (isCacheValid) {
-      console.log('💾 Używam cache dokumentów CMR');
+      logger.log('💾 Używam cache dokumentów CMR');
       allDocuments = [...cmrDocumentsCache];
     } else {
-      console.log('🔄 Pobieram świeże dane dokumentów CMR');
+      logger.log('🔄 Pobieram świeże dane dokumentów CMR');
       
       // Pobierz wszystkie dokumenty CMR
       allDocuments = await getAllCmrDocuments();
@@ -3488,12 +3489,12 @@ export const getCmrDocumentsOptimized = async ({
       cmrDocumentsCache = [...allDocuments];
       cmrDocumentsCacheTimestamp = now;
       
-      console.log('💾 Zapisano do cache:', allDocuments.length, 'dokumentów CMR');
+      logger.log('💾 Zapisano do cache:', allDocuments.length, 'dokumentów CMR');
     }
 
     // KROK 1.5: Jeśli jest filtr po pozycjach, pobierz pozycje dla każdego CMR i filtruj
     if (itemFilter && itemFilter.trim() !== '') {
-      console.log('🔍 Filtrowanie po pozycjach CMR:', itemFilter);
+      logger.log('🔍 Filtrowanie po pozycjach CMR:', itemFilter);
       const itemFilterLower = itemFilter.toLowerCase().trim();
       
       // Pobierz pozycje dla wszystkich CMR które mogą pasować
@@ -3559,7 +3560,7 @@ export const getCmrDocumentsOptimized = async ({
         });
       });
       
-      console.log('🔍 Po filtrowaniu po pozycjach:', allDocuments.length, 'dokumentów');
+      logger.log('🔍 Po filtrowaniu po pozycjach:', allDocuments.length, 'dokumentów');
     }
 
     // KROK 2: Filtrowanie po terminie wyszukiwania
@@ -3589,13 +3590,13 @@ export const getCmrDocumentsOptimized = async ({
       });
       
       allDocuments = [...cmrNumberMatches, ...otherMatches];
-      console.log('🔍 Po wyszukiwaniu:', allDocuments.length, 'dokumentów');
+      logger.log('🔍 Po wyszukiwaniu:', allDocuments.length, 'dokumentów');
     }
 
     // KROK 3: Filtrowanie po statusie
     if (statusFilter && statusFilter.trim() !== '') {
       allDocuments = allDocuments.filter(doc => doc.status === statusFilter);
-      console.log('📊 Po filtrowaniu statusu:', allDocuments.length, 'dokumentów');
+      logger.log('📊 Po filtrowaniu statusu:', allDocuments.length, 'dokumentów');
     }
 
     // KROK 4: Sortowanie
@@ -3635,7 +3636,7 @@ export const getCmrDocumentsOptimized = async ({
     };
 
     const sortedDocuments = sortByField([...allDocuments], sortField, sortOrder);
-    console.log('🔄 Posortowano według:', sortField, sortOrder);
+    logger.log('🔄 Posortowano według:', sortField, sortOrder);
 
     // KROK 5: Paginacja
     const totalItems = sortedDocuments.length;
@@ -3646,7 +3647,7 @@ export const getCmrDocumentsOptimized = async ({
     const endIndex = Math.min(startIndex + itemsPerPage, sortedDocuments.length);
     const paginatedDocuments = sortedDocuments.slice(startIndex, endIndex);
 
-    console.log('📄 Paginacja:', `Strona ${safePage}/${totalPages}, elementy ${startIndex + 1}-${endIndex} z ${totalItems}`);
+    logger.log('📄 Paginacja:', `Strona ${safePage}/${totalPages}, elementy ${startIndex + 1}-${endIndex} z ${totalItems}`);
 
     return {
       items: paginatedDocuments,
@@ -3668,7 +3669,7 @@ export const getCmrDocumentsOptimized = async ({
 export const clearCmrDocumentsCache = () => {
   cmrDocumentsCache = null;
   cmrDocumentsCacheTimestamp = null;
-  console.log('🗑️ Cache dokumentów CMR wyczyszczony');
+  logger.log('🗑️ Cache dokumentów CMR wyczyszczony');
 };
 
 /**
@@ -3679,7 +3680,7 @@ export const clearCmrDocumentsCache = () => {
  */
 export const updateCmrDocumentInCache = (documentId, updatedDocumentData) => {
   if (!cmrDocumentsCache || !Array.isArray(cmrDocumentsCache)) {
-    console.log('🚫 Cache dokumentów CMR jest pusty, pomijam aktualizację');
+    logger.log('🚫 Cache dokumentów CMR jest pusty, pomijam aktualizację');
     return false;
   }
 
@@ -3691,10 +3692,10 @@ export const updateCmrDocumentInCache = (documentId, updatedDocumentData) => {
       ...updatedDocumentData,
       id: documentId // Upewnij się, że ID się nie zmieni
     };
-    console.log('✅ Zaktualizowano dokument CMR w cache:', documentId);
+    logger.log('✅ Zaktualizowano dokument CMR w cache:', documentId);
     return true;
   } else {
-    console.log('❌ Nie znaleziono dokumentu CMR w cache:', documentId);
+    logger.log('❌ Nie znaleziono dokumentu CMR w cache:', documentId);
     return false;
   }
 };
@@ -3706,12 +3707,12 @@ export const updateCmrDocumentInCache = (documentId, updatedDocumentData) => {
  */
 export const addCmrDocumentToCache = (newDocumentData) => {
   if (!cmrDocumentsCache || !Array.isArray(cmrDocumentsCache)) {
-    console.log('🚫 Cache dokumentów CMR jest pusty, pomijam dodanie');
+    logger.log('🚫 Cache dokumentów CMR jest pusty, pomijam dodanie');
     return false;
   }
 
   cmrDocumentsCache.unshift(newDocumentData); // Dodaj na początek (najnowszy)
-  console.log('✅ Dodano nowy dokument CMR do cache:', newDocumentData.id);
+  logger.log('✅ Dodano nowy dokument CMR do cache:', newDocumentData.id);
   return true;
 };
 
@@ -3722,7 +3723,7 @@ export const addCmrDocumentToCache = (newDocumentData) => {
  */
 export const removeCmrDocumentFromCache = (documentId) => {
   if (!cmrDocumentsCache || !Array.isArray(cmrDocumentsCache)) {
-    console.log('🚫 Cache dokumentów CMR jest pusty, pomijam usunięcie');
+    logger.log('🚫 Cache dokumentów CMR jest pusty, pomijam usunięcie');
     return false;
   }
 
@@ -3730,10 +3731,10 @@ export const removeCmrDocumentFromCache = (documentId) => {
   
   if (documentIndex !== -1) {
     cmrDocumentsCache.splice(documentIndex, 1);
-    console.log('✅ Usunięto dokument CMR z cache:', documentId);
+    logger.log('✅ Usunięto dokument CMR z cache:', documentId);
     return true;
   } else {
-    console.log('❌ Nie znaleziono dokumentu CMR w cache:', documentId);
+    logger.log('❌ Nie znaleziono dokumentu CMR w cache:', documentId);
     return false;
   }
 };
@@ -3844,12 +3845,12 @@ export const deleteCmrDeliveryNote = async (noteId, userId) => {
       try {
         await deleteObject(fileRef);
       } catch (storageError) {
-        console.warn('Nie udało się usunąć pliku z Storage:', storageError);
+        logger.warn('Nie udało się usunąć pliku z Storage:', storageError);
       }
     }
 
     await deleteDoc(doc(db, 'cmrDeliveryNotes', noteId));
-    console.log(`Delivery Note ${noteData.fileName} usunięty przez ${userId}`);
+    logger.log(`Delivery Note ${noteData.fileName} usunięty przez ${userId}`);
   } catch (error) {
     console.error('Błąd podczas usuwania Delivery Note:', error);
     throw error;

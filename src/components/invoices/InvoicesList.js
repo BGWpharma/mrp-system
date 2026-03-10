@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
@@ -369,26 +369,9 @@ const InvoicesList = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [invoices]);
+  }, [invoices]); // fetchProformaAmounts is stable ([] deps) and declared below
 
-  const fetchInvoices = async () => {
-    setLoading(true);
-    try {
-      const fetchedInvoices = await getAllInvoices();
-      setInvoices(fetchedInvoices);
-      // setFilteredInvoices będzie ustawione automatycznie przez useEffect
-      
-      // Pobierz dostępne kwoty dla proform
-      await fetchProformaAmounts(fetchedInvoices);
-    } catch (error) {
-      showError(t('invoices.notifications.errors.fetchInvoices') + ': ' + error.message);
-      console.error('Error fetching invoices:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchProformaAmounts = async (invoices) => {
+  const fetchProformaAmounts = useCallback(async (invoices) => {
     const amounts = {};
     const proformaInvoices = invoices.filter(inv => inv.isProforma);
     
@@ -405,9 +388,26 @@ const InvoicesList = () => {
     );
     
     setProformaAmounts(amounts);
-  };
+  }, []);
 
-  const fetchOrders = async () => {
+  const fetchInvoices = useCallback(async () => {
+    setLoading(true);
+    try {
+      const fetchedInvoices = await getAllInvoices();
+      setInvoices(fetchedInvoices);
+      // setFilteredInvoices będzie ustawione automatycznie przez useEffect
+      
+      // Pobierz dostępne kwoty dla proform
+      await fetchProformaAmounts(fetchedInvoices);
+    } catch (error) {
+      showError(t('invoices.notifications.errors.fetchInvoices') + ': ' + error.message);
+      console.error('Error fetching invoices:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchProformaAmounts, showError, t]);
+
+  const fetchOrders = useCallback(async () => {
     setOrdersLoading(true);
     try {
       const fetchedOrders = await getAllOrders();
@@ -419,32 +419,32 @@ const InvoicesList = () => {
     } finally {
       setOrdersLoading(false);
     }
-  };
+  }, []);
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     // Filtrowanie jest już obsługiwane przez useEffect
     // Ta funkcja jest zachowana dla zgodności z UI (przycisk "Szukaj")
-  };
+  }, []);
 
-  const handleSearchChange = (e) => {
+  const handleSearchChange = useCallback((e) => {
     listActions.setSearchTerm(e.target.value);
-  };
+  }, [listActions]);
 
-  const handleSearchKeyPress = (e) => {
+  const handleSearchKeyPress = useCallback((e) => {
     if (e.key === 'Enter') {
       handleSearch();
     }
-  };
+  }, [handleSearch]);
 
-  const clearSearch = () => {
+  const clearSearch = useCallback(() => {
     listActions.setSearchTerm('');
-  };
+  }, [listActions]);
 
-  const handleAddInvoice = () => {
+  const handleAddInvoice = useCallback(() => {
     navigate('/invoices/new');
-  };
+  }, [navigate]);
   
-  const handleUpdateExchangeRates = async () => {
+  const handleUpdateExchangeRates = useCallback(async () => {
     setUpdatingExchangeRates(true);
     
     try {
@@ -472,19 +472,19 @@ const InvoicesList = () => {
     } finally {
       setUpdatingExchangeRates(false);
     }
-  };
+  }, [currentUser?.uid, showSuccess, showError, fetchInvoices]);
   
-  const handleDeleteClick = (invoice) => {
+  const handleDeleteClick = useCallback((invoice) => {
     setInvoiceToDelete(invoice);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = useCallback(async () => {
     if (!invoiceToDelete) return;
     
     try {
       await deleteInvoice(invoiceToDelete.id);
-      setInvoices(invoices.filter(i => i.id !== invoiceToDelete.id));
+      setInvoices(prev => prev.filter(i => i.id !== invoiceToDelete.id));
       // setFilteredInvoices będzie ustawione automatycznie przez useEffect
       showSuccess(t('invoices.notifications.invoiceDeleted'));
     } catch (error) {
@@ -493,9 +493,9 @@ const InvoicesList = () => {
       setDeleteDialogOpen(false);
       setInvoiceToDelete(null);
     }
-  };
+  }, [invoiceToDelete, showSuccess, showError, t]);
 
-  const handleUpdateStatus = async (invoiceId, newStatus) => {
+  const handleUpdateStatus = useCallback(async (invoiceId, newStatus) => {
     try {
       await updateInvoiceStatus(invoiceId, newStatus, currentUser.uid);
       // Odśwież listę po aktualizacji
@@ -504,43 +504,43 @@ const InvoicesList = () => {
     } catch (error) {
       showError(t('invoices.notifications.errors.updateStatus') + ': ' + error.message);
     }
-  };
+  }, [currentUser.uid, fetchInvoices, showSuccess, showError, t]);
 
-  const handleRefreshList = async () => {
+  const handleRefreshList = useCallback(async () => {
     await fetchInvoices();
     showSuccess(t('invoices.notifications.listRefreshed'));
-  };
+  }, [fetchInvoices, showSuccess, t]);
 
-  const handleRefreshProformaAmounts = async () => {
+  const handleRefreshProformaAmounts = useCallback(async () => {
     if (invoices.length > 0) {
       await fetchProformaAmounts(invoices);
       showSuccess(t('invoices.notifications.proformaAmountsRefreshed'));
     }
-  };
+  }, [invoices, fetchProformaAmounts, showSuccess, t]);
 
   // Funkcje obsługi menu dropdown akcji
-  const handleActionsMenuOpen = (event) => {
+  const handleActionsMenuOpen = useCallback((event) => {
     setActionsMenuAnchor(event.currentTarget);
-  };
+  }, []);
 
-  const handleActionsMenuClose = () => {
+  const handleActionsMenuClose = useCallback(() => {
     setActionsMenuAnchor(null);
-  };
+  }, []);
 
-  const toggleFilters = () => {
+  const toggleFilters = useCallback(() => {
     listActions.setFiltersExpanded(!listState.filtersExpanded);
-  };
+  }, [listActions, listState.filtersExpanded]);
 
-  const handleFilterChange = (e) => {
+  const handleFilterChange = useCallback((e) => {
     const { name, value } = e.target;
     listActions.updateFilter(name, value);
-  };
+  }, [listActions]);
 
-  const handleDateChange = (name, date) => {
+  const handleDateChange = useCallback((name, date) => {
     listActions.updateFilter(name, date);
-  };
+  }, [listActions]);
 
-  const applyFilters = async () => {
+  const applyFilters = useCallback(async () => {
     setLoading(true);
     try {
       const fetchedInvoices = await getAllInvoices(listState.filters);
@@ -551,15 +551,15 @@ const InvoicesList = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [listState.filters, showError, t]);
 
-  const resetFilters = () => {
+  const resetFilters = useCallback(() => {
     listActions.resetFilters();
     // setFilteredInvoices będzie ustawione automatycznie przez useEffect
-  };
+  }, [listActions]);
 
   // Funkcja do rozwijania/zwijania szczegółów faktury z pobieraniem danych onDemand
-  const toggleExpandInvoice = async (invoiceId) => {
+  const toggleExpandInvoice = useCallback(async (invoiceId) => {
     // Jeśli klikamy na już rozwinięty wiersz - zwijamy
     if (expandedInvoiceId === invoiceId) {
       setExpandedInvoiceId(null);
@@ -585,10 +585,10 @@ const InvoicesList = () => {
     } finally {
       setLoadingDetails(prev => ({ ...prev, [invoiceId]: false }));
     }
-  };
+  }, [expandedInvoiceId, invoiceDetails, showError, t]);
   
   // Funkcja do odświeżania szczegółów faktury
-  const refreshInvoiceDetails = async (invoiceId) => {
+  const refreshInvoiceDetails = useCallback(async (invoiceId) => {
     setLoadingDetails(prev => ({ ...prev, [invoiceId]: true }));
     try {
       const details = await getInvoiceById(invoiceId);
@@ -599,18 +599,18 @@ const InvoicesList = () => {
     } finally {
       setLoadingDetails(prev => ({ ...prev, [invoiceId]: false }));
     }
-  };
+  }, [showError, t]);
 
-  const formatDate = (date) => {
+  const formatDate = useCallback((date) => {
     if (!date) return '';
     return format(new Date(date), 'dd.MM.yyyy');
-  };
+  }, []);
 
-  const handleViewCustomer = (customerId) => {
+  const handleViewCustomer = useCallback((customerId) => {
     navigate(`/orders/customers/${customerId}`);
-  };
+  }, [navigate]);
 
-  const renderInvoiceStatus = (status) => {
+  const renderInvoiceStatus = useCallback((status) => {
     const statusConfig = {
       'draft': { color: 'default', label: t('invoices.status.draft') },
       'issued': { color: 'primary', label: t('invoices.status.issued') },
@@ -630,9 +630,9 @@ const InvoicesList = () => {
         size="small"
       />
     );
-  };
+  }, [t]);
 
-  const renderPaymentStatus = (paymentStatus) => {
+  const renderPaymentStatus = useCallback((paymentStatus) => {
     const statusConfig = {
       'unpaid': { color: 'error', label: t('invoices.status.unpaid') },
       'partially_paid': { color: 'warning', label: t('invoices.status.partiallyPaid') },
@@ -650,14 +650,22 @@ const InvoicesList = () => {
         variant="outlined"
       />
     );
-  };
+  }, [t]);
 
   // Funkcja obsługująca kliknięcie w nagłówek kolumny (sortowanie)
-  const handleRequestSort = (property) => {
+  const handleRequestSort = useCallback((property) => {
     const isAsc = tableSort?.field === property && tableSort?.order === 'asc';
     const newOrder = isAsc ? 'desc' : 'asc';
     listActions.setTableSort({ field: property, order: newOrder });
-  };
+  }, [tableSort, listActions]);
+
+  const paginatedInvoices = useMemo(() =>
+    filteredInvoices.slice(
+      listState.page * listState.rowsPerPage,
+      listState.page * listState.rowsPerPage + listState.rowsPerPage
+    ),
+    [filteredInvoices, listState.page, listState.rowsPerPage]
+  );
 
   // Komponent dla nagłówka kolumny z sortowaniem
   const SortableTableCell = ({ id, label, disableSorting = false }) => {
@@ -1030,8 +1038,7 @@ const InvoicesList = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredInvoices
-                      .slice(listState.page * listState.rowsPerPage, listState.page * listState.rowsPerPage + listState.rowsPerPage)
+                    paginatedInvoices
                       .map((invoice) => (
                         <React.Fragment key={invoice.id}>
                           <TableRow 

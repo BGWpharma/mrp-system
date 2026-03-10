@@ -1,8 +1,6 @@
-const isDev = process.env.NODE_ENV !== 'production';
-
 export const logger = {
-  debug: (...args) => isDev && console.log(...args),
-  info: (...args) => isDev && console.info(...args),
-  warn: (...args) => console.warn(...args),
+  log: (...args) => console.log(...args),
   error: (...args) => console.error(...args),
+  warn: (...args) => console.warn(...args),
+  debug: (...args) => console.log('[DEBUG]', ...args),
 };

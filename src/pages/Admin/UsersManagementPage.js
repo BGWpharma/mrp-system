@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Container,
   Paper,
@@ -121,7 +121,7 @@ const UsersManagementPage = () => {
     fetchUsers();
   }, []);
   
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       const usersData = await getAllUsers();
@@ -132,44 +132,44 @@ const UsersManagementPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showError]);
   
-  const handleOpenEditDialog = (user) => {
+  const handleOpenEditDialog = useCallback((user) => {
     setSelectedUser(user);
     setNewRole(user.role || 'pracownik');
     setEditDialogOpen(true);
-  };
+  }, []);
   
-  const handleCloseEditDialog = () => {
+  const handleCloseEditDialog = useCallback(() => {
     setEditDialogOpen(false);
     setSelectedUser(null);
-  };
+  }, []);
   
-  const handleOpenSidebarTabsDialog = (user) => {
+  const handleOpenSidebarTabsDialog = useCallback((user) => {
     setSelectedUserForTabs(user);
     setSidebarTabsDialogOpen(true);
-  };
+  }, []);
   
-  const handleCloseSidebarTabsDialog = () => {
+  const handleCloseSidebarTabsDialog = useCallback(() => {
     setSidebarTabsDialogOpen(false);
     setSelectedUserForTabs(null);
-  };
+  }, []);
   
-  const handleOpenProfileEditor = (user) => {
+  const handleOpenProfileEditor = useCallback((user) => {
     setSelectedUserForProfile(user);
     setProfileEditorOpen(true);
-  };
+  }, []);
   
-  const handleCloseProfileEditor = () => {
+  const handleCloseProfileEditor = useCallback(() => {
     setProfileEditorOpen(false);
     setSelectedUserForProfile(null);
-  };
+  }, []);
   
-  const handleUserUpdated = () => {
-    fetchUsers(); // Odśwież listę użytkowników po edycji
-  };
+  const handleUserUpdated = useCallback(() => {
+    fetchUsers();
+  }, [fetchUsers]);
   
-  const handleOpenPermissionsDialog = async (user) => {
+  const handleOpenPermissionsDialog = useCallback(async (user) => {
     try {
       setSelectedUserForPermissions(user);
       setProcessing(true);
@@ -185,22 +185,22 @@ const UsersManagementPage = () => {
     } finally {
       setProcessing(false);
     }
-  };
+  }, [showError]);
   
-  const handleClosePermissionsDialog = () => {
+  const handleClosePermissionsDialog = useCallback(() => {
     setPermissionsDialogOpen(false);
     setSelectedUserForPermissions(null);
     setUserPermissions({});
-  };
+  }, []);
   
-  const handlePermissionChange = (permissionKey) => {
+  const handlePermissionChange = useCallback((permissionKey) => {
     setUserPermissions(prev => ({
       ...prev,
       [permissionKey]: !prev[permissionKey]
     }));
-  };
+  }, []);
   
-  const handleSavePermissions = async () => {
+  const handleSavePermissions = useCallback(async () => {
     if (!selectedUserForPermissions) return;
     
     try {
@@ -217,9 +217,9 @@ const UsersManagementPage = () => {
     } finally {
       setProcessing(false);
     }
-  };
+  }, [selectedUserForPermissions, userPermissions, currentUser.uid, showSuccess, showError, handleClosePermissionsDialog, fetchUsers, refreshPermissions]);
   
-  const handleChangeRole = async () => {
+  const handleChangeRole = useCallback(async () => {
     if (!selectedUser || !newRole) return;
     
     try {
@@ -241,10 +241,10 @@ const UsersManagementPage = () => {
     } finally {
       setProcessing(false);
     }
-  };
+  }, [selectedUser, newRole, currentUser.uid, users, showSuccess, showError, handleCloseEditDialog]);
 
   // ===== Tworzenie pracownika kioskowego =====
-  const handleOpenCreateDialog = () => {
+  const handleOpenCreateDialog = useCallback(() => {
     setNewKioskUser({
       displayName: '',
       employeeId: '',
@@ -254,32 +254,32 @@ const UsersManagementPage = () => {
     });
     setCreateErrors({});
     setCreateDialogOpen(true);
-  };
+  }, []);
 
-  const handleCloseCreateDialog = () => {
+  const handleCloseCreateDialog = useCallback(() => {
     setCreateDialogOpen(false);
     setNewKioskUser({ displayName: '', employeeId: '', position: '', department: '', phone: '' });
     setCreateErrors({});
-  };
+  }, []);
 
-  const handleCreateInputChange = (field) => (e) => {
+  const handleCreateInputChange = useCallback((field) => (e) => {
     let value = e.target.value;
     if (field === 'employeeId') value = value.toUpperCase();
     setNewKioskUser(prev => ({ ...prev, [field]: value }));
     if (createErrors[field]) {
       setCreateErrors(prev => ({ ...prev, [field]: '' }));
     }
-  };
+  }, [createErrors]);
 
-  const validateCreateForm = () => {
+  const validateCreateForm = useCallback(() => {
     const errors = {};
     if (!newKioskUser.displayName.trim()) errors.displayName = 'Imię i nazwisko jest wymagane';
     if (!newKioskUser.employeeId.trim()) errors.employeeId = 'ID pracownika jest wymagane';
     setCreateErrors(errors);
     return Object.keys(errors).length === 0;
-  };
+  }, [newKioskUser]);
 
-  const handleCreateKioskUser = async () => {
+  const handleCreateKioskUser = useCallback(async () => {
     if (!validateCreateForm()) return;
 
     setCreating(true);
@@ -294,20 +294,20 @@ const UsersManagementPage = () => {
     } finally {
       setCreating(false);
     }
-  };
+  }, [validateCreateForm, newKioskUser, currentUser.uid, showSuccess, showError, handleCloseCreateDialog, fetchUsers]);
 
   // ===== Usuwanie pracownika kioskowego =====
-  const handleOpenDeleteDialog = (user) => {
+  const handleOpenDeleteDialog = useCallback((user) => {
     setUserToDelete(user);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
-  const handleCloseDeleteDialog = () => {
+  const handleCloseDeleteDialog = useCallback(() => {
     setDeleteDialogOpen(false);
     setUserToDelete(null);
-  };
+  }, []);
 
-  const handleDeleteKioskUser = async () => {
+  const handleDeleteKioskUser = useCallback(async () => {
     if (!userToDelete) return;
 
     setDeleting(true);
@@ -322,20 +322,20 @@ const UsersManagementPage = () => {
     } finally {
       setDeleting(false);
     }
-  };
+  }, [userToDelete, currentUser.uid, showSuccess, showError, handleCloseDeleteDialog, fetchUsers]);
   
   // ===== Archiwizacja kont =====
-  const handleOpenArchiveDialog = (user) => {
+  const handleOpenArchiveDialog = useCallback((user) => {
     setUserToArchive(user);
     setArchiveDialogOpen(true);
-  };
+  }, []);
 
-  const handleCloseArchiveDialog = () => {
+  const handleCloseArchiveDialog = useCallback(() => {
     setArchiveDialogOpen(false);
     setUserToArchive(null);
-  };
+  }, []);
 
-  const handleToggleArchive = async () => {
+  const handleToggleArchive = useCallback(async () => {
     if (!userToArchive) return;
 
     setArchiving(true);
@@ -356,21 +356,26 @@ const UsersManagementPage = () => {
     } finally {
       setArchiving(false);
     }
-  };
+  }, [userToArchive, currentUser.uid, showSuccess, showError, t, handleCloseArchiveDialog, fetchUsers]);
 
-  const activeUsers = users.filter(u => !u.archived);
-  const archivedUsers = users.filter(u => u.archived);
-  const displayedUsers = showArchived ? users : activeUsers;
+  const handleCloseWorkTimeDialog = useCallback(() => {
+    setWorkTimeUserDialogOpen(false);
+    setSelectedUserForWorkTime(null);
+  }, []);
+
+  const activeUsers = useMemo(() => users.filter(u => !u.archived), [users]);
+  const archivedUsers = useMemo(() => users.filter(u => u.archived), [users]);
+  const displayedUsers = useMemo(() => showArchived ? users : activeUsers, [showArchived, users, activeUsers]);
 
   const muiTheme = useMuiTheme();
   const isDark = muiTheme.palette.mode === 'dark';
 
-  const getInitials = (name) => {
+  const getInitials = useCallback((name) => {
     if (!name) return '?';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  };
+  }, []);
 
-  const getAvatarColor = (name) => {
+  const getAvatarColor = useCallback((name) => {
     if (!name) return muiTheme.palette.grey[500];
     const colors = [
       '#2563eb', '#7c3aed', '#db2777', '#ea580c', 
@@ -379,10 +384,10 @@ const UsersManagementPage = () => {
     let hash = 0;
     for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
     return colors[Math.abs(hash) % colors.length];
-  };
+  }, [muiTheme.palette.grey]);
 
-  const getUserAiLimit = (user) => user.aiMessagesLimit || (user.role === 'administrator' ? 250 : 50);
-  const getUserAiUsed = (user) => user.aiMessagesUsed || 0;
+  const getUserAiLimit = useCallback((user) => user.aiMessagesLimit || (user.role === 'administrator' ? 250 : 50), []);
+  const getUserAiUsed = useCallback((user) => user.aiMessagesUsed || 0, []);
 
   return (
     <Container maxWidth="lg">
@@ -1086,7 +1091,7 @@ const UsersManagementPage = () => {
       {/* Dialog czasu pracy per-user */}
       <WorkTimeUserDialog
         open={workTimeUserDialogOpen}
-        onClose={() => { setWorkTimeUserDialogOpen(false); setSelectedUserForWorkTime(null); }}
+        onClose={handleCloseWorkTimeDialog}
         user={selectedUserForWorkTime}
         users={users}
         adminUser={currentUser}

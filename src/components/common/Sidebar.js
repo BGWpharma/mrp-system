@@ -831,11 +831,11 @@ const Sidebar = ({ onToggle }) => {
           sx={{
             color: 'info.main',
             borderRadius: '6px',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            transition: 'background-color 0.15s ease',
             '&:hover': {
-              background: 'linear-gradient(to right, rgba(33, 150, 243, 0.1), rgba(25, 118, 210, 0.1))',
-              transform: 'translateX(4px)',
-              boxShadow: '0 4px 12px rgba(33, 150, 243, 0.2)',
+              backgroundColor: mode === 'dark' 
+                ? 'rgba(255, 255, 255, 0.06)'
+                : 'rgba(0, 0, 0, 0.04)',
             },
             cursor: 'pointer',
             mb: 0.5
@@ -876,11 +876,11 @@ const Sidebar = ({ onToggle }) => {
           sx={{
             color: 'error.main',
             borderRadius: '6px',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            transition: 'background-color 0.15s ease',
             '&:hover': {
-              background: 'linear-gradient(to right, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1))',
-              transform: 'translateX(4px)',
-              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)',
+              backgroundColor: mode === 'dark' 
+                ? 'rgba(255, 255, 255, 0.06)'
+                : 'rgba(0, 0, 0, 0.04)',
             },
             cursor: 'pointer'
           }}

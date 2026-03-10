@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -188,11 +188,11 @@ const ProductionReportPage = () => {
   };
 
   
-  const handleTabChange = (event, newValue) => {
+  const handleTabChange = useCallback((event, newValue) => {
     setSelectedTab(newValue);
-  };
+  }, []);
   
-  const getTaskCustomerName = (task) => {
+  const getTaskCustomerName = useCallback((task) => {
     const relatedOrder = orders.find(order => 
       order.productionTasks?.some(prodTask => prodTask.id === task.id)
     );
@@ -202,7 +202,12 @@ const ProductionReportPage = () => {
     }
     
     return 'Bez przypisanego klienta';
-  };
+  }, [orders]);
+
+  const handleDateChange = useCallback((newStartDate, newEndDate) => {
+    setStartDate(newStartDate);
+    setEndDate(newEndDate);
+  }, []);
 
   if (loading) {
     return (
@@ -285,10 +290,7 @@ const ProductionReportPage = () => {
           endDate={endDate}
           customers={customers}
           isMobile={isMobile}
-          onDateChange={(newStartDate, newEndDate) => {
-            setStartDate(newStartDate);
-            setEndDate(newEndDate);
-          }}
+          onDateChange={handleDateChange}
         />
       )}
 
@@ -306,7 +308,7 @@ const ProductionReportPage = () => {
 };
 
 // Komponent zakładki konsumpcji MO
-const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, onDateChange }) => {
+const ConsumptionReportTab = React.memo(({ tasks, startDate, endDate, customers, isMobile, onDateChange }) => {
   const { t } = useTranslation('production');
   const { showError } = useNotification();
   const [consumptionData, setConsumptionData] = useState([]);
@@ -323,7 +325,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
   const [sortDirection, setSortDirection] = useState('desc');
 
   // Funkcja do agregacji danych konsumpcji z zadań produkcyjnych
-  const aggregateConsumptionData = (tasks) => {
+  const aggregateConsumptionData = useCallback((tasks) => {
     console.log(`[RAPORT KONSUMPCJI] Rozpoczynam agregację dla ${tasks.length} zadań`);
     console.log(`[RAPORT KONSUMPCJI] Zakres dat: ${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`);
     
@@ -483,7 +485,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
       detailedData: aggregatedData,
       materialSummary: Object.values(materialSummary)
     };
-  };
+  }, [startDate, endDate]);
 
   // Pobierz unikalne materiały do filtrowania
   useEffect(() => {
@@ -543,7 +545,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
   }, [tasks]);
 
   // Funkcja do debugowania struktury zadań
-  const debugTasksStructure = (tasks) => {
+  const debugTasksStructure = useCallback((tasks) => {
     console.log('[DEBUG STRUKTURA] Analizuję strukturę zadań...');
     
     if (tasks.length === 0) {
@@ -584,7 +586,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
     });
     
     console.log('[DEBUG STRUKTURA] Statystyki zadań:', stats);
-  };
+  }, []);
 
   // Agreguj dane konsumpcji po zmianie filtrów
   useEffect(() => {
@@ -620,20 +622,20 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
     setLoading(false);
   }, [tasks, startDate, endDate, selectedMaterial, selectedOrder, sortField, sortDirection]);
 
-  const formatCurrency = (value) => {
+  const formatCurrency = useCallback((value) => {
     return new Intl.NumberFormat('pl-PL', {
       style: 'currency',
       currency: 'EUR',
       minimumFractionDigits: 2
     }).format(value);
-  };
+  }, []);
 
-  const formatQuantity = (value, precision = 3) => {
+  const formatQuantity = useCallback((value, precision = 3) => {
     return Number(value).toFixed(precision);
-  };
+  }, []);
 
   // Funkcja sortowania danych konsumpcji
-  const sortConsumptionData = (data, field, direction) => {
+  const sortConsumptionData = useCallback((data, field, direction) => {
     return [...data].sort((a, b) => {
       let aValue, bValue;
       
@@ -701,10 +703,10 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
       }
       return 0;
     });
-  };
+  }, [tasks]);
 
   // Funkcja obsługi kliknięcia w nagłówek kolumny
-  const handleSort = (field) => {
+  const handleSort = useCallback((field) => {
     const newDirection = sortField === field && sortDirection === 'asc' ? 'desc' : 'asc';
     setSortField(field);
     setSortDirection(newDirection);
@@ -712,7 +714,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
     // Posortuj bieżące dane
     const sortedData = sortConsumptionData(filteredConsumption, field, newDirection);
     setFilteredConsumption(sortedData);
-  };
+  }, [sortField, sortDirection, filteredConsumption, sortConsumptionData]);
 
   // Komponent nagłówka kolumny z sortowaniem
   const SortableTableCell = ({ field, children, align = 'left', ...props }) => {
@@ -749,7 +751,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
   };
 
   // Funkcja eksportu podsumowania materiałów do CSV
-  const exportSummaryToCSV = () => {
+  const exportSummaryToCSV = useCallback(() => {
     try {
       // Przygotuj nagłówki CSV dla podsumowania
       const headers = [
@@ -819,10 +821,10 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
       console.error('[EKSPORT CSV] Błąd podczas eksportu podsumowania:', error);
       showError(t('production.reports.consumption.exportErrorSummary'));
     }
-  };
+  }, [consumptionData, startDate, endDate, t, showError, formatQuantity]);
 
   // Funkcja eksportu szczegółów do CSV
-  const exportToCSV = () => {
+  const exportToCSV = useCallback(() => {
     try {
       // Przygotuj nagłówki CSV
       const headers = [
@@ -913,7 +915,22 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
       console.error('[EKSPORT CSV] Błąd podczas eksportu:', error);
       showError(t('production.reports.consumption.exportErrorDetails'));
     }
-  };
+  }, [filteredConsumption, tasks, startDate, endDate, t, showError, formatQuantity]);
+
+  const summaryTotalCost = useMemo(
+    () => consumptionData.reduce((sum, material) => sum + material.totalCost, 0),
+    [consumptionData]
+  );
+
+  const summaryTotalBatches = useMemo(
+    () => consumptionData.reduce((sum, material) => sum + material.batchCount, 0),
+    [consumptionData]
+  );
+
+  const summaryTotalTasks = useMemo(
+    () => new Set(consumptionData.flatMap(material => material.taskCount)).size,
+    [consumptionData]
+  );
 
   if (loading) {
     return (
@@ -1101,13 +1118,13 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
                   <TableCell>-</TableCell>
                   <TableCell align="right">-</TableCell>
                   <TableCell align="right">
-                    {formatCurrency(consumptionData.reduce((sum, material) => sum + material.totalCost, 0))}
+                    {formatCurrency(summaryTotalCost)}
                   </TableCell>
                   <TableCell align="center">
-                    {consumptionData.reduce((sum, material) => sum + material.batchCount, 0)}
+                    {summaryTotalBatches}
                   </TableCell>
                   <TableCell align="center">
-                    {new Set(consumptionData.flatMap(material => material.taskCount)).size}
+                    {summaryTotalTasks}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -1274,6 +1291,6 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
       </Paper>
     </Box>
   );
-};
+});
 
 export default ProductionReportPage; 

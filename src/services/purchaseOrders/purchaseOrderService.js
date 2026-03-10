@@ -17,6 +17,7 @@ import {
 import { ref, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 import { ServiceCacheManager } from '../cache/serviceCacheManager';
+import { logger } from '../../utils/logger';
 
 const PURCHASE_ORDERS_COLLECTION = 'purchaseOrders';
 const SUPPLIERS_COLLECTION = 'suppliers';
@@ -130,7 +131,7 @@ export const getAllPurchaseOrders = async () => {
         // Wartość brutto to suma: wartość netto produktów + VAT + dodatkowe koszty
         totalGross = productsValue + vatValue + additionalCosts;
         
-        console.log(`Obliczono wartość brutto dla PO ${poData.number}: ${totalGross}`);
+        logger.log(`Obliczono wartość brutto dla PO ${poData.number}: ${totalGross}`);
       } else {
         totalGross = parseFloat(totalGross) || 0;
       }
@@ -180,11 +181,11 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
     const shouldUseCache = useCache && (!filters.searchTerm || filters.searchTerm.trim() === '');
     
     if (shouldUseCache && ServiceCacheManager.has(cacheKey)) {
-      console.log('Używam danych z cache dla zapytania:', { page, itemsPerPage, sortField, sortOrder });
+      logger.log('Używam danych z cache dla zapytania:', { page, itemsPerPage, sortField, sortOrder });
       return ServiceCacheManager.get(cacheKey);
     }
     
-    console.log('Pobieranie świeżych danych dla zapytania:', { page, itemsPerPage, sortField, sortOrder, hasSearchTerm: !!(filters.searchTerm && filters.searchTerm.trim()) });
+    logger.log('Pobieranie świeżych danych dla zapytania:', { page, itemsPerPage, sortField, sortOrder, hasSearchTerm: !!(filters.searchTerm && filters.searchTerm.trim()) });
     
     // Ustaw realne wartości dla page i itemsPerPage
     const pageNum = Math.max(1, page);
@@ -289,15 +290,15 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
       // Filtrowanie po tekście wyszukiwania
       if (filters.searchTerm && filters.searchTerm.trim() !== '') {
         const searchTerm = filters.searchTerm.toLowerCase().trim();
-        console.log(`Rozpoczynam wyszukiwanie dla terminu: "${searchTerm}"`);
+        logger.log(`Rozpoczynam wyszukiwanie dla terminu: "${searchTerm}"`);
         
         // DEBUG: Pokaż przykładowe numery PO z bazy danych (pierwsze 3)
-        console.log('--- DEBUG: Przykładowe numery PO w bazie ---');
+        logger.log('--- DEBUG: Przykładowe numery PO w bazie ---');
         allDocs.slice(0, 3).forEach(doc => {
           const data = doc.data();
-          console.log(`ID: ${doc.id}, number: "${data.number}"`);
+          logger.log(`ID: ${doc.id}, number: "${data.number}"`);
         });
-        console.log('--- KONIEC DEBUG ---');
+        logger.log('--- KONIEC DEBUG ---');
         
         // Najpierw znajdź zamówienia pasujące bezpośrednio po tekście
         const directMatchingDocs = allDocs.filter(doc => {
@@ -305,13 +306,13 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
           
           // Szukaj w numerze zamówienia (zarówno pełnej nazwie jak i części)
           if (data.number && data.number.toLowerCase().includes(searchTerm)) {
-            console.log(`✓ Znaleziono dopasowanie w numerze: ${data.number}`);
+            logger.log(`✓ Znaleziono dopasowanie w numerze: ${data.number}`);
             return true;
           }
           
           // Szukaj w ID dokumentu (dla numerów PO)
           if (doc.id.toLowerCase().includes(searchTerm)) {
-            console.log(`✓ Znaleziono dopasowanie w ID dokumentu: ${doc.id}`);
+            logger.log(`✓ Znaleziono dopasowanie w ID dokumentu: ${doc.id}`);
             return true;
           }
           
@@ -320,26 +321,26 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             const numberUpper = data.number.toUpperCase();
             const searchUpper = searchTerm.toUpperCase();
             if (numberUpper.includes(searchUpper)) {
-              console.log(`✓ Znaleziono dopasowanie w numerze (case insensitive): ${data.number}`);
+              logger.log(`✓ Znaleziono dopasowanie w numerze (case insensitive): ${data.number}`);
               return true;
             }
           }
           
           // Sprawdź czy ID dokumentu pasuje (case insensitive)
           if (doc.id.toUpperCase().includes(searchTerm.toUpperCase())) {
-            console.log(`✓ Znaleziono dopasowanie w ID (case insensitive): ${doc.id}`);
+            logger.log(`✓ Znaleziono dopasowanie w ID (case insensitive): ${doc.id}`);
             return true;
           }
           
           // Szukaj w notatkach
           if (data.notes && data.notes.toLowerCase().includes(searchTerm)) {
-            console.log(`✓ Znaleziono dopasowanie w notatkach`);
+            logger.log(`✓ Znaleziono dopasowanie w notatkach`);
             return true;
           }
           
           // Szukaj w numerach referencyjnych
           if (data.referenceNumber && data.referenceNumber.toLowerCase().includes(searchTerm)) {
-            console.log(`✓ Znaleziono dopasowanie w numerze referencyjnym: ${data.referenceNumber}`);
+            logger.log(`✓ Znaleziono dopasowanie w numerze referencyjnym: ${data.referenceNumber}`);
             return true;
           }
           
@@ -348,31 +349,31 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             const foundInItems = data.items.some(item => {
               // Szukaj w nazwie produktu
               if (item.name && item.name.toLowerCase().includes(searchTerm)) {
-                console.log(`✓ Znaleziono dopasowanie w nazwie produktu: ${item.name}`);
+                logger.log(`✓ Znaleziono dopasowanie w nazwie produktu: ${item.name}`);
                 return true;
               }
               
               // Szukaj w kodzie produktu/SKU (jeśli istnieje)
               if (item.code && item.code.toLowerCase().includes(searchTerm)) {
-                console.log(`✓ Znaleziono dopasowanie w kodzie produktu: ${item.code}`);
+                logger.log(`✓ Znaleziono dopasowanie w kodzie produktu: ${item.code}`);
                 return true;
               }
               
               // Szukaj w numerze katalogowym (jeśli istnieje)
               if (item.catalogNumber && item.catalogNumber.toLowerCase().includes(searchTerm)) {
-                console.log(`✓ Znaleziono dopasowanie w numerze katalogowym: ${item.catalogNumber}`);
+                logger.log(`✓ Znaleziono dopasowanie w numerze katalogowym: ${item.catalogNumber}`);
                 return true;
               }
               
               // Szukaj w opisie pozycji (jeśli istnieje)
               if (item.description && item.description.toLowerCase().includes(searchTerm)) {
-                console.log(`✓ Znaleziono dopasowanie w opisie pozycji: ${item.description}`);
+                logger.log(`✓ Znaleziono dopasowanie w opisie pozycji: ${item.description}`);
                 return true;
               }
               
               // Szukaj w numerze faktury pozycji (może być przydatne)
               if (item.invoiceNumber && item.invoiceNumber.toLowerCase().includes(searchTerm)) {
-                console.log(`✓ Znaleziono dopasowanie w numerze faktury pozycji: ${item.invoiceNumber}`);
+                logger.log(`✓ Znaleziono dopasowanie w numerze faktury pozycji: ${item.invoiceNumber}`);
                 return true;
               }
               
@@ -400,7 +401,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             if (Math.abs(totalGross - searchNumber) <= tolerance ||
                 Math.abs(totalValue - searchNumber) <= tolerance ||
                 Math.abs(totalNet - searchNumber) <= tolerance) {
-              console.log(`✓ Znaleziono dopasowanie w wartości PO: ${data.number} (totalGross: ${totalGross})`);
+              logger.log(`✓ Znaleziono dopasowanie w wartości PO: ${data.number} (totalGross: ${totalGross})`);
               return true;
             }
             
@@ -414,7 +415,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
                      Math.abs(itemUnitPrice - searchNumber) <= tolerance ||
                      Math.abs(itemNetValue - searchNumber) <= tolerance;
             })) {
-              console.log(`✓ Znaleziono dopasowanie w wartości pozycji: ${data.number}`);
+              logger.log(`✓ Znaleziono dopasowanie w wartości pozycji: ${data.number}`);
               return true;
             }
             
@@ -423,7 +424,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
               const costValue = parseFloat(cost.value) || 0;
               return Math.abs(costValue - searchNumber) <= tolerance;
             })) {
-              console.log(`✓ Znaleziono dopasowanie w wartości kosztu dodatkowego: ${data.number}`);
+              logger.log(`✓ Znaleziono dopasowanie w wartości kosztu dodatkowego: ${data.number}`);
               return true;
             }
           }
@@ -431,7 +432,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
           return false;
         });
         
-        console.log(`Znaleziono ${directMatchingDocs.length} zamówień pasujących bezpośrednio`);
+        logger.log(`Znaleziono ${directMatchingDocs.length} zamówień pasujących bezpośrednio`);
         
         // ✅ OPTYMALIZACJA: Inteligentne wyszukiwanie dostawców z indeksami
         let matchingSupplierIds = new Set();
@@ -449,12 +450,12 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             const suppliersSnapshot = await getDocs(suppliersQuery);
             suppliersSnapshot.forEach(doc => {
               matchingSupplierIds.add(doc.id);
-              console.log(`✓ Znaleziono dostawcę: ${doc.data().name}`);
+              logger.log(`✓ Znaleziono dostawcę: ${doc.data().name}`);
             });
             
             // Jeśli nie znaleziono przez zapytanie zakresowe, spróbuj fallback
             if (matchingSupplierIds.size === 0) {
-              console.log('Brak wyników z zapytania zakresowego, używam fallback...');
+              logger.log('Brak wyników z zapytania zakresowego, używam fallback...');
               const allSuppliersQuery = query(collection(db, SUPPLIERS_COLLECTION), firebaseLimit(100));
               const allSuppliersSnapshot = await getDocs(allSuppliersQuery);
               
@@ -463,14 +464,14 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
                 if (supplierData.name && 
                     supplierData.name.toLowerCase().includes(searchTerm.toLowerCase())) {
                   matchingSupplierIds.add(doc.id);
-                  console.log(`✓ Znaleziono dostawcę (fallback): ${supplierData.name}`);
+                  logger.log(`✓ Znaleziono dostawcę (fallback): ${supplierData.name}`);
                 }
               });
             }
             
-            console.log(`Znaleziono ${matchingSupplierIds.size} dostawców pasujących do '${searchTerm}'`);
+            logger.log(`Znaleziono ${matchingSupplierIds.size} dostawców pasujących do '${searchTerm}'`);
           } catch (error) {
-            console.warn('Błąd podczas wyszukiwania dostawców:', error);
+            logger.warn('Błąd podczas wyszukiwania dostawców:', error);
             // W przypadku błędu, nie dodawaj żadnych dostawców
           }
         }
@@ -481,7 +482,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
           return data.supplierId && matchingSupplierIds.has(data.supplierId);
         });
         
-        console.log(`Znaleziono ${supplierMatchingDocs.length} zamówień z pasującymi dostawcami`);
+        logger.log(`Znaleziono ${supplierMatchingDocs.length} zamówień z pasującymi dostawcami`);
         
         // Połącz wyniki i usuń duplikaty
         const combinedDocsMap = new Map();
@@ -499,14 +500,14 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
         // Konwertuj z powrotem na tablicę
         allDocs = Array.from(combinedDocsMap.values());
         
-        console.log(`Łącznie znaleziono ${allDocs.length} zamówień dla zapytania '${searchTerm}'`);
+        logger.log(`Łącznie znaleziono ${allDocs.length} zamówień dla zapytania '${searchTerm}'`);
         
         // NOWE: Wyszukiwanie dodatkowe w pozycjach magazynowych
         // Pobierz pozycje magazynowe pasujące do zapytania wyszukiwania
         if (searchTerm.length >= 3) { // Zwiększono do 3 znaków dla lepszej wydajności
           const inventorySearchStartTime = Date.now();
           try {
-            console.log(`[PERFORMANCE] Rozpoczynam wyszukiwanie w pozycjach magazynowych dla: "${searchTerm}"`);
+            logger.log(`[PERFORMANCE] Rozpoczynam wyszukiwanie w pozycjach magazynowych dla: "${searchTerm}"`);
             
             // Sprawdź cache dla wyszukiwania pozycji magazynowych
             const inventoryCacheKey = searchTerm.toLowerCase().trim();
@@ -515,7 +516,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             const cachedInvSearch = ServiceCacheManager.get(`${PO_INV_SEARCH_PREFIX}${inventoryCacheKey}`);
             if (cachedInvSearch) {
               matchingInventoryItemIds = cachedInvSearch;
-              console.log(`Używam cache dla wyszukiwania pozycji magazynowych: ${matchingInventoryItemIds.size} pozycji`);
+              logger.log(`Używam cache dla wyszukiwania pozycji magazynowych: ${matchingInventoryItemIds.size} pozycji`);
             }
             
             // Jeśli nie ma w cache lub cache wygasł, wykonaj wyszukiwanie
@@ -542,20 +543,20 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
                 // Zapisz w cache tylko jeśli znaleziono wyniki
                 if (matchingInventoryItemIds.size > 0) {
                   ServiceCacheManager.set(`${PO_INV_SEARCH_PREFIX}${inventoryCacheKey}`, matchingInventoryItemIds, PO_CACHE_TTL);
-                  console.log(`Zapisano ${matchingInventoryItemIds.size} pozycji magazynowych w cache`);
+                  logger.log(`Zapisano ${matchingInventoryItemIds.size} pozycji magazynowych w cache`);
                 } else {
                   ServiceCacheManager.set(`${PO_INV_SEARCH_PREFIX}${inventoryCacheKey}`, new Set(), PO_CACHE_TTL);
-                  console.log(`Zapisano pusty wynik wyszukiwania pozycji magazynowych w cache`);
+                  logger.log(`Zapisano pusty wynik wyszukiwania pozycji magazynowych w cache`);
                 }
               } catch (inventoryError) {
-                console.warn('Błąd podczas wyszukiwania pozycji magazynowych:', inventoryError);
+                logger.warn('Błąd podczas wyszukiwania pozycji magazynowych:', inventoryError);
                 // W przypadku błędu, kontynuuj bez pozycji magazynowych
                 matchingInventoryItemIds = new Set();
               }
             }
             
             const inventorySearchDuration = Date.now() - inventorySearchStartTime;
-            console.log(`[PERFORMANCE] Wyszukiwanie pozycji magazynowych zakończone w ${inventorySearchDuration}ms. Znaleziono ${matchingInventoryItemIds.size} pozycji`);
+            logger.log(`[PERFORMANCE] Wyszukiwanie pozycji magazynowych zakończone w ${inventorySearchDuration}ms. Znaleziono ${matchingInventoryItemIds.size} pozycji`);
             
             if (matchingInventoryItemIds.size > 0) {
               // Znajdź zamówienia zawierające te pozycje magazynowe
@@ -578,7 +579,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
                 return false;
               });
               
-              console.log(`Znaleziono ${inventoryMatchingDocs.length} nowych zamówień z pasującymi pozycjami magazynowymi`);
+              logger.log(`Znaleziono ${inventoryMatchingDocs.length} nowych zamówień z pasującymi pozycjami magazynowymi`);
               
               // Dodaj znalezione zamówienia do wyników
               for (const doc of inventoryMatchingDocs) {
@@ -589,11 +590,11 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
                 }
               }
               
-              console.log(`Dodano ${addedCount} nowych zamówień. Łącznie: ${allDocs.length} zamówień`);
+              logger.log(`Dodano ${addedCount} nowych zamówień. Łącznie: ${allDocs.length} zamówień`);
             }
           } catch (error) {
             const inventorySearchDuration = Date.now() - inventorySearchStartTime;
-            console.warn(`[PERFORMANCE] Błąd podczas wyszukiwania w pozycjach magazynowych po ${inventorySearchDuration}ms:`, error);
+            logger.warn(`[PERFORMANCE] Błąd podczas wyszukiwania w pozycjach magazynowych po ${inventorySearchDuration}ms:`, error);
             // Kontynuuj bez tego wyszukiwania w przypadku błędu
           }
         }
@@ -623,7 +624,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
           if (searchTerm && supplierData.name && 
               supplierData.name.toLowerCase().includes(searchTerm)) {
             suppliersMapByName[doc.id] = true;
-            console.log(`Znaleziono dostawcę pasującego do zapytania '${searchTerm}': ${supplierData.name}`);
+            logger.log(`Znaleziono dostawcę pasującego do zapytania '${searchTerm}': ${supplierData.name}`);
           } else if (!searchTerm) {
             // Jeśli nie szukamy po tekście, dodaj wszystkich dostawców
             suppliersMapByName[doc.id] = true;
@@ -649,7 +650,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             }
           }
           
-          console.log(`Znaleziono ${ordersWithMatchingSuppliers.length} zamówień z pasującymi dostawcami`);
+          logger.log(`Znaleziono ${ordersWithMatchingSuppliers.length} zamówień z pasującymi dostawcami`);
         }
       }
     }
@@ -757,9 +758,9 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
     
     if (shouldUseCache) {
       ServiceCacheManager.set(cacheKey, result, PO_CACHE_TTL);
-      console.log('Zapisano wyniki do cache');
+      logger.log('Zapisano wyniki do cache');
     } else {
-      console.log('Wyniki wyszukiwania nie zostały zapisane do cache');
+      logger.log('Wyniki wyszukiwania nie zostały zapisane do cache');
     }
     
     return result;
@@ -778,7 +779,7 @@ export const getPurchaseOrderById = async (id) => {
     }
     
     const poData = purchaseOrderDoc.data();
-    console.log("Dane PO z bazy:", poData);
+    logger.log("Dane PO z bazy:", poData);
     
     // Pobierz dane dostawcy, tylko jeśli zamówienie ma referencję do dostawcy
     // i nie zawiera już pełnych danych dostawcy
@@ -817,7 +818,7 @@ export const getPurchaseOrderById = async (id) => {
       updatedAt: safeConvertDate(poData.updatedAt)
     };
     
-    console.log("Pobrane PO (po konwersji):", result);
+    logger.log("Pobrane PO (po konwersji):", result);
     return result;
   } catch (error) {
     console.error(`Błąd podczas pobierania zamówienia zakupowego o ID ${id}:`, error);
@@ -1011,7 +1012,7 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       updatedAt: new Date().toISOString()
     };
     
-    console.log("Nowe PO - wynik:", result);
+    logger.log("Nowe PO - wynik:", result);
     
     clearAllPOCache();
     clearLimitedPOCache();
@@ -1103,7 +1104,7 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
     // Sprawdź czy zaktualizowano pozycje z cenami jednostkowymi
     const hasItemsUpdate = updatedData.items !== undefined;
     
-    console.log(`🔍 [PO_UPDATE_DEBUG] Aktualizacja PO ${purchaseOrderId}:`, {
+    logger.log(`🔍 [PO_UPDATE_DEBUG] Aktualizacja PO ${purchaseOrderId}:`, {
       hasItemsUpdate,
       hasOldData: !!oldPoData,
       oldItemsCount: oldPoData?.items?.length || 0,
@@ -1114,14 +1115,14 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
     // WYŁĄCZONE: Cloud Functions obsługują aktualizację partii (onPurchaseOrderUpdate)
     // Cloud Function automatycznie wykryje zmiany w PO i zaktualizuje partie
     // ============================================================================
-    console.log('ℹ️ [PO_UPDATE_DEBUG] Aktualizacja cen partii będzie wykonana przez Cloud Function (onPurchaseOrderUpdate)');
+    logger.log('ℹ️ [PO_UPDATE_DEBUG] Aktualizacja cen partii będzie wykonana przez Cloud Function (onPurchaseOrderUpdate)');
     
     /*
     // STARA LOGIKA (przed Cloud Functions): Zawsze aktualizuj ceny partii przy każdym zapisie PO
-    console.log('🔄 [PO_UPDATE_DEBUG] Rozpoczynam automatyczną aktualizację cen partii przy zapisie PO');
+    logger.log('🔄 [PO_UPDATE_DEBUG] Rozpoczynam automatyczną aktualizację cen partii przy zapisie PO');
     try {
       await updateBatchPricesOnAnySave(purchaseOrderId, newPoData, userId || 'system');
-      console.log('✅ [PO_UPDATE_DEBUG] Pomyślnie zaktualizowano ceny partii przy zapisie PO');
+      logger.log('✅ [PO_UPDATE_DEBUG] Pomyślnie zaktualizowano ceny partii przy zapisie PO');
     } catch (error) {
       console.error('❌ [PO_UPDATE_DEBUG] Błąd podczas aktualizacji cen partii przy zapisie:', error);
       // Nie przerywamy procesu zapisywania PO z powodu błędu aktualizacji partii
@@ -1129,11 +1130,11 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
     */
     
     // Aktualizuj ceny w rezerwacjach PO
-    console.log('🔄 [PO_UPDATE_DEBUG] Rozpoczynam aktualizację cen w rezerwacjach PO');
+    logger.log('🔄 [PO_UPDATE_DEBUG] Rozpoczynam aktualizację cen w rezerwacjach PO');
     try {
       const { updatePOReservationsPricesOnPOChange } = await import('./poReservationService');
       const poResUpdateResult = await updatePOReservationsPricesOnPOChange(purchaseOrderId, newPoData, userId || 'system');
-      console.log('✅ [PO_UPDATE_DEBUG] Pomyślnie zaktualizowano ceny w rezerwacjach PO:', poResUpdateResult);
+      logger.log('✅ [PO_UPDATE_DEBUG] Pomyślnie zaktualizowano ceny w rezerwacjach PO:', poResUpdateResult);
     } catch (error) {
       console.error('❌ [PO_UPDATE_DEBUG] Błąd podczas aktualizacji cen w rezerwacjach PO:', error);
       // Nie przerywamy procesu zapisywania PO z powodu błędu aktualizacji rezerwacji
@@ -1146,7 +1147,7 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
       try {
         const { updatePOReservationsDeliveryDateOnPOChange } = await import('./poReservationService');
         const dateUpdateResult = await updatePOReservationsDeliveryDateOnPOChange(purchaseOrderId, newPoData, userId || 'system');
-        console.log('✅ [PO_UPDATE_DEBUG] Zaktualizowano daty dostawy w rezerwacjach PO:', dateUpdateResult);
+        logger.log('✅ [PO_UPDATE_DEBUG] Zaktualizowano daty dostawy w rezerwacjach PO:', dateUpdateResult);
       } catch (error) {
         console.error('❌ [PO_UPDATE_DEBUG] Błąd aktualizacji dat dostawy w rezerwacjach PO:', error);
       }
@@ -1155,11 +1156,11 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
     // WYŁĄCZONA STARA LOGIKA: Nowa funkcja updateBatchPricesOnAnySave już obsługuje wszystkie przypadki
     // Stara funkcja updateBatchBasePricesOnUnitPriceChange powodowała konflikty przy dopasowywaniu partii
     if (false && hasItemsUpdate) {
-      console.log('🔍 [PO_UPDATE_DEBUG] WYŁĄCZONE: Stara logika weryfikacji zmian cen (zastąpiona przez updateBatchPricesOnAnySave)');
+      logger.log('🔍 [PO_UPDATE_DEBUG] WYŁĄCZONE: Stara logika weryfikacji zmian cen (zastąpiona przez updateBatchPricesOnAnySave)');
       try {
         await updateBatchBasePricesOnUnitPriceChange(purchaseOrderId, oldPoData, newPoData, userId || 'system');
       } catch (error) {
-        console.warn('⚠️ [PO_UPDATE_DEBUG] Błąd podczas dodatkowej weryfikacji zmian cen:', error);
+        logger.warn('⚠️ [PO_UPDATE_DEBUG] Błąd podczas dodatkowej weryfikacji zmian cen:', error);
       }
     }
     
@@ -1171,10 +1172,10 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
                                      updatedData.additionalCosts !== undefined;
     
     if (hasAdditionalCostsUpdate) {
-      console.log('ℹ️ [PO_UPDATE_DEBUG] Wykryto aktualizację dodatkowych kosztów - Cloud Function obsłuży aktualizację partii');
+      logger.log('ℹ️ [PO_UPDATE_DEBUG] Wykryto aktualizację dodatkowych kosztów - Cloud Function obsłuży aktualizację partii');
       /*
       // STARA LOGIKA (przed Cloud Functions)
-      console.log('Wykryto aktualizację dodatkowych kosztów, aktualizuję ceny partii');
+      logger.log('Wykryto aktualizację dodatkowych kosztów, aktualizuję ceny partii');
       await updateBatchPricesWithAdditionalCosts(purchaseOrderId, newPoData, userId || 'system');
       */
     }
@@ -1321,7 +1322,7 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
       if (newStatus === PURCHASE_ORDER_STATUSES.DELIVERED) {
         updateFields.deliveredAt = serverTimestamp();
         updateFields.deliveredBy = userId;
-        console.log(`Zamówienie ${purchaseOrderId} oznaczone jako dostarczone w dniu ${new Date().toLocaleDateString()} o godzinie ${new Date().toLocaleTimeString()}`);
+        logger.log(`Zamówienie ${purchaseOrderId} oznaczone jako dostarczone w dniu ${new Date().toLocaleDateString()} o godzinie ${new Date().toLocaleTimeString()}`);
       }
 
       // Jeśli status zmieniany jest na "completed" (zakończone)
@@ -1329,7 +1330,7 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
       if (newStatus === PURCHASE_ORDER_STATUSES.COMPLETED) {
         updateFields.completedAt = serverTimestamp();
         updateFields.completedBy = userId;
-        console.log(`Zamówienie ${purchaseOrderId} oznaczone jako zakończone w dniu ${new Date().toLocaleDateString()} o godzinie ${new Date().toLocaleTimeString()}`);
+        logger.log(`Zamówienie ${purchaseOrderId} oznaczone jako zakończone w dniu ${new Date().toLocaleDateString()} o godzinie ${new Date().toLocaleTimeString()}`);
       }
       
       await updateDoc(poRef, updateFields);
@@ -1339,15 +1340,15 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
         const { shouldSendDeliveryNotification, handlePODeliveryNotification } = await import('./poDeliveryNotificationService');
         
         if (shouldSendDeliveryNotification(oldStatus, newStatus)) {
-          console.log(`Sprawdzanie rezerwacji PO dla dostawy: ${poData.number || purchaseOrderId}`);
+          logger.log(`Sprawdzanie rezerwacji PO dla dostawy: ${poData.number || purchaseOrderId}`);
           const deliveryResult = await handlePODeliveryNotification(purchaseOrderId, userId);
           
           if (deliveryResult.notificationsSent > 0) {
-            console.log(`Wysłano ${deliveryResult.notificationsSent} powiadomień o dostawie PO z rezerwacjami`);
+            logger.log(`Wysłano ${deliveryResult.notificationsSent} powiadomień o dostawie PO z rezerwacjami`);
           }
         }
       } catch (poNotificationError) {
-        console.warn('Błąd podczas obsługi powiadomień o dostawie PO z rezerwacjami:', poNotificationError);
+        logger.warn('Błąd podczas obsługi powiadomień o dostawie PO z rezerwacjami:', poNotificationError);
         // Nie przerywamy procesu - to dodatkowa funkcjonalność
       }
 
@@ -1390,9 +1391,9 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
           userId // Przekazanie ID użytkownika, który zmienił status
         );
         
-        console.log(`Utworzono powiadomienie o zmianie statusu zamówienia ${poData.number} z "${oldStatusPL}" na "${newStatusPL}"`);
+        logger.log(`Utworzono powiadomienie o zmianie statusu zamówienia ${poData.number} z "${oldStatusPL}" na "${newStatusPL}"`);
       } catch (notificationError) {
-        console.warn('Nie udało się utworzyć powiadomienia w czasie rzeczywistym:', notificationError);
+        logger.warn('Nie udało się utworzyć powiadomienia w czasie rzeczywistym:', notificationError);
         
         // Fallback do starego systemu powiadomień, jeśli Realtime Database nie zadziała
         try {
@@ -1406,9 +1407,9 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
             newStatusPL
           );
           
-          console.log(`Utworzono powiadomienie (fallback) o zmianie statusu zamówienia ${poData.number}`);
+          logger.log(`Utworzono powiadomienie (fallback) o zmianie statusu zamówienia ${poData.number}`);
         } catch (fallbackError) {
-          console.warn('Nie udało się również utworzyć powiadomienia w Firestore:', fallbackError);
+          logger.warn('Nie udało się również utworzyć powiadomienia w Firestore:', fallbackError);
         }
       }
     }
@@ -1727,7 +1728,7 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
     let updatedItems = [...poData.items];
     let itemWasUpdated = false;
     
-    console.log(`Próba aktualizacji PO ${purchaseOrderId}, produkt ${itemId}, ilość: ${receivedQuantity}`);
+    logger.log(`Próba aktualizacji PO ${purchaseOrderId}, produkt ${itemId}, ilość: ${receivedQuantity}`);
     
     // Najpierw sprawdź bezpośrednie dopasowanie po ID
     updatedItems = updatedItems.map(item => {
@@ -1743,7 +1744,7 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
         const fulfilledPercentage = ordered > 0 ? (newReceived / ordered) * 100 : 0;
         
         itemWasUpdated = true;
-        console.log(`Aktualizacja ilości w PO: ${item.name}, było ${currentReceived}, dodano ${receivedQuantity}, jest ${newReceived}`);
+        logger.log(`Aktualizacja ilości w PO: ${item.name}, było ${currentReceived}, dodano ${receivedQuantity}, jest ${newReceived}`);
         
         return {
           ...item,
@@ -1762,7 +1763,7 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
         
         if (inventoryItem && inventoryItem.name) {
           const productName = inventoryItem.name;
-          console.log(`Szukanie dopasowania produktu po nazwie: ${productName}`);
+          logger.log(`Szukanie dopasowania produktu po nazwie: ${productName}`);
           
           // Utwórz nową kopię tablicy items do aktualizacji
           let foundIndex = -1;
@@ -1795,7 +1796,7 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
             };
             
             itemWasUpdated = true;
-            console.log(`Zaktualizowano element po nazwie produktu: ${productName}`);
+            logger.log(`Zaktualizowano element po nazwie produktu: ${productName}`);
           }
         }
       } catch (error) {
@@ -1839,7 +1840,7 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
             };
             
             itemWasUpdated = true;
-            console.log(`Zaktualizowano element po kodzie SKU: ${inventoryItem.sku}`);
+            logger.log(`Zaktualizowano element po kodzie SKU: ${inventoryItem.sku}`);
           }
         }
       } catch (error) {
@@ -1865,11 +1866,11 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
       };
       
       itemWasUpdated = true;
-      console.log(`Zaktualizowano jedyny element w zamówieniu: ${singleItem.name || 'bez nazwy'}`);
+      logger.log(`Zaktualizowano jedyny element w zamówieniu: ${singleItem.name || 'bez nazwy'}`);
     }
 
     if (!itemWasUpdated) {
-      console.warn(`Nie znaleziono produktu o ID ${itemId} w zamówieniu zakupowym ${purchaseOrderId}`);
+      logger.warn(`Nie znaleziono produktu o ID ${itemId} w zamówieniu zakupowym ${purchaseOrderId}`);
       // Zwracamy sukces=false zamiast rzucać wyjątek, aby nie przerywać procesu
       return { 
         success: false, 
@@ -2074,7 +2075,7 @@ export const updatePurchaseOrderItems = async (purchaseOrderId, updatedItems, us
  */
 const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, userId) => {
   try {
-    console.log(`Aktualizuję ceny partii dla zamówienia ${purchaseOrderId}`);
+    logger.log(`Aktualizuję ceny partii dla zamówienia ${purchaseOrderId}`);
     
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
     const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
@@ -2127,10 +2128,10 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
     
     batchesToUpdate = Array.from(uniqueBatchesMap.values());
     
-    console.log(`Znaleziono ${batchesToUpdate.length} unikalnych partii powiązanych z zamówieniem ${purchaseOrderId}`);
+    logger.log(`Znaleziono ${batchesToUpdate.length} unikalnych partii powiązanych z zamówieniem ${purchaseOrderId}`);
     
     if (batchesToUpdate.length === 0) {
-      console.log(`Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
+      logger.log(`Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
       return;
     }
     
@@ -2177,15 +2178,15 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
           const itemPoId = batch.purchaseOrderDetails?.itemPoId || batch.sourceDetails?.itemPoId;
           return itemPoId && cost.affectedItems.includes(itemPoId);
         });
-        console.log(`Koszt "${cost.description || 'bez opisu'}" (${costGrossTotal.toFixed(2)}) przypisany do ${cost.affectedItems.length} pozycji, znaleziono ${affectedBatches.length} partii`);
+        logger.log(`Koszt "${cost.description || 'bez opisu'}" (${costGrossTotal.toFixed(2)}) przypisany do ${cost.affectedItems.length} pozycji, znaleziono ${affectedBatches.length} partii`);
       } else {
         // Koszt dotyczy wszystkich pozycji (domyślnie)
         affectedBatches = batchesToUpdate;
-        console.log(`Koszt "${cost.description || 'bez opisu'}" (${costGrossTotal.toFixed(2)}) przypisany do wszystkich pozycji (${affectedBatches.length} partii)`);
+        logger.log(`Koszt "${cost.description || 'bez opisu'}" (${costGrossTotal.toFixed(2)}) przypisany do wszystkich pozycji (${affectedBatches.length} partii)`);
       }
       
       if (affectedBatches.length === 0) {
-        console.log(`Brak partii dla kosztu "${cost.description || 'bez opisu'}", pomijam`);
+        logger.log(`Brak partii dla kosztu "${cost.description || 'bez opisu'}", pomijam`);
         continue;
       }
       
@@ -2196,7 +2197,7 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
       }, 0);
       
       if (totalAffectedQuantity <= 0) {
-        console.log(`Brak poprawnych ilości dla kosztu "${cost.description || 'bez opisu'}", pomijam`);
+        logger.log(`Brak poprawnych ilości dla kosztu "${cost.description || 'bez opisu'}", pomijam`);
         continue;
       }
       
@@ -2234,7 +2235,7 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
       const newUnitPrice = parseFloat(baseUnitPrice) + additionalCostPerUnit;
       
       const batchInitialQuantity = parseFloat(batchData.initialQuantity) || parseFloat(batchData.quantity) || 0;
-      console.log(`Aktualizuję partię ${batchData.id}: initialQuantity=${batchInitialQuantity}, additionalCostPerUnit=${additionalCostPerUnit.toFixed(6)}, basePrice=${baseUnitPrice}, newPrice=${newUnitPrice.toFixed(6)}`);
+      logger.log(`Aktualizuję partię ${batchData.id}: initialQuantity=${batchInitialQuantity}, additionalCostPerUnit=${additionalCostPerUnit.toFixed(6)}, basePrice=${baseUnitPrice}, newPrice=${newUnitPrice.toFixed(6)}`);
       
       // Aktualizuj dokument partii
       updatePromises.push(updateDoc(batchRef, {
@@ -2247,7 +2248,7 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
     }
     
     await Promise.all(updatePromises);
-    console.log(`Zaktualizowano ceny ${updatePromises.length} partii`);
+    logger.log(`Zaktualizowano ceny ${updatePromises.length} partii`);
     
   } catch (error) {
     console.error(`Błąd podczas aktualizacji cen partii dla zamówienia ${purchaseOrderId}:`, error);
@@ -2281,7 +2282,7 @@ export const updateBatchesForPurchaseOrder = async (purchaseOrderId, userId) => 
 export const clearLimitedPOCache = () => {
   limitedPOCache = null;
   limitedPOCacheTimestamp = null;
-  console.log('Wyczyszczono cache ograniczonej listy zamówień');
+  logger.log('Wyczyszczono cache ograniczonej listy zamówień');
 };
 
 // Eksportuj funkcję do czyszczenia cache wyszukiwania
@@ -2304,9 +2305,9 @@ export const clearAllCache = () => {
  */
 const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData, newPoData, userId) => {
   try {
-    console.log(`🔍 [BATCH_PRICE_DEBUG] Sprawdzam zmiany cen jednostkowych dla zamówienia ${purchaseOrderId}`);
-    console.log(`🔍 [BATCH_PRICE_DEBUG] Stare dane PO:`, { itemsCount: oldPoData.items?.length || 0, items: oldPoData.items?.map(i => ({ id: i.id, name: i.name, unitPrice: i.unitPrice })) });
-    console.log(`🔍 [BATCH_PRICE_DEBUG] Nowe dane PO:`, { itemsCount: newPoData.items?.length || 0, items: newPoData.items?.map(i => ({ id: i.id, name: i.name, unitPrice: i.unitPrice })) });
+    logger.log(`🔍 [BATCH_PRICE_DEBUG] Sprawdzam zmiany cen jednostkowych dla zamówienia ${purchaseOrderId}`);
+    logger.log(`🔍 [BATCH_PRICE_DEBUG] Stare dane PO:`, { itemsCount: oldPoData.items?.length || 0, items: oldPoData.items?.map(i => ({ id: i.id, name: i.name, unitPrice: i.unitPrice })) });
+    logger.log(`🔍 [BATCH_PRICE_DEBUG] Nowe dane PO:`, { itemsCount: newPoData.items?.length || 0, items: newPoData.items?.map(i => ({ id: i.id, name: i.name, unitPrice: i.unitPrice })) });
     
     // Sprawdź czy są zmiany cen jednostkowych w pozycjach
     const oldItems = oldPoData.items || [];
@@ -2316,7 +2317,7 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
     const itemsWithPriceChanges = [];
     
     for (const newItem of newItems) {
-      console.log(`🔍 [BATCH_PRICE_DEBUG] Sprawdzam pozycję:`, { id: newItem.id, name: newItem.name, unitPrice: newItem.unitPrice });
+      logger.log(`🔍 [BATCH_PRICE_DEBUG] Sprawdzam pozycję:`, { id: newItem.id, name: newItem.name, unitPrice: newItem.unitPrice });
       
       const oldItem = oldItems.find(item => 
         item.id === newItem.id || 
@@ -2328,7 +2329,7 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
         const oldUnitPrice = parseFloat(oldItem.unitPrice) || 0;
         const newUnitPrice = parseFloat(newItem.unitPrice) || 0;
         
-        console.log(`🔍 [BATCH_PRICE_DEBUG] Znaleziono starą pozycję:`, { 
+        logger.log(`🔍 [BATCH_PRICE_DEBUG] Znaleziono starą pozycję:`, { 
           oldId: oldItem.id, 
           oldName: oldItem.name, 
           oldUnitPrice, 
@@ -2348,23 +2349,23 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
           
           itemsWithPriceChanges.push(priceChangeData);
           
-          console.log(`✅ [BATCH_PRICE_DEBUG] Wykryto zmianę ceny dla pozycji ${newItem.name}: ${oldUnitPrice} -> ${newUnitPrice} (różnica: ${newUnitPrice - oldUnitPrice})`);
-          console.log(`✅ [BATCH_PRICE_DEBUG] Dane zmiany:`, priceChangeData);
+          logger.log(`✅ [BATCH_PRICE_DEBUG] Wykryto zmianę ceny dla pozycji ${newItem.name}: ${oldUnitPrice} -> ${newUnitPrice} (różnica: ${newUnitPrice - oldUnitPrice})`);
+          logger.log(`✅ [BATCH_PRICE_DEBUG] Dane zmiany:`, priceChangeData);
         } else {
-          console.log(`⚪ [BATCH_PRICE_DEBUG] Brak zmiany ceny dla pozycji ${newItem.name} (${oldUnitPrice} -> ${newUnitPrice})`);
+          logger.log(`⚪ [BATCH_PRICE_DEBUG] Brak zmiany ceny dla pozycji ${newItem.name} (${oldUnitPrice} -> ${newUnitPrice})`);
         }
       } else {
-        console.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono starej pozycji dla:`, { id: newItem.id, name: newItem.name });
+        logger.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono starej pozycji dla:`, { id: newItem.id, name: newItem.name });
       }
     }
     
     // Jeśli nie ma zmian cen, zakończ
     if (itemsWithPriceChanges.length === 0) {
-      console.log(`⚪ [BATCH_PRICE_DEBUG] Brak zmian cen jednostkowych w zamówieniu ${purchaseOrderId}`);
+      logger.log(`⚪ [BATCH_PRICE_DEBUG] Brak zmian cen jednostkowych w zamówieniu ${purchaseOrderId}`);
       return;
     }
     
-    console.log(`🎯 [BATCH_PRICE_DEBUG] Znaleziono ${itemsWithPriceChanges.length} pozycji z zmienionymi cenami:`, 
+    logger.log(`🎯 [BATCH_PRICE_DEBUG] Znaleziono ${itemsWithPriceChanges.length} pozycji z zmienionymi cenami:`, 
       itemsWithPriceChanges.map(item => ({ 
         id: item.id, 
         name: item.name, 
@@ -2424,8 +2425,8 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
     
     batchesToUpdate = Array.from(uniqueBatchesMap.values());
     
-    console.log(`🔍 [BATCH_PRICE_DEBUG] Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
-    console.log(`🔍 [BATCH_PRICE_DEBUG] Szczegóły partii:`, 
+    logger.log(`🔍 [BATCH_PRICE_DEBUG] Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
+    logger.log(`🔍 [BATCH_PRICE_DEBUG] Szczegóły partii:`, 
       batchesToUpdate.map(batch => ({
         id: batch.id,
         itemId: batch.itemId,
@@ -2439,7 +2440,7 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
     );
     
     if (batchesToUpdate.length === 0) {
-      console.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
+      logger.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
       return;
     }
     
@@ -2447,7 +2448,7 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
     const updatePromises = [];
     
     for (const batchData of batchesToUpdate) {
-      console.log(`🔍 [BATCH_PRICE_DEBUG] Przetwarzam partię ${batchData.id}:`, {
+      logger.log(`🔍 [BATCH_PRICE_DEBUG] Przetwarzam partię ${batchData.id}:`, {
         itemId: batchData.itemId,
         itemName: batchData.itemName,
         currentUnitPrice: batchData.unitPrice,
@@ -2461,24 +2462,24 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
       // 1. Sprawdź czy partia ma zapisane itemPoId (ID konkretnej pozycji w zamówieniu)
       const batchItemPoId = batchData.purchaseOrderDetails?.itemPoId || batchData.sourceDetails?.itemPoId;
       
-      console.log(`🔍 [BATCH_PRICE_DEBUG] Partia ${batchData.id} - itemPoId: ${batchItemPoId}`);
+      logger.log(`🔍 [BATCH_PRICE_DEBUG] Partia ${batchData.id} - itemPoId: ${batchItemPoId}`);
       
       if (batchItemPoId) {
         // Znajdź pozycję o dokładnie tym ID
         matchingItem = itemsWithPriceChanges.find(item => item.id === batchItemPoId);
         
         if (matchingItem) {
-          console.log(`✅ [BATCH_PRICE_DEBUG] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie itemPoId`);
+          logger.log(`✅ [BATCH_PRICE_DEBUG] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie itemPoId`);
         } else {
-          console.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono pozycji z ID ${batchItemPoId} w liście zmian cen`);
+          logger.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono pozycji z ID ${batchItemPoId} w liście zmian cen`);
         }
       } else {
-        console.log(`⚠️ [BATCH_PRICE_DEBUG] Partia ${batchData.id} nie ma itemPoId - użyję fallback`);
+        logger.log(`⚠️ [BATCH_PRICE_DEBUG] Partia ${batchData.id} nie ma itemPoId - użyję fallback`);
       }
       
       // 2. Jeśli nie znaleziono dopasowania po itemPoId, spróbuj starszej metody (tylko jako fallback)
       if (!matchingItem) {
-        console.log(`🔍 [BATCH_PRICE_DEBUG] Próbuję fallback dla partii ${batchData.id}`);
+        logger.log(`🔍 [BATCH_PRICE_DEBUG] Próbuję fallback dla partii ${batchData.id}`);
         
         // Znajdź odpowiadającą pozycję w zamówieniu na podstawie inventoryItemId lub nazwy
         matchingItem = itemsWithPriceChanges.find(item => {
@@ -2487,7 +2488,7 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
           const matchByItemName = item.name && batchData.itemName === item.name;
           const matchByName = item.name && batchData.name === item.name;
           
-          console.log(`🔍 [BATCH_PRICE_DEBUG] Sprawdzam dopasowanie fallback:`, {
+          logger.log(`🔍 [BATCH_PRICE_DEBUG] Sprawdzam dopasowanie fallback:`, {
             itemId: item.id,
             itemName: item.name,
             batchId: batchData.id,
@@ -2502,9 +2503,9 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
         });
         
         if (matchingItem) {
-          console.log(`✅ [BATCH_PRICE_DEBUG] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie inventoryItemId/nazwy (fallback)`);
+          logger.log(`✅ [BATCH_PRICE_DEBUG] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie inventoryItemId/nazwy (fallback)`);
         } else {
-          console.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono dopasowania fallback dla partii ${batchData.id}`);
+          logger.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono dopasowania fallback dla partii ${batchData.id}`);
         }
       }
       
@@ -2524,16 +2525,16 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
         // Oblicz nową cenę końcową: nowa cena bazowa (z rabatem) + dodatkowy koszt
         const newFinalUnitPrice = newBaseUnitPrice + additionalCostPerUnit;
         
-        console.log(`🎯 [BATCH_PRICE_DEBUG] AKTUALIZACJA PARTII ${batchData.id}:`);
-        console.log(`🎯 [BATCH_PRICE_DEBUG] - Pozycja: ${matchingItem.name} (ID: ${matchingItem.id})`);
-        console.log(`🎯 [BATCH_PRICE_DEBUG] - Oryginalna cena: ${originalUnitPrice}`);
-        console.log(`🎯 [BATCH_PRICE_DEBUG] - Rabat: ${discount}%`);
-        console.log(`🎯 [BATCH_PRICE_DEBUG] - Stara cena bazowa: ${currentBaseUnitPrice}`);
-        console.log(`🎯 [BATCH_PRICE_DEBUG] - Nowa cena bazowa: ${newBaseUnitPrice}`);
-        console.log(`🎯 [BATCH_PRICE_DEBUG] - Dodatkowy koszt/jednostka: ${additionalCostPerUnit}`);
-        console.log(`🎯 [BATCH_PRICE_DEBUG] - Stara cena końcowa: ${batchData.unitPrice}`);
-        console.log(`🎯 [BATCH_PRICE_DEBUG] - Nowa cena końcowa: ${newFinalUnitPrice}`);
-        console.log(`🎯 [BATCH_PRICE_DEBUG] - Zmiana ceny bazowej: ${newBaseUnitPrice - currentBaseUnitPrice}`);
+        logger.log(`🎯 [BATCH_PRICE_DEBUG] AKTUALIZACJA PARTII ${batchData.id}:`);
+        logger.log(`🎯 [BATCH_PRICE_DEBUG] - Pozycja: ${matchingItem.name} (ID: ${matchingItem.id})`);
+        logger.log(`🎯 [BATCH_PRICE_DEBUG] - Oryginalna cena: ${originalUnitPrice}`);
+        logger.log(`🎯 [BATCH_PRICE_DEBUG] - Rabat: ${discount}%`);
+        logger.log(`🎯 [BATCH_PRICE_DEBUG] - Stara cena bazowa: ${currentBaseUnitPrice}`);
+        logger.log(`🎯 [BATCH_PRICE_DEBUG] - Nowa cena bazowa: ${newBaseUnitPrice}`);
+        logger.log(`🎯 [BATCH_PRICE_DEBUG] - Dodatkowy koszt/jednostka: ${additionalCostPerUnit}`);
+        logger.log(`🎯 [BATCH_PRICE_DEBUG] - Stara cena końcowa: ${batchData.unitPrice}`);
+        logger.log(`🎯 [BATCH_PRICE_DEBUG] - Nowa cena końcowa: ${newFinalUnitPrice}`);
+        logger.log(`🎯 [BATCH_PRICE_DEBUG] - Zmiana ceny bazowej: ${newBaseUnitPrice - currentBaseUnitPrice}`);
         
         const updateData = {
           baseUnitPrice: newBaseUnitPrice,
@@ -2544,14 +2545,14 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
           updatedBy: userId
         };
         
-        console.log(`🎯 [BATCH_PRICE_DEBUG] - Dane aktualizacji:`, updateData);
+        logger.log(`🎯 [BATCH_PRICE_DEBUG] - Dane aktualizacji:`, updateData);
         
         // Aktualizuj dokument partii
         updatePromises.push(updateDoc(batchRef, updateData));
         
-        console.log(`✅ [BATCH_PRICE_DEBUG] Dodano partię ${batchData.id} do kolejki aktualizacji`);
+        logger.log(`✅ [BATCH_PRICE_DEBUG] Dodano partię ${batchData.id} do kolejki aktualizacji`);
       } else {
-        console.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono dopasowania dla partii ${batchData.id}:`, {
+        logger.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono dopasowania dla partii ${batchData.id}:`, {
           itemPoId: batchItemPoId,
           inventoryItemId: batchData.inventoryItemId,
           itemId: batchData.itemId,
@@ -2561,20 +2562,20 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
       }
     }
     
-    console.log(`🎯 [BATCH_PRICE_DEBUG] Kolejka aktualizacji zawiera ${updatePromises.length} partii`);
+    logger.log(`🎯 [BATCH_PRICE_DEBUG] Kolejka aktualizacji zawiera ${updatePromises.length} partii`);
     
     if (updatePromises.length > 0) {
-      console.log(`🎯 [BATCH_PRICE_DEBUG] Wykonuję aktualizację ${updatePromises.length} partii...`);
+      logger.log(`🎯 [BATCH_PRICE_DEBUG] Wykonuję aktualizację ${updatePromises.length} partii...`);
       
       try {
         await Promise.all(updatePromises);
-        console.log(`✅ [BATCH_PRICE_DEBUG] Pomyślnie zaktualizowano ceny bazowe ${updatePromises.length} partii na podstawie zmian cen pozycji`);
+        logger.log(`✅ [BATCH_PRICE_DEBUG] Pomyślnie zaktualizowano ceny bazowe ${updatePromises.length} partii na podstawie zmian cen pozycji`);
       } catch (error) {
         console.error(`❌ [BATCH_PRICE_DEBUG] Błąd podczas aktualizacji partii:`, error);
         throw error;
       }
     } else {
-      console.log(`⚪ [BATCH_PRICE_DEBUG] Nie znaleziono partii do aktualizacji na podstawie zmian cen pozycji`);
+      logger.log(`⚪ [BATCH_PRICE_DEBUG] Nie znaleziono partii do aktualizacji na podstawie zmian cen pozycji`);
     }
     
   } catch (error) {
@@ -2593,7 +2594,7 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
     }
     
     // Funkcja pomocnicza - nie mamy starych danych, więc sprawdzimy wszystkie partie
-    console.log(`Ręczna aktualizacja cen bazowych partii dla zamówienia ${purchaseOrderId}`);
+    logger.log(`Ręczna aktualizacja cen bazowych partii dla zamówienia ${purchaseOrderId}`);
     
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
     const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
@@ -2644,10 +2645,10 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
     
     batchesToUpdate = Array.from(uniqueBatchesMap.values());
     
-    console.log(`Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
+    logger.log(`Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
     
     if (batchesToUpdate.length === 0) {
-      console.log(`Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
+      logger.log(`Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
       return { success: true, updated: 0 };
     }
     
@@ -2667,7 +2668,7 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
         matchingItem = items.find(item => item.id === batchItemPoId);
         
         if (matchingItem) {
-          console.log(`Ręczna aktualizacja: Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie itemPoId`);
+          logger.log(`Ręczna aktualizacja: Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie itemPoId`);
         }
       }
       
@@ -2684,7 +2685,7 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
         });
         
         if (matchingItem) {
-          console.log(`Ręczna aktualizacja: Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie inventoryItemId/nazwy (fallback)`);
+          logger.log(`Ręczna aktualizacja: Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie inventoryItemId/nazwy (fallback)`);
         }
       }
       
@@ -2703,7 +2704,7 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
         // Oblicz nową cenę końcową: cena bazowa (z rabatem) + dodatkowy koszt
         const newFinalUnitPrice = newBaseUnitPrice + additionalCostPerUnit;
         
-        console.log(`Ręczna aktualizacja: Aktualizuję partię ${batchData.id} dla pozycji ${matchingItem.name}: originalPrice -> ${originalUnitPrice}, discount -> ${discount}%, basePrice -> ${newBaseUnitPrice}, finalPrice -> ${newFinalUnitPrice}`);
+        logger.log(`Ręczna aktualizacja: Aktualizuję partię ${batchData.id} dla pozycji ${matchingItem.name}: originalPrice -> ${originalUnitPrice}, discount -> ${discount}%, basePrice -> ${newBaseUnitPrice}, finalPrice -> ${newFinalUnitPrice}`);
         
         // Aktualizuj dokument partii
         updatePromises.push(updateDoc(batchRef, {
@@ -2715,13 +2716,13 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
           updatedBy: userId
         }));
       } else if (!matchingItem) {
-        console.log(`Ręczna aktualizacja: Nie znaleziono dopasowania dla partii ${batchData.id} (itemPoId: ${batchItemPoId}, inventoryItemId: ${batchData.inventoryItemId})`);
+        logger.log(`Ręczna aktualizacja: Nie znaleziono dopasowania dla partii ${batchData.id} (itemPoId: ${batchItemPoId}, inventoryItemId: ${batchData.inventoryItemId})`);
       }
     }
     
     if (updatePromises.length > 0) {
       await Promise.all(updatePromises);
-      console.log(`Zaktualizowano ceny bazowe ${updatePromises.length} partii`);
+      logger.log(`Zaktualizowano ceny bazowe ${updatePromises.length} partii`);
     }
     
     // Wyczyść cache dotyczące tego zamówienia
@@ -2742,7 +2743,7 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
  */
 const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
   try {
-    console.log(`🔄 [BATCH_AUTO_UPDATE] Rozpoczynam automatyczną aktualizację cen partii dla zamówienia ${purchaseOrderId}`);
+    logger.log(`🔄 [BATCH_AUTO_UPDATE] Rozpoczynam automatyczną aktualizację cen partii dla zamówienia ${purchaseOrderId}`);
     
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
     const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
@@ -2793,10 +2794,10 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
     
     batchesToUpdate = Array.from(uniqueBatchesMap.values());
     
-    console.log(`🔄 [BATCH_AUTO_UPDATE] Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
+    logger.log(`🔄 [BATCH_AUTO_UPDATE] Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
     
     if (batchesToUpdate.length === 0) {
-      console.log(`ℹ️ [BATCH_AUTO_UPDATE] Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
+      logger.log(`ℹ️ [BATCH_AUTO_UPDATE] Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
       return { success: true, updated: 0 };
     }
     
@@ -2826,7 +2827,7 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
       return sum + (parseFloat(batch.initialQuantity) || parseFloat(batch.quantity) || 0);
     }, 0);
     
-    console.log(`🔄 [BATCH_AUTO_UPDATE] Dodatkowe koszty: ${additionalCostsGrossTotal}, łączna ilość partii: ${totalInitialQuantity}`);
+    logger.log(`🔄 [BATCH_AUTO_UPDATE] Dodatkowe koszty: ${additionalCostsGrossTotal}, łączna ilość partii: ${totalInitialQuantity}`);
     
     for (const batchData of batchesToUpdate) {
       // Dopasuj partię do pozycji w zamówieniu
@@ -2840,7 +2841,7 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
         matchingItem = items.find(item => item.id === batchItemPoId);
         
         if (matchingItem) {
-          console.log(`🔄 [BATCH_AUTO_UPDATE] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie itemPoId`);
+          logger.log(`🔄 [BATCH_AUTO_UPDATE] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie itemPoId`);
         }
       }
       
@@ -2854,7 +2855,7 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
           );
           
           if (matchingItem) {
-            console.log(`🔄 [BATCH_AUTO_UPDATE] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} na podstawie inventoryItemId`);
+            logger.log(`🔄 [BATCH_AUTO_UPDATE] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} na podstawie inventoryItemId`);
           }
         }
         
@@ -2865,7 +2866,7 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
             matchingItem = items.find(item => item.name === batchItemName);
             
             if (matchingItem) {
-              console.log(`🔄 [BATCH_AUTO_UPDATE] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} na podstawie nazwy (fallback)`);
+              logger.log(`🔄 [BATCH_AUTO_UPDATE] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} na podstawie nazwy (fallback)`);
             }
           }
         }
@@ -2895,7 +2896,7 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
         // Oblicz nową cenę końcową: cena bazowa (z rabatem) + dodatkowy koszt
         const newFinalUnitPrice = newBaseUnitPrice + additionalCostPerUnit;
         
-        console.log(`🔄 [BATCH_AUTO_UPDATE] Aktualizuję partię ${batchData.id} dla pozycji ${matchingItem.name}:`, {
+        logger.log(`🔄 [BATCH_AUTO_UPDATE] Aktualizuję partię ${batchData.id} dla pozycji ${matchingItem.name}:`, {
           originalPrice: originalUnitPrice,
           discount: discount,
           basePrice: newBaseUnitPrice,
@@ -2915,7 +2916,7 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
           updatedBy: userId
         }));
       } else if (!matchingItem) {
-        console.warn(`⚠️ [BATCH_AUTO_UPDATE] Nie znaleziono dopasowania dla partii ${batchData.id}:`, {
+        logger.warn(`⚠️ [BATCH_AUTO_UPDATE] Nie znaleziono dopasowania dla partii ${batchData.id}:`, {
           itemPoId: batchItemPoId,
           inventoryItemId: batchData.inventoryItemId,
           itemId: batchData.itemId,
@@ -2927,9 +2928,9 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
     
     if (updatePromises.length > 0) {
       await Promise.all(updatePromises);
-      console.log(`✅ [BATCH_AUTO_UPDATE] Pomyślnie zaktualizowano ${updatePromises.length} partii przy zapisie PO`);
+      logger.log(`✅ [BATCH_AUTO_UPDATE] Pomyślnie zaktualizowano ${updatePromises.length} partii przy zapisie PO`);
     } else {
-      console.log(`ℹ️ [BATCH_AUTO_UPDATE] Brak partii do aktualizacji`);
+      logger.log(`ℹ️ [BATCH_AUTO_UPDATE] Brak partii do aktualizacji`);
     }
     
     // Wyczyść cache dotyczące tego zamówienia
@@ -2940,19 +2941,19 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
     // Cloud Function automatycznie wykryje zmiany cen partii i zaktualizuje zadania
     // ============================================================================
     if (updatePromises.length > 0) {
-      console.log(`ℹ️ [TASK_COST_UPDATE] Aktualizacja kosztów zadań będzie wykonana przez Cloud Function (onBatchPriceUpdate) dla ${updatePromises.length} partii`);
+      logger.log(`ℹ️ [TASK_COST_UPDATE] Aktualizacja kosztów zadań będzie wykonana przez Cloud Function (onBatchPriceUpdate) dla ${updatePromises.length} partii`);
       
       /*
       // STARA LOGIKA (przed Cloud Functions): Automatycznie aktualizuj koszty zadań
       try {
-        console.log(`🔄 [TASK_COST_UPDATE] Rozpoczynam aktualizację kosztów zadań po zmianie cen partii...`);
+        logger.log(`🔄 [TASK_COST_UPDATE] Rozpoczynam aktualizację kosztów zadań po zmianie cen partii...`);
         
         // Pobierz wszystkie zadania które używają zaktualizowanych partii
         const { updateTaskCostsForUpdatedBatches } = await import('../productionService');
         const batchIds = batchesToUpdate.map(batch => batch.id);
         
         const taskUpdateResult = await updateTaskCostsForUpdatedBatches(batchIds, userId || 'system');
-        console.log(`✅ [TASK_COST_UPDATE] Zakończono aktualizację kosztów zadań:`, taskUpdateResult);
+        logger.log(`✅ [TASK_COST_UPDATE] Zakończono aktualizację kosztów zadań:`, taskUpdateResult);
         
         return { 
           success: true, 
@@ -2987,7 +2988,7 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
  */
 const updateBatchPricesWithDetails = async (purchaseOrderId, userId) => {
   try {
-    console.log(`🔄 [BATCH_DETAILS_UPDATE] Rozpoczynam aktualizację cen partii z raportem dla zamówienia ${purchaseOrderId}`);
+    logger.log(`🔄 [BATCH_DETAILS_UPDATE] Rozpoczynam aktualizację cen partii z raportem dla zamówienia ${purchaseOrderId}`);
     
     // Pobierz aktualne dane zamówienia
     const poData = await getPurchaseOrderById(purchaseOrderId);
@@ -3044,7 +3045,7 @@ const updateBatchPricesWithDetails = async (purchaseOrderId, userId) => {
     
     batchesToUpdate = Array.from(uniqueBatchesMap.values());
     
-    console.log(`🔄 [BATCH_DETAILS_UPDATE] Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
+    logger.log(`🔄 [BATCH_DETAILS_UPDATE] Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
     
     if (batchesToUpdate.length === 0) {
       return {
@@ -3083,7 +3084,7 @@ const updateBatchPricesWithDetails = async (purchaseOrderId, userId) => {
       return sum + (parseFloat(batch.initialQuantity) || parseFloat(batch.quantity) || 0);
     }, 0);
     
-    console.log(`🔄 [BATCH_DETAILS_UPDATE] Dodatkowe koszty: ${additionalCostsGrossTotal}, łączna ilość partii: ${totalInitialQuantity}`);
+    logger.log(`🔄 [BATCH_DETAILS_UPDATE] Dodatkowe koszty: ${additionalCostsGrossTotal}, łączna ilość partii: ${totalInitialQuantity}`);
     
     // Przygotuj szczegółowy raport z różnicami
     const updateDetails = [];
@@ -3200,7 +3201,7 @@ const updateBatchPricesWithDetails = async (purchaseOrderId, userId) => {
     // Wykonaj aktualizacje
     if (updatePromises.length > 0) {
       await Promise.all(updatePromises);
-      console.log(`✅ [BATCH_DETAILS_UPDATE] Pomyślnie zaktualizowano ${updatePromises.length} partii`);
+      logger.log(`✅ [BATCH_DETAILS_UPDATE] Pomyślnie zaktualizowano ${updatePromises.length} partii`);
     }
     
     // Wyczyść cache
@@ -3254,7 +3255,7 @@ export const getLimitedPurchaseOrdersForBatchEdit = async () => {
     // Sprawdź cache
     const now = Date.now();
     if (limitedPOCache && limitedPOCacheTimestamp && (now - limitedPOCacheTimestamp < CACHE_DURATION)) {
-      console.log('Używam danych z cache dla ograniczonej listy zamówień');
+      logger.log('Używam danych z cache dla ograniczonej listy zamówień');
       return limitedPOCache;
     }
     // Pobierz tylko najnowsze 50 zamówień (większość edycji dotyczy najnowszych zamówień)
@@ -3323,7 +3324,7 @@ export const getLimitedPurchaseOrdersForBatchEdit = async () => {
     // Zapisz do cache
     limitedPOCache = purchaseOrders;
     limitedPOCacheTimestamp = now;
-    console.log(`Pobrano i zapisano do cache ${purchaseOrders.length} zamówień dla edycji partii`);
+    logger.log(`Pobrano i zapisano do cache ${purchaseOrders.length} zamówień dla edycji partii`);
     
     return purchaseOrders;
   } catch (error) {
@@ -3391,7 +3392,7 @@ export const updatePurchaseOrderPaymentStatus = async (purchaseOrderId, newPayme
     // Aktualizuj dokument
     await updateDoc(poRef, updateFields);
 
-    console.log(`Zaktualizowano status płatności zamówienia ${purchaseOrderId} z "${oldPaymentStatus}" na "${newPaymentStatus}"`);
+    logger.log(`Zaktualizowano status płatności zamówienia ${purchaseOrderId} z "${oldPaymentStatus}" na "${newPaymentStatus}"`);
 
     // Wyczyść cache dotyczące tego zamówienia
     invalidatePOCacheForOrder(purchaseOrderId);
@@ -3452,7 +3453,7 @@ export const updatePurchaseOrderAttachments = async (purchaseOrderId, attachment
     // Aktualizuj dokument
     await updateDoc(poRef, updateFields);
 
-    console.log(`Zaktualizowano załączniki zamówienia ${purchaseOrderId}`);
+    logger.log(`Zaktualizowano załączniki zamówienia ${purchaseOrderId}`);
 
     invalidatePOCacheForOrder(purchaseOrderId);
 
@@ -3500,7 +3501,7 @@ export const validateAndCleanupAttachments = async (purchaseOrderId, userId) => 
     const checkFileExists = async (attachment) => {
       try {
         if (!attachment.storagePath) {
-          console.warn(`Załącznik ${attachment.fileName} nie ma ścieżki storage`);
+          logger.warn(`Załącznik ${attachment.fileName} nie ma ścieżki storage`);
           return false;
         }
         
@@ -3509,7 +3510,7 @@ export const validateAndCleanupAttachments = async (purchaseOrderId, userId) => 
         return true;
       } catch (error) {
         if (error.code === 'storage/object-not-found') {
-          console.warn(`Plik nie istnieje w Storage: ${attachment.storagePath}`);
+          logger.warn(`Plik nie istnieje w Storage: ${attachment.storagePath}`);
           return false;
         }
         // Inne błędy mogą oznaczać problemy z siecią, więc zachowujemy załącznik
@@ -3568,7 +3569,7 @@ export const validateAndCleanupAttachments = async (purchaseOrderId, userId) => 
 
       await updateDoc(poRef, updateFields);
 
-      console.log(`Usunięto ${totalRemoved} nieistniejących załączników z zamówienia ${purchaseOrderId}`);
+      logger.log(`Usunięto ${totalRemoved} nieistniejących załączników z zamówienia ${purchaseOrderId}`);
 
       invalidatePOCacheForOrder(purchaseOrderId);
     }
@@ -3623,8 +3624,8 @@ export const getPurchaseOrdersOptimized = async ({
   forceRefresh = false
 }) => {
   try {
-    console.log('🚀 getPurchaseOrdersOptimized - rozpoczynam zoptymalizowane pobieranie');
-    console.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, paymentStatusFilter, sortField, sortOrder, forceRefresh });
+    logger.log('🚀 getPurchaseOrdersOptimized - rozpoczynam zoptymalizowane pobieranie');
+    logger.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, paymentStatusFilter, sortField, sortOrder, forceRefresh });
 
     // Walidacja wymaganych parametrów
     if (!page || !pageSize) {
@@ -3644,10 +3645,10 @@ export const getPurchaseOrdersOptimized = async ({
     let allOrders;
 
     if (isCacheValid) {
-      console.log('💾 Używam cache zamówień zakupu');
+      logger.log('💾 Używam cache zamówień zakupu');
       allOrders = [...purchaseOrdersCache];
     } else {
-      console.log('🔄 Pobieram świeże dane zamówień zakupu');
+      logger.log('🔄 Pobieram świeże dane zamówień zakupu');
       
       // Pobierz wszystkie zamówienia zakupu
       const ordersRef = collection(db, PURCHASE_ORDERS_COLLECTION);
@@ -3677,7 +3678,7 @@ export const getPurchaseOrdersOptimized = async ({
               return { id: supplierId, data: supplierDoc.data() };
             }
           } catch (error) {
-            console.warn(`Błąd podczas pobierania dostawcy ${supplierId}:`, error);
+            logger.warn(`Błąd podczas pobierania dostawcy ${supplierId}:`, error);
           }
           return null;
         });
@@ -3708,13 +3709,13 @@ export const getPurchaseOrdersOptimized = async ({
       purchaseOrdersCache = [...allOrders];
       purchaseOrdersCacheTimestamp = now;
       
-      console.log('💾 Zapisano do cache:', allOrders.length, 'zamówień zakupu');
+      logger.log('💾 Zapisano do cache:', allOrders.length, 'zamówień zakupu');
     }
 
     // KROK 2: Filtrowanie po terminie wyszukiwania
     if (searchTerm && searchTerm.trim() !== '') {
       const searchLower = searchTerm.toLowerCase().trim();
-      console.log('🔍 Filtrowanie po terminie wyszukiwania:', searchLower);
+      logger.log('🔍 Filtrowanie po terminie wyszukiwania:', searchLower);
       
       // Sprawdź czy searchTerm to liczba (obsługa wyszukiwania po wartości)
       const searchNumber = parseFloat(searchTerm.replace(',', '.').replace(/\s/g, ''));
@@ -3765,7 +3766,7 @@ export const getPurchaseOrdersOptimized = async ({
           if (Math.abs(totalGross - searchNumber) <= tolerance ||
               Math.abs(totalValue - searchNumber) <= tolerance ||
               Math.abs(totalNet - searchNumber) <= tolerance) {
-            console.log(`✓ Znaleziono dopasowanie w wartości PO: ${order.number} (totalGross: ${totalGross})`);
+            logger.log(`✓ Znaleziono dopasowanie w wartości PO: ${order.number} (totalGross: ${totalGross})`);
             return true;
           }
           
@@ -3779,7 +3780,7 @@ export const getPurchaseOrdersOptimized = async ({
                    Math.abs(itemUnitPrice - searchNumber) <= tolerance ||
                    Math.abs(itemNetValue - searchNumber) <= tolerance;
           })) {
-            console.log(`✓ Znaleziono dopasowanie w wartości pozycji: ${order.number}`);
+            logger.log(`✓ Znaleziono dopasowanie w wartości pozycji: ${order.number}`);
             return true;
           }
           
@@ -3788,7 +3789,7 @@ export const getPurchaseOrdersOptimized = async ({
             const costValue = parseFloat(cost.value) || 0;
             return Math.abs(costValue - searchNumber) <= tolerance;
           })) {
-            console.log(`✓ Znaleziono dopasowanie w wartości kosztu dodatkowego: ${order.number}`);
+            logger.log(`✓ Znaleziono dopasowanie w wartości kosztu dodatkowego: ${order.number}`);
             return true;
           }
         }
@@ -3796,28 +3797,28 @@ export const getPurchaseOrdersOptimized = async ({
         return false;
       });
       
-      console.log('🔍 Po filtrowaniu wyszukiwania:', allOrders.length, 'zamówień');
+      logger.log('🔍 Po filtrowaniu wyszukiwania:', allOrders.length, 'zamówień');
     }
 
     // KROK 3: Filtrowanie po statusie
     if (statusFilter && statusFilter !== 'all' && statusFilter.trim() !== '') {
-      console.log('📋 Filtrowanie po statusie:', statusFilter);
+      logger.log('📋 Filtrowanie po statusie:', statusFilter);
       allOrders = allOrders.filter(order => order.status === statusFilter);
-      console.log('📋 Po filtrowaniu statusu:', allOrders.length, 'zamówień');
+      logger.log('📋 Po filtrowaniu statusu:', allOrders.length, 'zamówień');
     }
 
     // KROK 3.5: Filtrowanie po statusie płatności
     if (paymentStatusFilter && paymentStatusFilter !== 'all' && paymentStatusFilter.trim() !== '') {
-      console.log('💳 Filtrowanie po statusie płatności:', paymentStatusFilter);
+      logger.log('💳 Filtrowanie po statusie płatności:', paymentStatusFilter);
       allOrders = allOrders.filter(order => {
         const orderPaymentStatus = order.paymentStatus || 'unpaid'; // domyślnie 'unpaid' jeśli brak statusu
         return orderPaymentStatus === paymentStatusFilter;
       });
-      console.log('💳 Po filtrowaniu statusu płatności:', allOrders.length, 'zamówień');
+      logger.log('💳 Po filtrowaniu statusu płatności:', allOrders.length, 'zamówień');
     }
 
     // KROK 4: Sortowanie
-    console.log('📊 Sortowanie po polu:', sortField, 'kierunek:', sortOrder);
+    logger.log('📊 Sortowanie po polu:', sortField, 'kierunek:', sortOrder);
     allOrders.sort((a, b) => {
       let valueA = a[sortField];
       let valueB = b[sortField];
@@ -3850,7 +3851,7 @@ export const getPurchaseOrdersOptimized = async ({
     const startIndex = (pageNum - 1) * itemsPerPage;
     const paginatedData = allOrders.slice(startIndex, startIndex + itemsPerPage);
 
-    console.log('📊 Wyniki paginacji:', {
+    logger.log('📊 Wyniki paginacji:', {
       totalItems,
       totalPages,
       currentPage: pageNum,
@@ -3878,7 +3879,7 @@ export const getPurchaseOrdersOptimized = async ({
 export const clearPurchaseOrdersCache = () => {
   purchaseOrdersCache = null;
   purchaseOrdersCacheTimestamp = null;
-  console.log('🗑️ Cache zamówień zakupu wyczyszczony');
+  logger.log('🗑️ Cache zamówień zakupu wyczyszczony');
 };
 
 /**
@@ -3904,7 +3905,7 @@ export const updatePurchaseOrderInCache = (orderId, updatedOrderData) => {
     updatedAt: new Date()
   };
 
-  console.log('✏️ Zaktualizowano zamówienie w cache:', orderId);
+  logger.log('✏️ Zaktualizowano zamówienie w cache:', orderId);
   return true;
 };
 
@@ -3925,7 +3926,7 @@ export const addPurchaseOrderToCache = (newOrderData) => {
     updatedAt: new Date()
   });
 
-  console.log('➕ Dodano nowe zamówienie do cache:', newOrderData.id);
+  logger.log('➕ Dodano nowe zamówienie do cache:', newOrderData.id);
   return true;
 };
 
@@ -3943,7 +3944,7 @@ export const removePurchaseOrderFromCache = (orderId) => {
   purchaseOrdersCache = purchaseOrdersCache.filter(order => order.id !== orderId);
 
   if (purchaseOrdersCache.length < initialLength) {
-    console.log('🗑️ Usunięto zamówienie z cache:', orderId);
+    logger.log('🗑️ Usunięto zamówienie z cache:', orderId);
     return true;
   }
 
@@ -4182,7 +4183,7 @@ export const searchPurchaseOrdersQuick = async (searchTerm, maxResults = 20) => 
       })
       .slice(0, maxResults);
 
-    console.log(`🔍 Wyszukano ${scoredResults.length} wyników dla "${searchTerm}"`);
+    logger.log(`🔍 Wyszukano ${scoredResults.length} wyników dla "${searchTerm}"`);
     return scoredResults;
 
   } catch (error) {

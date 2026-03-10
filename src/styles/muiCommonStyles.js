@@ -756,6 +756,17 @@ export const conditionalStyles = (baseStyles, condition, conditionalStyles) => {
     : baseStyles;
 };
 
+// =============================================
+// Tabele — standardowy styl nagłówka
+// =============================================
+export const tableHeaderSx = {
+  backgroundColor: 'action.hover',
+  '& .MuiTableCell-head': {
+    fontWeight: 'bold',
+    py: 1,
+  },
+};
+
 const muiCommonStyles = {
   // Flexbox
   flexCenter,
@@ -906,6 +917,9 @@ const muiCommonStyles = {
   textRight,
   mobileButton,
   
+  // Tables
+  tableHeaderSx,
+
   // Helpers
   combineStyles,
   conditionalStyles,

@@ -54,7 +54,6 @@ import {
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useAuth } from '../../../hooks/useAuth';
 import { useTranslation } from '../../../hooks/useTranslation';
-import { generateDeliveryNoteText, generateDeliveryNoteMetadata } from '../../../services/logistics/deliveryNoteService';
 
 /**
  * Komponent wyświetlający podsumowanie wagi i palet dla pojedynczej pozycji CMR
@@ -1594,7 +1593,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     return isValid;
   };
   
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     console.log('Próba wysłania formularza CMR:', formData);
     console.log('CmrForm handleSubmit - daty w formData:', {
@@ -1623,23 +1622,6 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     console.log('Wynik walidacji:', isValid);
     
     if (isValid) {
-      // Auto-generate delivery note references for attached documents
-      if (dataToSubmit.items && dataToSubmit.items.length > 0) {
-        try {
-          const dnText = await generateDeliveryNoteText(dataToSubmit.items);
-          if (dnText) {
-            const existingDocs = dataToSubmit.attachedDocuments || '';
-            const existingWithoutDN = existingDocs.replace(/\n?Delivery Notes:\n[\s\S]*$/, '').trim();
-            dataToSubmit.attachedDocuments = existingWithoutDN
-              ? `${existingWithoutDN}\n${dnText}`
-              : dnText;
-          }
-          dataToSubmit.deliveryNotes = await generateDeliveryNoteMetadata(dataToSubmit.items);
-        } catch (dnError) {
-          console.error('Error generating delivery notes:', dnError);
-        }
-      }
-
       console.log('Formularz jest poprawny, wysyłanie danych:', dataToSubmit);
       try {
         onSubmit(dataToSubmit);

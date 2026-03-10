@@ -1,4 +1,5 @@
 // src/services/productionService.js
+import { logger } from '../../utils/logger';
 import { 
     collection, 
     doc, 
@@ -504,7 +505,7 @@ import {
 
     const duplicatesCount = productionTasksCache.length - uniqueTasks.length;
     if (duplicatesCount > 0) {
-      console.log(`🧹 Usunięto ${duplicatesCount} duplikatów z cache zadań`);
+      logger.log(`🧹 Usunięto ${duplicatesCount} duplikatów z cache zadań`);
       productionTasksCache = uniqueTasks;
     }
   };
@@ -611,7 +612,7 @@ import {
     // Dla niektórych operacji lepiej wyczyścić cache (np. masowe operacje)
     const safeCacheSize = 50000; // 50KB
     if (status.cacheSize > safeCacheSize) {
-      console.log('🔄 Cache za duży, lepiej wyczyścić');
+      logger.log('🔄 Cache za duży, lepiej wyczyścić');
       return false;
     }
 
@@ -629,7 +630,7 @@ import {
       startDateTime = new Date(startDate);
       endDateTime = new Date(endDate);
       
-      console.log('Konwersja dat w getTasksByDateRange:', 
+      logger.log('Konwersja dat w getTasksByDateRange:', 
         'startDate:', startDate, '→', startDateTime, 
         'endDate:', endDate, '→', endDateTime);
       
@@ -645,16 +646,16 @@ import {
         orderBy('scheduledDate', 'asc')
       );
       
-      console.log('Wykonywanie zapytania do bazy danych...');
+      logger.log('Wykonywanie zapytania do bazy danych...');
       const querySnapshot = await getDocs(q);
-      console.log(`Pobrano ${querySnapshot.docs.length} zadań przed filtrowaniem`);
+      logger.log(`Pobrano ${querySnapshot.docs.length} zadań przed filtrowaniem`);
       
       const allTasks = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       
-      console.log('Wszystkie zadania przed filtrowaniem:', allTasks);
+      logger.log('Wszystkie zadania przed filtrowaniem:', allTasks);
       
       // Filtrujemy po stronie klienta, aby uwzględnić wszystkie możliwe przypadki
       const filteredTasks = allTasks.filter(task => {
@@ -670,11 +671,11 @@ import {
           } else if (task.scheduledDate instanceof Date) {
             taskStartDate = task.scheduledDate;
           } else {
-            console.warn(`Nieprawidłowy format daty rozpoczęcia dla zadania ${task.id}:`, task.scheduledDate);
+            logger.warn(`Nieprawidłowy format daty rozpoczęcia dla zadania ${task.id}:`, task.scheduledDate);
             taskStartDate = new Date(); // Domyślna data
           }
         } else {
-          console.warn(`Brak daty rozpoczęcia dla zadania ${task.id}`);
+          logger.warn(`Brak daty rozpoczęcia dla zadania ${task.id}`);
           taskStartDate = new Date(); // Domyślna data
         }
         
@@ -687,7 +688,7 @@ import {
           } else if (task.endDate instanceof Date) {
             taskEndDate = task.endDate;
           } else {
-            console.warn(`Nieprawidłowy format daty zakończenia dla zadania ${task.id}:`, task.endDate);
+            logger.warn(`Nieprawidłowy format daty zakończenia dla zadania ${task.id}:`, task.endDate);
             // Jeśli data zakończenia jest nieprawidłowa, ustaw ją na 1 godzinę po dacie rozpoczęcia
             taskEndDate = new Date(taskStartDate.getTime() + 60 * 60 * 1000);
           }
@@ -708,19 +709,19 @@ import {
         return isVisible;
       });
       
-      console.log(`Po filtrowaniu pozostało ${filteredTasks.length} zadań`);
+      logger.log(`Po filtrowaniu pozostało ${filteredTasks.length} zadań`);
       return filteredTasks;
     } catch (error) {
       console.error('Error parsing dates:', error);
       // W przypadku błędu zwróć wszystkie zadania
-      console.log('Błąd podczas przetwarzania dat, pobieranie wszystkich zadań...');
+      logger.log('Błąd podczas przetwarzania dat, pobieranie wszystkich zadań...');
       const q = query(tasksRef, orderBy('scheduledDate', 'asc'));
       const querySnapshot = await getDocs(q);
       const allTasks = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      console.log(`Pobrano ${allTasks.length} zadań (awaryjnie)`);
+      logger.log(`Pobrano ${allTasks.length} zadań (awaryjnie)`);
       return allTasks;
     }
   };
@@ -734,7 +735,7 @@ import {
       const startTimestamp = Timestamp.fromDate(new Date(startDate));
       const endTimestamp = Timestamp.fromDate(new Date(endDate));
       
-      console.log('Pobieranie zadań z serwera dla okresu:', startDate, '-', endDate);
+      logger.log('Pobieranie zadań z serwera dla okresu:', startDate, '-', endDate);
       
       // Przygotuj zapytanie z filtrowaniem po stronie serwera
       let q;
@@ -790,14 +791,14 @@ import {
         tasks = [...tasks, ...additionalPausedTasks];
       }
       
-      console.log(`Pobrano ${tasks.length} zadań z serwera`);
+      logger.log(`Pobrano ${tasks.length} zadań z serwera`);
       
       return tasks;
     } catch (error) {
       console.error('Błąd podczas pobierania zadań z optymalizacją:', error);
       
       // Fallback - użyj starszej metody
-      console.log('Fallback do starszej metody pobierania zadań');
+      logger.log('Fallback do starszej metody pobierania zadań');
       return await getTasksByDateRange(startDate, endDate);
     }
   };
@@ -820,7 +821,7 @@ import {
       
       // Sprawdź czy cache jest aktualny i nie wymuszono odświeżenia
       if (!forceRefresh && enrichmentCacheTimestamp && (now - enrichmentCacheTimestamp) < ENRICHMENT_CACHE_TTL) {
-        console.log(`🎯 Używam cache dla wzbogacania PO (cache age: ${((now - enrichmentCacheTimestamp) / 1000).toFixed(0)}s)`);
+        logger.log(`🎯 Używam cache dla wzbogacania PO (cache age: ${((now - enrichmentCacheTimestamp) / 1000).toFixed(0)}s)`);
         
         // Zwróć zadania z danymi z cache
         const cachedTasks = tasks.map(task => ({
@@ -831,12 +832,12 @@ import {
         }));
         
         const tasksWithPO = cachedTasks.filter(t => t.poNumbers.length > 0).length;
-        console.log(`✅ Wzbogacono ${cachedTasks.length} zadań z cache. Zadań z powiązaniami PO: ${tasksWithPO}`);
+        logger.log(`✅ Wzbogacono ${cachedTasks.length} zadań z cache. Zadań z powiązaniami PO: ${tasksWithPO}`);
         
         return cachedTasks;
       }
       
-      console.log(`🔍 Wzbogacanie ${tasks.length} zadań o numery PO...`);
+      logger.log(`🔍 Wzbogacanie ${tasks.length} zadań o numery PO...`);
       const enrichStartTime = performance.now();
       
       const poNumbersMap = new Map(); // task.id -> Set(poNumbers)
@@ -1046,8 +1047,8 @@ import {
       
       const enrichEndTime = performance.now();
       const tasksWithPO = enrichedTasks.filter(t => t.poNumbers.length > 0).length;
-      console.log(`✅ Wzbogacono ${enrichedTasks.length} zadań w ${(enrichEndTime - enrichStartTime).toFixed(0)}ms. Zadań z powiązaniami PO: ${tasksWithPO}`);
-      console.log(`💾 Cache zapisany, ważny przez ${ENRICHMENT_CACHE_TTL / 1000}s`);
+      logger.log(`✅ Wzbogacono ${enrichedTasks.length} zadań w ${(enrichEndTime - enrichStartTime).toFixed(0)}ms. Zadań z powiązaniami PO: ${tasksWithPO}`);
+      logger.log(`💾 Cache zapisany, ważny przez ${ENRICHMENT_CACHE_TTL / 1000}s`);
       
       return enrichedTasks;
       
@@ -1077,7 +1078,7 @@ import {
           t.poReservationIds?.length > 0 && deliveryInfoCache.has(t.id)
         );
         if (hasCachedDeliveryInfo) {
-          console.log('🎯 Używam cache dla danych dostawowych PO');
+          logger.log('🎯 Używam cache dla danych dostawowych PO');
           return tasks.map(task => ({
             ...task,
             poDeliveryInfo: deliveryInfoCache.get(task.id) || task.poDeliveryInfo || []
@@ -1085,7 +1086,7 @@ import {
         }
       }
 
-      console.log(`🚀 Szybkie wzbogacanie ${tasks.length} zadań o dane dostawowe PO...`);
+      logger.log(`🚀 Szybkie wzbogacanie ${tasks.length} zadań o dane dostawowe PO...`);
       const startTime = performance.now();
 
       // Zbierz wszystkie ID rezerwacji PO z zadań
@@ -1102,7 +1103,7 @@ import {
       });
 
       if (taskReservationMap.size === 0) {
-        console.log('🚀 Brak rezerwacji PO do pobrania');
+        logger.log('🚀 Brak rezerwacji PO do pobrania');
         return tasks;
       }
 
@@ -1153,7 +1154,7 @@ import {
 
       const endTime = performance.now();
       const tasksWithInfo = enrichedTasks.filter(t => t.poDeliveryInfo.length > 0).length;
-      console.log(`🚀 Dane dostawowe PO pobrane w ${(endTime - startTime).toFixed(0)}ms. Zadań z danymi: ${tasksWithInfo}`);
+      logger.log(`🚀 Dane dostawowe PO pobrane w ${(endTime - startTime).toFixed(0)}ms. Zadań z danymi: ${tasksWithInfo}`);
 
       return enrichedTasks;
 
@@ -1172,7 +1173,7 @@ import {
     const startTimestamp = Timestamp.fromDate(new Date(startDate));
     const endTimestamp = Timestamp.fromDate(new Date(endDate));
     
-    console.log('Pobieranie zadań z optymalizacją serwerową dla okresu:', startDate, '-', endDate);
+    logger.log('Pobieranie zadań z optymalizacją serwerową dla okresu:', startDate, '-', endDate);
     
     // OPTYMALIZACJA 1: Filtrowanie po stronie serwera
     const q = query(
@@ -1212,10 +1213,10 @@ import {
         
         tasks = [...tasks, ...additionalTasks];
       } catch (extendedError) {
-        console.warn('Nie udało się pobrać rozszerzonych zadań:', extendedError);
+        logger.warn('Nie udało się pobrać rozszerzonych zadań:', extendedError);
       }
       
-      console.log(`Pobrano ${tasks.length} zadań z optymalizacją serwerową`);
+      logger.log(`Pobrano ${tasks.length} zadań z optymalizacją serwerową`);
       
       // UWAGA: Wzbogacanie o numery PO jest teraz wykonywane ON-DEMAND w komponencie
       // aby przyspieszyć pierwsze ładowanie timeline. Zobacz ProductionTimeline.js
@@ -1270,7 +1271,7 @@ import {
             const taskDoc = await getDoc(taskRef);
             return { taskId, doc: taskDoc };
           } catch (error) {
-            console.warn(`Nie udało się pobrać zadania ${taskId}:`, error);
+            logger.warn(`Nie udało się pobrać zadania ${taskId}:`, error);
             return { taskId, doc: null };
           }
         });
@@ -1317,7 +1318,7 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
   let taskWithMeta = null;
   
   try {
-      console.log(`[DEBUG-MO] Rozpoczęto tworzenie zadania produkcyjnego:`, JSON.stringify({
+      logger.log(`[DEBUG-MO] Rozpoczęto tworzenie zadania produkcyjnego:`, JSON.stringify({
         productName: taskData.productName,
         orderItemId: taskData.orderItemId,
         orderId: taskData.orderId,
@@ -1337,7 +1338,7 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
       
       // Wygeneruj numer MO (dopiero po walidacji!)
       const moNumber = await generateMONumber();
-      console.log(`[DEBUG-MO] Wygenerowano numer MO: ${moNumber}`);
+      logger.log(`[DEBUG-MO] Wygenerowano numer MO: ${moNumber}`);
       
       // Przygotuj dane zadania z metadanymi
       let taskWithMeta = {
@@ -1367,7 +1368,7 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
         originalQuantity: taskData.quantity // Zapisz oryginalną ilość przy tworzeniu zadania
       };
       
-      console.log(`[DEBUG-MO] Dane powiązane z zamówieniem w taskWithMeta:`, JSON.stringify({
+      logger.log(`[DEBUG-MO] Dane powiązane z zamówieniem w taskWithMeta:`, JSON.stringify({
         orderItemId: taskWithMeta.orderItemId,
         orderId: taskWithMeta.orderId,
         orderNumber: taskWithMeta.orderNumber
@@ -1424,9 +1425,9 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
         }, 2));
         
         // Wyczyść obiekt z pól undefined przed zapisem
-        console.log(`[FIX-UNDEFINED] Czyszczenie obiektu z wartości undefined...`);
+        logger.log(`[FIX-UNDEFINED] Czyszczenie obiektu z wartości undefined...`);
         taskWithMeta = removeUndefinedFields(taskWithMeta);
-        console.log(`[FIX-UNDEFINED] Obiekt oczyszczony, ponowna weryfikacja...`);
+        logger.log(`[FIX-UNDEFINED] Obiekt oczyszczony, ponowna weryfikacja...`);
         
         const stillUndefined = findUndefinedFields(taskWithMeta);
         if (stillUndefined.length > 0) {
@@ -1436,15 +1437,15 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
       }
       
       // Zapisz zadanie w bazie danych
-      console.log(`[DEBUG-MO] Tworzenie zadania z numerem MO: ${moNumber}`, 
+      logger.log(`[DEBUG-MO] Tworzenie zadania z numerem MO: ${moNumber}`, 
         taskWithMeta.orderId ? `powiązanego z zamówieniem: ${taskWithMeta.orderNumber || taskWithMeta.orderId}` : 'bez powiązania z zamówieniem');
       const docRef = await addDoc(collection(db, PRODUCTION_TASKS_COLLECTION), taskWithMeta);
-      console.log(`[DEBUG-MO] Utworzono zadanie z ID: ${docRef.id}`);
+      logger.log(`[DEBUG-MO] Utworzono zadanie z ID: ${docRef.id}`);
       
       // Jeśli zadanie jest powiązane z zamówieniem, dodaj je do listy zadań w zamówieniu
       if (taskWithMeta.orderId) {
         try {
-          console.log(`[DEBUG-MO] Próba dodania zadania ${docRef.id} do zamówienia ${taskWithMeta.orderId} z orderItemId: ${taskWithMeta.orderItemId}`);
+          logger.log(`[DEBUG-MO] Próba dodania zadania ${docRef.id} do zamówienia ${taskWithMeta.orderId} z orderItemId: ${taskWithMeta.orderItemId}`);
           const { addProductionTaskToOrder } = await import('../orders');
           await addProductionTaskToOrder(taskWithMeta.orderId, {
             id: docRef.id,
@@ -1455,24 +1456,24 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
             quantity: taskWithMeta.quantity,
             unit: taskWithMeta.unit
           }, taskWithMeta.orderItemId);
-          console.log(`[DEBUG-MO] Pomyślnie dodano zadanie ${docRef.id} do zamówienia ${taskWithMeta.orderId}`);
+          logger.log(`[DEBUG-MO] Pomyślnie dodano zadanie ${docRef.id} do zamówienia ${taskWithMeta.orderId}`);
           
           // NOWA FUNKCJONALNOŚĆ: Po powiązaniu zadania z zamówieniem, automatycznie aktualizuj koszty
           if (taskWithMeta.materials && taskWithMeta.materials.length > 0) {
-            console.log(`[DEBUG-MO] Rozpoczynam automatyczną aktualizację kosztów dla nowo utworzonego zadania ${docRef.id}`);
+            logger.log(`[DEBUG-MO] Rozpoczynam automatyczną aktualizację kosztów dla nowo utworzonego zadania ${docRef.id}`);
             try {
               // Uruchom aktualizację kosztów w tle po krótkim opóźnieniu (pozwoli na zakończenie procesu tworzenia)
               setTimeout(async () => {
                 try {
                   await updateTaskCostsAutomatically(docRef.id, userId, 'Automatyczna aktualizacja kosztów po utworzeniu zadania i powiązaniu z CO');
-                  console.log(`✅ [DEBUG-MO] Zakończono automatyczną aktualizację kosztów dla zadania ${docRef.id}`);
+                  logger.log(`✅ [DEBUG-MO] Zakończono automatyczną aktualizację kosztów dla zadania ${docRef.id}`);
                 } catch (costError) {
                   console.error(`❌ [DEBUG-MO] Błąd podczas automatycznej aktualizacji kosztów dla zadania ${docRef.id}:`, costError);
                   // Nie przerywamy procesu tworzenia zadania z powodu błędu aktualizacji kosztów
                 }
               }, 1000); // 1 sekunda opóźnienie, aby upewnić się że zadanie zostało w pełni utworzone i powiązane
             } catch (error) {
-              console.warn(`⚠️ [DEBUG-MO] Nie udało się zaplanować aktualizacji kosztów dla zadania ${docRef.id}:`, error);
+              logger.warn(`⚠️ [DEBUG-MO] Nie udało się zaplanować aktualizacji kosztów dla zadania ${docRef.id}:`, error);
               // Nie przerywamy procesu tworzenia zadania
             }
           }
@@ -1481,7 +1482,7 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
           // Nie przerywamy głównej operacji, jeśli dodawanie do zamówienia się nie powiedzie
         }
       } else {
-        console.log(`[DEBUG-MO] Zadanie ${docRef.id} nie jest powiązane z zamówieniem - brak orderId`);
+        logger.log(`[DEBUG-MO] Zadanie ${docRef.id} nie jest powiązane z zamówieniem - brak orderId`);
       }
       
       // Teraz, gdy zadanie zostało utworzone, zarezerwuj materiały
@@ -1489,21 +1490,21 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
       
       // Rezerwuj materiały tylko jeśli autoReserveMaterials jest true
       if (autoReserveMaterials && taskWithMeta.materials && taskWithMeta.materials.length > 0) {
-        console.log(`Automatyczne rezerwowanie materiałów dla MO: ${moNumber}`);
+        logger.log(`Automatyczne rezerwowanie materiałów dla MO: ${moNumber}`);
         for (const material of taskWithMeta.materials) {
           try {
             // Sprawdź, czy materiał jest oznaczony jako brakujący
             if (material.missing) {
               // Pomijamy rezerwację dla brakujących materiałów
               missingMaterials.push(material.name);
-              console.log(`Pomijam rezerwację brakującego materiału: ${material.name}`);
+              logger.log(`Pomijam rezerwację brakującego materiału: ${material.name}`);
               continue;
             }
             
             // Sprawdź dostępność i zarezerwuj materiał z określoną metodą rezerwacji
             const materialId = material.inventoryItemId || material.id;
             if (materialId) {
-              console.log(`Rezerwacja materiału ${material.name} dla zadania MO: ${moNumber}`);
+              logger.log(`Rezerwacja materiału ${material.name} dla zadania MO: ${moNumber}`);
               await bookInventoryForTask(
                 materialId, 
                 material.quantity, 
@@ -1514,7 +1515,7 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
                 true     // autoCreatePOReservations = true - automatyczne tworzenie rezerwacji PO
               );
             } else {
-              console.warn(`Materiał ${material.name} nie ma przypisanego ID pozycji magazynowej, pomijam rezerwację`);
+              logger.warn(`Materiał ${material.name} nie ma przypisanego ID pozycji magazynowej, pomijam rezerwację`);
             }
           } catch (error) {
             console.error(`Błąd przy rezerwacji materiału ${material.name}:`, error);
@@ -1522,7 +1523,7 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
           }
         }
       } else if (!autoReserveMaterials) {
-        console.log(`Pominięto automatyczną rezerwację materiałów dla MO: ${moNumber} zgodnie z wyborem użytkownika`);
+        logger.log(`Pominięto automatyczną rezerwację materiałów dla MO: ${moNumber} zgodnie z wyborem użytkownika`);
       }
       
       // Jeśli były brakujące materiały, dodaj informację do zadania
@@ -1702,13 +1703,13 @@ export const updateTask = async (taskId, taskData, userId) => {
           id: taskId,
           ...updatedTask
         };
-        console.log('🔄 Próba aktualizacji cache po updateTask dla:', taskId);
+        logger.log('🔄 Próba aktualizacji cache po updateTask dla:', taskId);
         const updated = updateTaskInCache(taskId, updatedTaskForCache);
         if (!updated) {
-          console.log('⚠️ Aktualizacja cache nie powiodła się - cache może być pusty');
+          logger.log('⚠️ Aktualizacja cache nie powiodła się - cache może być pusty');
           // Nie dodawaj zadania do pustego cache - zostanie odświeżone przez real-time listener
         } else {
-          console.log('✅ Cache zaktualizowany pomyślnie');
+          logger.log('✅ Cache zaktualizowany pomyślnie');
         }
       }
       // Nie czyść cache'a - pozwól real-time listenerowi obsłużyć zmiany
@@ -1764,13 +1765,13 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         if (!task.materialConsumptionConfirmed && task.materials && task.materials.length > 0) {
           // Zmień status na "Potwierdzenie zużycia" zamiast "Zakończone"
           updates.status = 'Potwierdzenie zużycia';
-          console.log(`Zadanie ${taskId} wymaga potwierdzenia zużycia, zmieniono status na "Potwierdzenie zużycia"`);
+          logger.log(`Zadanie ${taskId} wymaga potwierdzenia zużycia, zmieniono status na "Potwierdzenie zużycia"`);
         }
         
         // Jeśli zadanie ma produkt, oznaczamy je jako gotowe do dodania do magazynu
         if (task.productName) {
           updates.readyForInventory = true;
-          console.log(`Zadanie ${taskId} oznaczono jako gotowe do dodania do magazynu`);
+          logger.log(`Zadanie ${taskId} oznaczono jako gotowe do dodania do magazynu`);
         }
       }
       
@@ -1796,7 +1797,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             userId // Przekazanie ID użytkownika, który zmienił status
           );
         } catch (notificationError) {
-          console.warn('Nie udało się utworzyć powiadomienia w czasie rzeczywistym:', notificationError);
+          logger.warn('Nie udało się utworzyć powiadomienia w czasie rzeczywistym:', notificationError);
           
           // Fallback do starego systemu powiadomień, jeśli Realtime Database nie zadziała
           try {
@@ -1810,7 +1811,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               updates.status
             );
           } catch (fallbackError) {
-            console.warn('Nie udało się również utworzyć powiadomienia w Firestore:', fallbackError);
+            logger.warn('Nie udało się również utworzyć powiadomienia w Firestore:', fallbackError);
           }
         }
       }
@@ -1818,7 +1819,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Jeśli zadanie jest powiązane z zamówieniem klienta, zaktualizuj informacje w zamówieniu
       if (task.orderId) {
         try {
-          console.log(`Próba aktualizacji zadania ${taskId} w zamówieniu ${task.orderId}`);
+          logger.log(`Próba aktualizacji zadania ${taskId} w zamówieniu ${task.orderId}`);
           
           // Pobierz bezpośrednio z bazy danych aktualne dane zamówienia
           const orderRef = doc(db, 'orders', task.orderId);
@@ -1857,7 +1858,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               updatedBy: userId
             });
             
-            console.log(`Dodano zadanie ${taskId} do zamówienia ${task.orderId}`);
+            logger.log(`Dodano zadanie ${taskId} do zamówienia ${task.orderId}`);
           } else {
             // Aktualizuj informacje o zadaniu w zamówieniu
             productionTasks[taskIndex] = {
@@ -1876,7 +1877,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               updatedBy: userId
             });
             
-            console.log(`Zaktualizowano status zadania ${taskId} w zamówieniu ${task.orderId}`);
+            logger.log(`Zaktualizowano status zadania ${taskId} w zamówieniu ${task.orderId}`);
           }
         } catch (orderUpdateError) {
           console.error(`Błąd podczas aktualizacji zadania w zamówieniu: ${orderUpdateError.message}`, orderUpdateError);
@@ -1910,7 +1911,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         const updated = updateTaskInCache(taskId, updatedTaskData);
         if (!updated) {
           // Nie dodawaj zadania do pustego cache - zostanie odświeżone przez real-time listener
-          console.log('⚠️ Aktualizacja cache status nie powiodła się - cache może być pusty');
+          logger.log('⚠️ Aktualizacja cache status nie powiodła się - cache może być pusty');
         }
       }
       // Nie czyść cache'a - pozwól real-time listenerowi obsłużyć zmiany
@@ -1935,7 +1936,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       if (task.materials && task.materials.length > 0) {
         for (const material of task.materials) {
           if (!material.id && !material.inventoryItemId) {
-            console.warn(`Materiał ${material.name} nie ma ID, pomijam anulowanie rezerwacji`);
+            logger.warn(`Materiał ${material.name} nie ma ID, pomijam anulowanie rezerwacji`);
             continue;
           }
           
@@ -1943,7 +1944,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           const materialId = material.inventoryItemId || material.id;
           materialCancellationPromises.push(
             cancelBooking(materialId, material.quantity, taskId, task.createdBy || 'system')
-              .then(() => console.log(`Anulowano rezerwację materiału ${material.name} dla usuniętego zadania`))
+              .then(() => logger.log(`Anulowano rezerwację materiału ${material.name} dla usuniętego zadania`))
               .catch(error => console.error(`Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error))
           );
         }
@@ -1960,7 +1961,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         
         // Wyczyść tylko konkretne rezerwacje dla tego zadania (bez globalnego czyszczenia)
         await cleanupTaskReservations(taskId);
-        console.log(`Usunięto wszystkie rezerwacje związane z zadaniem ${taskId}`);
+        logger.log(`Usunięto wszystkie rezerwacje związane z zadaniem ${taskId}`);
       } catch (error) {
         console.error(`Błąd podczas usuwania rezerwacji dla zadania ${taskId}:`, error);
         // Kontynuuj usuwanie zadania mimo błędu
@@ -1974,17 +1975,17 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         const poReservations = await getPOReservationsForTask(taskId);
         
         if (poReservations.length > 0) {
-          console.log(`Znaleziono ${poReservations.length} rezerwacji PO do usunięcia dla zadania ${taskId}`);
+          logger.log(`Znaleziono ${poReservations.length} rezerwacji PO do usunięcia dla zadania ${taskId}`);
           
           // Usuń wszystkie rezerwacje PO równolegle
           const poCancellationPromises = poReservations.map(reservation =>
             cancelPOReservation(reservation.id, task.createdBy || 'system')
-              .then(() => console.log(`Usunięto rezerwację PO ${reservation.id} dla usuniętego zadania`))
+              .then(() => logger.log(`Usunięto rezerwację PO ${reservation.id} dla usuniętego zadania`))
               .catch(error => console.error(`Błąd przy usuwaniu rezerwacji PO ${reservation.id}:`, error))
           );
           
           await Promise.allSettled(poCancellationPromises);
-          console.log(`Zakończono usuwanie rezerwacji PO dla zadania ${taskId}`);
+          logger.log(`Zakończono usuwanie rezerwacji PO dla zadania ${taskId}`);
         }
       } catch (error) {
         console.error(`Błąd podczas usuwania rezerwacji PO dla zadania ${taskId}:`, error);
@@ -2001,7 +2002,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             const batchesSnapshot = await getDocs(q);
             
             if (batchesSnapshot.docs.length > 0) {
-              console.log(`Zadanie ${taskId} ma ${batchesSnapshot.docs.length} powiązanych partii produktów w magazynie, które zostały zachowane.`);
+              logger.log(`Zadanie ${taskId} ma ${batchesSnapshot.docs.length} powiązanych partii produktów w magazynie, które zostały zachowane.`);
             }
             return batchesSnapshot.docs.length;
           } catch (error) {
@@ -2023,7 +2024,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             try {
               const { removeProductionTaskFromOrder } = await import('../orders');
               await removeProductionTaskFromOrder(task.orderId, taskId);
-              console.log(`Zadanie produkcyjne ${taskId} zostało usunięte z zamówienia ${task.orderId}`);
+              logger.log(`Zadanie produkcyjne ${taskId} zostało usunięte z zamówienia ${task.orderId}`);
               return true;
             } catch (orderError) {
               console.error(`Błąd podczas usuwania zadania ${taskId} z zamówienia ${task.orderId}:`, orderError);
@@ -2044,10 +2045,10 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               // Usuń wszystkie wpisy historii równolegle
               const historyDeletions = historySnapshot.docs.map(doc => deleteDoc(doc.ref));
               await Promise.all(historyDeletions);
-              console.log(`Usunięto ${historySnapshot.docs.length} wpisów historii produkcji dla zadania ${taskId}`);
+              logger.log(`Usunięto ${historySnapshot.docs.length} wpisów historii produkcji dla zadania ${taskId}`);
               return historySnapshot.docs.length;
             } else {
-              console.log(`Brak wpisów historii produkcji do usunięcia dla zadania ${taskId}`);
+              logger.log(`Brak wpisów historii produkcji do usunięcia dla zadania ${taskId}`);
               return 0;
             }
           } catch (error) {
@@ -2065,12 +2066,12 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         
         // Wykonaj usuwanie transakcji równolegle
         await Promise.all(transactionDeletions);
-        console.log(`Usunięto ${transactionDeletions.length} transakcji związanych z zadaniem ${taskId}`);
+        logger.log(`Usunięto ${transactionDeletions.length} transakcji związanych z zadaniem ${taskId}`);
       }
       
       // OPTYMALIZACJA 6: Weryfikuj usunięcie historii produkcji
       if (productionHistoryResult.status === 'fulfilled') {
-        console.log(`Historia produkcji usunięta pomyślnie: ${productionHistoryResult.value} wpisów`);
+        logger.log(`Historia produkcji usunięta pomyślnie: ${productionHistoryResult.value} wpisów`);
       } else {
         console.error(`Błąd podczas usuwania historii produkcji:`, productionHistoryResult.reason);
         // Nie przerywaj usuwania zadania, ale zaloguj błąd
@@ -2095,7 +2096,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
   
   // Pobieranie zadań według statusu
   export const getTasksByStatus = async (status) => {
-    console.log(`Próba pobrania zadań o statusie: "${status}"`);
+    logger.log(`Próba pobrania zadań o statusie: "${status}"`);
     
     // Sprawdźmy, czy status nie jest pusty
     if (!status) {
@@ -2110,14 +2111,14 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       tasksCache.timestamp[status] && 
       (now - tasksCache.timestamp[status] < tasksCache.ttl)
     ) {
-      console.log(`Zwracam zadania o statusie "${status}" z cache. Dane ważne przez ${Math.round((tasksCache.timestamp[status] + tasksCache.ttl - now) / 1000)} sekund.`);
+      logger.log(`Zwracam zadania o statusie "${status}" z cache. Dane ważne przez ${Math.round((tasksCache.timestamp[status] + tasksCache.ttl - now) / 1000)} sekund.`);
       return tasksCache.byStatus[status];
     }
     
     // Jeśli zapytanie jest już w toku, poczekaj na jego zakończenie 
     // zamiast uruchamiania kolejnego równoległego zapytania
     if (tasksCache.fetchInProgress[status]) {
-      console.log(`Zapytanie o zadania ze statusem "${status}" już w toku, oczekuję na jego zakończenie...`);
+      logger.log(`Zapytanie o zadania ze statusem "${status}" już w toku, oczekuję na jego zakończenie...`);
       
       // Czekaj maksymalnie 2 sekundy na zakończenie trwającego zapytania
       let waitTime = 0;
@@ -2131,13 +2132,13 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       
       // Jeśli dane są dostępne po oczekiwaniu, zwróć je
       if (tasksCache.byStatus[status] && !tasksCache.fetchInProgress[status]) {
-        console.log(`Zapytanie o zadania ze statusem "${status}" zostało zakończone przez inny proces, zwracam dane z cache`);
+        logger.log(`Zapytanie o zadania ze statusem "${status}" zostało zakończone przez inny proces, zwracam dane z cache`);
         return tasksCache.byStatus[status];
       }
       
       // Jeśli nadal trwa zapytanie, zresetuj flagę (na wypadek błędu) i kontynuuj
       if (tasksCache.fetchInProgress[status]) {
-        console.log(`Przekroczono czas oczekiwania na zapytanie o zadania ze statusem "${status}", kontynuuję własne zapytanie`);
+        logger.log(`Przekroczono czas oczekiwania na zapytanie o zadania ze statusem "${status}", kontynuuję własne zapytanie`);
         tasksCache.fetchInProgress[status] = false;
       }
     }
@@ -2155,7 +2156,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         where('status', '==', status)
       );
       
-      console.log(`Wykonuję zapytanie do kolekcji ${PRODUCTION_TASKS_COLLECTION} o zadania ze statusem "${status}"`);
+      logger.log(`Wykonuję zapytanie do kolekcji ${PRODUCTION_TASKS_COLLECTION} o zadania ze statusem "${status}"`);
       
       // Pobierz dane
       const querySnapshot = await getDocs(q);
@@ -2173,7 +2174,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         return dateA - dateB;
       });
       
-      console.log(`Znaleziono ${tasks.length} zadań o statusie "${status}"`);
+      logger.log(`Znaleziono ${tasks.length} zadań o statusie "${status}"`);
       
       // Zapisz wyniki do cache
       tasksCache.byStatus[status] = tasks;
@@ -2194,7 +2195,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
   // Dodanie produktu z zadania produkcyjnego do magazynu jako partii
   export const addTaskProductToInventory = async (taskId, userId, inventoryParams = {}) => {
     try {
-      console.log(`Dodawanie produktu z zadania ${taskId} do magazynu`, inventoryParams);
+      logger.log(`Dodawanie produktu z zadania ${taskId} do magazynu`, inventoryParams);
       
       // Pobierz dane zadania
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
@@ -2222,10 +2223,10 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           inventoryItem = await getInventoryItemById(inventoryItemId);
           
           if (!inventoryItem) {
-            console.warn(`Pozycja magazynowa ${inventoryItemId} z zadania nie istnieje, będę szukać innej`);
+            logger.warn(`Pozycja magazynowa ${inventoryItemId} z zadania nie istnieje, będę szukać innej`);
             inventoryItemId = null; // Wyzeruj ID, żeby wyszukać pozycję innym sposobem
           } else {
-            console.log(`Używam pozycji magazynowej z zadania: ${inventoryItem.name} (ID: ${inventoryItemId})`);
+            logger.log(`Używam pozycji magazynowej z zadania: ${inventoryItem.name} (ID: ${inventoryItemId})`);
           }
         } catch (error) {
           console.error('Błąd podczas sprawdzania pozycji magazynowej z zadania:', error);
@@ -2236,7 +2237,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       if (!inventoryItemId) {
         // Jeśli zadanie ma recepturę, sprawdź czy ta receptura ma już powiązaną pozycję magazynową
         if (taskData.recipeId) {
-          console.log(`Sprawdzanie pozycji magazynowej powiązanej z recepturą ${taskData.recipeId}`);
+          logger.log(`Sprawdzanie pozycji magazynowej powiązanej z recepturą ${taskData.recipeId}`);
           
           try {
             // Importuj funkcję do pobierania pozycji magazynowej powiązanej z recepturą
@@ -2247,7 +2248,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               inventoryItemId = recipeInventoryItem.id;
               inventoryItem = recipeInventoryItem;
               
-              console.log(`Znaleziono pozycję magazynową powiązaną z recepturą: ${recipeInventoryItem.name} (ID: ${inventoryItemId})`);
+              logger.log(`Znaleziono pozycję magazynową powiązaną z recepturą: ${recipeInventoryItem.name} (ID: ${inventoryItemId})`);
               
               // Zaktualizuj zadanie z informacją o pozycji magazynowej z receptury
               await updateDoc(taskRef, {
@@ -2273,7 +2274,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             inventoryItemId = doc.id;
             inventoryItem = doc.data();
             
-            console.log(`Znaleziono pozycję magazynową według nazwy: ${inventoryItem.name} (ID: ${inventoryItemId})`);
+            logger.log(`Znaleziono pozycję magazynową według nazwy: ${inventoryItem.name} (ID: ${inventoryItemId})`);
             
             // Zaktualizuj zadanie z informacją o znalezionym produkcie magazynowym
             await updateDoc(taskRef, {
@@ -2304,7 +2305,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             await setDoc(newItemRef, newItem);
             inventoryItem = newItem;
             
-            console.log(`Utworzono nową pozycję magazynową: ${newItem.name} (ID: ${inventoryItemId})`);
+            logger.log(`Utworzono nową pozycję magazynową: ${newItem.name} (ID: ${inventoryItemId})`);
             
             // Zaktualizuj zadanie z informacją o nowo utworzonym produkcie magazynowym
             await updateDoc(taskRef, {
@@ -2381,7 +2382,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       
       if (taskData.inventoryBatchId) {
         // Zadanie ma już przypisaną partię - użyj jej
-        console.log(`Zadanie ma już przypisaną partię: ${taskData.inventoryBatchId}`);
+        logger.log(`Zadanie ma już przypisaną partię: ${taskData.inventoryBatchId}`);
         batchRef = doc(db, 'inventoryBatches', taskData.inventoryBatchId);
         
         // Sprawdź czy partia rzeczywiście istnieje
@@ -2424,9 +2425,9 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           
           await updateDoc(batchRef, updateData);
           
-          console.log(`Dodano ${finalQuantity} do przypisanej partii zadania LOT: ${lotNumber}`);
+          logger.log(`Dodano ${finalQuantity} do przypisanej partii zadania LOT: ${lotNumber}`);
         } else {
-          console.warn(`Przypisana partia ${taskData.inventoryBatchId} nie istnieje - utworzę nową`);
+          logger.warn(`Przypisana partia ${taskData.inventoryBatchId} nie istnieje - utworzę nową`);
           // Partia nie istnieje, wyczyść powiązanie w zadaniu i utwórz nową partię
           await updateDoc(doc(db, PRODUCTION_TASKS_COLLECTION, taskId), {
             inventoryBatchId: null,
@@ -2470,7 +2471,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             }
           });
           
-          console.log(`Dodano ${finalQuantity} do istniejącej partii LOT: ${lotNumber}`);
+          logger.log(`Dodano ${finalQuantity} do istniejącej partii LOT: ${lotNumber}`);
         }
       }
       
@@ -2501,7 +2502,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         };
         
         await setDoc(batchRef, batchData);
-        console.log(`Utworzono nową partię LOT: ${lotNumber} z ilością ${finalQuantity}`);
+        logger.log(`Utworzono nową partię LOT: ${lotNumber} z ilością ${finalQuantity}`);
       }
       
       // Zaktualizuj ilość w magazynie
@@ -2582,12 +2583,12 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
                 updatedBy: userId
               });
               
-              console.log(`Zaktualizowano informacje o partii LOT w zamówieniu ${taskData.orderNumber}`);
+              logger.log(`Zaktualizowano informacje o partii LOT w zamówieniu ${taskData.orderNumber}`);
             } else {
-              console.warn(`Nie znaleziono zadania ${taskId} w zamówieniu ${taskData.orderId}`);
+              logger.warn(`Nie znaleziono zadania ${taskId} w zamówieniu ${taskData.orderId}`);
             }
           } else {
-            console.warn(`Zamówienie o ID ${taskData.orderId} nie istnieje`);
+            logger.warn(`Zamówienie o ID ${taskData.orderId} nie istnieje`);
           }
         } catch (orderError) {
           console.error(`Błąd podczas aktualizacji informacji o partii w zamówieniu: ${orderError.message}`, orderError);
@@ -2630,7 +2631,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
                   updatedBy: userId
                 });
                 
-                console.log(`Zaktualizowano informacje o partii LOT w zamówieniu ze źródła ${taskData.sourceDetails.orderNumber}`);
+                logger.log(`Zaktualizowano informacje o partii LOT w zamówieniu ze źródła ${taskData.sourceDetails.orderNumber}`);
               }
             }
           } catch (sourceOrderError) {
@@ -2672,7 +2673,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
   export const getAllPlannedTasks = async () => {
     try {
       const tasksRef = collection(db, 'productionTasks');
-      console.log('Pobieranie zaplanowanych zadań produkcyjnych...');
+      logger.log('Pobieranie zaplanowanych zadań produkcyjnych...');
       
       // Pobierz zadania zaplanowane, w trakcie realizacji oraz wstrzymane
       const q = query(
@@ -2686,7 +2687,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         ...doc.data()
       }));
       
-      console.log(`Pobrano ${allTasks.length} zadań`);
+      logger.log(`Pobrano ${allTasks.length} zadań`);
       
       // Zbierz wszystkie ID receptur używanych w zadaniach
       const recipeIds = new Set();
@@ -2886,7 +2887,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
     try {
       // Tutaj można by zaimplementować generowanie PDF lub CSV
       // Dla uproszczenia, zwracamy przykładowy URL do pliku
-      console.log(`Generowanie raportu produkcyjnego typu ${reportType}:`, {
+      logger.log(`Generowanie raportu produkcyjnego typu ${reportType}:`, {
         startDate,
         endDate
       });
@@ -2918,7 +2919,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       
       // Jeśli zużycie było już potwierdzone, musimy najpierw anulować poprzednie zużycie
       if (wasConfirmedBefore) {
-        console.log(`Zużycie materiałów dla zadania ${taskId} było już potwierdzone. Anulowanie poprzedniego zużycia...`);
+        logger.log(`Zużycie materiałów dla zadania ${taskId} było już potwierdzone. Anulowanie poprzedniego zużycia...`);
         
         // Pobierz poprzednio zużyte partie
         const usedBatches = task.usedBatches || {};
@@ -3014,9 +3015,9 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       const actualUsage = task.actualMaterialUsage || {};
       const batchActualUsage = task.batchActualUsage || {};
       
-      console.log("[DEBUG REZERWACJE] Rozpoczynam potwierdzanie zużycia materiałów dla zadania:", taskId);
-      console.log("[DEBUG REZERWACJE] Aktualne zużycie materiałów:", actualUsage);
-      console.log("[DEBUG REZERWACJE] Aktualne zużycie na poziomie partii:", batchActualUsage);
+      logger.log("[DEBUG REZERWACJE] Rozpoczynam potwierdzanie zużycia materiałów dla zadania:", taskId);
+      logger.log("[DEBUG REZERWACJE] Aktualne zużycie materiałów:", actualUsage);
+      logger.log("[DEBUG REZERWACJE] Aktualne zużycie na poziomie partii:", batchActualUsage);
       
       // Dla każdego materiału, zaktualizuj stan magazynowy
       for (const material of materials) {
@@ -3029,7 +3030,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           ? parseFloat(actualUsage[materialId]) 
           : parseFloat(material.quantity);
         
-        console.log(`[DEBUG REZERWACJE] Materiał ${material.name}: planowana ilość = ${material.quantity}, skorygowana ilość = ${consumedQuantity}`);
+        logger.log(`[DEBUG REZERWACJE] Materiał ${material.name}: planowana ilość = ${material.quantity}, skorygowana ilość = ${consumedQuantity}`);
         
         // Sprawdź, czy consumedQuantity jest dodatnią liczbą
         if (isNaN(consumedQuantity) || consumedQuantity < 0) {
@@ -3038,7 +3039,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         
         // Jeśli skorygowana ilość wynosi 0, pomijamy aktualizację partii dla tego materiału
         if (consumedQuantity === 0) {
-          console.log(`[DEBUG REZERWACJE] Pomijam aktualizację partii dla materiału ${material.name} - zużycie wynosi 0`);
+          logger.log(`[DEBUG REZERWACJE] Pomijam aktualizację partii dla materiału ${material.name} - zużycie wynosi 0`);
           continue;
         }
         
@@ -3052,7 +3053,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             ...inventorySnapshot.data()
           };
           
-          console.log(`[DEBUG REZERWACJE] Stan magazynowy ${material.name}: ilość=${inventoryItem.quantity}, zarezerwowano=${inventoryItem.bookedQuantity || 0}`);
+          logger.log(`[DEBUG REZERWACJE] Stan magazynowy ${material.name}: ilość=${inventoryItem.quantity}, zarezerwowano=${inventoryItem.bookedQuantity || 0}`);
           
           // 1. Najpierw pobierz i sprawdź przypisane loty/partie do tego materiału w zadaniu
           let assignedBatches = [];
@@ -3070,7 +3071,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               // Jeśli dla tej partii zdefiniowano niestandardową ilość zużycia, użyj jej
               if (batchActualUsage[batchKey] !== undefined) {
                 actualBatchQuantity = parseFloat(batchActualUsage[batchKey]);
-                console.log(`Używam skorygowanej ilości dla partii ${batch.batchNumber}: ${actualBatchQuantity} (oryginalna: ${batch.quantity})`);
+                logger.log(`Używam skorygowanej ilości dla partii ${batch.batchNumber}: ${actualBatchQuantity} (oryginalna: ${batch.quantity})`);
               }
               
               // Sprawdź czy ilość jest poprawna
@@ -3087,10 +3088,10 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             // Odfiltruj partie z zerowym zużyciem
             assignedBatches = assignedBatches.filter(batch => batch.quantity > 0);
             
-            console.log(`Przygotowano partie do aktualizacji dla ${material.name}:`, assignedBatches);
+            logger.log(`Przygotowano partie do aktualizacji dla ${material.name}:`, assignedBatches);
           } else {
             // Brak przypisanych partii - automatycznie przydziel partie według FIFO/FEFO
-            console.log(`Brak przypisanych partii dla materiału ${material.name}. Przydzielanie automatyczne...`);
+            logger.log(`Brak przypisanych partii dla materiału ${material.name}. Przydzielanie automatyczne...`);
             
             // Pobierz dostępne partie dla tego materiału
             const batchesQuery = query(
@@ -3128,7 +3129,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               });
             }
             
-            console.log(`Posortowane partie dla materiału ${material.name}:`, 
+            logger.log(`Posortowane partie dla materiału ${material.name}:`, 
                         availableBatches.map(b => `${b.batchId} (${b.quantity || 0} ${material.unit || 'szt.'})`));
             
             // Przypisz partie automatycznie według FEFO - użyj skorygowanej ilości
@@ -3146,7 +3147,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
                 batchNumber: batch.batchNumber || batch.lotNumber || 'Bez numeru'
               });
               
-              console.log(`Przypisano ${quantityFromBatch} z partii ${batch.batchNumber || batch.lotNumber || batch.id}`);
+              logger.log(`Przypisano ${quantityFromBatch} z partii ${batch.batchNumber || batch.lotNumber || batch.id}`);
             }
             
             // Jeśli nie udało się przypisać wszystkich wymaganych ilości
@@ -3155,7 +3156,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             }
           }
           
-          console.log(`Przypisane partie dla materiału ${material.name}:`, assignedBatches);
+          logger.log(`Przypisane partie dla materiału ${material.name}:`, assignedBatches);
           
           // 2. Odejmij ilości z przypisanych partii
           for (const batchAssignment of assignedBatches) {
@@ -3163,11 +3164,11 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             
             // Sprawdź, czy ilość do odjęcia jest większa od zera
             if (batchAssignment.quantity <= 0) {
-              console.log(`Pomijam aktualizację partii ${batchAssignment.batchId} - ilość do odjęcia wynosi ${batchAssignment.quantity}`);
+              logger.log(`Pomijam aktualizację partii ${batchAssignment.batchId} - ilość do odjęcia wynosi ${batchAssignment.quantity}`);
               continue;
             }
             
-            console.log(`Aktualizacja partii ${batchAssignment.batchId} - odejmowanie ${batchAssignment.quantity}`);
+            logger.log(`Aktualizacja partii ${batchAssignment.batchId} - odejmowanie ${batchAssignment.quantity}`);
             
             await updateDoc(batchRef, {
               quantity: increment(-batchAssignment.quantity),
@@ -3212,16 +3213,16 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               // Używamy consumedQuantity zamiast material.quantity
               const bookingQuantity = consumedQuantity;
               
-              console.log(`[DEBUG REZERWACJE] Przygotowanie do anulowania rezerwacji: materiał=${material.name}, ilość=${bookingQuantity}, bookedQuantity=${inventoryItem.bookedQuantity}`);
+              logger.log(`[DEBUG REZERWACJE] Przygotowanie do anulowania rezerwacji: materiał=${material.name}, ilość=${bookingQuantity}, bookedQuantity=${inventoryItem.bookedQuantity}`);
               
               // Anuluj rezerwację tylko jeśli jakąś ilość zarezerwowano
               if (bookingQuantity > 0) {
-                console.log(`[DEBUG REZERWACJE] Wywołuję cancelBooking dla materiału ${material.name} z ilością ${bookingQuantity}`);
+                logger.log(`[DEBUG REZERWACJE] Wywołuję cancelBooking dla materiału ${material.name} z ilością ${bookingQuantity}`);
                 await cancelBooking(inventoryMaterialId, bookingQuantity, taskId, task.createdBy || 'system');
-                console.log(`[DEBUG REZERWACJE] Anulowano rezerwację ${bookingQuantity} ${inventoryItem.unit} materiału ${material.name} po zatwierdzeniu zużycia`);
+                logger.log(`[DEBUG REZERWACJE] Anulowano rezerwację ${bookingQuantity} ${inventoryItem.unit} materiału ${material.name} po zatwierdzeniu zużycia`);
               }
             } else {
-              console.log(`[DEBUG REZERWACJE] Materiał ${material.name} nie ma zarezerwowanej ilości (bookedQuantity=${inventoryItem.bookedQuantity || 0})`);
+              logger.log(`[DEBUG REZERWACJE] Materiał ${material.name} nie ma zarezerwowanej ilości (bookedQuantity=${inventoryItem.bookedQuantity || 0})`);
             }
           } catch (error) {
             console.error(`[DEBUG REZERWACJE] Błąd przy anulowaniu rezerwacji materiału ${material.name}:`, error);
@@ -3230,7 +3231,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         }
       }
       
-      console.log("[DEBUG REZERWACJE] Zakończono anulowanie rezerwacji, aktualizuję składniki w planie mieszań");
+      logger.log("[DEBUG REZERWACJE] Zakończono anulowanie rezerwacji, aktualizuję składniki w planie mieszań");
       
       // Zaktualizuj powiązania składników w planie mieszań
       if (task.mixingPlanChecklist) {
@@ -3254,16 +3255,16 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
                 materialConsumedQty, 
                 userId || 'system'
               );
-              console.log(`[DEBUG PLAN MIESZAŃ] Zaktualizowano konsumpcję składnika ${ingredient.text}: ${materialConsumedQty}`);
+              logger.log(`[DEBUG PLAN MIESZAŃ] Zaktualizowano konsumpcję składnika ${ingredient.text}: ${materialConsumedQty}`);
             } catch (error) {
-              console.warn(`Nie udało się zaktualizować konsumpcji składnika ${ingredient.text}:`, error);
+              logger.warn(`Nie udało się zaktualizować konsumpcji składnika ${ingredient.text}:`, error);
               // Kontynuuj mimo błędu - nie przerywaj procesu konsumpcji
             }
           }
         }
       }
       
-      console.log("[DEBUG REZERWACJE] Zakończono aktualizację składników, aktualizuję status zadania");
+      logger.log("[DEBUG REZERWACJE] Zakończono aktualizację składników, aktualizuję status zadania");
       
       // Oznacz zużycie jako potwierdzone i zapisz informacje o wykorzystanych partiach
       const updates = {
@@ -3279,7 +3280,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // (bez przeliczania materiałów - materiały zostały już skonsumowane)
       const totalCompletedQuantity = task.totalCompletedQuantity || 0;
       if (totalCompletedQuantity > 0 && totalCompletedQuantity !== task.quantity) {
-        console.log(`[CONSUMPTION] Aktualizacja ilości zadania: ${task.quantity} -> ${totalCompletedQuantity} (bez przeliczania materiałów)`);
+        logger.log(`[CONSUMPTION] Aktualizacja ilości zadania: ${task.quantity} -> ${totalCompletedQuantity} (bez przeliczania materiałów)`);
         updates.quantity = totalCompletedQuantity;
         // Zapisz oryginalną ilość jeśli jeszcze nie była zapisana
         if (!task.originalQuantity) {
@@ -3290,7 +3291,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Zapisz w bazie danych
       await updateDoc(taskRef, updates);
       
-      console.log("[DEBUG REZERWACJE] Zakończono potwierdzanie zużycia materiałów");
+      logger.log("[DEBUG REZERWACJE] Zakończono potwierdzanie zużycia materiałów");
       
       return {
         success: true,
@@ -3309,7 +3310,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
   // Zarezerwowanie składników dla zadania
   export const reserveMaterialsForTask = async (taskId, userId, reservationMethod, selectedBatches = []) => {
     try {
-      console.log(`[DEBUG] Rozpoczynam rezerwację materiałów dla zadania ${taskId}, metoda=${reservationMethod}`);
+      logger.log(`[DEBUG] Rozpoczynam rezerwację materiałów dla zadania ${taskId}, metoda=${reservationMethod}`);
       
       // Pobierz dane zadania produkcyjnego
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
@@ -3319,7 +3320,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       }
       
       const task = { id: taskDoc.id, ...taskDoc.data() };
-      console.log("Pobrano zadanie:", task.moNumber || task.id);
+      logger.log("Pobrano zadanie:", task.moNumber || task.id);
       
       // Sprawdź, czy istnieją nowe materiały, które nie są jeszcze zarezerwowane
       const existingReservedMaterials = new Set();
@@ -3347,7 +3348,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       
       // Sprawdź, czy materiały są już zarezerwowane dla tego zadania i nie ma nowych materiałów
       if (task.materialsReserved && newMaterialsToReserve.length === 0) {
-        console.log(`[DEBUG] Materiały dla zadania ${taskId} są już zarezerwowane i nie ma nowych materiałów. Pomijam ponowną rezerwację.`);
+        logger.log(`[DEBUG] Materiały dla zadania ${taskId} są już zarezerwowane i nie ma nowych materiałów. Pomijam ponowną rezerwację.`);
         return {
           success: true,
           message: 'Materiały są już zarezerwowane dla tego zadania',
@@ -3357,18 +3358,18 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       
       // Jeśli są już zarezerwowane materiały, ale są też nowe do zarezerwowania
       if (task.materialsReserved && newMaterialsToReserve.length > 0) {
-        console.log(`[DEBUG] Zadanie ma już zarezerwowane materiały, ale wykryto ${newMaterialsToReserve.length} nowych materiałów do zarezerwowania.`);
+        logger.log(`[DEBUG] Zadanie ma już zarezerwowane materiały, ale wykryto ${newMaterialsToReserve.length} nowych materiałów do zarezerwowania.`);
       }
       
       // Reszta kodu pozostaje bez zmian...
 
       // Jeśli nie ma wymaganych materiałów, nie rób nic
       if (!task.requiredMaterials || task.requiredMaterials.length === 0) {
-        console.log("Brak wymaganych materiałów dla tego zadania.");
+        logger.log("Brak wymaganych materiałów dla tego zadania.");
         
         // Sprawdź, czy są materiały w polu materials
         if (task.materials && task.materials.length > 0) {
-          console.log("Znaleziono materiały w polu 'materials':", task.materials);
+          logger.log("Znaleziono materiały w polu 'materials':", task.materials);
           // Utwórz requiredMaterials na podstawie pola materials
           const requiredMaterials = task.materials.map(material => ({
             id: material.inventoryItemId || material.id,
@@ -3382,7 +3383,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             requiredMaterials: requiredMaterials
           });
           
-          console.log("Utworzono requiredMaterials na podstawie materials:", requiredMaterials);
+          logger.log("Utworzono requiredMaterials na podstawie materials:", requiredMaterials);
           task.requiredMaterials = requiredMaterials;
         } else {
           return { success: true, message: "Brak materiałów do zarezerwowania" };
@@ -3393,7 +3394,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       let currentReservations = [];
       if (task.materialReservations && task.materialReservations.length > 0) {
         currentReservations = [...task.materialReservations];
-        console.log("Istniejące rezerwacje materiałów:", currentReservations);
+        logger.log("Istniejące rezerwacje materiałów:", currentReservations);
       }
 
       // Zainicjuj zmienne do śledzenia postępu i błędów
@@ -3405,7 +3406,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       for (const requiredMaterial of task.requiredMaterials) {
         // Jeśli zadanie ma już zarezerwowane materiały i ten materiał jest już zarezerwowany, pomiń go
         if (task.materialsReserved && existingReservedMaterials.has(requiredMaterial.id)) {
-          console.log(`Materiał ${requiredMaterial.name} jest już zarezerwowany, pomijam.`);
+          logger.log(`Materiał ${requiredMaterial.name} jest już zarezerwowany, pomijam.`);
           continue;
         }
         
@@ -3420,11 +3421,11 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         let remainingToReserve = parseFloat((requiredQuantity - alreadyReservedQty).toFixed(10));
         
         if (remainingToReserve <= 0) {
-          console.log(`Materiał ${requiredMaterial.name} jest już w pełni zarezerwowany.`);
+          logger.log(`Materiał ${requiredMaterial.name} jest już w pełni zarezerwowany.`);
           continue;
         }
 
-        console.log(`Rezerwowanie materiału: ${requiredMaterial.name}, Wymagane: ${requiredQuantity}, 
+        logger.log(`Rezerwowanie materiału: ${requiredMaterial.name}, Wymagane: ${requiredQuantity}, 
                    Już zarezerwowane: ${alreadyReservedQty}, Pozostało do zarezerwowania: ${remainingToReserve}`);
 
         // Znajdź wybraną partię dla tego materiału
@@ -3432,7 +3433,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         
         // Jeśli nie wybrano ręcznie partii, a metoda to FIFO lub expiry, pobierz dostępne partie automatycznie
         if (materialBatches.length === 0 && (reservationMethod === 'fifo' || reservationMethod === 'expiry')) {
-          console.log(`Automatyczne wybieranie partii dla materiału ${requiredMaterial.name} metodą ${reservationMethod}`);
+          logger.log(`Automatyczne wybieranie partii dla materiału ${requiredMaterial.name} metodą ${reservationMethod}`);
           
           // Pobierz dostępne partie dla tego materiału
           const batchesRef = collection(db, 'inventoryBatches');
@@ -3444,7 +3445,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           
           const batchesSnapshot = await getDocs(q);
           if (batchesSnapshot.empty) {
-            console.warn(`Brak dostępnych partii dla materiału: ${requiredMaterial.name}`);
+            logger.warn(`Brak dostępnych partii dla materiału: ${requiredMaterial.name}`);
             errors.push(`Brak dostępnych partii dla materiału: ${requiredMaterial.name}`);
             continue;
           }
@@ -3456,7 +3457,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             materialId: requiredMaterial.id
           }));
           
-          console.log(`Znaleziono ${availableBatches.length} dostępnych partii dla materiału ${requiredMaterial.name}`);
+          logger.log(`Znaleziono ${availableBatches.length} dostępnych partii dla materiału ${requiredMaterial.name}`);
           
           // Sortuj partie według metody rezerwacji
           if (reservationMethod === 'fifo') {
@@ -3474,7 +3475,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             });
           }
           
-          console.log(`Posortowane partie dla materiału ${requiredMaterial.name}:`, 
+          logger.log(`Posortowane partie dla materiału ${requiredMaterial.name}:`, 
                       availableBatches.map(b => `${b.batchId} (${b.quantity || 0} ${requiredMaterial.unit || 'szt.'})`));
           
           // Dodaj partie do listy wybranych partii
@@ -3482,7 +3483,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         }
         
         if (materialBatches.length === 0) {
-          console.warn(`Nie wybrano partii dla materiału: ${requiredMaterial.name}`);
+          logger.warn(`Nie wybrano partii dla materiału: ${requiredMaterial.name}`);
           errors.push(`Nie wybrano partii dla materiału: ${requiredMaterial.name}`);
           continue;
         }
@@ -3510,7 +3511,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             const batchData = batchDoc.data();
             const availableQty = batchData.quantity || 0;
             
-            console.log(`Partia ${batch.batchId}, Dostępna ilość: ${availableQty} ${requiredMaterial.unit || 'szt.'}`);
+            logger.log(`Partia ${batch.batchId}, Dostępna ilość: ${availableQty} ${requiredMaterial.unit || 'szt.'}`);
             
             // Oblicz ile można zarezerwować z tej partii
             const toReserve = Math.min(remainingToReserve, availableQty);
@@ -3518,11 +3519,11 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             const reserveAmount = parseFloat(toReserve.toFixed(10));
             
             if (reserveAmount <= 0) {
-              console.warn(`Partia ${batch.batchId} nie ma dostępnej ilości.`);
+              logger.warn(`Partia ${batch.batchId} nie ma dostępnej ilości.`);
               continue;
             }
             
-            console.log(`Rezerwowanie ${reserveAmount} ${requiredMaterial.unit || 'szt.'} z partii ${batch.batchId}`);
+            logger.log(`Rezerwowanie ${reserveAmount} ${requiredMaterial.unit || 'szt.'} z partii ${batch.batchId}`);
             
             // Użyj funkcji bookInventoryForTask z inventoryService
             const { bookInventoryForTask } = await import('../inventory');
@@ -3535,7 +3536,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               batch.batchId
             );
             
-            console.log(`Wynik rezerwacji partii ${batch.batchId}:`, bookingResult);
+            logger.log(`Wynik rezerwacji partii ${batch.batchId}:`, bookingResult);
             
             if (bookingResult.success) {
               try {
@@ -3560,7 +3561,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               }
               
               remainingToReserve = parseFloat((remainingToReserve - reserveAmount).toFixed(3));
-              console.log(`Zarezerwowano ${reserveAmount} z partii ${batchData.batchNumber || batch.batchId}, 
+              logger.log(`Zarezerwowano ${reserveAmount} z partii ${batchData.batchNumber || batch.batchId}, 
                          Pozostało do zarezerwowania: ${remainingToReserve}`);
                          
               // Dodaj do listy zarezerwowanych materiałów
@@ -3586,7 +3587,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       }
 
       // Aktualizuj zadanie z informacjami o rezerwacjach
-      console.log("[DEBUG] Aktualizacja zadania z rezerwacjami:", JSON.stringify(currentReservations));
+      logger.log("[DEBUG] Aktualizacja zadania z rezerwacjami:", JSON.stringify(currentReservations));
       
       // Przygotuj materialBatches do aktualizacji
       let materialBatches = {};
@@ -3624,7 +3625,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Jeśli z jakiegoś powodu materialBatches jest nadal puste, ale mamy reservedItems,
       // zbudujmy materialBatches na podstawie reservedItems
       if (Object.keys(materialBatches).length === 0 && reservedItems.length > 0) {
-        console.log("[DEBUG] Odtwarzanie materialBatches z reservedItems");
+        logger.log("[DEBUG] Odtwarzanie materialBatches z reservedItems");
         for (const item of reservedItems) {
           if (!materialBatches[item.materialId]) {
             materialBatches[item.materialId] = [];
@@ -3634,11 +3635,11 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             quantity: item.quantity,
             batchNumber: item.batchNumber
           });
-          console.log(`[DEBUG] Dodano partię do ${item.name}:`, JSON.stringify(materialBatches[item.materialId]));
+          logger.log(`[DEBUG] Dodano partię do ${item.name}:`, JSON.stringify(materialBatches[item.materialId]));
         }
       }
       
-      console.log("[DEBUG] Przygotowane materialBatches do aktualizacji:", JSON.stringify(materialBatches));
+      logger.log("[DEBUG] Przygotowane materialBatches do aktualizacji:", JSON.stringify(materialBatches));
       
       // Ustaw materialsReserved na true tylko jeśli wszystkie materiały zostały zarezerwowane
       // lub jeśli było to już ustawione wcześniej
@@ -3652,7 +3653,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         materialBatches: materialBatches  // Dodajemy aktualizację materialBatches
       });
       
-      console.log("[DEBUG] Zakończono aktualizację zadania z materialBatches");
+      logger.log("[DEBUG] Zakończono aktualizację zadania z materialBatches");
 
       if (errors.length > 0) {
         return { 
@@ -3705,11 +3706,11 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       let batchResult = null;
       try {
         batchResult = await createEmptyProductBatch(taskId, userId, expiryDate);
-        console.log(`Utworzono pustą partię przy rozpoczynaniu produkcji: ${batchResult.message}`);
+        logger.log(`Utworzono pustą partię przy rozpoczynaniu produkcji: ${batchResult.message}`);
       } catch (batchError) {
         console.error('Błąd podczas tworzenia pustej partii:', batchError);
         // Nie przerywamy głównego procesu rozpoczynania produkcji jeśli utworzenie partii się nie powiedzie
-        console.warn('Produkcja została rozpoczęta mimo błędu przy tworzeniu pustej partii');
+        logger.warn('Produkcja została rozpoczęta mimo błędu przy tworzeniu pustej partii');
         batchResult = { success: false, message: 'Błąd podczas tworzenia partii' };
       }
       
@@ -3757,10 +3758,10 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Sprawdź czy zadanie ma materiały i czy nie ma potwierdzonego zużycia
       if (!task.materialConsumptionConfirmed && task.materials && task.materials.length > 0) {
         finalStatus = 'Potwierdzenie zużycia';
-        console.log(`Zadanie ${taskId} wymaga potwierdzenia zużycia, ustawiono status na "Potwierdzenie zużycia"`);
+        logger.log(`Zadanie ${taskId} wymaga potwierdzenia zużycia, ustawiono status na "Potwierdzenie zużycia"`);
       } else {
         finalStatus = 'Zakończone';
-        console.log(`Zadanie ${taskId} zakończone bez potrzeby potwierdzenia zużycia`);
+        logger.log(`Zadanie ${taskId} zakończone bez potrzeby potwierdzenia zużycia`);
       }
     }
     
@@ -3781,7 +3782,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // USUNIĘTO: automatyczne anulowanie rezerwacji po zakończeniu zadania
       // Rezerwacje będą anulowane dopiero po potwierdzeniu zużycia materiałów
       // Materiały pozostają zarezerwowane, dopóki użytkownik nie potwierdzi ich zużycia
-      console.log(`Zadanie ${taskId} zostało ukończone. Rezerwacje materiałów pozostają aktywne do momentu potwierdzenia zużycia.`);
+      logger.log(`Zadanie ${taskId} zostało ukończone. Rezerwacje materiałów pozostają aktywne do momentu potwierdzenia zużycia.`);
     }
     
     await updateDoc(taskRef, updates);
@@ -3868,7 +3869,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             const userData = await getUserById(session.createdBy);
             userName = userData?.displayName || userData?.email || session.createdBy;
           } catch (error) {
-            console.warn('Nie udało się pobrać nazwy użytkownika dla historii:', error);
+            logger.warn('Nie udało się pobrać nazwy użytkownika dla historii:', error);
             userName = session.createdBy;
           }
         }
@@ -3943,11 +3944,11 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           const batchCheckDoc = await getDoc(batchRef);
           
           if (!batchCheckDoc.exists()) {
-            console.warn(`⚠️ Partia ${task.inventoryBatchId} nie istnieje - pomijam aktualizację`);
+            logger.warn(`⚠️ Partia ${task.inventoryBatchId} nie istnieje - pomijam aktualizację`);
             throw new Error(`Partia magazynowa ${task.inventoryBatchId} nie istnieje w bazie danych`);
           }
           
-          console.log(`Aktualizacja partii ${task.inventoryBatchId} o ${quantityDifference} z powodu korekty historii produkcji`);
+          logger.log(`Aktualizacja partii ${task.inventoryBatchId} o ${quantityDifference} z powodu korekty historii produkcji`);
           
           // Aktualizuj ilość w partii używając Firebase increment
           await updateDoc(batchRef, {
@@ -4001,12 +4002,12 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               // Nie przerywaj operacji - aktualizacja historii jest ważniejsza
             }
             
-            console.log(`Partia ${task.inventoryBatchId} została zaktualizowana o ${quantityDifference}`);
+            logger.log(`Partia ${task.inventoryBatchId} została zaktualizowana o ${quantityDifference}`);
           }
         } catch (batchError) {
           console.error('Błąd podczas aktualizacji partii z historii produkcji:', batchError);
           // Nie przerywaj aktualizacji historii, ale zaloguj błąd
-          console.warn('Aktualizacja historii produkcji zostanie kontynuowana mimo błędu partii');
+          logger.warn('Aktualizacja historii produkcji zostanie kontynuowana mimo błędu partii');
         }
       }
       
@@ -4018,7 +4019,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           const userData = await getUserById(userId);
           userName = userData?.displayName || userData?.email || userId;
         } catch (error) {
-          console.warn('Nie udało się pobrać nazwy użytkownika dla aktualizacji:', error);
+          logger.warn('Nie udało się pobrać nazwy użytkownika dla aktualizacji:', error);
           userName = userId;
         }
       }
@@ -4089,11 +4090,11 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           const batchCheckDoc = await getDoc(batchRef);
           
           if (!batchCheckDoc.exists()) {
-            console.warn(`⚠️ Partia ${task.inventoryBatchId} nie istnieje - pomijam aktualizację`);
+            logger.warn(`⚠️ Partia ${task.inventoryBatchId} nie istnieje - pomijam aktualizację`);
             throw new Error(`Partia magazynowa ${task.inventoryBatchId} nie istnieje w bazie danych`);
           }
           
-          console.log(`Aktualizacja partii ${task.inventoryBatchId} o +${addedQuantity} z powodu dodania nowej sesji produkcyjnej`);
+          logger.log(`Aktualizacja partii ${task.inventoryBatchId} o +${addedQuantity} z powodu dodania nowej sesji produkcyjnej`);
           
           // Aktualizuj ilość w partii używając Firebase increment
           await updateDoc(batchRef, {
@@ -4143,15 +4144,15 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               // Nie przerywaj operacji - dodanie sesji jest ważniejsze
             }
             
-            console.log(`Partia ${task.inventoryBatchId} została zaktualizowana o +${addedQuantity}`);
+            logger.log(`Partia ${task.inventoryBatchId} została zaktualizowana o +${addedQuantity}`);
           }
         } catch (batchError) {
           console.error('Błąd podczas aktualizacji partii przy dodawaniu sesji:', batchError);
           // Nie przerywaj dodawania sesji, ale zaloguj błąd
-          console.warn('Dodanie sesji produkcyjnej zostanie kontynuowane mimo błędu partii');
+          logger.warn('Dodanie sesji produkcyjnej zostanie kontynuowane mimo błędu partii');
         }
       } else if (skipBatchUpdate) {
-        console.log(`Pomijam aktualizację partii dla sesji - zostanie zaktualizowana przez addTaskProductToInventory`);
+        logger.log(`Pomijam aktualizację partii dla sesji - zostanie zaktualizowana przez addTaskProductToInventory`);
       }
       
       // Pobierz dane użytkownika dla zapisania nazwy
@@ -4162,7 +4163,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           const userData = await getUserById(sessionData.userId);
           userName = userData?.displayName || userData?.email || sessionData.userId;
         } catch (error) {
-          console.warn('Nie udało się pobrać nazwy użytkownika:', error);
+          logger.warn('Nie udało się pobrać nazwy użytkownika:', error);
           userName = sessionData.userId;
         }
       }
@@ -4247,7 +4248,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
    */
   export const addProductionSessionFromShiftReport = async (moNumber, shiftData, userId, shiftReportId = null) => {
     try {
-      console.log('🔄 Rozpoczynam dodawanie sesji produkcyjnej z raportu zmiany:', { moNumber, shiftData });
+      logger.log('🔄 Rozpoczynam dodawanie sesji produkcyjnej z raportu zmiany:', { moNumber, shiftData });
       
       // 1. Znajdź zadanie produkcyjne po numerze MO
       const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
@@ -4262,7 +4263,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       const taskId = taskDoc.id;
       const taskData = taskDoc.data();
       
-      console.log('✅ Znaleziono zadanie produkcyjne:', taskId, taskData.name);
+      logger.log('✅ Znaleziono zadanie produkcyjne:', taskId, taskData.name);
       
       // 2. Oblicz czas trwania zmiany w minutach
       const startTime = parseShiftTime(shiftData.fillDate, shiftData.shiftStartTime);
@@ -4275,7 +4276,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       
       const timeSpentMinutes = Math.round((endTime - startTime) / (1000 * 60));
       
-      console.log('⏱️ Obliczono czas trwania zmiany:', {
+      logger.log('⏱️ Obliczono czas trwania zmiany:', {
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
         timeSpentMinutes
@@ -4293,7 +4294,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         responsiblePerson: shiftData.responsiblePerson
       };
       
-      console.log('📋 Dane sesji przygotowane:', sessionData);
+      logger.log('📋 Dane sesji przygotowane:', sessionData);
       
       // 4. ✨ Sprawdź czy zadanie ma już partię magazynową (i czy faktycznie istnieje)
       let hasInventoryBatch = false;
@@ -4304,12 +4305,12 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         hasInventoryBatch = batchDoc.exists();
         
         if (!hasInventoryBatch) {
-          console.warn(`⚠️ Zadanie ma inventoryBatchId (${taskData.inventoryBatchId}), ale partia nie istnieje w bazie - zostanie utworzona nowa`);
+          logger.warn(`⚠️ Zadanie ma inventoryBatchId (${taskData.inventoryBatchId}), ale partia nie istnieje w bazie - zostanie utworzona nowa`);
         }
       }
       
       if (!hasInventoryBatch) {
-        console.log('⚠️ Zadanie nie ma jeszcze partii magazynowej - zostanie utworzona automatycznie');
+        logger.log('⚠️ Zadanie nie ma jeszcze partii magazynowej - zostanie utworzona automatycznie');
         
         try {
           await addTaskProductToInventory(taskId, userId, {
@@ -4321,7 +4322,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             warehouseId: shiftData.warehouseId || taskData.warehouseId || null
           });
           
-          console.log('✅ Partia magazynowa została utworzona automatycznie');
+          logger.log('✅ Partia magazynowa została utworzona automatycznie');
           
           // Pobierz zaktualizowane dane zadania
           const updatedTaskDoc = await getDoc(taskDoc.ref);
@@ -4342,7 +4343,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         } catch (inventoryError) {
           console.error('❌ Błąd podczas tworzenia partii magazynowej:', inventoryError);
           
-          console.log('⚠️ Dodaję sesję bez partii magazynowej');
+          logger.log('⚠️ Dodaję sesję bez partii magazynowej');
           const result = await addProductionSession(taskId, sessionData, false);
           
           return {
@@ -4356,7 +4357,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           };
         }
       } else {
-        console.log('✅ Zadanie ma już partię magazynową - zostanie zaktualizowana');
+        logger.log('✅ Zadanie ma już partię magazynową - zostanie zaktualizowana');
         // Dodaj sesję i zaktualizuj istniejący batch
         const result = await addProductionSession(taskId, sessionData, false); // skipBatchUpdate = false
         
@@ -4585,9 +4586,9 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       try {
         const { clearAllIngredientLinksForTask } = await import('./mixingPlanReservationService');
         const clearResult = await clearAllIngredientLinksForTask(taskId, userId);
-        console.log(`Usunięto ${clearResult.deletedCount} starych powiązań składników przed zapisaniem nowego planu`);
+        logger.log(`Usunięto ${clearResult.deletedCount} starych powiązań składników przed zapisaniem nowego planu`);
       } catch (error) {
-        console.warn('Ostrzeżenie: Nie udało się usunąć starych powiązań składników:', error);
+        logger.warn('Ostrzeżenie: Nie udało się usunąć starych powiązań składników:', error);
         // Kontynuuj mimo błędu - nie przerywaj procesu zapisywania planu
       }
       
@@ -4859,16 +4860,16 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           for (const ingredient of ingredientItems) {
             try {
               await unlinkIngredientFromReservation(taskId, ingredient.id, userId);
-              console.log(`Usunięto powiązania dla składnika ${ingredient.id}`);
+              logger.log(`Usunięto powiązania dla składnika ${ingredient.id}`);
             } catch (ingredientError) {
-              console.warn(`Nie udało się usunąć powiązań dla składnika ${ingredient.id}:`, ingredientError);
+              logger.warn(`Nie udało się usunąć powiązań dla składnika ${ingredient.id}:`, ingredientError);
               // Kontynuuj z następnym składnikiem
             }
           }
 
-          console.log(`Przetworzono powiązania dla ${ingredientItems.length} usuniętych składników mieszania`);
+          logger.log(`Przetworzono powiązania dla ${ingredientItems.length} usuniętych składników mieszania`);
         } catch (error) {
-          console.warn('Ostrzeżenie: Nie udało się usunąć wszystkich powiązań usuniętych składników:', error);
+          logger.warn('Ostrzeżenie: Nie udało się usunąć wszystkich powiązań usuniętych składników:', error);
           // Kontynuuj mimo błędu - nie przerywaj procesu usuwania mieszania
         }
       }
@@ -5113,7 +5114,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       const updatedTasks = [];
       const failedTasks = [];
       
-      console.log(`Znaleziono ${querySnapshot.docs.length} zadań produkcyjnych do sprawdzenia`);
+      logger.log(`Znaleziono ${querySnapshot.docs.length} zadań produkcyjnych do sprawdzenia`);
       
       for (const doc of querySnapshot.docs) {
         try {
@@ -5129,7 +5130,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           
           // Jeśli brakuje któregokolwiek pola, zaktualizuj zadanie
           if (!hasTotalMaterialCost || !hasUnitMaterialCost || !hasTotalFullProductionCost || !hasUnitFullProductionCost || !hasCostHistory) {
-            console.log(`Inicjalizacja pól kosztów dla zadania ${taskId} (MO: ${taskData.moNumber || 'brak'})`);
+            logger.log(`Inicjalizacja pól kosztów dla zadania ${taskId} (MO: ${taskData.moNumber || 'brak'})`);
             
             const updateData = {};
             
@@ -5231,7 +5232,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Jeśli zadanie ma powiązaną partię, zaktualizuj jej ilość przy usuwaniu sesji
       if (task.inventoryBatchId && deletedQuantity > 0) {
         try {
-          console.log(`Aktualizacja partii ${task.inventoryBatchId} o -${deletedQuantity} z powodu usunięcia sesji produkcyjnej`);
+          logger.log(`Aktualizacja partii ${task.inventoryBatchId} o -${deletedQuantity} z powodu usunięcia sesji produkcyjnej`);
           
           // Aktualizuj ilość w partii używając Firebase increment (ujemna wartość)
           const batchRef = doc(db, 'inventoryBatches', task.inventoryBatchId);
@@ -5284,12 +5285,12 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               // Nie przerywaj operacji - usunięcie sesji jest ważniejsze
             }
             
-            console.log(`Partia ${task.inventoryBatchId} została zaktualizowana o -${deletedQuantity}`);
+            logger.log(`Partia ${task.inventoryBatchId} została zaktualizowana o -${deletedQuantity}`);
           }
         } catch (batchError) {
           console.error('Błąd podczas aktualizacji partii przy usuwaniu sesji:', batchError);
           // Nie przerywaj usuwania sesji, ale zaloguj błąd
-          console.warn('Usunięcie sesji produkcyjnej zostanie kontynuowane mimo błędu partii');
+          logger.warn('Usunięcie sesji produkcyjnej zostanie kontynuowane mimo błędu partii');
         }
       }
       
@@ -5394,7 +5395,7 @@ const COST_TOLERANCE = 0.005;
  */
 export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Automatyczna aktualizacja kosztów') => {
   try {
-    console.log(`[AUTO] Rozpoczynam zunifikowaną aktualizację kosztów dla zadania ${taskId} - ${reason}`);
+    logger.log(`[AUTO] Rozpoczynam zunifikowaną aktualizację kosztów dla zadania ${taskId} - ${reason}`);
     
     // Import funkcji matematycznych dla precyzyjnych obliczeń
     const { fixFloatingPointPrecision, preciseMultiply, preciseAdd, preciseSubtract, preciseDivide } = await import('../../utils/calculations');
@@ -5402,17 +5403,17 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     // Pobierz aktualne dane zadania
     const task = await getTaskById(taskId);
     if (!task || !task.materials || task.materials.length === 0) {
-      console.log(`[AUTO] Zadanie ${taskId} nie ma materiałów, pomijam aktualizację kosztów`);
+      logger.log(`[AUTO] Zadanie ${taskId} nie ma materiałów, pomijam aktualizację kosztów`);
       return { success: false, message: 'Brak materiałów w zadaniu' };
     }
 
     // SPRAWDŹ CZY AUTOMATYCZNE AKTUALIZACJE SĄ WYŁĄCZONE
     if (task.disableAutomaticCostUpdates === true) {
-      console.log(`[AUTO] Automatyczne aktualizacje kosztów są wyłączone dla zadania ${taskId}`);
+      logger.log(`[AUTO] Automatyczne aktualizacje kosztów są wyłączone dla zadania ${taskId}`);
       return { success: false, message: 'Automatyczne aktualizacje kosztów są wyłączone dla tego zadania' };
     }
 
-    console.log(`[AUTO-DEBUG] Stan zadania przed kalkulacją:`, {
+    logger.log(`[AUTO-DEBUG] Stan zadania przed kalkulacją:`, {
       moNumber: task.moNumber,
       materialsCount: task.materials?.length || 0,
       consumedMaterialsCount: task.consumedMaterials?.length || 0,
@@ -5448,12 +5449,12 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
             const batchData = batchDoc.data();
             const price = fixFloatingPointPrecision(parseFloat(batchData.unitPrice) || 0);
             consumedBatchPricesCache[batchId] = price;
-            console.log(`[AUTO] Pobrana aktualna cena skonsumowanej partii ${batchId}: ${price}€`);
+            logger.log(`[AUTO] Pobrana aktualna cena skonsumowanej partii ${batchId}: ${price}€`);
           } else {
             consumedBatchPricesCache[batchId] = 0;
           }
         } catch (error) {
-          console.warn(`[AUTO] Błąd podczas pobierania ceny skonsumowanej partii ${batchId}:`, error);
+          logger.warn(`[AUTO] Błąd podczas pobierania ceny skonsumowanej partii ${batchId}:`, error);
           consumedBatchPricesCache[batchId] = 0;
         }
       });
@@ -5499,7 +5500,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
         const quantity = fixFloatingPointPrecision(parseFloat(consumed.quantity) || 0);
         const cost = preciseMultiply(quantity, unitPrice);
 
-        console.log(`[AUTO] Skonsumowany materiał ${material.name}: ilość=${quantity}, cena=${unitPrice}€ (${priceSource}), koszt=${cost.toFixed(4)}€`);
+        logger.log(`[AUTO] Skonsumowany materiał ${material.name}: ilość=${quantity}, cena=${unitPrice}€ (${priceSource}), koszt=${cost.toFixed(4)}€`);
 
         // Aktualizuj szczegóły z precyzyjnymi obliczeniami
         consumedCostDetails[materialId].totalQuantity = preciseAdd(
@@ -5516,7 +5517,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
           ? consumed.includeInCosts 
           : (task.materialInCosts && task.materialInCosts[material.id] !== false);
 
-        console.log(`[AUTO] Materiał ${material.name} - includeInCosts: ${shouldIncludeInCosts}`);
+        logger.log(`[AUTO] Materiał ${material.name} - includeInCosts: ${shouldIncludeInCosts}`);
 
         if (shouldIncludeInCosts) {
           totalMaterialCost = preciseAdd(totalMaterialCost, cost);
@@ -5534,7 +5535,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     // Najpierw pobierz rezerwacje PO i zgrupuj je według materiału
     const poReservationsByMaterial = {};
     if (task.poReservationIds && task.poReservationIds.length > 0) {
-      console.log(`[AUTO] Przetwarzam ${task.poReservationIds.length} rezerwacji PO`);
+      logger.log(`[AUTO] Przetwarzam ${task.poReservationIds.length} rezerwacji PO`);
       
       const { getPOReservationsForTask } = await import('../purchaseOrders');
       const poReservations = await getPOReservationsForTask(taskId);
@@ -5553,7 +5554,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
         poReservationsByMaterial[materialId].push(poRes);
       }
       
-      console.log(`[AUTO] Znaleziono ${activePoReservations.length} aktywnych rezerwacji PO dla ${Object.keys(poReservationsByMaterial).length} materiałów`);
+      logger.log(`[AUTO] Znaleziono ${activePoReservations.length} aktywnych rezerwacji PO dla ${Object.keys(poReservationsByMaterial).length} materiałów`);
     }
     
     // Pobierz ceny partii magazynowych
@@ -5581,12 +5582,12 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
             const batchData = batchDoc.data();
             const price = fixFloatingPointPrecision(parseFloat(batchData.unitPrice) || 0);
             batchPricesCache[batchId] = price;
-            console.log(`[AUTO] Pobrana aktualna cena partii ${batchId}: ${price}€`);
+            logger.log(`[AUTO] Pobrana aktualna cena partii ${batchId}: ${price}€`);
           } else {
             batchPricesCache[batchId] = 0;
           }
         } catch (error) {
-          console.warn(`[AUTO] Błąd podczas pobierania ceny partii ${batchId}:`, error);
+          logger.warn(`[AUTO] Błąd podczas pobierania ceny partii ${batchId}:`, error);
           batchPricesCache[batchId] = 0;
         }
       });
@@ -5615,9 +5616,9 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     if (materialIdsWithoutReservations.length > 0) {
       try {
         estimatedPricesMap = await calculateEstimatedPricesForMultipleMaterials(materialIdsWithoutReservations);
-        console.log(`[AUTO] Pobrano szacunkowe ceny dla ${Object.keys(estimatedPricesMap).length} materiałów bez rezerwacji`);
+        logger.log(`[AUTO] Pobrano szacunkowe ceny dla ${Object.keys(estimatedPricesMap).length} materiałów bez rezerwacji`);
       } catch (error) {
-        console.warn(`[AUTO] Błąd podczas pobierania szacunkowych cen:`, error);
+        logger.warn(`[AUTO] Błąd podczas pobierania szacunkowych cen:`, error);
       }
     }
 
@@ -5649,9 +5650,9 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
         : parseFloat(material.quantity) || 0;
       const requiredQuantity = fixFloatingPointPrecision(baseQuantity);
       
-      console.log(`[AUTO-DEBUG] Materiał ${material.name}: baseQuantity=${baseQuantity}, requiredQuantity=${requiredQuantity}, hasActualUsage=${actualUsage[material.inventoryItemId] !== undefined}`);
+      logger.log(`[AUTO-DEBUG] Materiał ${material.name}: baseQuantity=${baseQuantity}, requiredQuantity=${requiredQuantity}, hasActualUsage=${actualUsage[material.inventoryItemId] !== undefined}`);
       const remainingQuantity = Math.max(0, preciseSubtract(requiredQuantity, consumedQuantity));
-      console.log(`[AUTO-DEBUG] Materiał ${material.name}: consumedQuantity=${consumedQuantity}, remainingQuantity=${remainingQuantity}`);
+      logger.log(`[AUTO-DEBUG] Materiał ${material.name}: consumedQuantity=${consumedQuantity}, remainingQuantity=${remainingQuantity}`);
       
       // ZMIANA: Dla materiałów bez rezerwacji oblicz szacunkowy koszt na podstawie partii
       // POPRAWKA: Pomijaj materiały z konsumpcjami - dla nich nie liczymy szacunkowych kosztów
@@ -5662,7 +5663,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
         
         if (hasConsumption) {
           // Materiał ma konsumpcje - nie liczymy szacunkowych kosztów dla pozostałej ilości
-          console.log(`[AUTO] Materiał ${material.name}: ma konsumpcje (${consumedQuantity}), pomijam szacunek dla pozostałej ilości (${remainingQuantity})`);
+          logger.log(`[AUTO] Materiał ${material.name}: ma konsumpcje (${consumedQuantity}), pomijam szacunek dla pozostałej ilości (${remainingQuantity})`);
           return; // Przejdź do następnego materiału
         }
         
@@ -5674,12 +5675,12 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
           if (estimatedData && estimatedData.averagePrice > 0) {
             unitPrice = fixFloatingPointPrecision(estimatedData.averagePrice);
             priceSource = 'batch-weighted-average';
-            console.log(`[AUTO-ESTIMATE] Materiał ${material.name}: szacunkowa cena ${unitPrice.toFixed(4)}€ (średnia z ${estimatedData.batchCount} partii)`);
+            logger.log(`[AUTO-ESTIMATE] Materiał ${material.name}: szacunkowa cena ${unitPrice.toFixed(4)}€ (średnia z ${estimatedData.batchCount} partii)`);
           } else {
             // Brak partii = cena 0 (nie używamy fallbacku na material.unitPrice)
             unitPrice = 0;
             priceSource = 'no-batches';
-            console.log(`[AUTO-ESTIMATE] Materiał ${material.name}: brak partii, cena=0€`);
+            logger.log(`[AUTO-ESTIMATE] Materiał ${material.name}: brak partii, cena=0€`);
           }
           
           const materialCost = preciseMultiply(remainingQuantity, unitPrice);
@@ -5703,7 +5704,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
           }
           totalFullProductionCost = preciseAdd(totalFullProductionCost, materialCost);
           
-          console.log(`[AUTO-ESTIMATE] Materiał ${material.name}: ilość=${remainingQuantity}, koszt=${materialCost.toFixed(4)}€ (SZACUNEK z ${priceSource})`);
+          logger.log(`[AUTO-ESTIMATE] Materiał ${material.name}: ilość=${remainingQuantity}, koszt=${materialCost.toFixed(4)}€ (SZACUNEK z ${priceSource})`);
         }
         return; // Przejdź do następnego materiału
       }
@@ -5732,7 +5733,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
               const weightedPrice = preciseMultiply(batchPrice, batchQuantity);
               weightedPriceSum = preciseAdd(weightedPriceSum, weightedPrice);
               totalReservedQuantity = preciseAdd(totalReservedQuantity, batchQuantity);
-              console.log(`[AUTO] Partia ${batch.batchId}: ilość=${batchQuantity}, cena=${batchPrice}€`);
+              logger.log(`[AUTO] Partia ${batch.batchId}: ilość=${batchQuantity}, cena=${batchPrice}€`);
             }
           });
         }
@@ -5749,7 +5750,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
               const weightedPrice = preciseMultiply(unitPrice, availableQuantity);
               weightedPriceSum = preciseAdd(weightedPriceSum, weightedPrice);
               totalReservedQuantity = preciseAdd(totalReservedQuantity, availableQuantity);
-              console.log(`[AUTO] Rezerwacja PO ${poRes.poNumber}: ilość=${availableQuantity}, cena=${unitPrice}€`);
+              logger.log(`[AUTO] Rezerwacja PO ${poRes.poNumber}: ilość=${availableQuantity}, cena=${unitPrice}€`);
             }
           });
         }
@@ -5759,12 +5760,12 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
         if (totalReservedQuantity > 0) {
           const averagePrice = preciseDivide(weightedPriceSum, totalReservedQuantity);
           materialCost = preciseMultiply(remainingQuantity, averagePrice);
-          console.log(`[AUTO] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, średnia ważona cena=${averagePrice.toFixed(4)}€, koszt=${materialCost.toFixed(4)}€`);
+          logger.log(`[AUTO] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, średnia ważona cena=${averagePrice.toFixed(4)}€, koszt=${materialCost.toFixed(4)}€`);
         } else {
           // Fallback na cenę z materiału
           const unitPrice = fixFloatingPointPrecision(parseFloat(material.unitPrice) || 0);
           materialCost = preciseMultiply(remainingQuantity, unitPrice);
-          console.log(`[AUTO] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, cena fallback=${unitPrice}€, koszt=${materialCost.toFixed(4)}€`);
+          logger.log(`[AUTO] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, cena fallback=${unitPrice}€, koszt=${materialCost.toFixed(4)}€`);
         }
         
         // Sprawdź czy materiał ma być wliczany do kosztów
@@ -5786,9 +5787,9 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     let processingCostPerUnit = 0;
     if (task.processingCostPerUnit !== undefined && task.processingCostPerUnit !== null) {
       processingCostPerUnit = fixFloatingPointPrecision(parseFloat(task.processingCostPerUnit) || 0);
-      console.log(`[AUTO] Koszt procesowy zapisany w MO: ${processingCostPerUnit.toFixed(4)}€/szt`);
+      logger.log(`[AUTO] Koszt procesowy zapisany w MO: ${processingCostPerUnit.toFixed(4)}€/szt`);
     } else {
-      console.log(`[AUTO] MO nie ma przypisanego kosztu procesowego - pomijam (stare MO miały koszty ręczne)`);
+      logger.log(`[AUTO] MO nie ma przypisanego kosztu procesowego - pomijam (stare MO miały koszty ręczne)`);
     }
 
     // Użyj rzeczywistej wyprodukowanej ilości zamiast planowanej
@@ -5804,7 +5805,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     totalMaterialCost = preciseAdd(totalMaterialCost, totalProcessingCost);
     totalFullProductionCost = preciseAdd(totalFullProductionCost, totalProcessingCost);
 
-    console.log(`[AUTO] Koszt procesowy: ${processingCostPerUnit.toFixed(4)}€/szt × ${completedQuantity} wyprodukowanych (z ${taskQuantity} planowanych) = ${totalProcessingCost.toFixed(4)}€`);
+    logger.log(`[AUTO] Koszt procesowy: ${processingCostPerUnit.toFixed(4)}€/szt × ${completedQuantity} wyprodukowanych (z ${taskQuantity} planowanych) = ${totalProcessingCost.toFixed(4)}€`);
 
     // 4. DODATKOWE KOSZTY (przeliczone na EUR kursem NBP z dnia przed datą faktury)
     if (task.additionalCosts && Array.isArray(task.additionalCosts) && task.additionalCosts.length > 0) {
@@ -5822,7 +5823,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
       }
       totalMaterialCost = preciseAdd(totalMaterialCost, totalAdditionalCostsInEUR);
       totalFullProductionCost = preciseAdd(totalFullProductionCost, totalAdditionalCostsInEUR);
-      console.log(`[AUTO] Dodatkowe koszty: ${totalAdditionalCostsInEUR.toFixed(4)} €`);
+      logger.log(`[AUTO] Dodatkowe koszty: ${totalAdditionalCostsInEUR.toFixed(4)} €`);
     }
 
     // ZABEZPIECZENIE: Nie nadpisuj kosztów zerami jeśli nie ma danych do obliczeń
@@ -5834,7 +5835,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     const hasDataForCalculation = hasConsumedMaterials || hasReservedMaterials || hasPOReservations || hasEstimatedCosts || totalProcessingCost > 0 || hasAdditionalCosts;
     
     if (!hasDataForCalculation) {
-      console.log(`[AUTO] Zadanie ${taskId} nie ma danych do obliczenia kosztów (brak konsumpcji, rezerwacji, rezerwacji PO, szacunkowych kosztów i kosztu procesowego). Pomijam aktualizację aby nie wyzerować istniejących kosztów.`);
+      logger.log(`[AUTO] Zadanie ${taskId} nie ma danych do obliczenia kosztów (brak konsumpcji, rezerwacji, rezerwacji PO, szacunkowych kosztów i kosztu procesowego). Pomijam aktualizację aby nie wyzerować istniejących kosztów.`);
       return { 
         success: false, 
         message: 'Brak danych do obliczenia kosztów - zadanie nie ma konsumpcji ani rezerwacji materiałów' 
@@ -5870,16 +5871,16 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
 
     if (!costChanged) {
       const maxChange = Math.max(...costChanges);
-      console.log(`[AUTO] Koszty zadania ${taskId} nie zmieniły się znacząco (max zmiana: ${maxChange.toFixed(4)}€ ≤ ${COST_TOLERANCE}€), pomijam aktualizację`);
+      logger.log(`[AUTO] Koszty zadania ${taskId} nie zmieniły się znacząco (max zmiana: ${maxChange.toFixed(4)}€ ≤ ${COST_TOLERANCE}€), pomijam aktualizację`);
       return { success: false, message: `Koszty nie uległy zmianie (tolerancja: ${COST_TOLERANCE}€)` };
     }
 
-    console.log(`[AUTO] Wykryto znaczące zmiany kosztów zadania ${taskId}:`);
-    console.log(`[AUTO] - Koszt materiałów: ${oldCosts.totalMaterialCost.toFixed(4)}€ → ${finalTotalMaterialCost.toFixed(4)}€ (Δ${costChanges[0].toFixed(4)}€)`);
-    console.log(`[AUTO] - Koszt/jednostka: ${oldCosts.unitMaterialCost.toFixed(4)}€ → ${finalUnitMaterialCost.toFixed(4)}€ (Δ${costChanges[1].toFixed(4)}€)`);
-    console.log(`[AUTO] - Pełny koszt: ${oldCosts.totalFullProductionCost.toFixed(4)}€ → ${finalTotalFullProductionCost.toFixed(4)}€ (Δ${costChanges[2].toFixed(4)}€)`);
-    console.log(`[AUTO] - Pełny koszt/jednostka: ${oldCosts.unitFullProductionCost.toFixed(4)}€ → ${finalUnitFullProductionCost.toFixed(4)}€ (Δ${costChanges[3].toFixed(4)}€)`);
-    console.log(`[AUTO] - Tolerancja: ${COST_TOLERANCE}€`);
+    logger.log(`[AUTO] Wykryto znaczące zmiany kosztów zadania ${taskId}:`);
+    logger.log(`[AUTO] - Koszt materiałów: ${oldCosts.totalMaterialCost.toFixed(4)}€ → ${finalTotalMaterialCost.toFixed(4)}€ (Δ${costChanges[0].toFixed(4)}€)`);
+    logger.log(`[AUTO] - Koszt/jednostka: ${oldCosts.unitMaterialCost.toFixed(4)}€ → ${finalUnitMaterialCost.toFixed(4)}€ (Δ${costChanges[1].toFixed(4)}€)`);
+    logger.log(`[AUTO] - Pełny koszt: ${oldCosts.totalFullProductionCost.toFixed(4)}€ → ${finalTotalFullProductionCost.toFixed(4)}€ (Δ${costChanges[2].toFixed(4)}€)`);
+    logger.log(`[AUTO] - Pełny koszt/jednostka: ${oldCosts.unitFullProductionCost.toFixed(4)}€ → ${finalUnitFullProductionCost.toFixed(4)}€ (Δ${costChanges[3].toFixed(4)}€)`);
+    logger.log(`[AUTO] - Tolerancja: ${COST_TOLERANCE}€`);
 
     // Kontynuuj z aktualizacją...
 
@@ -5919,7 +5920,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     // NOWE: Dodaj szczegóły szacunkowych kosztów jeśli są
     if (Object.keys(estimatedCostDetails).length > 0) {
       updateData.estimatedMaterialCosts = estimatedCostDetails;
-      console.log(`[AUTO] Zapisano szacunkowe koszty dla ${Object.keys(estimatedCostDetails).length} materiałów bez rezerwacji`);
+      logger.log(`[AUTO] Zapisano szacunkowe koszty dla ${Object.keys(estimatedCostDetails).length} materiałów bez rezerwacji`);
     } else {
       // Usuń stare szacunkowe koszty jeśli już nie ma materiałów bez rezerwacji
       updateData.estimatedMaterialCosts = null;
@@ -5936,7 +5937,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
       updateData.unitCostWithFactory = fixFloatingPointPrecision(
         finalUnitFullProductionCost + existingFactoryCostPerUnit
       );
-      console.log(`[AUTO] Zaktualizowano koszty z zakładem: totalCostWithFactory=${updateData.totalCostWithFactory.toFixed(2)}€, unitCostWithFactory=${updateData.unitCostWithFactory.toFixed(4)}€`);
+      logger.log(`[AUTO] Zaktualizowano koszty z zakładem: totalCostWithFactory=${updateData.totalCostWithFactory.toFixed(2)}€, unitCostWithFactory=${updateData.unitCostWithFactory.toFixed(4)}€`);
     } else {
       // Jeśli nie ma kosztu zakładu, *WithFactory = koszty produkcji
       updateData.totalCostWithFactory = finalTotalFullProductionCost;
@@ -5945,9 +5946,9 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     
     await updateDoc(taskRef, updateData);
 
-    console.log(`[AUTO] Zunifikowana aktualizacja kosztów zadania ${taskId} zakończona pomyślnie:`);
-    console.log(`[AUTO] - Nowy koszt materiałów: ${finalTotalMaterialCost.toFixed(4)}€ (${finalUnitMaterialCost.toFixed(4)}€/${task.unit || 'szt'})`);
-    console.log(`[AUTO] - Nowy pełny koszt: ${finalTotalFullProductionCost.toFixed(4)}€ (${finalUnitFullProductionCost.toFixed(4)}€/${task.unit || 'szt'})`);
+    logger.log(`[AUTO] Zunifikowana aktualizacja kosztów zadania ${taskId} zakończona pomyślnie:`);
+    logger.log(`[AUTO] - Nowy koszt materiałów: ${finalTotalMaterialCost.toFixed(4)}€ (${finalUnitMaterialCost.toFixed(4)}€/${task.unit || 'szt'})`);
+    logger.log(`[AUTO] - Nowy pełny koszt: ${finalTotalFullProductionCost.toFixed(4)}€ (${finalUnitFullProductionCost.toFixed(4)}€/${task.unit || 'szt'})`);
 
     // 6. WYŚLIJ POWIADOMIENIE O ZMIANIE KOSZTÓW (do odświeżenia UI)
     try {
@@ -5968,17 +5969,17 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
           maxChange: Math.max(...costChanges)
         });
         channel.close();
-        console.log(`[AUTO] Wysłano powiadomienie BroadcastChannel o zunifikowanej aktualizacji kosztów zadania ${taskId}`);
+        logger.log(`[AUTO] Wysłano powiadomienie BroadcastChannel o zunifikowanej aktualizacji kosztów zadania ${taskId}`);
       }
     } catch (broadcastError) {
-      console.warn('[AUTO] Błąd podczas wysyłania powiadomienia BroadcastChannel:', broadcastError);
+      logger.warn('[AUTO] Błąd podczas wysyłania powiadomienia BroadcastChannel:', broadcastError);
     }
 
     // ============================================================================
     // 7. AKTUALIZACJA ZAMÓWIEŃ - PRZYWRÓCONA (Cloud Functions nie działają poprawnie)
     // TYMCZASOWO używamy logiki frontendowej dopóki Cloud Functions nie zostaną naprawione
     // ============================================================================
-    console.log(`[AUTO] Rozpoczynam aktualizację związanych zamówień dla zadania ${taskId}`);
+    logger.log(`[AUTO] Rozpoczynam aktualizację związanych zamówień dla zadania ${taskId}`);
     let relatedOrders = [];
     
     // PRZYWRÓCONA LOGIKA: Automatycznie aktualizuj związane zamówienia klientów
@@ -5990,7 +5991,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
       relatedOrders = await getOrdersByProductionTaskId(taskId);
 
       if (relatedOrders.length > 0) {
-        console.log(`[AUTO] Znaleziono ${relatedOrders.length} zamówień do zaktualizowania`);
+        logger.log(`[AUTO] Znaleziono ${relatedOrders.length} zamówień do zaktualizowania`);
         
         // Przygotuj wszystkie aktualizacje równolegle
         const updatePromises = relatedOrders.map(async (order) => {
@@ -6019,7 +6020,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
               };
               orderUpdated = true;
               
-              console.log(`[AUTO] Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt z zakładem=${materialCostWithFactory.toFixed(4)}€, pełny koszt/szt=${calculatedFullProductionUnitCost.toFixed(4)}€`);
+              logger.log(`[AUTO] Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt z zakładem=${materialCostWithFactory.toFixed(4)}€, pełny koszt/szt=${calculatedFullProductionUnitCost.toFixed(4)}€`);
             }
           }
             
@@ -6070,7 +6071,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
               };
               
               await updateOrder(order.id, updateData, userId);
-              console.log(`[AUTO] Zaktualizowano zamówienie ${order.orderNumber} - wartość zmieniona z ${order.totalValue}€ na ${newTotalValue}€`);
+              logger.log(`[AUTO] Zaktualizowano zamówienie ${order.orderNumber} - wartość zmieniona z ${order.totalValue}€ na ${newTotalValue}€`);
             }
           });
 
@@ -6117,7 +6118,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
  */
 export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'system') => {
   try {
-    console.log(`[BATCH_COST_UPDATE] Rozpoczynam aktualizację kosztów zadań dla ${batchIds.length} zaktualizowanych partii`);
+    logger.log(`[BATCH_COST_UPDATE] Rozpoczynam aktualizację kosztów zadań dla ${batchIds.length} zaktualizowanych partii`);
     
     // Znajdź wszystkie zadania które używają tych partii
     const tasksToUpdate = new Set();
@@ -6140,7 +6141,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
           const batches = materialBatches[materialId] || [];
           if (batches.some(batch => batch.batchId === batchId)) {
             tasksToUpdate.add(doc.id);
-            console.log(`[BATCH_COST_UPDATE] Znaleziono zadanie ${taskData.moNumber || doc.id} używające partię ${batchId}`);
+            logger.log(`[BATCH_COST_UPDATE] Znaleziono zadanie ${taskData.moNumber || doc.id} używające partię ${batchId}`);
           }
         }
       });
@@ -6161,13 +6162,13 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
         
         if (consumedMaterials.some(material => material.batchId === batchId)) {
           tasksToUpdate.add(doc.id);
-          console.log(`[BATCH_COST_UPDATE] Znaleziono zadanie ${taskData.moNumber || doc.id} z skonsumowaną partią ${batchId}`);
+          logger.log(`[BATCH_COST_UPDATE] Znaleziono zadanie ${taskData.moNumber || doc.id} z skonsumowaną partią ${batchId}`);
         }
       });
     }
     
     const taskIds = Array.from(tasksToUpdate);
-    console.log(`[BATCH_COST_UPDATE] Znaleziono ${taskIds.length} zadań do aktualizacji kosztów`);
+    logger.log(`[BATCH_COST_UPDATE] Znaleziono ${taskIds.length} zadań do aktualizacji kosztów`);
     
     if (taskIds.length === 0) {
       return { success: true, updatedTasks: 0, message: 'Brak zadań do aktualizacji' };
@@ -6203,9 +6204,9 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
           
           const updated = updateTaskInCache(taskId, updatedTaskData);
           if (updated) {
-            console.log(`🔄 [BATCH_COST_UPDATE] Zaktualizowano zadanie ${taskId} w cache z nowymi kosztami`);
+            logger.log(`🔄 [BATCH_COST_UPDATE] Zaktualizowano zadanie ${taskId} w cache z nowymi kosztami`);
           } else {
-            console.log(`⚠️ [BATCH_COST_UPDATE] Nie udało się zaktualizować zadania ${taskId} w cache - cache może być pusty`);
+            logger.log(`⚠️ [BATCH_COST_UPDATE] Nie udało się zaktualizować zadania ${taskId} w cache - cache może być pusty`);
           }
         }
       } else {
@@ -6214,7 +6215,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       }
     });
     
-    console.log(`[BATCH_COST_UPDATE] Zakończono: ${successCount} zadań zaktualizowanych, ${errorCount} błędów`);
+    logger.log(`[BATCH_COST_UPDATE] Zakończono: ${successCount} zadań zaktualizowanych, ${errorCount} błędów`);
     
     // Wyślij powiadomienie BroadcastChannel o aktualizacji kosztów po zmianie PO
     if (successCount > 0) {
@@ -6231,16 +6232,16 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
             reason: 'Automatyczna aktualizacja po zmianie cen partii z PO'
           });
           channel.close();
-          console.log(`🔄 [BATCH_COST_UPDATE] Wysłano BroadcastChannel powiadomienie o aktualizacji ${successCount} zadań`);
+          logger.log(`🔄 [BATCH_COST_UPDATE] Wysłano BroadcastChannel powiadomienie o aktualizacji ${successCount} zadań`);
         }
       } catch (broadcastError) {
-        console.warn('[BATCH_COST_UPDATE] Błąd podczas wysyłania powiadomienia BroadcastChannel:', broadcastError);
+        logger.warn('[BATCH_COST_UPDATE] Błąd podczas wysyłania powiadomienia BroadcastChannel:', broadcastError);
       }
     }
     
     // Jako fallback, jeśli cache nie istnieje, wymuś jego odświeżenie
     if (successCount > 0 && !productionTasksCache) {
-      console.log('🔄 [BATCH_COST_UPDATE] Cache nie istnieje - wymuszam odświeżenie przy następnym pobieraniu');
+      logger.log('🔄 [BATCH_COST_UPDATE] Cache nie istnieje - wymuszam odświeżenie przy następnym pobieraniu');
       forceRefreshProductionTasksCache();
     }
     
@@ -6261,7 +6262,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
   // Funkcja do tworzenia pustej partii produktu przy rozpoczynaniu zadania produkcyjnego
   export const createEmptyProductBatch = async (taskId, userId, expiryDate = null) => {
     try {
-      console.log(`Tworzenie pustej partii produktu dla zadania ${taskId}`);
+      logger.log(`Tworzenie pustej partii produktu dla zadania ${taskId}`);
       
       // Pobierz dane zadania
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
@@ -6280,7 +6281,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       
       // Sprawdź, czy zadanie już ma utworzoną partię
       if (taskData.inventoryBatchId) {
-        console.log(`Zadanie ${taskId} już ma utworzoną partię: ${taskData.inventoryBatchId}`);
+        logger.log(`Zadanie ${taskId} już ma utworzoną partię: ${taskData.inventoryBatchId}`);
         return {
           success: true,
           message: 'Partia już istnieje',
@@ -6300,10 +6301,10 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
           inventoryItem = await getInventoryItemById(inventoryItemId);
           
           if (!inventoryItem) {
-            console.warn(`Pozycja magazynowa ${inventoryItemId} z zadania nie istnieje, będę szukać innej`);
+            logger.warn(`Pozycja magazynowa ${inventoryItemId} z zadania nie istnieje, będę szukać innej`);
             inventoryItemId = null; // Wyzeruj ID, żeby wyszukać pozycję innym sposobem
           } else {
-            console.log(`Używam pozycji magazynowej z zadania: ${inventoryItem.name} (ID: ${inventoryItemId})`);
+            logger.log(`Używam pozycji magazynowej z zadania: ${inventoryItem.name} (ID: ${inventoryItemId})`);
           }
         } catch (error) {
           console.error('Błąd podczas sprawdzania pozycji magazynowej z zadania:', error);
@@ -6314,7 +6315,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       if (!inventoryItemId) {
         // Jeśli zadanie ma recepturę, sprawdź czy ta receptura ma już powiązaną pozycję magazynową
         if (taskData.recipeId) {
-          console.log(`Sprawdzanie pozycji magazynowej powiązanej z recepturą ${taskData.recipeId}`);
+          logger.log(`Sprawdzanie pozycji magazynowej powiązanej z recepturą ${taskData.recipeId}`);
           
           try {
             const { getInventoryItemByRecipeId } = await import('../inventory');
@@ -6324,7 +6325,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
               inventoryItemId = recipeInventoryItem.id;
               inventoryItem = recipeInventoryItem;
               
-              console.log(`Znaleziono pozycję magazynową powiązaną z recepturą: ${recipeInventoryItem.name} (ID: ${inventoryItemId})`);
+              logger.log(`Znaleziono pozycję magazynową powiązaną z recepturą: ${recipeInventoryItem.name} (ID: ${inventoryItemId})`);
               
               // Zaktualizuj zadanie z informacją o pozycji magazynowej z receptury
               await updateDoc(taskRef, {
@@ -6350,7 +6351,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
             inventoryItemId = doc.id;
             inventoryItem = doc.data();
             
-            console.log(`Znaleziono pozycję magazynową według nazwy: ${inventoryItem.name} (ID: ${inventoryItemId})`);
+            logger.log(`Znaleziono pozycję magazynową według nazwy: ${inventoryItem.name} (ID: ${inventoryItemId})`);
             
             // Zaktualizuj zadanie z informacją o znalezionym produkcie magazynowym
             await updateDoc(taskRef, {
@@ -6377,7 +6378,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
             inventoryItemId = newItemRef.id;
             inventoryItem = newItemData;
             
-            console.log(`Utworzono nową pozycję magazynową: ${taskData.productName} (ID: ${inventoryItemId})`);
+            logger.log(`Utworzono nową pozycję magazynową: ${taskData.productName} (ID: ${inventoryItemId})`);
             
             // Zaktualizuj zadanie z informacją o nowo utworzonej pozycji magazynowej
             await updateDoc(taskRef, {
@@ -6449,7 +6450,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
         const existingBatch = existingBatchSnapshot.docs[0];
         const batchId = existingBatch.id;
         
-        console.log(`Znaleziono istniejącą partię LOT: ${lotNumber} - używam jej jako partię dla zadania`);
+        logger.log(`Znaleziono istniejącą partię LOT: ${lotNumber} - używam jej jako partię dla zadania`);
         
         // Zaktualizuj zadanie z informacją o istniejącej partii
         await updateDoc(taskRef, {
@@ -6497,7 +6498,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       };
       
       await setDoc(batchRef, batchData);
-      console.log(`Utworzono pustą partię LOT: ${lotNumber} dla zadania produkcyjnego`);
+      logger.log(`Utworzono pustą partię LOT: ${lotNumber} dla zadania produkcyjnego`);
       
       // Dodaj transakcję do historii (opcjonalnie, dla śledzenia)
       const transactionRef = doc(collection(db, 'inventoryTransactions'));
@@ -6577,7 +6578,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
         }
       }
 
-      console.log(`[BATCH-EXPIRY-UPDATE] Aktualizacja daty ważności dla zadania ${taskId}`);
+      logger.log(`[BATCH-EXPIRY-UPDATE] Aktualizacja daty ważności dla zadania ${taskId}`);
 
       // Znajdź wszystkie partie powiązane z tym zadaniem
       const batchesRef = collection(db, 'inventoryBatches');
@@ -6614,7 +6615,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       }
 
       if (batchIdsToUpdate.size === 0) {
-        console.log(`[BATCH-EXPIRY-UPDATE] Nie znaleziono partii powiązanych z zadaniem ${taskId}`);
+        logger.log(`[BATCH-EXPIRY-UPDATE] Nie znaleziono partii powiązanych z zadaniem ${taskId}`);
         return { success: true, updated: 0, message: 'Brak partii do aktualizacji' };
       }
 
@@ -6635,7 +6636,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       // Wykonaj aktualizację wszystkich partii w jednej transakcji
       await batch.commit();
 
-      console.log(`[BATCH-EXPIRY-UPDATE] Zaktualizowano datę ważności w ${batchIdsToUpdate.size} partiach dla zadania ${taskId}`);
+      logger.log(`[BATCH-EXPIRY-UPDATE] Zaktualizowano datę ważności w ${batchIdsToUpdate.size} partiach dla zadania ${taskId}`);
 
       return {
         success: true,
@@ -6690,7 +6691,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
         updatedBy: userId
       });
       
-      console.log(`[TASK-COMMENT] Dodano komentarz do zadania ${taskId}:`, newComment.id);
+      logger.log(`[TASK-COMMENT] Dodano komentarz do zadania ${taskId}:`, newComment.id);
       return newComment;
     } catch (error) {
       console.error('Błąd podczas dodawania komentarza:', error);
@@ -6747,7 +6748,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       });
       
       const deletedBy = isAuthor ? 'autora' : 'administratora';
-      console.log(`[TASK-COMMENT] Usunięto komentarz ${commentId} z zadania ${taskId} przez ${deletedBy}`);
+      logger.log(`[TASK-COMMENT] Usunięto komentarz ${commentId} z zadania ${taskId} przez ${deletedBy}`);
     } catch (error) {
       console.error('Błąd podczas usuwania komentarza:', error);
       throw error;
@@ -6793,7 +6794,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
           updatedAt: serverTimestamp()
         });
         
-        console.log(`[TASK-COMMENT] Oznaczono komentarze jako przeczytane dla użytkownika ${userId} w zadaniu ${taskId}`);
+        logger.log(`[TASK-COMMENT] Oznaczono komentarze jako przeczytane dla użytkownika ${userId} w zadaniu ${taskId}`);
       }
     } catch (error) {
       console.error('Błąd podczas oznaczania komentarzy jako przeczytane:', error);
@@ -6811,7 +6812,7 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
  */
 export const getTasksWithCosts = async (startDate, endDate, statusFilter = 'completed', productFilter = 'all') => {
   try {
-    console.log('[COST REPORT] Pobieranie zadań z kosztami:', { 
+    logger.log('[COST REPORT] Pobieranie zadań z kosztami:', { 
       startDate: startDate?.toISOString?.(), 
       endDate: endDate?.toISOString?.(), 
       statusFilter, 
@@ -6952,7 +6953,7 @@ export const getTasksWithCosts = async (startDate, endDate, statusFilter = 'comp
       return b.completionDate - a.completionDate;
     });
     
-    console.log(`[COST REPORT] Znaleziono ${tasks.length} zadań z sesjami w podanym zakresie`);
+    logger.log(`[COST REPORT] Znaleziono ${tasks.length} zadań z sesjami w podanym zakresie`);
     return tasks;
   } catch (error) {
     console.error('[COST REPORT] Błąd podczas pobierania zadań z kosztami:', error);
@@ -7075,7 +7076,7 @@ export const calculateCostStatistics = (tasks) => {
     ? (stats.totalCompletedQuantity / stats.totalPlannedQuantity) * 100
     : 0;
   
-  console.log('[COST REPORT] Statystyki obliczone:', {
+  logger.log('[COST REPORT] Statystyki obliczone:', {
     totalTasks: stats.totalTasks,
     totalFullCost: stats.totalFullProductionCost.toFixed(2),
     avgUnitCost: stats.avgUnitFullCost.toFixed(2),

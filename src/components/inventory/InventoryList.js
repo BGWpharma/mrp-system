@@ -77,7 +77,6 @@ import { convertTimestampToDate, isDefaultDate } from '../../services/inventory/
 import { exportToExcel } from '../../utils/exportUtils';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatQuantity } from '../../utils/formatting';
-import { toast } from 'react-hot-toast';
 import { exportToCSV } from '../../utils/exportUtils';
 import { useAuth } from '../../hooks/useAuth';
 import EditReservationDialog from './EditReservationDialog';
@@ -665,7 +664,7 @@ const InventoryList = () => {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching reservations:', error);
-      toast.error('Błąd podczas pobierania rezerwacji');
+      showError('Błąd podczas pobierania rezerwacji');
       setLoading(false);
     }
   };
@@ -763,10 +762,10 @@ const InventoryList = () => {
       // Eksportuj do CSV
       exportToCSV(dataToExport, fileName);
       
-      toast.success('Eksport rezerwacji zakończony sukcesem');
+      showSuccess('Eksport rezerwacji zakończony sukcesem');
     } catch (error) {
       console.error('Error exporting reservations:', error);
-      toast.error('Błąd podczas eksportu rezerwacji');
+      showError('Błąd podczas eksportu rezerwacji');
     }
   };
 

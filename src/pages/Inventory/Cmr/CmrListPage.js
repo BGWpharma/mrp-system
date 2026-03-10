@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Container, 
   Paper, 
@@ -212,15 +212,15 @@ const CmrListPage = () => {
   const { data: customers, loading: loadingCustomers } = useServiceData(CUSTOMERS_CACHE_KEY, getAllCustomers, { ttl: 10 * 60 * 1000 });
   
   // Bieżący słownik tłumaczeń na podstawie wybranego języka
-  const t = translations[reportFilters.language] || translations.pl;
+  const t = useMemo(() => translations[reportFilters.language] || translations.pl, [reportFilters.language]);
   
   // Obsługa zmiany wyszukiwania - używa kontekstu
-  const handleSearchChange = (event) => {
+  const handleSearchChange = useCallback((event) => {
     listActions.setSearchTerm(event.target.value);
-  };
+  }, [listActions]);
 
   // Nowa zoptymalizowana funkcja pobierania dokumentów CMR
-  const fetchCmrDocumentsOptimized = async (newSortField = null, newSortOrder = null) => {
+  const fetchCmrDocumentsOptimized = useCallback(async (newSortField = null, newSortOrder = null) => {
     setMainTableLoading(true);
     setShowContent(false);
     
@@ -269,10 +269,10 @@ const CmrListPage = () => {
       setMainTableLoading(false);
       setLoading(false); // Zachowaj kompatybilność ze starym loading
     }
-  };
+  }, [page, pageSize, debouncedSearchTerm, statusFilter, debouncedItemFilter, tableSort, showError]);
 
   // Obsługa sortowania - używa kontekstu
-  const handleSort = (field) => {
+  const handleSort = useCallback((field) => {
     const isAsc = tableSort.field === field && tableSort.order === 'asc';
     const newOrder = isAsc ? 'desc' : 'asc';
     
@@ -283,30 +283,30 @@ const CmrListPage = () => {
     
     // Wywołaj funkcję pobierania z nowymi parametrami sortowania
     fetchCmrDocumentsOptimized(field, newOrder);
-  };
+  }, [tableSort, listActions, fetchCmrDocumentsOptimized]);
 
   // Obsługa zmiany strony - używa kontekstu
-  const handleChangePage = (event, newPage) => {
+  const handleChangePage = useCallback((event, newPage) => {
     listActions.setPage(newPage);
-  };
+  }, [listActions]);
 
   // Obsługa zmiany liczby wierszy na stronę - używa kontekstu
-  const handleChangeRowsPerPage = (event) => {
+  const handleChangeRowsPerPage = useCallback((event) => {
     listActions.setPageSize(parseInt(event.target.value, 10));
-  };
+  }, [listActions]);
 
   // Obsługa zmiany filtra statusu - używa kontekstu
-  const handleStatusFilterChange = (event) => {
+  const handleStatusFilterChange = useCallback((event) => {
     listActions.setStatusFilter(event.target.value);
-  };
+  }, [listActions]);
 
   // Obsługa zmiany filtra pozycji - używa kontekstu
-  const handleItemFilterChange = (event) => {
+  const handleItemFilterChange = useCallback((event) => {
     listActions.setItemFilter(event.target.value);
-  };
+  }, [listActions]);
 
   // Funkcja do odświeżania cache i danych
-  const handleRefreshData = async () => {
+  const handleRefreshData = useCallback(async () => {
     try {
       setMainTableLoading(true);
       
@@ -321,23 +321,23 @@ const CmrListPage = () => {
       console.error('Błąd podczas odświeżania danych:', error);
       showError('Błąd podczas odświeżania danych: ' + error.message);
     }
-  };
+  }, [fetchCmrDocumentsOptimized, showSuccess, showError]);
   
-  const handleCreateCmr = () => {
+  const handleCreateCmr = useCallback(() => {
     navigate('/inventory/cmr/new');
-  };
+  }, [navigate]);
   
-  const handleDeleteClick = (document) => {
+  const handleDeleteClick = useCallback((document) => {
     setDocumentToDelete(document);
     setDeleteDialogOpen(true);
-  };
+  }, []);
   
-  const handleDeleteCancel = () => {
+  const handleDeleteCancel = useCallback(() => {
     setDeleteDialogOpen(false);
     setDocumentToDelete(null);
-  };
+  }, []);
   
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = useCallback(async () => {
     if (!documentToDelete) return;
     
     try {
@@ -356,11 +356,11 @@ const CmrListPage = () => {
       console.error('Błąd podczas usuwania dokumentu CMR:', error);
       showError('Nie udało się usunąć dokumentu CMR');
     }
-  };
+  }, [documentToDelete, fetchCmrDocumentsOptimized, showSuccess, showError]);
 
 
   
-  const formatDate = (date) => {
+  const formatDate = useCallback((date) => {
     if (!date) return '-';
     
     try {
@@ -389,9 +389,9 @@ const CmrListPage = () => {
       console.warn('Błąd formatowania daty:', e, date);
       return String(date);
     }
-  };
+  }, []);
   
-  const renderStatusChip = (status) => {
+  const renderStatusChip = useCallback((status) => {
     let color;
     switch (status) {
       case CMR_STATUSES.DRAFT:
@@ -427,9 +427,15 @@ const CmrListPage = () => {
         }}
       />
     );
-  };
+  }, []);
 
-  const getPaymentStatusChip = (paymentStatus, cmr) => {
+  const handlePaymentStatusClick = useCallback((cmr) => {
+    setCmrToUpdatePaymentStatus(cmr);
+    setNewPaymentStatus(cmr.paymentStatus || CMR_PAYMENT_STATUSES.UNPAID);
+    setPaymentStatusDialogOpen(true);
+  }, []);
+
+  const getPaymentStatusChip = useCallback((paymentStatus, cmr) => {
     const status = paymentStatus || CMR_PAYMENT_STATUSES.UNPAID;
     const label = translatePaymentStatus(status);
     let color = '#f44336'; // czerwony domyślny dla nie opłacone
@@ -462,57 +468,51 @@ const CmrListPage = () => {
         }}
       />
     );
-  };
+  }, [handlePaymentStatusClick]);
   
   // Funkcje do obsługi raportów
-  const handleOpenReportDialog = () => {
+  const handleOpenReportDialog = useCallback(() => {
     setReportDialogOpen(true);
-  };
+  }, []);
   
-  const handleCloseReportDialog = () => {
+  const handleCloseReportDialog = useCallback(() => {
     setReportDialogOpen(false);
     // Resetujemy dane raportu po zamknięciu
     if (reportData) {
       setReportData(null);
     }
-  };
+  }, [reportData]);
   
-  const handleReportFilterChange = (e) => {
+  const handleReportFilterChange = useCallback((e) => {
     const { name, value } = e.target;
     setReportFilters(prev => ({ ...prev, [name]: value }));
-  };
+  }, []);
   
-  const handleReportCheckboxChange = (e) => {
+  const handleReportCheckboxChange = useCallback((e) => {
     const { name, checked } = e.target;
     setReportFilters(prev => ({ ...prev, [name]: checked }));
-  };
+  }, []);
   
-  const handleLanguageChange = (e) => {
+  const handleLanguageChange = useCallback((e) => {
     setReportFilters(prev => ({ ...prev, language: e.target.checked ? 'en' : 'pl' }));
-  };
+  }, []);
   
-  const handleRecipientChange = (event, newValue) => {
+  const handleRecipientChange = useCallback((event, newValue) => {
     setReportFilters(prev => ({ 
       ...prev, 
       recipient: newValue && newValue.id !== '' ? newValue.name : '' 
     }));
-  };
+  }, []);
   
   // Funkcja do tłumaczenia statusu
-  const translateStatus = (status) => {
+  const translateStatus = useCallback((status) => {
     if (statusTranslations[status]) {
       return statusTranslations[status][reportFilters.language] || status;
     }
     return status;
-  };
+  }, [reportFilters.language]);
 
-  const handlePaymentStatusClick = (cmr) => {
-    setCmrToUpdatePaymentStatus(cmr);
-    setNewPaymentStatus(cmr.paymentStatus || CMR_PAYMENT_STATUSES.UNPAID);
-    setPaymentStatusDialogOpen(true);
-  };
-
-  const handlePaymentStatusUpdate = async () => {
+  const handlePaymentStatusUpdate = useCallback(async () => {
     try {
       await updateCmrPaymentStatus(cmrToUpdatePaymentStatus.id, newPaymentStatus, currentUser.uid);
       
@@ -527,9 +527,9 @@ const CmrListPage = () => {
       console.error('Błąd podczas aktualizacji statusu płatności:', error);
       showError('Nie udało się zaktualizować statusu płatności');
     }
-  };
+  }, [cmrToUpdatePaymentStatus, newPaymentStatus, currentUser, fetchCmrDocumentsOptimized, showSuccess, showError]);
   
-  const handleGenerateReport = async () => {
+  const handleGenerateReport = useCallback(async () => {
     try {
       setGeneratingReport(true);
       const report = await generateCmrReport(reportFilters);
@@ -541,9 +541,9 @@ const CmrListPage = () => {
     } finally {
       setGeneratingReport(false);
     }
-  };
+  }, [reportFilters, showSuccess, showError]);
   
-  const exportReportToCsv = () => {
+  const exportReportToCsv = useCallback(() => {
     if (!reportData || !reportData.documents.length) return;
     
     // Tworzymy nagłówki CSV w wybranym języku
@@ -667,7 +667,13 @@ const CmrListPage = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    };
+  }, [reportData, reportFilters, t, translateStatus]);
+
+  const paginationInfo = useMemo(() => ({
+    start: cmrDocuments.length > 0 ? (page - 1) * pageSize + 1 : 0,
+    end: Math.min(page * pageSize, totalItems),
+    total: totalItems
+  }), [cmrDocuments.length, page, pageSize, totalItems]);
 
   // Efekt do pobierania danych - używa debouncedSearchTerm i debouncedItemFilter
   useEffect(() => {
@@ -984,7 +990,7 @@ const CmrListPage = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, flexDirection: 'column', alignItems: 'center' }}>
             <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
               <Typography variant="body2" color="textSecondary">
-                Wyświetlanie {cmrDocuments.length > 0 ? (page - 1) * pageSize + 1 : 0} - {Math.min(page * pageSize, totalItems)} z {totalItems} dokumentów CMR
+                Wyświetlanie {paginationInfo.start} - {paginationInfo.end} z {paginationInfo.total} dokumentów CMR
               </Typography>
               
               <FormControl variant="outlined" size="small" sx={{ minWidth: 80 }}>

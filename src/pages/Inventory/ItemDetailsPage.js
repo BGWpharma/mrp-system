@@ -1,5 +1,5 @@
 // src/pages/Inventory/ItemDetailsPage.js
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Container,
@@ -128,9 +128,9 @@ const ItemDetailsPage = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Helper function do aktualizacji stanów ładowania
-  const updateLoadingState = (key, value) => {
+  const updateLoadingState = useCallback((key, value) => {
     setLoadingStates(prev => ({ ...prev, [key]: value }));
-  };
+  }, []);
 
 
 
@@ -300,11 +300,11 @@ const ItemDetailsPage = () => {
     };
   }, [id, showError]);
 
-  const handleTabChange = (event, newValue) => {
+  const handleTabChange = useCallback((event, newValue) => {
     setTabValue(newValue);
-  };
+  }, []);
 
-  const getStockLevelIndicator = (quantity, minStock, maxStock) => {
+  const getStockLevelIndicator = useCallback((quantity, minStock, maxStock) => {
     if (quantity <= 0) {
       return <Chip label="Brak" color="error" />;
     } else if (minStock && quantity <= minStock) {
@@ -314,10 +314,9 @@ const ItemDetailsPage = () => {
     } else {
       return <Chip label="Optymalny stan" color="success" />;
     }
-  };
+  }, []);
 
-  // Sprawdź, czy są partie z krótkim terminem ważności (12 miesięcy)
-  const getExpiringBatches = () => {
+  const expiringBatches = useMemo(() => {
     const today = new Date();
     const twelveMonthsFromNow = new Date();
     twelveMonthsFromNow.setMonth(today.getMonth() + 12);
@@ -331,10 +330,9 @@ const ItemDetailsPage = () => {
       
       return expiryDate > today && expiryDate <= twelveMonthsFromNow;
     });
-  };
+  }, [batches]);
   
-  // Sprawdź, czy są przeterminowane partie
-  const getExpiredBatches = () => {
+  const expiredBatches = useMemo(() => {
     const today = new Date();
     
     return batches.filter(batch => {
@@ -346,59 +344,20 @@ const ItemDetailsPage = () => {
       
       return expiryDate < today;
     });
-  };
-  
-  const expiringBatches = getExpiringBatches();
-  const expiredBatches = getExpiredBatches();
+  }, [batches]);
 
   // Funkcja otwierająca dialog etykiet
-  const handleOpenLabelDialog = () => {
+  const handleOpenLabelDialog = useCallback(() => {
     setLabelDialogOpen(true);
-  };
+  }, []);
   
   // Funkcja zamykająca dialog etykiet
-  const handleCloseLabelDialog = () => {
+  const handleCloseLabelDialog = useCallback(() => {
     setLabelDialogOpen(false);
-  };
+  }, []);
 
-  // Funkcja do pobierania rezerwacji dla produktu
-  const fetchReservations = async (itemData) => {
-    try {
-      // Pobierz zgrupowane rezerwacje zamiast pojedynczych transakcji
-      const groupedReservations = await getReservationsGroupedByTask(itemData.id);
-      
-      console.log('Zgrupowane rezerwacje:', groupedReservations);
-      
-      // Ustaw rezerwacje
-      setReservations(groupedReservations);
-      
-      // Zastosuj filtrowanie i sortowanie
-      filterAndSortReservations(reservationFilter, reservationSortField, reservationSortOrder, groupedReservations);
-    } catch (error) {
-      console.error('Błąd podczas pobierania rezerwacji:', error);
-      showError('Nie udało się pobrać listy rezerwacji');
-    }
-  };
-  
-  // Funkcja do filtrowania rezerwacji
-  const handleFilterChange = (event) => {
-    const filterValue = event.target.value;
-    setReservationFilter(filterValue);
-    
-    filterAndSortReservations(filterValue, reservationSortField, reservationSortOrder);
-  };
-  
-  // Funkcja do sortowania rezerwacji
-  const handleSort = (field) => {
-    const newSortOrder = field === reservationSortField && reservationSortOrder === 'asc' ? 'desc' : 'asc';
-    setReservationSortOrder(newSortOrder);
-    setReservationSortField(field);
-    
-    filterAndSortReservations(reservationFilter, field, newSortOrder);
-  };
-  
   // Funkcja do filtrowania i sortowania rezerwacji
-  const filterAndSortReservations = (filterValue, field, order, data = reservations) => {
+  const filterAndSortReservations = useCallback((filterValue, field, order, data = reservations) => {
     let filtered = [...data];
     
     // Filtrowanie według statusu rezerwacji
@@ -439,10 +398,40 @@ const ItemDetailsPage = () => {
     });
     
     setFilteredReservations(filtered);
-  };
+  }, [reservations]);
+
+  const fetchReservations = useCallback(async (itemData) => {
+    try {
+      const groupedReservations = await getReservationsGroupedByTask(itemData.id);
+      
+      console.log('Zgrupowane rezerwacje:', groupedReservations);
+      
+      setReservations(groupedReservations);
+      
+      filterAndSortReservations(reservationFilter, reservationSortField, reservationSortOrder, groupedReservations);
+    } catch (error) {
+      console.error('Błąd podczas pobierania rezerwacji:', error);
+      showError('Nie udało się pobrać listy rezerwacji');
+    }
+  }, [filterAndSortReservations, reservationFilter, reservationSortField, reservationSortOrder, showError]);
+  
+  const handleFilterChange = useCallback((event) => {
+    const filterValue = event.target.value;
+    setReservationFilter(filterValue);
+    
+    filterAndSortReservations(filterValue, reservationSortField, reservationSortOrder);
+  }, [filterAndSortReservations, reservationSortField, reservationSortOrder]);
+  
+  const handleSort = useCallback((field) => {
+    const newSortOrder = field === reservationSortField && reservationSortOrder === 'asc' ? 'desc' : 'asc';
+    setReservationSortOrder(newSortOrder);
+    setReservationSortField(field);
+    
+    filterAndSortReservations(reservationFilter, field, newSortOrder);
+  }, [reservationSortField, reservationSortOrder, reservationFilter, filterAndSortReservations]);
 
   // Funkcja do usuwania rezerwacji
-  const handleDeleteReservation = async (taskId) => {
+  const handleDeleteReservation = useCallback(async (taskId) => {
     if (!window.confirm('Czy na pewno chcesz usunąć tę rezerwację? Ta operacja jest nieodwracalna.')) {
       return;
     }
@@ -483,10 +472,10 @@ const ItemDetailsPage = () => {
       console.error('Błąd podczas usuwania rezerwacji:', error);
       showError(error.message || 'Wystąpił błąd podczas usuwania rezerwacji');
     }
-  };
+  }, [reservations, currentUser, showSuccess, showError, fetchReservations, item]);
 
   // Funkcja do czyszczenia rezerwacji z usuniętych zadań
-  const handleCleanupDeletedTaskReservations = async () => {
+  const handleCleanupDeletedTaskReservations = useCallback(async () => {
     if (!window.confirm('Czy na pewno chcesz usunąć wszystkie rezerwacje dla usuniętych zadań produkcyjnych? Ta operacja jest nieodwracalna.')) {
       return;
     }
@@ -509,10 +498,10 @@ const ItemDetailsPage = () => {
     } finally {
       setUpdatingReservations(false);
     }
-  };
+  }, [showSuccess, showError, fetchReservations, item, t]);
 
   // Funkcja do czyszczenia wszystkich rezerwacji dla produktu
-  const handleCleanupAllItemReservations = async () => {
+  const handleCleanupAllItemReservations = useCallback(async () => {
     if (!window.confirm('Czy na pewno chcesz usunąć WSZYSTKIE rezerwacje dla tego produktu? Ta operacja jest nieodwracalna i wpłynie na zadania produkcyjne korzystające z tego surowca.')) {
       return;
     }
@@ -535,10 +524,10 @@ const ItemDetailsPage = () => {
     } finally {
       setUpdatingReservations(false);
     }
-  };
+  }, [item, currentUser, showSuccess, showError, fetchReservations, t]);
 
   // Funkcja do odświeżania ilości towaru
-  const handleRefreshQuantity = async () => {
+  const handleRefreshQuantity = useCallback(async () => {
     try {
       setRefreshingQuantity(true);
       const newQuantity = await recalculateItemQuantity(id);
@@ -554,10 +543,10 @@ const ItemDetailsPage = () => {
     } finally {
       setRefreshingQuantity(false);
     }
-  };
+  }, [id, showSuccess, showError, t]);
 
   // Funkcja do pobierania oczekiwanych zamówień
-  const fetchAwaitingOrders = async (itemId) => {
+  const fetchAwaitingOrders = useCallback(async (itemId) => {
     try {
       setAwaitingOrdersLoading(true);
       const awaitingOrdersData = await getAwaitingOrdersForInventoryItem(itemId);
@@ -568,7 +557,7 @@ const ItemDetailsPage = () => {
     } finally {
       setAwaitingOrdersLoading(false);
     }
-  };
+  }, [showError, t]);
 
   if (loading) {
     return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>{t('common.loading')}</Container>;

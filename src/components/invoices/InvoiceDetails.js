@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
@@ -109,7 +109,7 @@ const InvoiceDetails = () => {
     }
   };
 
-  const refreshInvoice = async () => {
+  const refreshInvoice = useCallback(async () => {
     try {
       const fetchedInvoice = await getInvoiceById(invoiceId);
       setInvoice(fetchedInvoice);
@@ -124,7 +124,7 @@ const InvoiceDetails = () => {
     } catch (error) {
       console.error('Błąd podczas odświeżania faktury:', error);
     }
-  };
+  }, [invoiceId]);
 
   const fetchRelatedInvoices = async (orderId) => {
     if (!orderId) {
@@ -193,15 +193,15 @@ const InvoiceDetails = () => {
     }
   };
   
-  const handleEditClick = () => {
+  const handleEditClick = useCallback(() => {
     navigate(`/invoices/${invoiceId}/edit`);
-  };
+  }, [navigate, invoiceId]);
   
-  const handleDeleteClick = () => {
+  const handleDeleteClick = useCallback(() => {
     setDeleteDialogOpen(true);
-  };
+  }, []);
   
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = useCallback(async () => {
     try {
       await deleteInvoice(invoiceId);
       showSuccess(t('invoices.details.notifications.invoiceDeleted'));
@@ -211,9 +211,9 @@ const InvoiceDetails = () => {
     } finally {
       setDeleteDialogOpen(false);
     }
-  };
+  }, [invoiceId, navigate, showSuccess, showError, t]);
   
-  const handleUpdateStatus = async (newStatus) => {
+  const handleUpdateStatus = useCallback(async (newStatus) => {
     try {
       // Jeśli wystawiamy fakturę, pokaż loading
       if (newStatus === 'issued') {
@@ -236,15 +236,15 @@ const InvoiceDetails = () => {
         setIssuingInvoice(false);
       }
     }
-  };
+  }, [invoiceId, currentUser.uid, showSuccess, showError, t]);
   
-  const handleViewCustomer = () => {
+  const handleViewCustomer = useCallback(() => {
     if (invoice?.customer?.id) {
       navigate(`/orders/customers/${invoice.customer.id}`);
     }
-  };
+  }, [invoice?.customer?.id, navigate]);
   
-  const handleViewOrder = () => {
+  const handleViewOrder = useCallback(() => {
     if (invoice?.orderId) {
       // Refaktury i faktury zakupowe kierują do Purchase Orders
       if (invoice.isRefInvoice || invoice.originalOrderType === 'purchase') {
@@ -253,14 +253,14 @@ const InvoiceDetails = () => {
         navigate(`/orders/${invoice.orderId}`);
       }
     }
-  };
+  }, [invoice?.orderId, invoice?.isRefInvoice, invoice?.originalOrderType, navigate]);
   
-  const formatDate = (date) => {
+  const formatDate = useCallback((date) => {
     if (!date) return '';
     return format(new Date(date), 'dd.MM.yyyy');
-  };
+  }, []);
   
-  const renderInvoiceStatus = (status) => {
+  const renderInvoiceStatus = useCallback((status) => {
     const statusConfig = {
       'draft': { color: 'default', label: 'Szkic' },
       'issued': { color: 'primary', label: 'Wystawiona' },
@@ -280,10 +280,10 @@ const InvoiceDetails = () => {
         size="small"
       />
     );
-  };
+  }, []);
   
   // Funkcja generująca i pobierająca PDF faktury
-  const handleDownloadPdf = async (language = 'en') => {
+  const handleDownloadPdf = useCallback(async (language = 'en') => {
     try {
       setPdfGenerating(true);
       
@@ -306,10 +306,143 @@ const InvoiceDetails = () => {
     } finally {
       setPdfGenerating(false);
     }
-  };
+  }, [invoice, companyInfo, showSuccess, showError, t]);
   
 
   
+  const paymentStatusText = useMemo(() => {
+    if (!invoice) return '';
+    const totalPaid = parseFloat(invoice.totalPaid || 0);
+    
+    let advancePayments = 0;
+    if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
+      advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+    } else {
+      advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
+    }
+    
+    const invoiceTotal = parseFloat(invoice.total || 0);
+    const totalSettled = totalPaid + advancePayments;
+    const remainingToPay = invoiceTotal - totalSettled;
+    
+    if (Math.abs(remainingToPay) <= 0.01) {
+      return 'Opłacona';
+    } else if (invoiceTotal > 0 && totalSettled > 0) {
+      return 'Częściowo opłacona';
+    } else if (invoiceTotal < 0 && totalSettled < 0) {
+      return 'Częściowo opłacona';
+    } else {
+      return 'Nieopłacona';
+    }
+  }, [invoice]);
+
+  const billingAddressText = useMemo(() => {
+    if (!invoice) return '';
+    const addr = invoice.billingAddress || invoice.customer?.billingAddress || invoice.customer?.address;
+    return (typeof addr === 'string' && addr.trim()) ? addr : t('invoices.details.clientInfo.noBillingAddress');
+  }, [invoice, t]);
+
+  const shippingAddressText = useMemo(() => {
+    if (!invoice) return '';
+    const addr = invoice.shippingAddress || invoice.customer?.shippingAddress || invoice.customer?.address;
+    return (typeof addr === 'string' && addr.trim()) ? addr : t('invoices.details.clientInfo.noShippingAddress');
+  }, [invoice, t]);
+
+  const selectedBankInfo = useMemo(() => {
+    if (!invoice) return { bankName: null, accountNumber: null, swift: null };
+    const selectedBank = invoice.selectedBankAccount && companyInfo?.bankAccounts
+      ? companyInfo.bankAccounts.find(acc => acc.id === invoice.selectedBankAccount)
+      : null;
+    return {
+      bankName: selectedBank?.bankName || companyInfo.bankName,
+      accountNumber: selectedBank?.accountNumber || companyInfo.bankAccount,
+      swift: selectedBank?.swift || companyInfo.swift
+    };
+  }, [invoice, companyInfo]);
+
+  const netTotal = useMemo(() => {
+    if (!invoice?.items) return 0;
+    return invoice.items.reduce((sum, item) => {
+      const quantity = Number(item.quantity) || 0;
+      const price = Number(item.price) || 0;
+      const netValue = Number(item.netValue) || (quantity * price);
+      const roundedNetValue = Math.round(netValue * 10000) / 10000;
+      return sum + roundedNetValue;
+    }, 0);
+  }, [invoice?.items]);
+
+  const vatTotal = useMemo(() => {
+    if (!invoice?.items) return 0;
+    return invoice.items.reduce((sum, item) => {
+      const quantity = Number(item.quantity) || 0;
+      const price = Number(item.price) || 0;
+      const netValue = Number(item.netValue) || (quantity * price);
+      const roundedNetValue = Math.round(netValue * 10000) / 10000;
+      
+      let vatRate = 0;
+      if (typeof item.vat === 'number') {
+        vatRate = item.vat;
+      } else if (item.vat !== "ZW" && item.vat !== "NP") {
+        vatRate = parseFloat(item.vat) || 0;
+      }
+      
+      const vatValue = roundedNetValue * (vatRate / 100);
+      const roundedVatValue = Math.round(vatValue * 10000) / 10000;
+      return sum + roundedVatValue;
+    }, 0);
+  }, [invoice?.items]);
+
+  const grossTotalText = useMemo(() => {
+    if (!invoice?.items) return '';
+    const total = netTotal + vatTotal;
+    
+    let advancePayments = 0;
+    if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
+      advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+    } else {
+      advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
+    }
+    
+    const remaining = total - advancePayments;
+    return `${remaining.toFixed(2)} ${typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}`;
+  }, [invoice, netTotal, vatTotal]);
+
+  const proformaAllocationTotal = useMemo(() => {
+    if (!invoice?.proformAllocation) return 0;
+    return invoice.proformAllocation.reduce((sum, alloc) => sum + (alloc.amount || 0), 0);
+  }, [invoice?.proformAllocation]);
+
+  const linkedPurchaseOrdersTotal = useMemo(() => {
+    if (!invoice?.linkedPurchaseOrders) return 0;
+    return invoice.linkedPurchaseOrders.reduce((sum, po) => {
+      let poValue = 0;
+      if (po.finalGrossValue !== undefined) {
+        poValue = parseFloat(po.finalGrossValue);
+      } else if (po.totalGross !== undefined) {
+        poValue = parseFloat(po.totalGross);
+      } else {
+        const productsValue = po.calculatedProductsValue || po.totalValue || 
+          (Array.isArray(po.items) ? po.items.reduce((s, item) => s + (parseFloat(item.totalPrice) || 0), 0) : 0);
+        
+        let additionalCostsValue = 0;
+        if (po.calculatedAdditionalCosts !== undefined) {
+          additionalCostsValue = parseFloat(po.calculatedAdditionalCosts);
+        } else if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
+          additionalCostsValue = po.additionalCostsItems.reduce((s, cost) => s + (parseFloat(cost.value) || 0), 0);
+        } else if (po.additionalCosts) {
+          additionalCostsValue = parseFloat(po.additionalCosts) || 0;
+        }
+        
+        const vatRate = parseFloat(po.vatRate) || 0;
+        const vatValue = (productsValue * vatRate) / 100;
+        
+        poValue = productsValue + vatValue + additionalCostsValue;
+      }
+      
+      return sum + poValue;
+    }, 0);
+  }, [invoice?.linkedPurchaseOrders]);
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
@@ -477,36 +610,7 @@ const InvoiceDetails = () => {
                     {t('invoices.details.paymentStatus')}
                   </Typography>
                   <Typography variant="body1" gutterBottom>
-                    {(() => {
-                      // Oblicz łączne płatności (gotówkowe + proformy)
-                      const totalPaid = parseFloat(invoice.totalPaid || 0);
-                      
-                      // Oblicz przedpłaty z proform
-                      let advancePayments = 0;
-                      if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
-                        advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
-                      } else {
-                        advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
-                      }
-                      
-                      const invoiceTotal = parseFloat(invoice.total || 0);
-                      const totalSettled = totalPaid + advancePayments;
-                      const remainingToPay = invoiceTotal - totalSettled;
-                      
-                      // Używamy wartości bezwzględnej pozostałej kwoty dla poprawnej obsługi faktur korygujących (ujemnych)
-                      if (Math.abs(remainingToPay) <= 0.01) {
-                        // Faktura jest w pełni rozliczona (różnica bliska zeru)
-                        return 'Opłacona';
-                      } else if (invoiceTotal > 0 && totalSettled > 0) {
-                        // Standardowa faktura częściowo opłacona
-                        return 'Częściowo opłacona';
-                      } else if (invoiceTotal < 0 && totalSettled < 0) {
-                        // Faktura korygująca (ujemna) częściowo rozliczona (częściowy zwrot)
-                        return 'Częściowo opłacona';
-                      } else {
-                        return 'Nieopłacona';
-                      }
-                    })()}
+                    {paymentStatusText}
                   </Typography>
                 </Grid>
                 {invoice.paymentDate && (
@@ -545,10 +649,7 @@ const InvoiceDetails = () => {
                         {t('invoices.details.clientInfo.billingAddress')}
                       </Typography>
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                        {(() => {
-                          const addr = invoice.billingAddress || invoice.customer?.billingAddress || invoice.customer?.address;
-                          return (typeof addr === 'string' && addr.trim()) ? addr : t('invoices.details.clientInfo.noBillingAddress');
-                        })()}
+                        {billingAddressText}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -560,10 +661,7 @@ const InvoiceDetails = () => {
                         {t('invoices.details.clientInfo.shippingAddress')}
                       </Typography>
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                        {(() => {
-                          const addr = invoice.shippingAddress || invoice.customer?.shippingAddress || invoice.customer?.address;
-                          return (typeof addr === 'string' && addr.trim()) ? addr : t('invoices.details.clientInfo.noShippingAddress');
-                        })()}
+                        {shippingAddressText}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -961,9 +1059,7 @@ const InvoiceDetails = () => {
                       }}>
                         <Typography variant="body2" color="success.main" fontWeight="bold">
                           Łączna kwota z proform: -
-                          {invoice.proformAllocation
-                            .reduce((sum, alloc) => sum + (alloc.amount || 0), 0)
-                            .toFixed(2)} {(typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}
+                          {proformaAllocationTotal.toFixed(2)} {(typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}
                         </Typography>
                       </Box>
                       </Box>
@@ -1010,36 +1106,21 @@ const InvoiceDetails = () => {
                   )}
                 </Box>
                 <Box sx={{ mt: 1 }}>
-                  {(() => {
-                    // Znajdź wybrany bank z faktury lub użyj domyślnych wartości
-                    const selectedBank = invoice.selectedBankAccount && companyInfo?.bankAccounts
-                      ? companyInfo.bankAccounts.find(acc => acc.id === invoice.selectedBankAccount)
-                      : null;
-                    
-                    const bankName = selectedBank?.bankName || companyInfo.bankName;
-                    const accountNumber = selectedBank?.accountNumber || companyInfo.bankAccount;
-                    const swift = selectedBank?.swift || companyInfo.swift;
-                    
-                    return (
-                      <>
-                        {bankName && (
-                          <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            {t('invoices.details.sellerInfo.bank')}: {bankName}
-                          </Typography>
-                        )}
-                        {accountNumber && (
-                          <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            {t('invoices.details.sellerInfo.accountNumber')}: {accountNumber}
-                          </Typography>
-                        )}
-                        {swift && (
-                          <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            SWIFT: {swift}
-                          </Typography>
-                        )}
-                      </>
-                    );
-                  })()}
+                  {selectedBankInfo.bankName && (
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      {t('invoices.details.sellerInfo.bank')}: {selectedBankInfo.bankName}
+                    </Typography>
+                  )}
+                  {selectedBankInfo.accountNumber && (
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      {t('invoices.details.sellerInfo.accountNumber')}: {selectedBankInfo.accountNumber}
+                    </Typography>
+                  )}
+                  {selectedBankInfo.swift && (
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      SWIFT: {selectedBankInfo.swift}
+                    </Typography>
+                  )}
                 </Box>
               </CardContent>
             </Card>
@@ -1124,15 +1205,7 @@ const InvoiceDetails = () => {
             </Grid>
             <Grid item xs={6}>
               <Typography variant="body1" fontWeight="bold" align="right">
-                {invoice.items.reduce((sum, item) => {
-                  const quantity = Number(item.quantity) || 0;
-                  const price = Number(item.price) || 0;
-                  // Użyj zapisanej wartości netValue jeśli jest dostępna (spójność z formularzem i PDF)
-                  const netValue = Number(item.netValue) || (quantity * price);
-                  // Zaokrąglij do 4 miejsc po przecinku (jak w PDF)
-                  const roundedNetValue = Math.round(netValue * 10000) / 10000;
-                  return sum + roundedNetValue;
-                }, 0).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
+                {netTotal.toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
               </Typography>
             </Grid>
             <Grid item xs={6}>
@@ -1142,27 +1215,7 @@ const InvoiceDetails = () => {
             </Grid>
             <Grid item xs={6}>
               <Typography variant="body1" fontWeight="bold" align="right">
-                {invoice.items.reduce((sum, item) => {
-                  const quantity = Number(item.quantity) || 0;
-                  const price = Number(item.price) || 0;
-                  // Użyj zapisanej wartości netValue jeśli jest dostępna
-                  const netValue = Number(item.netValue) || (quantity * price);
-                  const roundedNetValue = Math.round(netValue * 10000) / 10000;
-                  
-                  // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
-                  let vatRate = 0;
-                  if (typeof item.vat === 'number') {
-                    vatRate = item.vat;
-                  } else if (item.vat !== "ZW" && item.vat !== "NP") {
-                    vatRate = parseFloat(item.vat) || 0;
-                  }
-                  
-                  // Oblicz VAT z zaokrąglonej wartości netto i zaokrąglij wynik do 4 miejsc (jak w PDF)
-                  const vatValue = roundedNetValue * (vatRate / 100);
-                  const roundedVatValue = Math.round(vatValue * 10000) / 10000;
-                  
-                  return sum + roundedVatValue;
-                }, 0).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
+                {vatTotal.toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
               </Typography>
             </Grid>
             
@@ -1291,33 +1344,7 @@ const InvoiceDetails = () => {
             {/* Podsumowanie kosztów zakupowych przeniesione poza tabelę */}
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
               <Typography variant="h6" fontWeight="bold" align="right">
-                Razem zaliczki/przedpłaty: {invoice.linkedPurchaseOrders.reduce((sum, po) => {
-                  let poValue = 0;
-                  if (po.finalGrossValue !== undefined) {
-                    poValue = parseFloat(po.finalGrossValue);
-                  } else if (po.totalGross !== undefined) {
-                    poValue = parseFloat(po.totalGross);
-                  } else {
-                    const productsValue = po.calculatedProductsValue || po.totalValue || 
-                      (Array.isArray(po.items) ? po.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0) : 0);
-                    
-                    let additionalCostsValue = 0;
-                    if (po.calculatedAdditionalCosts !== undefined) {
-                      additionalCostsValue = parseFloat(po.calculatedAdditionalCosts);
-                    } else if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                      additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-                    } else if (po.additionalCosts) {
-                      additionalCostsValue = parseFloat(po.additionalCosts) || 0;
-                    }
-                    
-                    const vatRate = parseFloat(po.vatRate) || 0;
-                    const vatValue = (productsValue * vatRate) / 100;
-                    
-                    poValue = productsValue + vatValue + additionalCostsValue;
-                  }
-                  
-                  return sum + poValue;
-                }, 0).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
+                Razem zaliczki/przedpłaty: {linkedPurchaseOrdersTotal.toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
               </Typography>
             </Box>
           </Box>
@@ -1334,49 +1361,7 @@ const InvoiceDetails = () => {
             </Grid>
             <Grid item xs={6}>
               <Typography variant="h6" fontWeight="bold" align="right" color="primary">
-                {(() => {
-                  // Oblicz sumę netto (suma zaokrąglonych pozycji)
-                  const totalNetto = invoice.items.reduce((sum, item) => {
-                    const quantity = Number(item.quantity) || 0;
-                    const price = Number(item.price) || 0;
-                    const netValue = Number(item.netValue) || (quantity * price);
-                    const roundedNetValue = Math.round(netValue * 10000) / 10000;
-                    return sum + roundedNetValue;
-                  }, 0);
-                  
-                  // Oblicz sumę VAT (suma zaokrąglonych wartości VAT)
-                  const totalVat = invoice.items.reduce((sum, item) => {
-                    const quantity = Number(item.quantity) || 0;
-                    const price = Number(item.price) || 0;
-                    const netValue = Number(item.netValue) || (quantity * price);
-                    const roundedNetValue = Math.round(netValue * 10000) / 10000;
-                    
-                    let vatRate = 0;
-                    if (typeof item.vat === 'number') {
-                      vatRate = item.vat;
-                    } else if (item.vat !== "ZW" && item.vat !== "NP") {
-                      vatRate = parseFloat(item.vat) || 0;
-                    }
-                    
-                    const vatValue = roundedNetValue * (vatRate / 100);
-                    const roundedVatValue = Math.round(vatValue * 10000) / 10000;
-                    return sum + roundedVatValue;
-                  }, 0);
-                  
-                  // Suma brutto to suma netto + suma VAT
-                  const total = totalNetto + totalVat;
-                  
-                  // Oblicz przedpłaty z proform
-                  let advancePayments = 0;
-                  if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
-                    advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
-                  } else {
-                    advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
-                  }
-                  
-                  const remaining = total - advancePayments;
-                  return `${remaining.toFixed(2)} ${typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}`;
-                })()}
+                {grossTotalText}
               </Typography>
             </Grid>
           </Grid>

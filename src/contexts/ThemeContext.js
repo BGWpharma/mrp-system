@@ -348,27 +348,6 @@ const getCommonComponents = (theme) => ({
             ? `radial-gradient(circle at 15% 25%, ${alpha('#3b82f6', 0.08)} 0%, transparent 50%), radial-gradient(circle at 85% 75%, ${alpha('#8b5cf6', 0.06)} 0%, transparent 50%), radial-gradient(circle at 50% 60%, ${alpha('#06b6d4', 0.05)} 0%, transparent 50%)`
             : `radial-gradient(circle at 15% 25%, ${alpha('#3b82f6', 0.04)} 0%, transparent 50%), radial-gradient(circle at 85% 75%, ${alpha('#8b5cf6', 0.03)} 0%, transparent 50%), radial-gradient(circle at 50% 60%, ${alpha('#06b6d4', 0.02)} 0%, transparent 50%)`
         },
-        '&::-webkit-scrollbar': {
-          width: '8px',
-          height: '8px',
-        },
-        '&::-webkit-scrollbar-track': {
-          background: theme.palette.mode === 'dark' 
-            ? 'rgba(255, 255, 255, 0.03)'
-            : 'rgba(0, 0, 0, 0.03)',
-          borderRadius: '4px',
-        },
-        '&::-webkit-scrollbar-thumb': {
-          backgroundColor: theme.palette.mode === 'dark' 
-            ? 'rgba(255, 255, 255, 0.15)'
-            : 'rgba(0, 0, 0, 0.15)',
-          borderRadius: '4px',
-          '&:hover': {
-            backgroundColor: theme.palette.mode === 'dark' 
-              ? 'rgba(255, 255, 255, 0.25)'
-              : 'rgba(0, 0, 0, 0.25)',
-          },
-        },
       },
     },
   },

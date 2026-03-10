@@ -57,23 +57,16 @@ export const resolveItemsEcoStatus = async (items) => {
     const ecoRecipeNames = new Set();
     const ecoRecipeIds = new Set();
 
+    const ecoProductMaterialIds = new Set();
+
     ecoSnapshot.forEach(doc => {
       const recipe = doc.data();
       ecoRecipeIds.add(doc.id);
       if (recipe.name) {
         ecoRecipeNames.add(recipe.name.toLowerCase());
       }
-    });
-
-    // Also fetch all recipes to build inventoryItem -> eco mapping
-    const allRecipesSnapshot = await getDocs(collection(db, 'recipes'));
-    const recipeProductMaterialIds = new Set();
-    allRecipesSnapshot.forEach(doc => {
-      if (ecoRecipeIds.has(doc.id)) {
-        const recipe = doc.data();
-        if (recipe.productMaterialId) {
-          recipeProductMaterialIds.add(recipe.productMaterialId);
-        }
+      if (recipe.productMaterialId) {
+        ecoProductMaterialIds.add(recipe.productMaterialId);
       }
     });
 
@@ -104,7 +97,7 @@ export const resolveItemsEcoStatus = async (items) => {
       }
 
       // 4) inventoryItemId match via productMaterialId
-      if (!isEco && item.inventoryItemId && recipeProductMaterialIds.has(item.inventoryItemId)) {
+      if (!isEco && item.inventoryItemId && ecoProductMaterialIds.has(item.inventoryItemId)) {
         isEco = true;
       }
 
@@ -154,13 +147,23 @@ export const generateDeliveryNoteNumber = (orderNumber, isEco) => {
 };
 
 /**
- * Generates text summary for the CMR "attached documents" field (English).
- * Accepts items with or without isEco resolved — resolves dynamically if needed.
+ * Merges delivery-note text into the CMR attachedDocuments field,
+ * replacing any previous DN section.
  */
-export const generateDeliveryNoteText = async (items) => {
+export const buildAttachedDocumentsWithDN = (existingDocs, dnText) => {
+  if (!dnText) return existingDocs || '';
+  const cleaned = (existingDocs || '').replace(/\n?Delivery Notes:\n[\s\S]*$/, '').trim();
+  return cleaned ? `${cleaned}\n${dnText}` : dnText;
+};
+
+/**
+ * Generates text summary for the CMR "attached documents" field (English).
+ * Pass pre-resolved items to avoid redundant Firestore queries.
+ */
+export const generateDeliveryNoteText = async (items, { resolvedItems: preResolved } = {}) => {
   if (!items || items.length === 0) return '';
 
-  const resolvedItems = await resolveItemsEcoStatus(items);
+  const resolvedItems = preResolved || await resolveItemsEcoStatus(items);
   const groups = groupCmrItemsForDeliveryNotes(resolvedItems);
   const groupKeys = Object.keys(groups);
 
@@ -195,11 +198,12 @@ export const generateDeliveryNoteText = async (items) => {
 
 /**
  * Generates delivery note metadata to store on the CMR document.
+ * Pass pre-resolved items to avoid redundant Firestore queries.
  */
-export const generateDeliveryNoteMetadata = async (items) => {
+export const generateDeliveryNoteMetadata = async (items, { resolvedItems: preResolved } = {}) => {
   if (!items || items.length === 0) return [];
 
-  const resolvedItems = await resolveItemsEcoStatus(items);
+  const resolvedItems = preResolved || await resolveItemsEcoStatus(items);
   const groups = groupCmrItemsForDeliveryNotes(resolvedItems);
   return Object.values(groups).map(group => ({
     number: group.dnNumber,
@@ -212,12 +216,12 @@ export const generateDeliveryNoteMetadata = async (items) => {
 
 /**
  * Generates a full delivery note PDF using jsPDF.
- * Returns an object with { pdf, filename } for each DN group, or opens a combined PDF in a new window.
+ * Returns { pdf, filename }. Pass pre-resolved items to avoid redundant Firestore queries.
  */
-export const generateDeliveryNotePdf = async (items, cmrData) => {
+export const generateDeliveryNotePdf = async (items, cmrData, { resolvedItems: preResolved } = {}) => {
   const { jsPDF } = await import('jspdf');
 
-  const resolvedItems = await resolveItemsEcoStatus(items);
+  const resolvedItems = preResolved || await resolveItemsEcoStatus(items);
   const groups = groupCmrItemsForDeliveryNotes(resolvedItems);
   const groupKeys = Object.keys(groups);
 
@@ -245,6 +249,21 @@ export const generateDeliveryNotePdf = async (items, cmrData) => {
     pdf,
     filename: `DN-${cmrNum}-${dateStr}.pdf`
   };
+};
+
+/**
+ * Convenience wrapper: resolves ECO once, then generates pdf + text + metadata.
+ * Returns { pdf, filename, text, metadata, resolvedItems }.
+ */
+export const generateAllDeliveryNoteData = async (items, cmrData) => {
+  const resolvedItems = await resolveItemsEcoStatus(items);
+  const opts = { resolvedItems };
+
+  const { pdf, filename } = await generateDeliveryNotePdf(items, cmrData, opts);
+  const text = await generateDeliveryNoteText(items, opts);
+  const metadata = await generateDeliveryNoteMetadata(items, opts);
+
+  return { pdf, filename, text, metadata, resolvedItems };
 };
 
 function renderDeliveryNotePage(pdf, group, cmrData) {

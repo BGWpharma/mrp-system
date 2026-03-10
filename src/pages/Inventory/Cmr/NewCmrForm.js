@@ -55,7 +55,6 @@ import { getCompanyData } from '../../../services/companyService';
 import BatchSelector from '../../../components/cmr/BatchSelector';
 import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDialog';
 import { useTranslation } from '../../../hooks/useTranslation';
-import { generateDeliveryNoteText, generateDeliveryNoteMetadata } from '../../../services/logistics/deliveryNoteService';
 
 /**
  * Nowy komponent formularza CMR oparty na oficjalnym dokumencie.
@@ -472,7 +471,7 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     return Object.keys(errors).length === 0;
   };
   
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     console.log('Próba wysłania formularza CMR:', formData);
     
@@ -483,26 +482,7 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     }
     
     try {
-      const dataToSubmit = { ...formData };
-
-      // Auto-generate delivery note references
-      if (dataToSubmit.items && dataToSubmit.items.length > 0) {
-        try {
-          const dnText = await generateDeliveryNoteText(dataToSubmit.items);
-          if (dnText) {
-            const existingDocs = dataToSubmit.attachedDocuments || '';
-            const existingWithoutDN = existingDocs.replace(/\n?Delivery Notes:\n[\s\S]*$/, '').trim();
-            dataToSubmit.attachedDocuments = existingWithoutDN
-              ? `${existingWithoutDN}\n${dnText}`
-              : dnText;
-          }
-          dataToSubmit.deliveryNotes = await generateDeliveryNoteMetadata(dataToSubmit.items);
-        } catch (dnError) {
-          console.error('Error generating delivery notes:', dnError);
-        }
-      }
-
-      onSubmit(dataToSubmit);
+      onSubmit(formData);
       showMessage('Dokument CMR został zapisany pomyślnie', 'success');
     } catch (error) {
       console.error('Błąd podczas próby zapisania dokumentu CMR:', error);

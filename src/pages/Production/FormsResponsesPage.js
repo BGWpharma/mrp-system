@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Container, 
   Typography, 
@@ -119,7 +119,7 @@ const FormsResponsesPage = () => {
   const [exportFormType, setExportFormType] = useState('');
 
   // ✅ FALLBACK: Funkcja do sekwencyjnego ładowania stron gdy brakuje kursorów
-  const loadSequentiallyToPage = async (targetPage, formType) => {
+  const loadSequentiallyToPage = useCallback(async (targetPage, formType) => {
     try {
       console.log(`🔄 Rozpoczynam sekwencyjne ładowanie ${formType} do strony ${targetPage}`);
       
@@ -156,10 +156,10 @@ const FormsResponsesPage = () => {
     } catch (error) {
       console.error('Błąd podczas sekwencyjnego ładowania:', error);
     }
-  };
+  }, [rowsPerPage]);
 
   // ✅ ZOPTYMALIZOWANA funkcja ładowania danych z kursorami
-  const loadFormResponses = async (formType, pageNum = 1, perPage = rowsPerPage, filters = {}) => {
+  const loadFormResponses = useCallback(async (formType, pageNum = 1, perPage = rowsPerPage, filters = {}) => {
     try {
       setLoading(true);
       
@@ -204,10 +204,10 @@ const FormsResponsesPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [rowsPerPage, loadSequentiallyToPage]);
   
   // Funkcja ładowania aktualnie wybranej zakładki
-  const loadCurrentTabData = async () => {
+  const loadCurrentTabData = useCallback(async () => {
     const pageNum = page + 1; // Konwersja z 0-based na 1-based
     
     try {
@@ -230,15 +230,15 @@ const FormsResponsesPage = () => {
       console.error('Błąd podczas ładowania danych:', error);
       setError(error.message);
     }
-  };
+  }, [page, tabValue, loadFormResponses]);
 
   // Obsługa zmiany strony
-  const handleChangePage = (event, newPage) => {
+  const handleChangePage = useCallback((event, newPage) => {
     setPage(newPage);
-  };
+  }, []);
 
   // ✅ OPTYMALIZACJA: Reset kursorów przy zmianie rozmiaru strony
-  const handleChangeRowsPerPage = (event) => {
+  const handleChangeRowsPerPage = useCallback((event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0); // Reset do pierwszej strony
     
@@ -248,10 +248,10 @@ const FormsResponsesPage = () => {
       productionControl: new Map(),
       productionShift: new Map()
     };
-  };
+  }, []);
 
   // ✅ OPTYMALIZACJA: Reset kursorów przy zmianie zakładki
-  const handleTabChange = (event, newValue) => {
+  const handleTabChange = useCallback((event, newValue) => {
     setTabValue(newValue);
     setPage(0); // Reset paginacji przy zmianie zakładki
     
@@ -261,7 +261,7 @@ const FormsResponsesPage = () => {
       productionControl: new Map(),
       productionShift: new Map()
     };
-  };
+  }, []);
 
   // useEffect do ładowania danych
   useEffect(() => {
@@ -286,7 +286,7 @@ const FormsResponsesPage = () => {
   }, []);
   
   // Funkcja ładowania z filtrami dla Production Shift
-  const loadShiftDataWithFilters = async () => {
+  const loadShiftDataWithFilters = useCallback(async () => {
     if (tabValue !== 2) return; // Filtry tylko dla zakładki Production Shift
     
     const pageNum = page + 1;
@@ -313,7 +313,7 @@ const FormsResponsesPage = () => {
     
     setProductionShiftResponses(shiftData);
     setFilteredShiftResponses(filtered);
-  };
+  }, [tabValue, page, rowsPerPage, shiftFilters, loadFormResponses]);
 
   // useEffect do obsługi filtrów Production Shift
   useEffect(() => {
@@ -323,7 +323,7 @@ const FormsResponsesPage = () => {
   }, [shiftFilters]);
 
   // Funkcja do wyodrębniania ścieżki pliku z URL Firebase Storage
-  const extractStoragePathFromUrl = (url) => {
+  const extractStoragePathFromUrl = useCallback((url) => {
     if (!url || !url.includes('firebase')) return null;
     
     try {
@@ -340,9 +340,9 @@ const FormsResponsesPage = () => {
       console.error('Błąd podczas wyodrębniania ścieżki z URL:', error);
       return null;
     }
-  };
+  }, []);
   
-  const formatDateTime = (date) => {
+  const formatDateTime = useCallback((date) => {
     if (!date) return '-';
     try {
       return format(date, 'dd.MM.yyyy HH:mm', { locale: pl });
@@ -350,10 +350,10 @@ const FormsResponsesPage = () => {
       console.error('Błąd formatowania daty:', error);
       return '-';
     }
-  };
+  }, []);
   
   // Funkcja pomocnicza do formatowania wartości CSV
-  const formatCSVValue = (value) => {
+  const formatCSVValue = useCallback((value) => {
     if (value === null || value === undefined) {
       return '""';
     }
@@ -369,10 +369,10 @@ const FormsResponsesPage = () => {
     
     // Dla bezpieczeństwa owijamy wszystkie wartości w cudzysłowy
     return `"${stringValue}"`;
-  };
+  }, []);
   
   // Funkcja otwierania dialogu wyboru zakresu dat
-  const handleOpenExportDialog = (defaultFilename, formType) => {
+  const handleOpenExportDialog = useCallback((defaultFilename, formType) => {
     setExportFilename(defaultFilename);
     setExportFormType(formType);
     // Ustaw domyślny zakres - ostatnie 30 dni
@@ -385,72 +385,17 @@ const FormsResponsesPage = () => {
       toDate: today.toISOString().split('T')[0]
     });
     setExportDialogOpen(true);
-  };
+  }, []);
 
   // Funkcja zamykania dialogu eksportu
-  const handleCloseExportDialog = () => {
+  const handleCloseExportDialog = useCallback(() => {
     setExportDialogOpen(false);
     setExportDateRange({ fromDate: '', toDate: '' });
     setExportFilename('');
     setExportFormType('');
-  };
+  }, []);
 
-  // Funkcja obsługi eksportu z dialogu
-  const handleConfirmExport = async () => {
-    if (!exportDateRange.fromDate || !exportDateRange.toDate) {
-      showError(t('common:common.selectDateRange'));
-      return;
-    }
-    
-    if (new Date(exportDateRange.fromDate) > new Date(exportDateRange.toDate)) {
-      showError(t('common:common.startDateCannotBeAfterEndDate'));
-      return;
-    }
-    
-    // Zamknij dialog
-    setExportDialogOpen(false);
-    
-    // Wykonaj eksport z wybranym zakresem dat
-    await handleExportToCSVWithDateRange(exportFilename, exportFormType, exportDateRange);
-    
-    // Wyczyść stan
-    handleCloseExportDialog();
-  };
-
-  // Nowa funkcja eksportu z filtrowaniem po datach
-  const handleExportToCSVWithDateRange = async (filename, formType, dateRange) => {
-    try {
-      setLoading(true);
-      
-      // Przygotuj filtry
-      const filters = {};
-      if (dateRange && dateRange.fromDate) {
-        filters.fromDate = dateRange.fromDate;
-      }
-      if (dateRange && dateRange.toDate) {
-        filters.toDate = dateRange.toDate;
-      }
-      
-      // Pobierz dane z serwisu z filtrowaniem po datach
-      const result = await getFormResponsesWithPagination(
-        formType,
-        1, // First page
-        10000, // Large limit to get all data
-        filters
-      );
-      
-      // Użyj istniejącej funkcji eksportu z pobranymi danymi
-      handleExportToCSV(result.data, filename);
-      
-    } catch (error) {
-      console.error('Błąd podczas eksportu do CSV:', error);
-      setError(`Błąd podczas eksportu: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleExportToCSV = (data, filename) => {
+  const handleExportToCSV = useCallback((data, filename) => {
     // Funkcja do eksportu danych do pliku CSV
     let csvContent = "data:text/csv;charset=utf-8,";
     
@@ -481,15 +426,70 @@ const FormsResponsesPage = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
+  }, [tabValue, formatCSVValue, formatDateTime]);
+
+  // Nowa funkcja eksportu z filtrowaniem po datach
+  const handleExportToCSVWithDateRange = useCallback(async (filename, formType, dateRange) => {
+    try {
+      setLoading(true);
+      
+      // Przygotuj filtry
+      const filters = {};
+      if (dateRange && dateRange.fromDate) {
+        filters.fromDate = dateRange.fromDate;
+      }
+      if (dateRange && dateRange.toDate) {
+        filters.toDate = dateRange.toDate;
+      }
+      
+      // Pobierz dane z serwisu z filtrowaniem po datach
+      const result = await getFormResponsesWithPagination(
+        formType,
+        1, // First page
+        10000, // Large limit to get all data
+        filters
+      );
+      
+      // Użyj istniejącej funkcji eksportu z pobranymi danymi
+      handleExportToCSV(result.data, filename);
+      
+    } catch (error) {
+      console.error('Błąd podczas eksportu do CSV:', error);
+      setError(`Błąd podczas eksportu: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [handleExportToCSV]);
+
+  // Funkcja obsługi eksportu z dialogu
+  const handleConfirmExport = useCallback(async () => {
+    if (!exportDateRange.fromDate || !exportDateRange.toDate) {
+      showError(t('common:common.selectDateRange'));
+      return;
+    }
+    
+    if (new Date(exportDateRange.fromDate) > new Date(exportDateRange.toDate)) {
+      showError(t('common:common.startDateCannotBeAfterEndDate'));
+      return;
+    }
+    
+    // Zamknij dialog
+    setExportDialogOpen(false);
+    
+    // Wykonaj eksport z wybranym zakresem dat
+    await handleExportToCSVWithDateRange(exportFilename, exportFormType, exportDateRange);
+    
+    // Wyczyść stan
+    handleCloseExportDialog();
+  }, [exportDateRange, exportFilename, exportFormType, showError, t, handleExportToCSVWithDateRange, handleCloseExportDialog]);
 
   // Funkcje do obsługi dialogu potwierdzenia usunięcia
-  const handleDeleteClick = (item, formType) => {
+  const handleDeleteClick = useCallback((item, formType) => {
     setDeleteItemData({ item, formType });
     setDeleteConfirmOpen(true);
-  };
+  }, []);
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = useCallback(async () => {
     if (!deleteItemData) return;
     
     try {
@@ -537,15 +537,15 @@ const FormsResponsesPage = () => {
       console.error('Błąd podczas usuwania dokumentu:', error);
       alert(`Wystąpił błąd podczas usuwania dokumentu: ${error.message}`);
     }
-  };
+  }, [deleteItemData, extractStoragePathFromUrl, loadCurrentTabData]);
 
-  const handleDeleteCancel = () => {
+  const handleDeleteCancel = useCallback(() => {
     setDeleteConfirmOpen(false);
     setDeleteItemData(null);
-  };
+  }, []);
 
   // Funkcja do obsługi edycji (przekierowanie do formularza z wypełnionymi danymi)
-  const handleEditClick = (item, formType) => {
+  const handleEditClick = useCallback((item, formType) => {
     // Zapisz dane do edycji w sessionStorage
     sessionStorage.setItem('editFormData', JSON.stringify(item));
     
@@ -563,34 +563,43 @@ const FormsResponsesPage = () => {
       default:
         console.error('Nieznany typ formularza');
     }
-  };
+  }, [navigate]);
 
   // Funkcja do powrotu na stronę formularzy
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     navigate('/production/forms');
-  };
+  }, [navigate]);
   
-  const handleFilterChange = (e) => {
+  const handleFilterChange = useCallback((e) => {
     const { name, value } = e.target;
     setShiftFilters(prev => ({
       ...prev,
       [name]: value
     }));
-  };
+  }, []);
   
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setShiftFilters({
       responsiblePerson: '',
       product: '',
       moNumber: ''
     });
     setPage(0); // Reset paginacji po wyczyszczeniu filtrów
-  };
+  }, []);
   
-  const toggleFilters = () => {
-    setShowFilters(!showFilters);
-  };
+  const toggleFilters = useCallback(() => {
+    setShowFilters(prev => !prev);
+  }, []);
   
+  const uniqueResponsiblePersons = useMemo(
+    () => [...new Set(productionShiftResponses.map(item => item.responsiblePerson))].filter(Boolean),
+    [productionShiftResponses]
+  );
+  const uniqueProducts = useMemo(
+    () => [...new Set(productionShiftResponses.map(item => item.product))].filter(Boolean),
+    [productionShiftResponses]
+  );
+
   // Komponent tabeli dla raportu zakończonych MO
   const CompletedMOTable = () => (
     <>
@@ -894,10 +903,6 @@ const FormsResponsesPage = () => {
   
   // Komponent tabeli dla raportów zmian produkcyjnych
   const ProductionShiftTable = () => {
-    // Zbierz unikalne wartości dla filtrów
-    const uniqueResponsiblePersons = [...new Set(productionShiftResponses.map(item => item.responsiblePerson))].filter(Boolean);
-    const uniqueProducts = [...new Set(productionShiftResponses.map(item => item.product))].filter(Boolean);
-    
     return (
       <>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>

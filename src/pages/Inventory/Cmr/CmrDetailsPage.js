@@ -103,8 +103,9 @@ import {
 } from '../../../utils/calculations';
 import LabelsDisplayDialog from '../../../components/cmr/LabelsDisplayDialog';
 import LabelGenerator from '../../../components/cmr/LabelGenerator';
-import { generateDeliveryNotePdf, generateDeliveryNoteText, generateDeliveryNoteMetadata } from '../../../services/logistics/deliveryNoteService';
+import { generateAllDeliveryNoteData, buildAttachedDocumentsWithDN } from '../../../services/logistics/deliveryNoteService';
 import { updateCmrDocument } from '../../../services/logistics';
+import { logger } from '../../../utils/logger';
 
 // Ikony
 import EditIcon from '@mui/icons-material/Edit';
@@ -305,6 +306,7 @@ const CmrDetailsPage = () => {
   // Stany dla Delivery Notes
   const [deliveryNoteAttachments, setDeliveryNoteAttachments] = useState([]);
   const [deliveryNoteAttachmentsLoading, setDeliveryNoteAttachmentsLoading] = useState(false);
+  const [uploadingDeliveryNote, setUploadingDeliveryNote] = useState(false);
   
   const menuOpen = Boolean(anchorEl);
   
@@ -485,7 +487,7 @@ const CmrDetailsPage = () => {
     
     setLoadingFormResponsesLoading(true);
     try {
-      console.log('🔍 Searching for loading forms with CMR number:', cmrNumber);
+      logger.log('🔍 Searching for loading forms with CMR number:', cmrNumber);
       
       // Sprawdź różne warianty numeru CMR
       const cmrVariants = [
@@ -496,7 +498,7 @@ const CmrDetailsPage = () => {
         `CMR ${cmrNumber}`,          // Z dodatkowym prefiksem (na wszelki wypadek)
       ].filter((variant, index, array) => array.indexOf(variant) === index); // Usuń duplikaty
       
-      console.log('🔍 Checking CMR variants:', cmrVariants);
+      logger.log('🔍 Checking CMR variants:', cmrVariants);
       
       // Jedno zapytanie 'in' zamiast pętli po wariantach
       const loadingQuery = query(
@@ -505,11 +507,11 @@ const CmrDetailsPage = () => {
       );
       const loadingSnapshot = await getDocs(loadingQuery);
       
-      console.log(`📄 Found ${loadingSnapshot.docs.length} loading form responses for variants:`, cmrVariants);
+      logger.log(`📄 Found ${loadingSnapshot.docs.length} loading form responses for variants:`, cmrVariants);
       
       let loadingData = loadingSnapshot.docs.map(doc => {
         const data = doc.data();
-        console.log('📝 Processing document:', doc.id, 'with CMR:', data.cmrNumber);
+        logger.log('📝 Processing document:', doc.id, 'with CMR:', data.cmrNumber);
         return {
           id: doc.id,
           ...data,
@@ -521,13 +523,13 @@ const CmrDetailsPage = () => {
       
       // Jeśli nadal nic nie znaleziono, pokaż wszystkie numery CMR w kolekcji dla debugowania
       if (loadingData.length === 0) {
-        console.log('🔍 No results found for any variant. Let me check all CMR numbers in the collection...');
+        logger.log('🔍 No results found for any variant. Let me check all CMR numbers in the collection...');
         const allDocsQuery = query(collection(db, 'Forms/ZaladunekTowaru/Odpowiedzi'));
         const allDocsSnapshot = await getDocs(allDocsQuery);
-        console.log('📋 All CMR numbers in collection:');
+        logger.log('📋 All CMR numbers in collection:');
         allDocsSnapshot.docs.forEach((doc, index) => {
           const data = doc.data();
-          console.log(`${index + 1}. CMR: "${data.cmrNumber}" (type: ${typeof data.cmrNumber})`);
+          logger.log(`${index + 1}. CMR: "${data.cmrNumber}" (type: ${typeof data.cmrNumber})`);
         });
       }
 
@@ -539,7 +541,7 @@ const CmrDetailsPage = () => {
       };
 
       setLoadingFormResponses(loadingData.sort(sortByFillDate));
-      console.log('✅ Set', loadingData.length, 'loading form responses');
+      logger.log('✅ Set', loadingData.length, 'loading form responses');
     } catch (error) {
       console.error('Błąd podczas pobierania odpowiedzi formularzy załadunku:', error);
       setLoadingFormResponses([]);
@@ -561,17 +563,17 @@ const CmrDetailsPage = () => {
       
       // Pobierz odpowiedzi formularzy załadunku dla tego CMR
       if (data && data.cmrNumber) {
-        console.log('🚛 CMR Document loaded with number:', data.cmrNumber, '(type:', typeof data.cmrNumber, ')');
+        logger.log('🚛 CMR Document loaded with number:', data.cmrNumber, '(type:', typeof data.cmrNumber, ')');
         fetchLoadingFormResponses(data.cmrNumber);
       } else {
-        console.log('❌ No CMR number found in document data:', data);
+        logger.log('❌ No CMR number found in document data:', data);
       }
       
       // Debug: Wyświetl strukturę danych CMR (można usunąć po testach)
-      console.log('CMR data:', data);
-      console.log('linkedOrderId:', data.linkedOrderId);
-      console.log('linkedOrderIds:', data.linkedOrderIds);
-      console.log('linkedOrderNumbers:', data.linkedOrderNumbers);
+      logger.log('CMR data:', data);
+      logger.log('linkedOrderId:', data.linkedOrderId);
+      logger.log('linkedOrderIds:', data.linkedOrderIds);
+      logger.log('linkedOrderNumbers:', data.linkedOrderNumbers);
       
       // Pobierz dane powiązanych zamówień klienta
       const ordersToFetch = [];
@@ -619,8 +621,8 @@ const CmrDetailsPage = () => {
   };
   
   const handleEdit = () => {
-    console.log('handleEdit wywołane z id:', id);
-    console.log('Próba nawigacji do:', `/inventory/cmr/${id}/edit`);
+    logger.log('handleEdit wywołane z id:', id);
+    logger.log('Próba nawigacji do:', `/inventory/cmr/${id}/edit`);
     navigate(`/inventory/cmr/${id}/edit`);
   };
   
@@ -682,19 +684,11 @@ const CmrDetailsPage = () => {
         return;
       }
 
-      const { pdf, filename } = await generateDeliveryNotePdf(cmrData.items, cmrData);
-
-      // Update attachedDocuments field on the CMR with DN references
-      const dnText = await generateDeliveryNoteText(cmrData.items);
-      const dnMetadata = await generateDeliveryNoteMetadata(cmrData.items);
+      const { pdf, filename, text: dnText, metadata: dnMetadata } =
+        await generateAllDeliveryNoteData(cmrData.items, cmrData);
 
       if (dnText) {
-        const existingDocs = cmrData.attachedDocuments || '';
-        const existingWithoutDN = existingDocs.replace(/\n?Delivery Notes:\n[\s\S]*$/, '').trim();
-        const newAttachedDocs = existingWithoutDN
-          ? `${existingWithoutDN}\n${dnText}`
-          : dnText;
-
+        const newAttachedDocs = buildAttachedDocumentsWithDN(cmrData.attachedDocuments, dnText);
         try {
           await updateCmrDocument(id, {
             attachedDocuments: newAttachedDocs,
@@ -710,7 +704,6 @@ const CmrDetailsPage = () => {
         }
       }
 
-      // Save PDF as CMR attachment
       const pdfBlob = pdf.output('blob');
       try {
         await uploadCmrDeliveryNote(pdfBlob, id, currentUser.uid, filename);
@@ -719,7 +712,6 @@ const CmrDetailsPage = () => {
         console.error('Failed to save DN attachment:', uploadErr);
       }
 
-      // Open PDF in new window
       const pdfUrl = URL.createObjectURL(pdfBlob);
       const printWindow = window.open(pdfUrl, '_blank');
       if (!printWindow) {
@@ -733,6 +725,7 @@ const CmrDetailsPage = () => {
       showError(t('details.deliveryNotes.generateError', { message: error.message }));
     }
   };
+
 
   const handleGenerateOfficialCmr = async () => {
     try {
@@ -813,7 +806,7 @@ const CmrDetailsPage = () => {
             // Znajdź pole formularza po ID
             const field = svgDoc.getElementById(fieldId);
             if (!field) {
-              console.warn(`Nie znaleziono pola o ID: ${fieldId}`);
+              logger.warn(`Nie znaleziono pola o ID: ${fieldId}`);
               return;
             }
             
@@ -894,7 +887,7 @@ const CmrDetailsPage = () => {
             if (formFields) {
               formFields.appendChild(textElement);
             } else {
-              console.warn('Nie znaleziono grupy form-fields w dokumencie SVG');
+              logger.warn('Nie znaleziono grupy form-fields w dokumencie SVG');
               svgDoc.documentElement.appendChild(textElement);
             }
           };
@@ -1032,7 +1025,7 @@ const CmrDetailsPage = () => {
                   }
                 }
 
-                console.log(`CMR pozycja ${index + 1}: towar="${item.description}", CO="${coNumber}"`);
+                logger.log(`CMR pozycja ${index + 1}: towar="${item.description}", CO="${coNumber}"`);
                 return index === 0 ? coNumber : '\n\n' + coNumber;
               }).join('');
               addTextToField(svgDoc, 'field-statistical-number', statisticalNumberText, '6.5px');
@@ -1159,7 +1152,7 @@ const CmrDetailsPage = () => {
             const canvasWidth = Math.round(210 * pxPerMm);
             const canvasHeight = Math.round(297 * pxPerMm);
             
-            console.log(`CMR PDF Optymalizacja: Urządzenie: ${isMobile ? 'Mobile' : isTablet ? 'Tablet' : 'Desktop'}, DPI: ${dpi}, Rozmiar: ${canvasWidth}x${canvasHeight}`);
+            logger.log(`CMR PDF Optymalizacja: Urządzenie: ${isMobile ? 'Mobile' : isTablet ? 'Tablet' : 'Desktop'}, DPI: ${dpi}, Rozmiar: ${canvasWidth}x${canvasHeight}`);
             
             // Utwórz element Canvas z optymalizowanym rozmiarem
             const canvas = document.createElement('canvas');
@@ -1201,7 +1194,7 @@ const CmrDetailsPage = () => {
               
               // Logowanie informacji o optymalizacji
               const originalSize = Math.round(canvasWidth * canvasHeight * 4 / 1024 / 1024); // MB (RGBA)
-              console.log(`CMR PDF: Optymalizacja zakończona. Szacowany rozmiar przed kompresją: ~${originalSize}MB, Jakość JPEG: ${Math.round(quality * 100)}%`);
+              logger.log(`CMR PDF: Optymalizacja zakończona. Szacowany rozmiar przed kompresją: ~${originalSize}MB, Jakość JPEG: ${Math.round(quality * 100)}%`);
               
               resolve(imgData);
             };
@@ -1226,12 +1219,12 @@ const CmrDetailsPage = () => {
         const printImages = [];
         
         // Konwertuj wszystkie dokumenty na obrazy z optymalizacją
-        console.log(`🔄 CMR PDF: Rozpoczynam konwersję ${generatedDocuments.length} dokumentów z optymalizacją dla urządzeń mobilnych`);
+        logger.log(`🔄 CMR PDF: Rozpoczynam konwersję ${generatedDocuments.length} dokumentów z optymalizacją dla urządzeń mobilnych`);
         
         for (let i = 0; i < generatedDocuments.length; i++) {
           const docData = generatedDocuments[i];
           try {
-            console.log(`📄 CMR PDF: Konwersja kopii ${docData.copyNumber} (${i + 1}/${generatedDocuments.length})`);
+            logger.log(`📄 CMR PDF: Konwersja kopii ${docData.copyNumber} (${i + 1}/${generatedDocuments.length})`);
             const imgData = await convertSvgToImage(docData.svgString, pdfOptimizationOptions);
             printImages.push(imgData);
           } catch (imageError) {
@@ -1239,13 +1232,13 @@ const CmrDetailsPage = () => {
           }
         }
         
-        console.log(`✅ CMR PDF: Konwersja zakończona. Przygotowano ${printImages.length} obrazów`);
+        logger.log(`✅ CMR PDF: Konwersja zakończona. Przygotowano ${printImages.length} obrazów`);
         
         if (printImages.length > 0) {
           // Szacowanie rozmiaru po optymalizacji
           const estimatedSizePerImage = printImages[0].length / 1024 / 1024; // MB
           const totalEstimatedSize = estimatedSizePerImage * printImages.length;
-          console.log(`📊 CMR PDF: Szacowany rozmiar po optymalizacji: ~${totalEstimatedSize.toFixed(1)}MB (${estimatedSizePerImage.toFixed(1)}MB na stronę)`);
+          logger.log(`📊 CMR PDF: Szacowany rozmiar po optymalizacji: ~${totalEstimatedSize.toFixed(1)}MB (${estimatedSizePerImage.toFixed(1)}MB na stronę)`);
         }
         
         if (printImages.length === 0) {
@@ -1360,12 +1353,12 @@ const CmrDetailsPage = () => {
           
           let isFirstPage = true;
           
-          console.log(`🔄 CMR PDF Fallback: Generowanie PDF z ${generatedDocuments.length} stronami z optymalizacją`);
+          logger.log(`🔄 CMR PDF Fallback: Generowanie PDF z ${generatedDocuments.length} stronami z optymalizacją`);
           
           for (let i = 0; i < generatedDocuments.length; i++) {
             const docData = generatedDocuments[i];
             try {
-              console.log(`📄 CMR PDF Fallback: Przetwarzanie kopii ${docData.copyNumber} (${i + 1}/${generatedDocuments.length})`);
+              logger.log(`📄 CMR PDF Fallback: Przetwarzanie kopii ${docData.copyNumber} (${i + 1}/${generatedDocuments.length})`);
               const imgData = await convertSvgToImage(docData.svgString, pdfOptimizationOptions);
               
               if (!isFirstPage) {
@@ -1464,7 +1457,7 @@ const CmrDetailsPage = () => {
         // Dodatkowe informacje o statystykach
         if (reservationResult.statistics) {
           const stats = reservationResult.statistics;
-          console.log(`Statystyki rezerwacji: ${stats.successCount} sukces(ów), ${stats.errorCount} błąd(ów) z ${stats.totalAttempted} prób`);
+          logger.log(`Statystyki rezerwacji: ${stats.successCount} sukces(ów), ${stats.errorCount} błąd(ów) z ${stats.totalAttempted} prób`);
         }
       } 
       // Sprawdź czy zmiana statusu zawiera informacje o dostarczeniu
@@ -1510,7 +1503,7 @@ const CmrDetailsPage = () => {
         // Dodatkowe informacje o statystykach
         if (deliveryResult.statistics) {
           const stats = deliveryResult.statistics;
-          console.log(`Statystyki dostarczenia: ${stats.successCount} sukces(ów), ${stats.errorCount} błąd(ów) z ${stats.totalAttempted} prób`);
+          logger.log(`Statystyki dostarczenia: ${stats.successCount} sukces(ów), ${stats.errorCount} błąd(ów) z ${stats.totalAttempted} prób`);
         }
       } else {
         showSuccess(`Status dokumentu CMR zmieniony na: ${newStatus}`);
@@ -1519,20 +1512,14 @@ const CmrDetailsPage = () => {
       // Auto-generate and save Delivery Notes PDF when status changes to "W transporcie"
       if (newStatus === CMR_STATUSES.IN_TRANSIT && cmrData.items && cmrData.items.length > 0) {
         try {
-          const { pdf, filename } = await generateDeliveryNotePdf(cmrData.items, cmrData);
-          const dnText = await generateDeliveryNoteText(cmrData.items);
-          const dnMetadata = await generateDeliveryNoteMetadata(cmrData.items);
+          const { pdf, filename, text: dnText, metadata: dnMetadata } =
+            await generateAllDeliveryNoteData(cmrData.items, cmrData);
 
           const pdfBlob = pdf.output('blob');
           await uploadCmrDeliveryNote(pdfBlob, id, currentUser.uid, filename);
 
           if (dnText) {
-            const existingDocs = cmrData.attachedDocuments || '';
-            const existingWithoutDN = existingDocs.replace(/\n?Delivery Notes:\n[\s\S]*$/, '').trim();
-            const newAttachedDocs = existingWithoutDN
-              ? `${existingWithoutDN}\n${dnText}`
-              : dnText;
-
+            const newAttachedDocs = buildAttachedDocumentsWithDN(cmrData.attachedDocuments, dnText);
             await updateCmrDocument(id, {
               attachedDocuments: newAttachedDocs,
               deliveryNotes: dnMetadata
@@ -1594,7 +1581,7 @@ const CmrDetailsPage = () => {
       
       return format(dateObj, 'dd MMMM yyyy', { locale: pl });
     } catch (e) {
-      console.warn('Błąd formatowania daty:', e, date);
+      logger.warn('Błąd formatowania daty:', e, date);
       return String(date);
     }
   };
@@ -1865,6 +1852,34 @@ const CmrDetailsPage = () => {
     }
   };
 
+  const handleDeliveryNoteUpload = async (event) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingDeliveryNote(true);
+    try {
+      let uploadedCount = 0;
+      for (const file of files) {
+        if (file.size > 20 * 1024 * 1024) {
+          showError(`Plik "${file.name}" przekracza limit 20MB`);
+          continue;
+        }
+        await uploadCmrDeliveryNote(file, id, currentUser.uid, file.name);
+        uploadedCount++;
+      }
+      if (uploadedCount > 0) {
+        fetchDeliveryNoteAttachments();
+        showSuccess('Delivery Note przesłany pomyślnie');
+      }
+    } catch (error) {
+      console.error('Błąd podczas przesyłania Delivery Note:', error);
+      showError(error.message || 'Nie udało się przesłać Delivery Note');
+    } finally {
+      setUploadingDeliveryNote(false);
+      event.target.value = '';
+    }
+  };
+
   // Funkcja do przesyłania innego załącznika
   const handleOtherAttachmentUpload = async (event) => {
     const files = event.target.files;
@@ -1949,10 +1964,10 @@ const CmrDetailsPage = () => {
   }
   
   const isEditable = cmrData.status === CMR_STATUSES.DRAFT || cmrData.status === CMR_STATUSES.ISSUED || cmrData.status === CMR_STATUSES.COMPLETED;
-  console.log('CMR Status:', cmrData.status);
-  console.log('Is Editable:', isEditable);
-  console.log('CMR_STATUSES.DRAFT:', CMR_STATUSES.DRAFT);
-  console.log('CMR_STATUSES.ISSUED:', CMR_STATUSES.ISSUED);
+  logger.log('CMR Status:', cmrData.status);
+  logger.log('Is Editable:', isEditable);
+  logger.log('CMR_STATUSES.DRAFT:', CMR_STATUSES.DRAFT);
+  logger.log('CMR_STATUSES.ISSUED:', CMR_STATUSES.ISSUED);
   
   return (
     <Container maxWidth="xl" sx={{ mt: 2, mb: 4 }}>
@@ -2066,6 +2081,7 @@ const CmrDetailsPage = () => {
             >
               {t('details.actions.deliveryNotes')}
             </Button>
+
             
             {/* Grupa przycisków etykiet - tylko gdy dostępne są szczegółowe dane wag */}
             {weightSummary && (weightSummary.totalPallets > 0 || weightSummary.totalBoxes > 0) && (
@@ -3227,6 +3243,13 @@ const CmrDetailsPage = () => {
                     <label htmlFor="cmr-other-upload">
                       <Button variant="outlined" component="span" size="small" color="info" startIcon={uploadingOtherAttachment ? <CircularProgress size={14} color="info" /> : <AttachFileIcon />} disabled={uploadingOtherAttachment}>
                         {t('details.attachments.other')}
+                      </Button>
+                    </label>
+
+                    <input accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style={{ display: 'none' }} id="cmr-dn-upload" type="file" onChange={handleDeliveryNoteUpload} disabled={uploadingDeliveryNote} />
+                    <label htmlFor="cmr-dn-upload">
+                      <Button variant="outlined" component="span" size="small" color="success" startIcon={uploadingDeliveryNote ? <CircularProgress size={14} color="success" /> : <DescriptionIcon />} disabled={uploadingDeliveryNote}>
+                        DN
                       </Button>
                     </label>
                   </Box>

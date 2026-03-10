@@ -1,9 +1,10 @@
 import React from 'react';
-import { Container, Typography, Box, Paper } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNotification } from '../../../hooks/useNotification';
 import { useTranslation } from '../../../hooks/useTranslation';
+import { logger } from '../../../utils/logger';
+import FormPageLayout from '../../../components/common/FormPageLayout';
 import CmrForm from './CmrForm';
 import { createCmrDocument } from '../../../services/logistics';
 
@@ -15,9 +16,8 @@ const CmrCreatePage = () => {
 
   const handleSubmit = async (formData) => {
     try {
-      console.log('CmrCreatePage - Tworzenie dokumentu CMR z danymi:', formData);
+      logger.log('CmrCreatePage - Tworzenie dokumentu CMR z danymi:', formData);
       
-      // Upewnij się, że wszystkie pola są określone
       const dataToSave = {
         ...formData,
         specialAgreements: formData.specialAgreements || '',
@@ -25,9 +25,9 @@ const CmrCreatePage = () => {
         notes: formData.notes || ''
       };
       
-      console.log('CmrCreatePage - Wywołuję createCmrDocument z danymi:', dataToSave);
+      logger.log('CmrCreatePage - Wywołuję createCmrDocument z danymi:', dataToSave);
       const result = await createCmrDocument(dataToSave, currentUser.uid);
-      console.log('CmrCreatePage - Wynik createCmrDocument:', result);
+      logger.log('CmrCreatePage - Wynik createCmrDocument:', result);
       
       showSuccess('Dokument CMR został utworzony pomyślnie');
       navigate(`/inventory/cmr/${result.id}`);
@@ -42,15 +42,10 @@ const CmrCreatePage = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h5">{t('cmr.buttons.createDocument')}</Typography>
-      </Box>
-      <Paper sx={{ p: 3 }}>
-        <CmrForm onSubmit={handleSubmit} onCancel={handleCancel} />
-      </Paper>
-    </Container>
+    <FormPageLayout title={t('cmr.buttons.createDocument')}>
+      <CmrForm onSubmit={handleSubmit} onCancel={handleCancel} />
+    </FormPageLayout>
   );
 };
 
-export default CmrCreatePage; 
+export default CmrCreatePage;
