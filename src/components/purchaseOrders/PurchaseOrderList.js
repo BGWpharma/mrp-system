@@ -530,8 +530,8 @@ const PurchaseOrderList = () => {
   const handleStatusUpdate = async () => {
     if (poToUpdateStatus && newStatus) {
       try {
-        // Sprawdź czy status zmienia się na "ordered" i czy są pozycje z krótką datą ważności
-        if (newStatus === 'ordered' && 
+        // Sprawdź czy status zmienia się na "confirmed" i czy są pozycje z krótką datą ważności
+        if (newStatus === 'confirmed' && 
             poToUpdateStatus?.items?.length > 0 && 
             poToUpdateStatus?.orderDate) {
           
@@ -895,7 +895,7 @@ const PurchaseOrderList = () => {
               label={t('purchaseOrders.filters.status')}
             >
               <MenuItem value="all">{t('purchaseOrders.filters.all')}</MenuItem>
-              {['draft', 'ordered', 'shipped', 'partial', 'delivered', 'completed', 'cancelled'].map((status) => (
+              {['draft', 'ordered', 'confirmed', 'shipped', 'partial', 'delivered', 'completed', 'cancelled'].map((status) => (
                 <MenuItem key={status} value={status}>
                   {translateStatus(status)}
                 </MenuItem>
@@ -1203,7 +1203,7 @@ const PurchaseOrderList = () => {
               onChange={(e) => setNewStatus(e.target.value)}
               label={t('purchaseOrders.table.status')}
             >
-              {['draft', 'ordered', 'shipped', 'partial', 'delivered', 'completed', 'cancelled'].map((status) => (
+              {['draft', 'ordered', 'confirmed', 'shipped', 'partial', 'delivered', 'completed', 'cancelled'].map((status) => (
                 <MenuItem key={status} value={status}>
                   {translateStatus(status)}
                 </MenuItem>

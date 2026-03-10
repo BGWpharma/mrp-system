@@ -177,6 +177,7 @@ const POReservationDialog = ({
       pending: { color: 'default', label: 'Oczekujące' },
       approved: { color: 'warning', label: 'Zatwierdzone' },
       ordered: { color: 'primary', label: 'Zamówione' },
+      confirmed: { color: 'success', label: 'Potwierdzone' },
       partial: { color: 'warning', label: 'Częściowo' },
       shipped: { color: 'info', label: 'Wysłane' },
       delivered: { color: 'success', label: 'Dostarczone' }

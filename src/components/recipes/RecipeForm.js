@@ -309,7 +309,8 @@ const RecipeForm = ({ recipeId }) => {
       eco: false,
       vege: false,
       vegan: false,
-      kosher: false
+      kosher: false,
+      custom: []
     }
   });
 
@@ -398,6 +399,9 @@ const RecipeForm = ({ recipeId }) => {
   const [designAttachments, setDesignAttachments] = useState([]);
   // Stan dla załączników zasad
   const [rulesAttachments, setRulesAttachments] = useState([]);
+  
+  // Stan dla nowego custom certyfikatu
+  const [newCustomCert, setNewCustomCert] = useState('');
   
   // Stany dla dialogu synchronizacji nazwy z pozycją magazynową
   const [originalRecipeName, setOriginalRecipeName] = useState('');
@@ -638,12 +642,14 @@ const RecipeForm = ({ recipeId }) => {
             _sortId: ingredient._sortId || generateIngredientId()
           }));
           
-          const certifications = recipe.certifications || {
+          const certifications = {
             halal: false,
             eco: false,
             vege: false,
             vegan: false,
-            kosher: false
+            kosher: false,
+            custom: [],
+            ...(recipe.certifications || {})
           };
           
           const recipeWithMicronutrients = {
@@ -918,6 +924,41 @@ const RecipeForm = ({ recipeId }) => {
       certifications: {
         ...prev.certifications,
         [certName]: e.target.checked
+      }
+    }));
+  };
+
+  const handleAddCustomCert = () => {
+    const trimmed = newCustomCert.trim();
+    if (!trimmed) return;
+    
+    const currentCustom = recipeData.certifications?.custom || [];
+    const allNames = [
+      ...currentCustom.map(c => c.toLowerCase()),
+      ...['halal', 'eco', 'vege', 'vegan', 'kosher']
+    ];
+    
+    if (allNames.includes(trimmed.toLowerCase())) {
+      showError(t('recipes.certifications.duplicateError'));
+      return;
+    }
+    
+    setRecipeData(prev => ({
+      ...prev,
+      certifications: {
+        ...prev.certifications,
+        custom: [...(prev.certifications?.custom || []), trimmed]
+      }
+    }));
+    setNewCustomCert('');
+  };
+
+  const handleRemoveCustomCert = (certToRemove) => {
+    setRecipeData(prev => ({
+      ...prev,
+      certifications: {
+        ...prev.certifications,
+        custom: (prev.certifications?.custom || []).filter(c => c !== certToRemove)
       }
     }));
   };
@@ -2168,6 +2209,46 @@ const RecipeForm = ({ recipeId }) => {
               label={t('recipes.certifications.kosher')}
             />
           </FormGroup>
+
+          {(recipeData.certifications?.custom || []).length > 0 && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2, mb: 1 }}>
+              {recipeData.certifications.custom.map((cert) => (
+                <Chip
+                  key={cert}
+                  label={cert}
+                  color="primary"
+                  variant="outlined"
+                  onDelete={() => handleRemoveCustomCert(cert)}
+                />
+              ))}
+            </Box>
+          )}
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
+            <TextField
+              size="small"
+              value={newCustomCert}
+              onChange={(e) => setNewCustomCert(e.target.value)}
+              placeholder={t('recipes.certifications.customPlaceholder')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddCustomCert();
+                }
+              }}
+              sx={{ minWidth: 280 }}
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={handleAddCustomCert}
+              disabled={!newCustomCert.trim()}
+              sx={{ borderRadius: '20px', whiteSpace: 'nowrap' }}
+            >
+              {t('recipes.certifications.addCustom')}
+            </Button>
+          </Box>
         </Box>
       </Paper>
 

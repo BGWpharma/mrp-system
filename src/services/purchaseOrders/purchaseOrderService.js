@@ -1289,11 +1289,11 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
     const poData = poSnapshot.data();
     const oldStatus = poData.status;
     
-    // Walidacja daty ważności przy zmianie statusu z "szkic" na "zamówione"
-    if (oldStatus === PURCHASE_ORDER_STATUSES.DRAFT && newStatus === PURCHASE_ORDER_STATUSES.ORDERED) {
+    // Walidacja daty ważności przy zmianie statusu na "potwierdzone"
+    if (newStatus === PURCHASE_ORDER_STATUSES.CONFIRMED) {
       const itemsWithoutExpiryDate = poData.items?.filter(item => !item.expiryDate && !item.noExpiryDate) || [];
       if (itemsWithoutExpiryDate.length > 0) {
-        throw new Error('Wszystkie pozycje muszą mieć określoną datę ważności lub być oznaczone jako "brak daty ważności" przed zmianą statusu na "Zamówione"');
+        throw new Error('Wszystkie pozycje muszą mieć określoną datę ważności lub być oznaczone jako "brak daty ważności" przed zmianą statusu na "Potwierdzone"');
       }
     }
     
@@ -1532,7 +1532,7 @@ export const PURCHASE_ORDER_STATUSES = {
 };
 
 export const KANBAN_COLUMN_ORDER = [
-  'draft', 'ordered', 'shipped', 'partial', 'delivered', 'completed', 'cancelled'
+  'draft', 'ordered', 'confirmed', 'shipped', 'partial', 'delivered', 'completed', 'cancelled'
 ];
 
 export const KANBAN_COLUMN_COLORS = {
@@ -1552,7 +1552,7 @@ const STATUS_TRANSITIONS = {
   draft:     ['ordered', 'cancelled'],
   pending:   ['ordered', 'cancelled', 'draft'],
   approved:  ['ordered', 'cancelled'],
-  ordered:   ['shipped', 'delivered', 'partial', 'cancelled'],
+  ordered:   ['confirmed', 'shipped', 'delivered', 'partial', 'cancelled'],
   confirmed: ['shipped', 'delivered', 'partial', 'cancelled', 'ordered'],
   shipped:   ['delivered', 'partial', 'cancelled'],
   delivered: ['partial', 'completed', 'cancelled'],

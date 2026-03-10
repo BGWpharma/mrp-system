@@ -241,6 +241,7 @@ export const exportRecipesToCSV = async ({
         '(Bool) KOSHER': certifications.kosher ? 'TRUE' : 'FALSE',
         '(Bool) VEGAN': certifications.vegan ? 'TRUE' : 'FALSE',
         '(Bool) VEGETERIAN': certifications.vege ? 'TRUE' : 'FALSE',
+        'Other certifications': (certifications.custom || []).join(', '),
         'notes': recipe.notes || ''
       };
     });
@@ -266,6 +267,7 @@ export const exportRecipesToCSV = async ({
       '(Bool) KOSHER',
       '(Bool) VEGAN',
       '(Bool) VEGETERIAN',
+      'Other certifications',
       'notes'
     ];
     

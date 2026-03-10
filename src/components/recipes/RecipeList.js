@@ -1542,6 +1542,11 @@ const RecipeList = () => {
           newCerts[key] = parseBoolean(rawValue);
         });
         
+        const csvCustomCerts = (row['Other certifications'] || '').trim();
+        newCerts.custom = csvCustomCerts
+          ? csvCustomCerts.split(',').map(c => c.trim()).filter(Boolean)
+          : (oldCerts.custom || []);
+        
         console.log('🏅 Porównanie certyfikacji:');
         console.log('  CSV:', newCerts);
         console.log('  DB:', oldCerts);

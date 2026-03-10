@@ -611,7 +611,10 @@ const RecipeDetailsPage = () => {
                 </Grid>
                 
                 {/* Sekcja certyfikacji */}
-                {recipe.certifications && Object.values(recipe.certifications).some(val => val === true) && (
+                {recipe.certifications && (
+                  Object.entries(recipe.certifications).some(([key, val]) => key !== 'custom' && val === true) ||
+                  (recipe.certifications.custom?.length > 0)
+                ) && (
                   <Grid item xs={12}>
                     <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
                       {t('recipes.certifications.title')}
@@ -657,6 +660,15 @@ const RecipeDetailsPage = () => {
                           variant="outlined"
                         />
                       )}
+                      {(recipe.certifications.custom || []).map((cert) => (
+                        <Chip
+                          key={cert}
+                          label={cert}
+                          size="small"
+                          color="info"
+                          variant="outlined"
+                        />
+                      ))}
                     </Box>
                   </Grid>
                 )}

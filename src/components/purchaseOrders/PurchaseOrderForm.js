@@ -1123,11 +1123,11 @@ const PurchaseOrderForm = ({ orderId }) => {
       return false;
     }
     
-    // Sprawdź czy wszystkie pozycje mają datę ważności przy zmianie statusu na "zamówione"
-    if (poData.status === PURCHASE_ORDER_STATUSES.ORDERED) {
+    // Sprawdź czy wszystkie pozycje mają datę ważności przy zmianie statusu na "potwierdzone"
+    if (poData.status === PURCHASE_ORDER_STATUSES.CONFIRMED) {
       const itemWithoutExpiryDate = poData.items.find(item => !item.expiryDate && !item.noExpiryDate);
       if (itemWithoutExpiryDate) {
-        showError('Wszystkie pozycje muszą mieć określoną datę ważności lub być oznaczone jako "brak daty ważności" przed zmianą statusu na "Zamówione"');
+        showError('Wszystkie pozycje muszą mieć określoną datę ważności lub być oznaczone jako "brak daty ważności" przed zmianą statusu na "Potwierdzone"');
         return false;
       }
     }

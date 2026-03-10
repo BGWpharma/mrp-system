@@ -818,8 +818,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
   
   const handleStatusUpdate = async () => {
     try {
-      // Sprawdź czy status zmienia się na "ordered" i czy są pozycje z krótką datą ważności
-      if (newStatus === 'ordered' && 
+      // Sprawdź czy status zmienia się na "confirmed" i czy są pozycje z krótką datą ważności
+      if (newStatus === 'confirmed' && 
           purchaseOrder?.items?.length > 0 && 
           purchaseOrder?.orderDate) {
         
@@ -3364,6 +3364,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
             >
               <MenuItem value="draft">{translateStatus('draft')}</MenuItem>
               <MenuItem value="ordered">{translateStatus('ordered')}</MenuItem>
+              <MenuItem value="confirmed">{translateStatus('confirmed')}</MenuItem>
               <MenuItem value="shipped">{translateStatus('shipped')}</MenuItem>
               <MenuItem value="partial">{translateStatus('partial')}</MenuItem>
               <MenuItem value="delivered">{translateStatus('delivered')}</MenuItem>

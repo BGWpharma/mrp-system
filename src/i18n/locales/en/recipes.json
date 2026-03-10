@@ -20,7 +20,11 @@
     "eco": "Eco",
     "vege": "Vegetarian",
     "vegan": "Vegan",
-    "kosher": "Kosher"
+    "kosher": "Kosher",
+    "customTitle": "Additional certificates",
+    "addCustom": "Add certificate",
+    "customPlaceholder": "Certificate name (e.g. GMP, ISO 22000)",
+    "duplicateError": "This certificate already exists"
   },
   "processingCost": "Processing cost per {{unit}} (EUR)",
   "productionTime": "Production time per {{unit}} (min.)",
