@@ -54,6 +54,7 @@ import {
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useAuth } from '../../../hooks/useAuth';
 import { useTranslation } from '../../../hooks/useTranslation';
+import { generateDeliveryNoteText, generateDeliveryNoteMetadata } from '../../../services/logistics/deliveryNoteService';
 
 /**
  * Komponent wyświetlający podsumowanie wagi i palet dla pojedynczej pozycji CMR
@@ -1249,34 +1250,41 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       originalOrderItem: orderItem
     };
 
-    // Spróbuj automatycznie znaleźć pozycję magazynową na podstawie receptury
+    // Resolve recipe & ECO status — prefer direct recipeId from CO item, fallback to name matching
     try {
-      // Import potrzebnych funkcji
-      const { getAllRecipes } = await import('../../../services/products');
+      const { getAllRecipes, getRecipeById } = await import('../../../services/products');
       const { getInventoryItemByRecipeId } = await import('../../../services/inventory');
-      
-      // Pobierz receptury
-      const recipes = await getAllRecipes();
-      
-      // Znajdź recepturę odpowiadającą nazwie pozycji z zamówienia
-      const matchingRecipe = recipes.find(recipe => {
-        const recipeName = recipe.name.toLowerCase();
-        const itemName = orderItem.name.toLowerCase();
-        
-        // Szukaj dokładnego dopasowania lub częściowego
-        return recipeName === itemName || 
-               recipeName.includes(itemName) || 
-               itemName.includes(recipeName);
-      });
+
+      let matchingRecipe = null;
+
+      // 1) Direct lookup via recipeId from CO item (most reliable)
+      if (orderItem.recipeId) {
+        matchingRecipe = await getRecipeById(orderItem.recipeId);
+      }
+
+      // 2) Fallback: name-based search (for legacy items without recipeId)
+      if (!matchingRecipe) {
+        const recipes = await getAllRecipes();
+        matchingRecipe = recipes.find(recipe => {
+          const recipeName = recipe.name.toLowerCase();
+          const itemName = orderItem.name.toLowerCase();
+          return recipeName === itemName || 
+                 recipeName.includes(itemName) || 
+                 itemName.includes(recipeName);
+        });
+      }
 
       if (matchingRecipe) {
-        // Sprawdź czy receptura ma powiązaną pozycję magazynową
+        newItem.isEco = !!(matchingRecipe.certifications?.eco);
+        newItem.recipeId = matchingRecipe.id || null;
+
         const inventoryItem = await getInventoryItemByRecipeId(matchingRecipe.id);
         
         if (inventoryItem) {
           newItem.notes += ` | Znaleziono pozycję magazynową "${inventoryItem.name}" na podstawie receptury "${matchingRecipe.name}"`;
           newItem.suggestedInventoryItem = inventoryItem;
           newItem.matchedRecipe = matchingRecipe;
+          newItem.inventoryItemId = inventoryItem.id || null;
           
           console.log(`Automatycznie dopasowano pozycję magazynową "${inventoryItem.name}" dla pozycji CMR "${orderItem.name}" na podstawie receptury "${matchingRecipe.name}"`);
           showMessage(`Dodano pozycję "${orderItem.name}" z sugerowaną pozycją magazynową "${inventoryItem.name}" (z receptury)`, 'success');
@@ -1284,10 +1292,12 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
           showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia. Znaleziono recepturę "${matchingRecipe.name}", ale brak powiązanej pozycji magazynowej`, 'info');
         }
       } else {
+        newItem.isEco = false;
         showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia`, 'success');
       }
     } catch (error) {
       console.error('Błąd podczas automatycznego dopasowywania pozycji magazynowej:', error);
+      newItem.isEco = false;
       showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia`, 'success');
     }
     
@@ -1584,7 +1594,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     return isValid;
   };
   
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     console.log('Próba wysłania formularza CMR:', formData);
     console.log('CmrForm handleSubmit - daty w formData:', {
@@ -1593,10 +1603,8 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       loadingDate: formData.loadingDate
     });
     
-    // Upewnij się, że wszystkie pola są poprawnie uwzględnione przed wysłaniem formularza
     const dataToSubmit = {
       ...formData,
-      // Upewnij się, że te pola są poprawnie przekazywane
       specialAgreements: formData.specialAgreements || '',
       reservations: formData.reservations || '',
       notes: formData.notes || ''
@@ -1608,15 +1616,30 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       loadingDate: dataToSubmit.loadingDate
     });
     
-    // Upewnij się, że vehicleInfo jest zdefiniowane
     if (!dataToSubmit.vehicleInfo) dataToSubmit.vehicleInfo = {};
     
-    // Pomiń walidację partii jeśli CMR jest w stanie 'Szkic'
     const skipBatchValidation = formData.status === CMR_STATUSES.DRAFT;
     const isValid = validateForm(skipBatchValidation);
     console.log('Wynik walidacji:', isValid);
     
     if (isValid) {
+      // Auto-generate delivery note references for attached documents
+      if (dataToSubmit.items && dataToSubmit.items.length > 0) {
+        try {
+          const dnText = await generateDeliveryNoteText(dataToSubmit.items);
+          if (dnText) {
+            const existingDocs = dataToSubmit.attachedDocuments || '';
+            const existingWithoutDN = existingDocs.replace(/\n?Delivery Notes:\n[\s\S]*$/, '').trim();
+            dataToSubmit.attachedDocuments = existingWithoutDN
+              ? `${existingWithoutDN}\n${dnText}`
+              : dnText;
+          }
+          dataToSubmit.deliveryNotes = await generateDeliveryNoteMetadata(dataToSubmit.items);
+        } catch (dnError) {
+          console.error('Error generating delivery notes:', dnError);
+        }
+      }
+
       console.log('Formularz jest poprawny, wysyłanie danych:', dataToSubmit);
       try {
         onSubmit(dataToSubmit);

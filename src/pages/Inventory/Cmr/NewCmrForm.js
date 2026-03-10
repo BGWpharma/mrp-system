@@ -55,6 +55,7 @@ import { getCompanyData } from '../../../services/companyService';
 import BatchSelector from '../../../components/cmr/BatchSelector';
 import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDialog';
 import { useTranslation } from '../../../hooks/useTranslation';
+import { generateDeliveryNoteText, generateDeliveryNoteMetadata } from '../../../services/logistics/deliveryNoteService';
 
 /**
  * Nowy komponent formularza CMR oparty na oficjalnym dokumencie.
@@ -336,33 +337,40 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
       originalOrderItem: orderItem
     };
 
-    // Spróbuj automatycznie znaleźć pozycję magazynową na podstawie receptury
+    // Resolve recipe & ECO status — prefer direct recipeId from CO item, fallback to name matching
     try {
-      // Import potrzebnych funkcji
-      const { getAllRecipes } = await import('../../services/products');
+      const { getAllRecipes, getRecipeById } = await import('../../services/products');
       const { getInventoryItemByRecipeId } = await import('../../services/inventory');
-      
-      // Pobierz receptury
-      const recipes = await getAllRecipes();
-      
-      // Znajdź recepturę odpowiadającą nazwie pozycji z zamówienia
-      const matchingRecipe = recipes.find(recipe => {
-        const recipeName = recipe.name.toLowerCase();
-        const itemName = orderItem.name.toLowerCase();
-        
-        // Szukaj dokładnego dopasowania lub częściowego
-        return recipeName === itemName || 
-               recipeName.includes(itemName) || 
-               itemName.includes(recipeName);
-      });
+
+      let matchingRecipe = null;
+
+      // 1) Direct lookup via recipeId from CO item (most reliable)
+      if (orderItem.recipeId) {
+        matchingRecipe = await getRecipeById(orderItem.recipeId);
+      }
+
+      // 2) Fallback: name-based search (for legacy items without recipeId)
+      if (!matchingRecipe) {
+        const recipes = await getAllRecipes();
+        matchingRecipe = recipes.find(recipe => {
+          const recipeName = recipe.name.toLowerCase();
+          const itemName = orderItem.name.toLowerCase();
+          return recipeName === itemName || 
+                 recipeName.includes(itemName) || 
+                 itemName.includes(recipeName);
+        });
+      }
 
       if (matchingRecipe) {
-        // Sprawdź czy receptura ma powiązaną pozycję magazynową
+        newItem.isEco = !!(matchingRecipe.certifications?.eco);
+        newItem.recipeId = matchingRecipe.id || null;
+
         const inventoryItem = await getInventoryItemByRecipeId(matchingRecipe.id);
         
         if (inventoryItem) {
           newItem.suggestedInventoryItem = inventoryItem;
           newItem.matchedRecipe = matchingRecipe;
+          newItem.inventoryItemId = inventoryItem.id || null;
           
           console.log(`Automatycznie dopasowano pozycję magazynową "${inventoryItem.name}" dla pozycji CMR "${orderItem.name}" na podstawie receptury "${matchingRecipe.name}"`);
           showMessage(`Dodano pozycję "${orderItem.name}" z sugerowaną pozycją magazynową "${inventoryItem.name}" (z receptury)`, 'success');
@@ -370,10 +378,12 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
           showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia. Znaleziono recepturę "${matchingRecipe.name}", ale brak powiązanej pozycji magazynowej`, 'info');
         }
       } else {
+        newItem.isEco = false;
         showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia`, 'success');
       }
     } catch (error) {
       console.error('Błąd podczas automatycznego dopasowywania pozycji magazynowej:', error);
+      newItem.isEco = false;
       showMessage(`Dodano pozycję "${orderItem.name}" z zamówienia`, 'success');
     }
     
@@ -462,19 +472,37 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     return Object.keys(errors).length === 0;
   };
   
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     console.log('Próba wysłania formularza CMR:', formData);
     
-    // Walidacja formularza - pomiń walidację partii dla nowych CMR (domyślnie są w stanie 'Szkic')
-    const isValid = validateForm(true); // Nowe CMR są zawsze w stanie 'Szkic', więc pomijamy walidację partii
+    const isValid = validateForm(true);
     if (!isValid) {
       showMessage('Formularz zawiera błędy. Popraw zaznaczone pola.', 'error');
       return;
     }
     
     try {
-      onSubmit(formData);
+      const dataToSubmit = { ...formData };
+
+      // Auto-generate delivery note references
+      if (dataToSubmit.items && dataToSubmit.items.length > 0) {
+        try {
+          const dnText = await generateDeliveryNoteText(dataToSubmit.items);
+          if (dnText) {
+            const existingDocs = dataToSubmit.attachedDocuments || '';
+            const existingWithoutDN = existingDocs.replace(/\n?Delivery Notes:\n[\s\S]*$/, '').trim();
+            dataToSubmit.attachedDocuments = existingWithoutDN
+              ? `${existingWithoutDN}\n${dnText}`
+              : dnText;
+          }
+          dataToSubmit.deliveryNotes = await generateDeliveryNoteMetadata(dataToSubmit.items);
+        } catch (dnError) {
+          console.error('Error generating delivery notes:', dnError);
+        }
+      }
+
+      onSubmit(dataToSubmit);
       showMessage('Dokument CMR został zapisany pomyślnie', 'success');
     } catch (error) {
       console.error('Błąd podczas próby zapisania dokumentu CMR:', error);

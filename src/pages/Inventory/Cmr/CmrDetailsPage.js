@@ -83,7 +83,10 @@ import {
   deleteCmrInvoice,
   uploadCmrOtherAttachment,
   getCmrOtherAttachments,
-  deleteCmrOtherAttachment
+  deleteCmrOtherAttachment,
+  uploadCmrDeliveryNote,
+  getCmrDeliveryNotes,
+  deleteCmrDeliveryNote
 } from '../../../services/logistics';
 import { getOrderById } from '../../../services/orders';
 import { 
@@ -100,6 +103,8 @@ import {
 } from '../../../utils/calculations';
 import LabelsDisplayDialog from '../../../components/cmr/LabelsDisplayDialog';
 import LabelGenerator from '../../../components/cmr/LabelGenerator';
+import { generateDeliveryNotePdf, generateDeliveryNoteText, generateDeliveryNoteMetadata } from '../../../services/logistics/deliveryNoteService';
+import { updateCmrDocument } from '../../../services/logistics';
 
 // Ikony
 import EditIcon from '@mui/icons-material/Edit';
@@ -123,6 +128,7 @@ import WarningIcon from '@mui/icons-material/Warning';
 import CheckIcon from '@mui/icons-material/Check';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ReceiptIcon from '@mui/icons-material/Receipt';
+import DescriptionIcon from '@mui/icons-material/Description';
 
 // TabPanel component
 function TabPanel(props) {
@@ -295,6 +301,10 @@ const CmrDetailsPage = () => {
   const [otherAttachments, setOtherAttachments] = useState([]);
   const [otherAttachmentsLoading, setOtherAttachmentsLoading] = useState(false);
   const [uploadingOtherAttachment, setUploadingOtherAttachment] = useState(false);
+
+  // Stany dla Delivery Notes
+  const [deliveryNoteAttachments, setDeliveryNoteAttachments] = useState([]);
+  const [deliveryNoteAttachmentsLoading, setDeliveryNoteAttachmentsLoading] = useState(false);
   
   const menuOpen = Boolean(anchorEl);
   
@@ -665,6 +675,65 @@ const CmrDetailsPage = () => {
     setCurrentLabelType('unknown');
   };
   
+  const handleGenerateDeliveryNotes = async () => {
+    try {
+      if (!cmrData.items || cmrData.items.length === 0) {
+        showError(t('details.deliveryNotes.noItems'));
+        return;
+      }
+
+      const { pdf, filename } = await generateDeliveryNotePdf(cmrData.items, cmrData);
+
+      // Update attachedDocuments field on the CMR with DN references
+      const dnText = await generateDeliveryNoteText(cmrData.items);
+      const dnMetadata = await generateDeliveryNoteMetadata(cmrData.items);
+
+      if (dnText) {
+        const existingDocs = cmrData.attachedDocuments || '';
+        const existingWithoutDN = existingDocs.replace(/\n?Delivery Notes:\n[\s\S]*$/, '').trim();
+        const newAttachedDocs = existingWithoutDN
+          ? `${existingWithoutDN}\n${dnText}`
+          : dnText;
+
+        try {
+          await updateCmrDocument(id, {
+            attachedDocuments: newAttachedDocs,
+            deliveryNotes: dnMetadata
+          }, currentUser.uid);
+          setCmrData(prev => ({
+            ...prev,
+            attachedDocuments: newAttachedDocs,
+            deliveryNotes: dnMetadata
+          }));
+        } catch (updateErr) {
+          console.error('Failed to update CMR with DN data:', updateErr);
+        }
+      }
+
+      // Save PDF as CMR attachment
+      const pdfBlob = pdf.output('blob');
+      try {
+        await uploadCmrDeliveryNote(pdfBlob, id, currentUser.uid, filename);
+        fetchDeliveryNoteAttachments();
+      } catch (uploadErr) {
+        console.error('Failed to save DN attachment:', uploadErr);
+      }
+
+      // Open PDF in new window
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const printWindow = window.open(pdfUrl, '_blank');
+      if (!printWindow) {
+        pdf.save(filename);
+        showSuccess(t('details.deliveryNotes.pdfSaved', { filename }));
+      } else {
+        showSuccess(t('details.deliveryNotes.generated', { count: dnMetadata.length }));
+      }
+    } catch (error) {
+      console.error('Error generating Delivery Notes:', error);
+      showError(t('details.deliveryNotes.generateError', { message: error.message }));
+    }
+  };
+
   const handleGenerateOfficialCmr = async () => {
     try {
       // Opcje optymalizacji PDF dla różnych scenariuszy
@@ -1446,7 +1515,37 @@ const CmrDetailsPage = () => {
       } else {
         showSuccess(`Status dokumentu CMR zmieniony na: ${newStatus}`);
       }
-      
+
+      // Auto-generate and save Delivery Notes PDF when status changes to "W transporcie"
+      if (newStatus === CMR_STATUSES.IN_TRANSIT && cmrData.items && cmrData.items.length > 0) {
+        try {
+          const { pdf, filename } = await generateDeliveryNotePdf(cmrData.items, cmrData);
+          const dnText = await generateDeliveryNoteText(cmrData.items);
+          const dnMetadata = await generateDeliveryNoteMetadata(cmrData.items);
+
+          const pdfBlob = pdf.output('blob');
+          await uploadCmrDeliveryNote(pdfBlob, id, currentUser.uid, filename);
+
+          if (dnText) {
+            const existingDocs = cmrData.attachedDocuments || '';
+            const existingWithoutDN = existingDocs.replace(/\n?Delivery Notes:\n[\s\S]*$/, '').trim();
+            const newAttachedDocs = existingWithoutDN
+              ? `${existingWithoutDN}\n${dnText}`
+              : dnText;
+
+            await updateCmrDocument(id, {
+              attachedDocuments: newAttachedDocs,
+              deliveryNotes: dnMetadata
+            }, currentUser.uid);
+          }
+
+          fetchDeliveryNoteAttachments();
+          showSuccess(t('details.deliveryNotes.autoGenerated'));
+        } catch (dnError) {
+          console.error('Error auto-generating Delivery Notes:', dnError);
+        }
+      }
+
       fetchCmrDocument();
     } catch (error) {
       console.error('Błąd podczas zmiany statusu dokumentu CMR:', error);
@@ -1754,6 +1853,18 @@ const CmrDetailsPage = () => {
     }
   };
 
+  const fetchDeliveryNoteAttachments = async () => {
+    try {
+      setDeliveryNoteAttachmentsLoading(true);
+      const notesList = await getCmrDeliveryNotes(id);
+      setDeliveryNoteAttachments(notesList);
+    } catch (error) {
+      console.error('Błąd podczas pobierania Delivery Notes:', error);
+    } finally {
+      setDeliveryNoteAttachmentsLoading(false);
+    }
+  };
+
   // Funkcja do przesyłania innego załącznika
   const handleOtherAttachmentUpload = async (event) => {
     const files = event.target.files;
@@ -1805,6 +1916,7 @@ const CmrDetailsPage = () => {
       fetchAttachments();
       fetchInvoices();
       fetchOtherAttachments();
+      fetchDeliveryNoteAttachments();
     }
   }, [id]);
   
@@ -1943,6 +2055,16 @@ const CmrDetailsPage = () => {
               color="success"
             >
               {t('details.actions.generateOfficialCMR')}
+            </Button>
+
+            <Button
+              variant="outlined"
+              startIcon={<DescriptionIcon />}
+              onClick={handleGenerateDeliveryNotes}
+              color="info"
+              disabled={!cmrData.items || cmrData.items.length === 0}
+            >
+              {t('details.actions.deliveryNotes')}
             </Button>
             
             {/* Grupa przycisków etykiet - tylko gdy dostępne są szczegółowe dane wag */}
@@ -2425,7 +2547,17 @@ const CmrDetailsPage = () => {
                             return (
                             <TableRow key={item.id || index}>
                               <TableCell>{index + 1}</TableCell>
-                              <TableCell>{item.description}</TableCell>
+                              <TableCell>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  {item.description}
+                                  {item.isEco === true && (
+                                    <Chip label="ECO" size="small" color="success" variant="outlined" sx={{ fontSize: '0.65rem', height: 18, ml: 0.5 }} />
+                                  )}
+                                  {item.isEco === false && item.orderNumber && (
+                                    <Chip label="STD" size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 18, ml: 0.5 }} />
+                                  )}
+                                </Box>
+                              </TableCell>
                               <TableCell>
                                 <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
                                   {item.orderNumber || linkedOrder?.orderNumber || 
@@ -2561,8 +2693,8 @@ const CmrDetailsPage = () => {
                                   <Box>
                                     {item.linkedBatches.map((batch, batchIndex) => (
                                       <Typography key={batch.id} variant="body2" sx={{ fontSize: '0.9rem' }}>
-                                        {batch.batchNumber || batch.lotNumber || 'Bez numeru'} 
-                                        ({batch.quantity} {batch.unit || 'szt.'})
+                                        {batch.batchNumber || batch.lotNumber || '-'} 
+                                        ({batch.quantity} {batch.unit || t('common:common.pieces')})
                                         {batchIndex < item.linkedBatches.length - 1 ? '; ' : ''}
                                       </Typography>
                                     ))}
@@ -2698,10 +2830,10 @@ const CmrDetailsPage = () => {
                     {/* Informacje o metodzie obliczania */}
                     <Alert severity="info" sx={mt2}>
                       <Typography variant="body2">
-                        <strong>Informacje o obliczeniach:</strong><br />
-                        • Szczegółowe wyliczenia są dostępne dla pozycji z powiązanymi partiami magazynowymi<br />
-                        • Wagi obejmują produkty, kartony (0.34 kg) i palety (25 kg)<br />
-                        • Pozycje bez danych magazynowych pokazują tylko podstawowe informacje
+                        <strong>{t('details.calculationInfo.title')}</strong><br />
+                        • {t('details.calculationInfo.detailedAvailable')}<br />
+                        • {t('details.calculationInfo.weightsInclude')}<br />
+                        • {t('details.calculationInfo.basicOnly')}
                       </Typography>
                     </Alert>
                   </CardContent>
@@ -2893,28 +3025,28 @@ const CmrDetailsPage = () => {
                               {/* Podstawowe informacje */}
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Pracownik
+                                  {t('details.loadingReports.employee')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.employeeName || 'Nie podano'}
+                                  {report.employeeName || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Stanowisko
+                                  {t('details.loadingReports.position')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.position || 'Nie podano'}
+                                  {report.position || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Godzina wypełnienia
+                                  {t('details.loadingReports.fillTime')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.fillTime || 'Nie podano'}
+                                  {report.fillTime || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
@@ -2929,37 +3061,37 @@ const CmrDetailsPage = () => {
                               
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Godzina załadunku
+                                  {t('details.loadingReports.loadingTime')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.loadingTime || 'Nie podano'}
+                                  {report.loadingTime || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Przewoźnik
+                                  {t('details.loadingReports.carrier')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.carrierName || 'Nie podano'}
+                                  {report.carrierName || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Nr rejestracyjny pojazdu
+                                  {t('details.loadingReports.vehicleRegistration')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.vehicleRegistration || 'Nie podano'}
+                                  {report.vehicleRegistration || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Stan techniczny pojazdu
+                                  {t('details.loadingReports.vehicleTechnicalCondition')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.vehicleTechnicalCondition || 'Nie podano'}
+                                  {report.vehicleTechnicalCondition || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
@@ -2967,34 +3099,34 @@ const CmrDetailsPage = () => {
                               <Grid item xs={12}>
                                 <Divider sx={{ my: 2 }} />
                                 <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-                                  Informacje o towarze
+                                  {t('details.loadingReports.goodsInfo')}
                                 </Typography>
                               </Grid>
                               
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Klient
+                                  {t('details.loadingReports.client')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.clientName || 'Nie podano'}
+                                  {report.clientName || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Nr zamówienia
+                                  {t('details.loadingReports.orderNumber')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.orderNumber || 'Nie podano'}
+                                  {report.orderNumber || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Ilość palet
+                                  {t('details.loadingReports.palletQuantity')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.palletQuantity || 'Nie podano'}
+                                  {report.palletQuantity || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
@@ -3009,10 +3141,10 @@ const CmrDetailsPage = () => {
                               
                               <Grid item xs={12} sm={6}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Paleta/Nazwa produktu
+                                  {t('details.loadingReports.palletProductName')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.palletProductName || 'Nie podano'}
+                                  {report.palletProductName || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
@@ -3022,14 +3154,14 @@ const CmrDetailsPage = () => {
                                   <Grid item xs={12}>
                                     <Divider sx={{ my: 2 }} />
                                     <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-                                      Uwagi
+                                      {t('details.loadingReports.notes')}
                                     </Typography>
                                   </Grid>
                                   
                                   {report.notes && (
                                     <Grid item xs={12} sm={6}>
                                       <Typography variant="body2" color="text.secondary">
-                                        Uwagi ogólne
+                                        {t('details.loadingReports.generalNotes')}
                                       </Typography>
                                       <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                                         {report.notes}
@@ -3040,7 +3172,7 @@ const CmrDetailsPage = () => {
                                   {report.goodsNotes && (
                                     <Grid item xs={12} sm={6}>
                                       <Typography variant="body2" color="text.secondary">
-                                        Uwagi dotyczące towaru
+                                        {t('details.loadingReports.goodsNotes')}
                                       </Typography>
                                       <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                                         {report.goodsNotes}
@@ -3061,547 +3193,160 @@ const CmrDetailsPage = () => {
               </Card>
             </Grid>
 
-            {/* Załączniki CMR */}
-            <Grid item xs={12}>
-              <Card>
-                <CardHeader 
-                  title={t('details.attachments.title', { count: attachments.length })}
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
-                />
-                <Divider />
-                <CardContent>
-                  {/* Sekcja przesyłania plików */}
-                  <Box sx={{ mb: 3, p: 2, backgroundColor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
-                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
-                      <CloudUploadIcon sx={mr1} />
-                      Dodaj załącznik do CMR
-                    </Typography>
-                    
-                    <Box sx={mt2}>
-                      <input
-                        accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.txt,.xls,.xlsx,.bmp,.tiff"
-                        style={{ display: 'none' }}
-                        id="cmr-attachment-upload"
-                        type="file"
-                        onChange={handleAttachmentUpload}
-                        disabled={uploadingAttachment}
-                      />
-                      <label htmlFor="cmr-attachment-upload">
-                        <Button
-                          variant="outlined"
-                          component="span"
-                          startIcon={<CloudUploadIcon />}
-                          disabled={uploadingAttachment}
-                          fullWidth
-                        >
-                          Wybierz plik
-                        </Button>
-                      </label>
-                    </Box>
-                    
-                    {uploadingAttachment && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                        <CircularProgress size={20} sx={mr1} />
-                        <Typography variant="caption" color="text.secondary">
-                          Przesyłanie pliku...
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-                      Dozwolone formaty: PDF, JPG, PNG, GIF, DOC, DOCX, TXT, XLS, XLSX, BMP, TIFF (max 20MB na plik)
-                    </Typography>
-                  </Box>
-
-                  {/* Lista załączników */}
-                  {attachmentsLoading ? (
-                    <Box sx={loadingContainer}>
-                      <CircularProgress />
-                    </Box>
-                  ) : attachments.length === 0 ? (
-                    <Paper sx={{ p: 2, backgroundColor: 'background.paper', border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
-                      <Typography variant="body2" color="text.secondary" align="center">
-                        {t('details.attachments.noAttachments')}
-                      </Typography>
-                      <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
-                        {t('details.attachments.addFilesHint')}
-                      </Typography>
-                    </Paper>
-                  ) : (
-                    <Box>
-                      <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
-                        <AttachFileIcon sx={mr1} />
-                        {t('details.attachments.attachmentsList', { count: attachments.length })}
-                      </Typography>
-                      
-                      <TableContainer component={Paper} sx={mt2}>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                              <TableCell sx={{ fontWeight: 'bold', width: 60 }}>{t('details.attachments.type')}</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold' }}>{t('details.attachments.fileName')}</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 100 }}>{t('details.attachments.size')}</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 120 }}>{t('details.attachments.dateAdded')}</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">{t('details.attachments.actions')}</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {attachments.map((attachment) => (
-                              <TableRow key={attachment.id} hover>
-                                <TableCell>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {attachment.contentType?.startsWith('image/') ? (
-                                      <Box sx={{ bgcolor: 'success.light', color: 'success.dark', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                        IMG
-                                      </Box>
-                                    ) : attachment.contentType?.includes('pdf') ? (
-                                      <Box sx={{ bgcolor: 'error.light', color: 'error.dark', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                        PDF
-                                      </Box>
-                                    ) : attachment.contentType?.includes('word') || attachment.contentType?.includes('document') ? (
-                                      <Box sx={{ bgcolor: 'info.light', color: 'info.dark', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                        DOC
-                                      </Box>
-                                    ) : attachment.contentType?.includes('sheet') || attachment.contentType?.includes('excel') ? (
-                                      <Box sx={{ bgcolor: 'warning.light', color: 'warning.dark', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                        XLS
-                                      </Box>
-                                    ) : (
-                                      <Box sx={{ bgcolor: 'grey.300', color: 'grey.700', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                        FILE
-                                      </Box>
-                                    )}
-                                  </Box>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography 
-                                    variant="body2" 
-                                    sx={{ 
-                                      fontWeight: 500,
-                                      color: 'primary.main',
-                                      cursor: 'pointer',
-                                      textDecoration: 'underline',
-                                      '&:hover': {
-                                        color: 'primary.dark'
-                                      }
-                                    }}
-                                    onClick={() => window.open(attachment.downloadURL, '_blank')}
-                                    title={t('common:common.clickToOpenInNewTab')}
-                                  >
-                                    {attachment.fileName}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {formatFileSize(attachment.size)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {attachment.uploadedAt ? format(attachment.uploadedAt, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Nie określono'}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell align="center">
-                                  <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                                    <IconButton
-                                      size="small"
-                                      color="primary"
-                                      onClick={() => window.open(attachment.downloadURL, '_blank')}
-                                      title={t('common:common.openInNewTab')}
-                                    >
-                                      <OpenInNewIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                      size="small"
-                                      color="secondary"
-                                      href={attachment.downloadURL}
-                                      component="a"
-                                      download={attachment.fileName}
-                                      title="Pobierz plik"
-                                    >
-                                      <DownloadIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                      size="small"
-                                      color="error"
-                                      onClick={() => handleAttachmentDelete(attachment.id, attachment.fileName)}
-                                      title={t('common:common.removeAttachment')}
-                                    >
-                                      <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                  </Box>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                        <Box sx={{ p: 2, backgroundColor: 'action.hover', borderTop: 1, borderColor: 'divider' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                            {t('details.attachments.totalCount', { count: attachments.length })}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                            {t('details.attachments.totalSize')}: {formatFileSize(attachments.reduce((sum, attachment) => sum + attachment.size, 0))}
-                          </Typography>
-                        </Box>
-                      </TableContainer>
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Faktury CMR */}
+            {/* Wszystkie załączniki CMR */}
             <Grid item xs={12}>
               <Card>
                 <CardHeader 
                   title={
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <ReceiptIcon sx={{ mr: 1, color: 'success.main' }} />
-                      Faktury ({invoices.length})
+                      <AttachFileIcon sx={{ mr: 1 }} />
+                      {t('details.attachments.allTitle', { count: attachments.length + invoices.length + deliveryNoteAttachments.length + otherAttachments.length })}
                     </Box>
                   }
                   titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
+                  sx={{ pb: 0 }}
                 />
-                <Divider />
-                <CardContent>
-                  {/* Sekcja przesyłania faktur */}
-                  <Box sx={{ mb: 3, p: 2, backgroundColor: 'success.50', borderRadius: 1, border: 1, borderColor: 'success.200', borderStyle: 'dashed' }}>
-                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', color: 'success.dark' }}>
-                      <CloudUploadIcon sx={mr1} />
-                      Dodaj fakturę do CMR
-                    </Typography>
-                    
-                    <Box sx={mt2}>
-                      <input
-                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
-                        style={{ display: 'none' }}
-                        id="cmr-invoice-upload"
-                        type="file"
-                        onChange={handleInvoiceUpload}
-                        disabled={uploadingInvoice}
-                      />
-                      <label htmlFor="cmr-invoice-upload">
-                        <Button
-                          variant="outlined"
-                          component="span"
-                          color="success"
-                          startIcon={<ReceiptIcon />}
-                          disabled={uploadingInvoice}
-                          fullWidth
-                        >
-                          Wybierz fakturę
-                        </Button>
-                      </label>
-                    </Box>
-                    
-                    {uploadingInvoice && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                        <CircularProgress size={20} sx={mr1} color="success" />
-                        <Typography variant="caption" color="text.secondary">
-                          Przesyłanie faktury...
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-                      Dozwolone formaty: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX (max 20MB)
-                    </Typography>
+                <CardContent sx={{ pt: 1 }}>
+                  {/* Kompaktowy rząd przycisków upload */}
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+                    <input accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.txt,.xls,.xlsx,.bmp,.tiff" style={{ display: 'none' }} id="cmr-attachment-upload" type="file" onChange={handleAttachmentUpload} disabled={uploadingAttachment} />
+                    <label htmlFor="cmr-attachment-upload">
+                      <Button variant="outlined" component="span" size="small" startIcon={uploadingAttachment ? <CircularProgress size={14} /> : <CloudUploadIcon />} disabled={uploadingAttachment}>
+                        {t('details.attachments.attachment')}
+                      </Button>
+                    </label>
+
+                    <input accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" style={{ display: 'none' }} id="cmr-invoice-upload" type="file" onChange={handleInvoiceUpload} disabled={uploadingInvoice} />
+                    <label htmlFor="cmr-invoice-upload">
+                      <Button variant="outlined" component="span" size="small" color="success" startIcon={uploadingInvoice ? <CircularProgress size={14} color="success" /> : <ReceiptIcon />} disabled={uploadingInvoice}>
+                        {t('details.attachments.invoice')}
+                      </Button>
+                    </label>
+
+                    <input accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.zip,.txt" style={{ display: 'none' }} id="cmr-other-upload" type="file" onChange={handleOtherAttachmentUpload} disabled={uploadingOtherAttachment} />
+                    <label htmlFor="cmr-other-upload">
+                      <Button variant="outlined" component="span" size="small" color="info" startIcon={uploadingOtherAttachment ? <CircularProgress size={14} color="info" /> : <AttachFileIcon />} disabled={uploadingOtherAttachment}>
+                        {t('details.attachments.other')}
+                      </Button>
+                    </label>
                   </Box>
 
-                  {/* Lista faktur */}
-                  {invoicesLoading ? (
-                    <Box sx={loadingContainer}>
-                      <CircularProgress color="success" />
-                    </Box>
-                  ) : invoices.length === 0 ? (
-                    <Paper sx={{ p: 2, backgroundColor: 'background.paper', border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
-                      <Typography variant="body2" color="text.secondary" align="center">
-                        Brak faktur dla tego CMR
-                      </Typography>
-                      <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
-                        Możesz dodać faktury korzystając z przycisku powyżej
-                      </Typography>
-                    </Paper>
-                  ) : (
-                    <Box>
-                      <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
-                        <ReceiptIcon sx={{ mr: 1, color: 'success.main' }} />
-                        Lista faktur ({invoices.length})
-                      </Typography>
-                      
-                      <TableContainer component={Paper} sx={mt2}>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow sx={{ backgroundColor: 'success.50' }}>
-                              <TableCell sx={{ fontWeight: 'bold', width: 60 }}>Typ</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold' }}>Nazwa pliku</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Rozmiar</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 120 }}>Data dodania</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">Akcje</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {invoices.map((invoice) => (
-                              <TableRow key={invoice.id} hover>
-                                <TableCell>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Box sx={{ bgcolor: 'success.light', color: 'success.dark', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                      FV
-                                    </Box>
-                                  </Box>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography 
-                                    variant="body2" 
-                                    sx={{ 
-                                      fontWeight: 500,
-                                      color: 'success.main',
-                                      cursor: 'pointer',
-                                      textDecoration: 'underline',
-                                      '&:hover': {
-                                        color: 'success.dark'
-                                      }
-                                    }}
-                                    onClick={() => window.open(invoice.downloadURL, '_blank')}
-                                    title={t('common:common.clickToOpenInNewTab')}
-                                  >
-                                    {invoice.fileName}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {formatFileSize(invoice.size)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {invoice.uploadedAt ? format(invoice.uploadedAt, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Nie określono'}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell align="center">
-                                  <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                                    <IconButton
-                                      size="small"
-                                      color="success"
-                                      onClick={() => window.open(invoice.downloadURL, '_blank')}
-                                      title={t('common:common.openInNewTab')}
-                                    >
-                                      <OpenInNewIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                      size="small"
-                                      color="secondary"
-                                      href={invoice.downloadURL}
-                                      component="a"
-                                      download={invoice.fileName}
-                                      title="Pobierz plik"
-                                    >
-                                      <DownloadIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                      size="small"
-                                      color="error"
-                                      onClick={() => handleInvoiceDelete(invoice.id, invoice.fileName)}
-                                      title={t('common:common.removeInvoice')}
-                                    >
-                                      <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                  </Box>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                        <Box sx={{ p: 2, backgroundColor: 'success.50', borderTop: 1, borderColor: 'divider' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'success.main' }}>
-                            Łącznie faktur: {invoices.length}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                            Całkowity rozmiar: {formatFileSize(invoices.reduce((sum, inv) => sum + inv.size, 0))}
-                          </Typography>
-                        </Box>
-                      </TableContainer>
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Inne załączniki */}
-            <Grid item xs={12}>
-              <Card>
-                <CardHeader 
-                  title={
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <AttachFileIcon sx={{ mr: 1, color: 'info.main' }} />
-                      Inne załączniki ({otherAttachments.length})
-                    </Box>
-                  }
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
-                />
-                <Divider />
-                <CardContent>
-                  {/* Sekcja przesyłania innych załączników */}
-                  <Box sx={{ mb: 3, p: 2, backgroundColor: 'info.50', borderRadius: 1, border: 1, borderColor: 'info.200', borderStyle: 'dashed' }}>
-                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', color: 'info.dark' }}>
-                      <CloudUploadIcon sx={mr1} />
-                      Dodaj inny załącznik do CMR
+                  {/* Jedna tabela ze wszystkimi plikami */}
+                  {(attachmentsLoading || invoicesLoading || otherAttachmentsLoading || deliveryNoteAttachmentsLoading) ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><CircularProgress size={24} /></Box>
+                  ) : (attachments.length + invoices.length + deliveryNoteAttachments.length + otherAttachments.length) === 0 ? (
+                    <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
+                      {t('details.attachments.noAttachments')}
                     </Typography>
-                    
-                    <Box sx={mt2}>
-                      <input
-                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.zip,.txt"
-                        style={{ display: 'none' }}
-                        id="cmr-other-upload"
-                        type="file"
-                        onChange={handleOtherAttachmentUpload}
-                        disabled={uploadingOtherAttachment}
-                      />
-                      <label htmlFor="cmr-other-upload">
-                        <Button
-                          variant="outlined"
-                          component="span"
-                          color="info"
-                          startIcon={<AttachFileIcon />}
-                          disabled={uploadingOtherAttachment}
-                          fullWidth
-                        >
-                          Wybierz plik
-                        </Button>
-                      </label>
-                    </Box>
-                    
-                    {uploadingOtherAttachment && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                        <CircularProgress size={20} sx={mr1} color="info" />
-                        <Typography variant="caption" color="text.secondary">
-                          Przesyłanie załącznika...
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-                      Dozwolone formaty: PDF, JPG, PNG, DOC, XLS, ZIP, TXT (max 20MB)
-                    </Typography>
-                  </Box>
-
-                  {/* Lista innych załączników */}
-                  {otherAttachmentsLoading ? (
-                    <Box sx={loadingContainer}>
-                      <CircularProgress color="info" />
-                    </Box>
-                  ) : otherAttachments.length === 0 ? (
-                    <Paper sx={{ p: 2, backgroundColor: 'background.paper', border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
-                      <Typography variant="body2" color="text.secondary" align="center">
-                        Brak innych załączników dla tego CMR
-                      </Typography>
-                      <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
-                        Możesz dodać załączniki korzystając z przycisku powyżej
-                      </Typography>
-                    </Paper>
                   ) : (
-                    <Box>
-                      <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
-                        <AttachFileIcon sx={{ mr: 1, color: 'info.main' }} />
-                        Lista załączników ({otherAttachments.length})
-                      </Typography>
-                      
-                      <TableContainer component={Paper} sx={mt2}>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow sx={{ backgroundColor: 'info.50' }}>
-                              <TableCell sx={{ fontWeight: 'bold', width: 60 }}>Typ</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold' }}>Nazwa pliku</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Rozmiar</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 120 }}>Data dodania</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">Akcje</TableCell>
+                    <TableContainer component={Paper} variant="outlined">
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow sx={{ backgroundColor: 'action.hover' }}>
+                            <TableCell sx={{ fontWeight: 'bold', width: 55, py: 0.5 }}>{t('details.attachments.type')}</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', py: 0.5 }}>{t('details.attachments.fileName')}</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', width: 80, py: 0.5 }}>{t('details.attachments.size')}</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', width: 110, py: 0.5 }}>{t('details.attachments.date')}</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold', width: 100, py: 0.5 }} align="center">{t('details.attachments.actions')}</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {/* Delivery Notes */}
+                          {deliveryNoteAttachments.map((note) => (
+                            <TableRow key={`dn-${note.id}`} hover>
+                              <TableCell sx={{ py: 0.5 }}>
+                                <Box sx={{ bgcolor: 'success.light', color: 'success.dark', px: 0.75, py: 0.25, borderRadius: 1, fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' }}>DN</Box>
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main', cursor: 'pointer', textDecoration: 'underline', '&:hover': { color: 'success.dark' } }} onClick={() => window.open(note.downloadURL, '_blank')}>
+                                  {note.fileName}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{formatFileSize(note.size)}</Typography></TableCell>
+                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{note.uploadedAt ? format(note.uploadedAt, 'dd.MM.yy HH:mm', { locale: pl }) : '-'}</Typography></TableCell>
+                              <TableCell align="center" sx={{ py: 0.5 }}>
+                                <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
+                                  <IconButton size="small" onClick={() => window.open(note.downloadURL, '_blank')}><OpenInNewIcon sx={{ fontSize: 16 }} /></IconButton>
+                                  <IconButton size="small" href={note.downloadURL} component="a" download={note.fileName}><DownloadIcon sx={{ fontSize: 16 }} /></IconButton>
+                                  <IconButton size="small" color="error" onClick={async () => { if (window.confirm(t('details.attachments.confirmDeleteFile', { name: note.fileName }))) { try { await deleteCmrDeliveryNote(note.id, currentUser.uid); setDeliveryNoteAttachments(prev => prev.filter(n => n.id !== note.id)); showSuccess(t('details.attachments.deleted')); } catch (err) { showError(err.message); } } }}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton>
+                                </Box>
+                              </TableCell>
                             </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {otherAttachments.map((attachment) => (
-                              <TableRow key={attachment.id} hover>
-                                <TableCell>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Box sx={{ bgcolor: 'info.light', color: 'info.dark', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                      INNE
-                                    </Box>
-                                  </Box>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography 
-                                    variant="body2" 
-                                    sx={{ 
-                                      fontWeight: 500,
-                                      color: 'info.main',
-                                      cursor: 'pointer',
-                                      textDecoration: 'underline',
-                                      '&:hover': {
-                                        color: 'info.dark'
-                                      }
-                                    }}
-                                    onClick={() => window.open(attachment.downloadURL, '_blank')}
-                                    title={t('common:common.clickToOpenInNewTab')}
-                                  >
-                                    {attachment.fileName}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {formatFileSize(attachment.size)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {attachment.uploadedAt ? format(attachment.uploadedAt, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Nie określono'}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell align="center">
-                                  <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                                    <IconButton
-                                      size="small"
-                                      color="info"
-                                      onClick={() => window.open(attachment.downloadURL, '_blank')}
-                                      title={t('common:common.openInNewTab')}
-                                    >
-                                      <OpenInNewIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                      size="small"
-                                      color="secondary"
-                                      href={attachment.downloadURL}
-                                      component="a"
-                                      download={attachment.fileName}
-                                      title="Pobierz plik"
-                                    >
-                                      <DownloadIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                      size="small"
-                                      color="error"
-                                      onClick={() => handleOtherAttachmentDelete(attachment.id, attachment.fileName)}
-                                      title={t('common:common.removeAttachment')}
-                                    >
-                                      <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                  </Box>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                        <Box sx={{ p: 2, backgroundColor: 'info.50', borderTop: 1, borderColor: 'divider' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'info.main' }}>
-                            Łącznie załączników: {otherAttachments.length}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                            Całkowity rozmiar: {formatFileSize(otherAttachments.reduce((sum, att) => sum + att.size, 0))}
-                          </Typography>
-                        </Box>
-                      </TableContainer>
-                    </Box>
+                          ))}
+
+                          {/* Załączniki */}
+                          {attachments.map((att) => (
+                            <TableRow key={`att-${att.id}`} hover>
+                              <TableCell sx={{ py: 0.5 }}>
+                                <Box sx={{ bgcolor: att.contentType?.includes('pdf') ? 'error.light' : att.contentType?.startsWith('image/') ? 'warning.light' : 'grey.300', color: att.contentType?.includes('pdf') ? 'error.dark' : att.contentType?.startsWith('image/') ? 'warning.dark' : 'grey.700', px: 0.75, py: 0.25, borderRadius: 1, fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' }}>
+                                  {att.contentType?.includes('pdf') ? 'PDF' : att.contentType?.startsWith('image/') ? 'IMG' : 'FILE'}
+                                </Box>
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'primary.main', cursor: 'pointer', textDecoration: 'underline', '&:hover': { color: 'primary.dark' } }} onClick={() => window.open(att.downloadURL, '_blank')}>
+                                  {att.fileName}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{formatFileSize(att.size)}</Typography></TableCell>
+                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{att.uploadedAt ? format(att.uploadedAt, 'dd.MM.yy HH:mm', { locale: pl }) : '-'}</Typography></TableCell>
+                              <TableCell align="center" sx={{ py: 0.5 }}>
+                                <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
+                                  <IconButton size="small" onClick={() => window.open(att.downloadURL, '_blank')}><OpenInNewIcon sx={{ fontSize: 16 }} /></IconButton>
+                                  <IconButton size="small" href={att.downloadURL} component="a" download={att.fileName}><DownloadIcon sx={{ fontSize: 16 }} /></IconButton>
+                                  <IconButton size="small" color="error" onClick={() => handleAttachmentDelete(att.id, att.fileName)}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+
+                          {/* Faktury */}
+                          {invoices.map((inv) => (
+                            <TableRow key={`inv-${inv.id}`} hover>
+                              <TableCell sx={{ py: 0.5 }}>
+                                <Box sx={{ bgcolor: 'success.light', color: 'success.dark', px: 0.75, py: 0.25, borderRadius: 1, fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' }}>FV</Box>
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main', cursor: 'pointer', textDecoration: 'underline', '&:hover': { color: 'success.dark' } }} onClick={() => window.open(inv.downloadURL, '_blank')}>
+                                  {inv.fileName}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{formatFileSize(inv.size)}</Typography></TableCell>
+                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{inv.uploadedAt ? format(inv.uploadedAt, 'dd.MM.yy HH:mm', { locale: pl }) : '-'}</Typography></TableCell>
+                              <TableCell align="center" sx={{ py: 0.5 }}>
+                                <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
+                                  <IconButton size="small" onClick={() => window.open(inv.downloadURL, '_blank')}><OpenInNewIcon sx={{ fontSize: 16 }} /></IconButton>
+                                  <IconButton size="small" href={inv.downloadURL} component="a" download={inv.fileName}><DownloadIcon sx={{ fontSize: 16 }} /></IconButton>
+                                  <IconButton size="small" color="error" onClick={() => handleInvoiceDelete(inv.id, inv.fileName)}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+
+                          {/* Inne */}
+                          {otherAttachments.map((att) => (
+                            <TableRow key={`other-${att.id}`} hover>
+                              <TableCell sx={{ py: 0.5 }}>
+                                <Box sx={{ bgcolor: 'info.light', color: 'info.dark', px: 0.75, py: 0.25, borderRadius: 1, fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' }}>{t('details.attachments.otherBadge')}</Box>
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'info.main', cursor: 'pointer', textDecoration: 'underline', '&:hover': { color: 'info.dark' } }} onClick={() => window.open(att.downloadURL, '_blank')}>
+                                  {att.fileName}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{formatFileSize(att.size)}</Typography></TableCell>
+                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{att.uploadedAt ? format(att.uploadedAt, 'dd.MM.yy HH:mm', { locale: pl }) : '-'}</Typography></TableCell>
+                              <TableCell align="center" sx={{ py: 0.5 }}>
+                                <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
+                                  <IconButton size="small" onClick={() => window.open(att.downloadURL, '_blank')}><OpenInNewIcon sx={{ fontSize: 16 }} /></IconButton>
+                                  <IconButton size="small" href={att.downloadURL} component="a" download={att.fileName}><DownloadIcon sx={{ fontSize: 16 }} /></IconButton>
+                                  <IconButton size="small" color="error" onClick={() => handleOtherAttachmentDelete(att.id, att.fileName)}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   )}
                 </CardContent>
               </Card>
@@ -3626,27 +3371,27 @@ const CmrDetailsPage = () => {
         
         <Box className="print-section">
           <Typography variant="h6" className="print-section-title">
-            Informacje podstawowe
+            {t('details.basicInfo.title')}
           </Typography>
           
           <Box className="print-grid">
             <Box className="print-grid-item">
-              <Typography className="print-label">Numer CMR</Typography>
+              <Typography className="print-label">{t('details.basicInfo.cmrNumber')}</Typography>
               <Typography className="print-value">{cmrData.cmrNumber}</Typography>
             </Box>
             
             <Box className="print-grid-item">
-              <Typography className="print-label">Data wystawienia</Typography>
+              <Typography className="print-label">{t('details.basicInfo.issueDate')}</Typography>
               <Typography className="print-value">{formatDate(cmrData.issueDate)}</Typography>
             </Box>
             
             <Box className="print-grid-item">
-              <Typography className="print-label">Data dostawy</Typography>
+              <Typography className="print-label">{t('details.basicInfo.deliveryDate')}</Typography>
               <Typography className="print-value">{formatDate(cmrData.deliveryDate)}</Typography>
             </Box>
             
             <Box className="print-grid-item">
-              <Typography className="print-label">Typ transportu</Typography>
+              <Typography className="print-label">{t('details.basicInfo.transportType')}</Typography>
               <Typography className="print-value">{getTransportTypeLabel(cmrData.transportType) || '-'}</Typography>
             </Box>
           </Box>
@@ -3654,12 +3399,12 @@ const CmrDetailsPage = () => {
         
         <Box className="print-section">
           <Typography variant="h6" className="print-section-title">
-            Strony
+            {t('details.parties.title')}
           </Typography>
           
           <Box className="print-grid">
             <Box className="print-grid-item">
-              <Typography className="print-label">Nadawca</Typography>
+              <Typography className="print-label">{t('details.parties.sender')}</Typography>
               <Typography className="print-value" sx={{ fontWeight: 'bold' }}>{cmrData.sender}</Typography>
               <Typography className="print-value">{cmrData.senderAddress}</Typography>
               <Typography className="print-value">
@@ -3668,7 +3413,7 @@ const CmrDetailsPage = () => {
             </Box>
             
             <Box className="print-grid-item">
-              <Typography className="print-label">Odbiorca</Typography>
+              <Typography className="print-label">{t('details.parties.recipient')}</Typography>
               <Typography className="print-value" sx={{ fontWeight: 'bold' }}>{cmrData.recipient}</Typography>
               <Typography className="print-value" sx={{ whiteSpace: 'pre-line' }}>
                 {cmrData.recipientAddress}
@@ -3677,7 +3422,7 @@ const CmrDetailsPage = () => {
           </Box>
           
           <Box sx={{ mt: 3 }}>
-            <Typography className="print-label">Przewoźnik</Typography>
+            <Typography className="print-label">{t('details.parties.carrier')}</Typography>
             <Typography className="print-value" sx={{ fontWeight: 'bold' }}>{cmrData.carrier}</Typography>
             <Typography className="print-value">{cmrData.carrierAddress}</Typography>
             <Typography className="print-value">
@@ -3708,17 +3453,17 @@ const CmrDetailsPage = () => {
         
         <Box className="print-section">
           <Typography variant="h6" className="print-section-title">
-            Informacje o pojeździe
+            {t('details.vehicle.title')}
           </Typography>
           
           <Box className="print-grid">
             <Box className="print-grid-item">
-              <Typography className="print-label">Numer rejestracyjny pojazdu</Typography>
+              <Typography className="print-label">{t('details.vehicle.vehicleRegistration')}</Typography>
               <Typography className="print-value">{cmrData.vehicleInfo?.vehicleRegistration || '-'}</Typography>
             </Box>
             
             <Box className="print-grid-item">
-              <Typography className="print-label">Numer rejestracyjny naczepy</Typography>
+              <Typography className="print-label">{t('details.vehicle.trailerRegistration')}</Typography>
               <Typography className="print-value">{cmrData.vehicleInfo?.trailerRegistration || '-'}</Typography>
             </Box>
           </Box>
@@ -3726,21 +3471,21 @@ const CmrDetailsPage = () => {
         
         <Box className="print-section">
           <Typography variant="h6" className="print-section-title">
-            Elementy dokumentu CMR
+            {t('details.items.title')}
           </Typography>
           
           {cmrData.items && cmrData.items.length > 0 ? (
             <Table className="print-table">
               <TableHead>
                 <TableRow>
-                  <TableCell>Lp.</TableCell>
-                  <TableCell>Opis</TableCell>
-                  <TableCell>Ilość</TableCell>
-                  <TableCell>Jednostka</TableCell>
-                  <TableCell>{t('details.weightSummary.weight')} (kg)</TableCell>
-                  <TableCell>Palety</TableCell>
-                  <TableCell>Kartony</TableCell>
-                  <TableCell>Powiązane partie</TableCell>
+                  <TableCell>#</TableCell>
+                  <TableCell>{t('details.items.description')}</TableCell>
+                  <TableCell>{t('details.items.quantity')}</TableCell>
+                  <TableCell>{t('details.items.unit')}</TableCell>
+                  <TableCell>{t('details.items.weight')}</TableCell>
+                  <TableCell>{t('details.common.pallets')}</TableCell>
+                  <TableCell>{t('details.common.boxes')}</TableCell>
+                  <TableCell>{t('details.items.batchInfo')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -3752,7 +3497,17 @@ const CmrDetailsPage = () => {
                   return (
                   <TableRow key={item.id || index}>
                     <TableCell>{index + 1}</TableCell>
-                    <TableCell>{item.description}</TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        {item.description}
+                        {item.isEco === true && (
+                          <Chip label="ECO" size="small" color="success" variant="outlined" sx={{ fontSize: '0.65rem', height: 18 }} />
+                        )}
+                        {item.isEco === false && item.orderNumber && (
+                          <Chip label="STD" size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 18 }} />
+                        )}
+                      </Box>
+                    </TableCell>
                     <TableCell>
                       {item.quantity}
                       {item.orderItemTotalQuantity && (
@@ -3770,15 +3525,15 @@ const CmrDetailsPage = () => {
                         <Box>
                           {item.linkedBatches.map((batch, batchIndex) => (
                             <Typography key={batch.id} variant="body2" sx={{ fontSize: '0.9rem' }}>
-                              {batch.batchNumber || batch.lotNumber || 'Bez numeru'} 
-                              ({batch.quantity} {batch.unit || 'szt.'})
+                              {batch.batchNumber || batch.lotNumber || '-'} 
+                              ({batch.quantity} {batch.unit || t('common:common.pieces')})
                               {batchIndex < item.linkedBatches.length - 1 ? '; ' : ''}
                             </Typography>
                           ))}
                         </Box>
                       ) : (
                         <Typography variant="body2" sx={{ fontSize: '0.9rem', fontStyle: 'italic' }}>
-                          Brak powiązanych partii
+                          -
                         </Typography>
                       )}
                     </TableCell>
@@ -3789,56 +3544,56 @@ const CmrDetailsPage = () => {
             </Table>
           ) : (
             <Typography variant="body1" sx={{ textAlign: 'center', py: 2 }}>
-              Brak elementów w dokumencie CMR
+              {t('details.items.noItems')}
             </Typography>
           )}
         </Box>
         
         <Box className="print-section">
           <Typography variant="h6" className="print-section-title">
-            Opłaty i ustalenia szczególne
+            {t('details.feesPayments.title')}
           </Typography>
           
           <Box className="print-grid">
             <Box className="print-grid-item">
-              <Typography className="print-label">Przewoźne</Typography>
+              <Typography className="print-label">{t('details.feesPayments.freight')}</Typography>
               <Typography className="print-value">{cmrData.freight || '-'}</Typography>
             </Box>
             
             <Box className="print-grid-item">
-              <Typography className="print-label">Koszty dodatkowe</Typography>
+              <Typography className="print-label">{t('details.feesPayments.additionalCosts')}</Typography>
               <Typography className="print-value">{cmrData.carriage || '-'}</Typography>
             </Box>
             
             <Box className="print-grid-item">
-              <Typography className="print-label">Bonifikaty</Typography>
+              <Typography className="print-label">{t('details.feesPayments.discounts')}</Typography>
               <Typography className="print-value">{cmrData.discounts || '-'}</Typography>
             </Box>
             
             <Box className="print-grid-item">
-              <Typography className="print-label">Saldo</Typography>
+              <Typography className="print-label">{t('details.feesPayments.balance')}</Typography>
               <Typography className="print-value">{cmrData.balance || '-'}</Typography>
             </Box>
             
             <Box className="print-grid-item">
-              <Typography className="print-label">Płatność</Typography>
+              <Typography className="print-label">{t('details.feesPayments.paymentMethod')}</Typography>
               <Typography className="print-value">
-                {cmrData.paymentMethod === 'sender' ? 'Płaci nadawca' : 
-                 cmrData.paymentMethod === 'recipient' ? 'Płaci odbiorca' : 
-                 'Inny sposób płatności'}
+                {cmrData.paymentMethod === 'sender' ? t('details.feesPayments.paymentBySender') : 
+                 cmrData.paymentMethod === 'recipient' ? t('details.feesPayments.paymentByRecipient') : 
+                 t('details.feesPayments.otherPaymentMethod')}
               </Typography>
             </Box>
           </Box>
           
           <Box sx={{ mt: 3 }}>
-            <Typography className="print-label">Ustalenia szczególne</Typography>
+            <Typography className="print-label">{t('details.specialAgreements.specialAgreements')}</Typography>
             <Typography className="print-value" sx={{ whiteSpace: 'pre-wrap' }}>
               {cmrData.specialAgreements || '-'}
             </Typography>
           </Box>
           
           <Box sx={{ mt: 3 }}>
-            <Typography className="print-label">Zastrzeżenia i uwagi przewoźnika</Typography>
+            <Typography className="print-label">{t('details.specialAgreements.carrierReservations')}</Typography>
             <Typography className="print-value" sx={{ whiteSpace: 'pre-wrap' }}>
               {cmrData.reservations || '-'}
             </Typography>
@@ -3848,7 +3603,7 @@ const CmrDetailsPage = () => {
         {cmrData.notes && (
           <Box className="print-section">
             <Typography variant="h6" className="print-section-title">
-              Uwagi i informacje dodatkowe
+              {t('details.additionalInfo.notesAndAdditionalInfo')}
             </Typography>
             <Typography className="print-value" sx={{ whiteSpace: 'pre-wrap' }}>
               {cmrData.notes}
@@ -3879,13 +3634,12 @@ const CmrDetailsPage = () => {
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <WarningIcon color="warning" />
-            Potwierdź rozpoczęcie transportu
+            {t('details.dialogs.confirmTransportTitle')}
           </Box>
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={mb3}>
-            Znaleziono {loadingFormResponses.length} odpowiedzi z formularza załadunku towaru dla tego CMR. 
-            Sprawdź poniższe dane przed rozpoczęciem transportu:
+            {t('details.loadingReports.dialogDescription', { count: loadingFormResponses.length })}
           </DialogContentText>
           
           {loadingFormResponses.length > 0 && (
@@ -3901,50 +3655,50 @@ const CmrDetailsPage = () => {
                        {/* Informacje podstawowe o wypełnieniu */}
                        <Grid item xs={12}>
                          <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
-                           Informacje o wypełnieniu formularza
+                           {t('details.loadingReports.formInfoTitle')}
                          </Typography>
                        </Grid>
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Email pracownika
+                           {t('details.loadingReports.employeeEmail')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.email || 'Nie podano'}
+                           {report.email || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Pracownik
+                           {t('details.loadingReports.employee')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.employeeName || 'Nie podano'}
+                           {report.employeeName || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Stanowisko
+                           {t('details.loadingReports.position')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.position || 'Nie podano'}
+                           {report.position || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Godzina wypełnienia
+                           {t('details.loadingReports.fillTime')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.fillTime || 'Nie podano'}
+                           {report.fillTime || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
                        {/* Informacje o załadunku */}
                        <Grid item xs={12}>
                          <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
-                           Informacje o załadunku
+                           {t('details.loadingReports.loadingInfoTitle')}
                          </Typography>
                        </Grid>
                        
@@ -3959,71 +3713,71 @@ const CmrDetailsPage = () => {
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Godzina załadunku
+                           {t('details.loadingReports.loadingTime')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.loadingTime || 'Nie podano'}
+                           {report.loadingTime || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Przewoźnik
+                           {t('details.loadingReports.carrier')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.carrierName || 'Nie podano'}
+                           {report.carrierName || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Nr rejestracyjny pojazdu
+                           {t('details.loadingReports.vehicleRegistration')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.vehicleRegistration || 'Nie podano'}
+                           {report.vehicleRegistration || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
                        <Grid item xs={12} sm={6}>
                          <Typography variant="caption" color="text.secondary">
-                           Stan techniczny pojazdu
+                           {t('details.loadingReports.vehicleTechnicalCondition')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.vehicleTechnicalCondition || 'Nie podano'}
+                           {report.vehicleTechnicalCondition || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
                        {/* Informacje o towarze */}
                        <Grid item xs={12}>
                          <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
-                           Informacje o towarze
+                           {t('details.loadingReports.goodsInfo')}
                          </Typography>
                        </Grid>
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Klient
+                           {t('details.loadingReports.client')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.clientName || 'Nie podano'}
+                           {report.clientName || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Nr zamówienia
+                           {t('details.loadingReports.orderNumber')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.orderNumber || 'Nie podano'}
+                           {report.orderNumber || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Ilość palet
+                           {t('details.loadingReports.palletQuantity')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.palletQuantity || 'Nie podano'}
+                           {report.palletQuantity || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
@@ -4039,7 +3793,7 @@ const CmrDetailsPage = () => {
                        {report.palletProductName && (
                          <Grid item xs={12}>
                            <Typography variant="caption" color="text.secondary">
-                             Nazwa produktu / Paleta
+                             {t('details.loadingReports.productNamePallet')}
                            </Typography>
                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
                              {report.palletProductName}
@@ -4052,14 +3806,14 @@ const CmrDetailsPage = () => {
                          <>
                            <Grid item xs={12}>
                              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
-                               Uwagi
+                               {t('details.loadingReports.notes')}
                              </Typography>
                            </Grid>
                            
                            {report.notes && (
                              <Grid item xs={12} sm={6}>
                                <Typography variant="caption" color="text.secondary">
-                                 Uwagi dotyczące załadunku
+                                 {t('details.loadingReports.loadingNotes')}
                                </Typography>
                                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
                                  {report.notes}
@@ -4070,7 +3824,7 @@ const CmrDetailsPage = () => {
                            {report.goodsNotes && (
                              <Grid item xs={12} sm={6}>
                                <Typography variant="caption" color="text.secondary">
-                                 Uwagi dotyczące towaru
+                                 {t('details.loadingReports.goodsNotes')}
                                </Typography>
                                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
                                  {report.goodsNotes}
@@ -4098,7 +3852,7 @@ const CmrDetailsPage = () => {
                                rel="noopener noreferrer"
                                startIcon={<FileCopyIcon />}
                              >
-                               {report.documentsName || 'Pobierz załącznik'}
+                               {report.documentsName || t('details.loadingReports.downloadAttachment')}
                              </Button>
                            </Grid>
                          </>
@@ -4121,7 +3875,7 @@ const CmrDetailsPage = () => {
             variant="contained"
             startIcon={<CheckIcon />}
           >
-            Potwierdź rozpoczęcie transportu
+            {t('details.loadingReports.confirmTransport')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -4131,10 +3885,10 @@ const CmrDetailsPage = () => {
         open={paymentStatusDialogOpen}
         onClose={() => setPaymentStatusDialogOpen(false)}
       >
-        <DialogTitle>Zmień status płatności</DialogTitle>
+        <DialogTitle>{t('details.dialogs.changePaymentStatusTitle')}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={mb2}>
-            Wybierz nowy status płatności dokumentu CMR:
+            {t('details.dialogs.selectNewPaymentStatus')}
           </DialogContentText>
           <FormControl fullWidth>
             <InputLabel>{t('common:common.paymentStatus')}</InputLabel>
@@ -4163,7 +3917,7 @@ const CmrDetailsPage = () => {
         open={labelsDialogOpen}
         onClose={handleLabelsDialogClose}
         labels={currentLabels}
-        title={`Etykiety CMR ${cmrData?.cmrNumber || ''}`}
+        title={t('details.dialogs.labelsTitle', { cmrNumber: cmrData?.cmrNumber || '' })}
         cmrData={cmrData}
         itemsWeightDetails={itemsWeightDetails}
         labelType={currentLabelType}

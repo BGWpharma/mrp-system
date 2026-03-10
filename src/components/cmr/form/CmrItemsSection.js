@@ -77,9 +77,17 @@ const CmrItemsSection = React.memo(({
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="subtitle2">
-                        Pozycja {index + 1}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="subtitle2">
+                          Pozycja {index + 1}
+                        </Typography>
+                        {item.isEco === true && (
+                          <Chip label="ECO" size="small" color="success" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />
+                        )}
+                        {item.isEco === false && item.orderNumber && (
+                          <Chip label="Standard" size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />
+                        )}
+                      </Box>
                       {formData.items.length > 1 && (
                         <IconButton
                           color="error"

@@ -360,78 +360,47 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
     
     // Funkcja pomocnicza do konwersji dat na Firestore Timestamp
     const convertToTimestamp = (dateValue) => {
-      console.log('convertToTimestamp - wejście:', dateValue, 'typ:', typeof dateValue);
-      
       if (!dateValue) {
-        console.log('convertToTimestamp - brak wartości, zwracam null');
         return null;
       }
       
-      // Jeśli to już Firestore Timestamp
       if (dateValue && typeof dateValue === 'object' && typeof dateValue.toDate === 'function') {
-        console.log('convertToTimestamp - już Firestore Timestamp');
         return dateValue;
       }
       
-      // Jeśli to obiekt Date
       if (dateValue instanceof Date) {
-        console.log('convertToTimestamp - obiekt Date, konwertuję na Timestamp');
-        const timestamp = Timestamp.fromDate(dateValue);
-        console.log('convertToTimestamp - wynik:', timestamp);
-        return timestamp;
+        return Timestamp.fromDate(dateValue);
       }
       
-      // Jeśli to obiekt z sekundami (Firestore Timestamp format)
       if (dateValue && typeof dateValue === 'object' && dateValue.seconds) {
-        console.log('convertToTimestamp - obiekt z sekundami');
         return Timestamp.fromDate(new Date(dateValue.seconds * 1000));
       }
       
-      // Jeśli to string lub liczba
       try {
         const date = new Date(dateValue);
         if (isNaN(date.getTime())) {
           console.warn('Nieprawidłowa data:', dateValue);
           return null;
         }
-        console.log('convertToTimestamp - skonwertowano string/liczbę na Date, następnie na Timestamp');
-        const timestamp = Timestamp.fromDate(date);
-        console.log('convertToTimestamp - wynik:', timestamp);
-        return timestamp;
+        return Timestamp.fromDate(date);
       } catch (e) {
         console.warn('Błąd konwersji daty:', dateValue, e);
         return null;
       }
     };
     
-    // Formatowanie dat
     const formattedData = {
       ...cmrData,
-      issueDate: convertToTimestamp(cmrData.issueDate),
-      deliveryDate: convertToTimestamp(cmrData.deliveryDate),
-      loadingDate: convertToTimestamp(cmrData.loadingDate),
       updatedAt: serverTimestamp(),
       updatedBy: userId
     };
+    if ('issueDate' in cmrData) formattedData.issueDate = convertToTimestamp(cmrData.issueDate);
+    if ('deliveryDate' in cmrData) formattedData.deliveryDate = convertToTimestamp(cmrData.deliveryDate);
+    if ('loadingDate' in cmrData) formattedData.loadingDate = convertToTimestamp(cmrData.loadingDate);
     
-    console.log('updateCmrDocument - formattedData przed usunięciem items:', formattedData);
-    
-    // Usuń items z aktualizacji (obsłużymy je oddzielnie)
     const { items, ...updateData } = formattedData;
-    
-    console.log('updateCmrDocument - updateData przed czyszczeniem:', updateData);
-    
-    // Oczyść undefined wartości przed zapisaniem
     const cleanedUpdateData = cleanUndefinedValues(updateData);
-    
-    console.log('updateCmrDocument - cleanedUpdateData po czyszczeniu:', cleanedUpdateData);
-    
     await updateDoc(cmrRef, cleanedUpdateData);
-    
-    console.log('updateCmrDocument - dane zapisane w bazie, zwracam:', {
-      id: cmrId,
-      ...cleanedUpdateData
-    });
     
     // Aktualizacja elementów
     if (items && items.length > 0) {
@@ -478,27 +447,20 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
       await Promise.all(itemPromises);
     }
     
-    console.log('updateCmrDocument - przed konwersją dat:', {
-      issueDate: cleanedUpdateData.issueDate,
-      deliveryDate: cleanedUpdateData.deliveryDate,
-      loadingDate: cleanedUpdateData.loadingDate
-    });
-    
-    // Konwertuj daty z powrotem na obiekty Date dla wyświetlenia w formularzu
-    const convertedIssueDate = cleanedUpdateData.issueDate && cleanedUpdateData.issueDate.toDate ? cleanedUpdateData.issueDate.toDate() : cleanedUpdateData.issueDate;
-    const convertedDeliveryDate = cleanedUpdateData.deliveryDate && cleanedUpdateData.deliveryDate.toDate ? cleanedUpdateData.deliveryDate.toDate() : cleanedUpdateData.deliveryDate;
-    const convertedLoadingDate = cleanedUpdateData.loadingDate && cleanedUpdateData.loadingDate.toDate ? cleanedUpdateData.loadingDate.toDate() : cleanedUpdateData.loadingDate;
-    
-    console.log('updateCmrDocument - po konwersji dat:', {
-      issueDate: convertedIssueDate,
-      deliveryDate: convertedDeliveryDate,
-      loadingDate: convertedLoadingDate
-    });
+    const result = {
+      id: cmrId,
+      ...cleanedUpdateData
+    };
+    if ('issueDate' in cleanedUpdateData) {
+      result.issueDate = cleanedUpdateData.issueDate && cleanedUpdateData.issueDate.toDate ? cleanedUpdateData.issueDate.toDate() : cleanedUpdateData.issueDate;
+    }
+    if ('deliveryDate' in cleanedUpdateData) {
+      result.deliveryDate = cleanedUpdateData.deliveryDate && cleanedUpdateData.deliveryDate.toDate ? cleanedUpdateData.deliveryDate.toDate() : cleanedUpdateData.deliveryDate;
+    }
+    if ('loadingDate' in cleanedUpdateData) {
+      result.loadingDate = cleanedUpdateData.loadingDate && cleanedUpdateData.loadingDate.toDate ? cleanedUpdateData.loadingDate.toDate() : cleanedUpdateData.loadingDate;
+    }
 
-    // 🔄 AUTOMATYCZNA AKTUALIZACJA ilości wysłanych w powiązanych zamówieniach przy edycji CMR
-    console.log('🔄 Rozpoczynam automatyczne odświeżanie ilości w powiązanych zamówieniach...');
-    
-    // Zbierz wszystkie powiązane zamówienia
     const ordersToRefresh = new Set();
     if (cmrData.linkedOrderIds && Array.isArray(cmrData.linkedOrderIds)) {
       cmrData.linkedOrderIds.forEach(id => ordersToRefresh.add(id));
@@ -507,44 +469,26 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
       ordersToRefresh.add(cmrData.linkedOrderId);
     }
 
-    // Odśwież ilości w każdym zamówieniu
     if (ordersToRefresh.size > 0) {
-      console.log(`📦 Odświeżanie ilości w ${ordersToRefresh.size} zamówieniu/zamówieniach...`);
-      
-      for (const linkedOrderId of ordersToRefresh) {
-        try {
-          const { refreshShippedQuantitiesFromCMR } = await import('../orders');
-          const refreshResult = await refreshShippedQuantitiesFromCMR(linkedOrderId, userId);
-          
-          if (refreshResult.success) {
-            console.log(`✅ Pomyślnie odświeżono ilości w zamówieniu ${linkedOrderId}`);
-            console.log(`   • Przetworzono ${refreshResult.stats?.processedCMRs || 0} dokumentów CMR`);
-            console.log(`   • Zaktualizowano ${refreshResult.stats?.shippedItems || 0} pozycji`);
-          } else {
-            console.warn(`⚠️ Nie udało się odświeżyć ilości w zamówieniu ${linkedOrderId}`);
-          }
-        } catch (error) {
-          console.error(`❌ Błąd podczas odświeżania ilości w zamówieniu ${linkedOrderId}:`, error);
-          // Nie przerywamy procesu - logujemy tylko błąd
+      const { refreshShippedQuantitiesFromCMR } = await import('../orders');
+      const refreshResults = await Promise.allSettled(
+        [...ordersToRefresh].map(linkedOrderId =>
+          refreshShippedQuantitiesFromCMR(linkedOrderId, userId)
+            .then(result => ({ orderId: linkedOrderId, ...result }))
+        )
+      );
+
+      for (const settled of refreshResults) {
+        if (settled.status === 'fulfilled' && settled.value.success) {
+          console.log(`✅ Odświeżono zamówienie ${settled.value.orderId}: ${settled.value.stats?.processedCMRs || 0} CMR, ${settled.value.stats?.shippedItems || 0} pozycji`);
+        } else {
+          const id = settled.status === 'fulfilled' ? settled.value.orderId : 'unknown';
+          const err = settled.status === 'rejected' ? settled.reason : '';
+          console.warn(`⚠️ Nie udało się odświeżyć zamówienia ${id}`, err);
         }
       }
-      
-      console.log('✅ Zakończono automatyczne odświeżanie ilości wysłanych');
-    } else {
-      console.log('ℹ️ Brak powiązanych zamówień do odświeżenia');
     }
 
-    console.log('📝 CMR zaktualizowany pomyślnie');
-
-    const result = {
-      id: cmrId,
-      ...cleanedUpdateData,
-      issueDate: convertedIssueDate,
-      deliveryDate: convertedDeliveryDate,
-      loadingDate: convertedLoadingDate
-    };
-
-    // Aktualizuj dokument w cache
     updateCmrDocumentInCache(cmrId, result);
 
     return result;
@@ -3794,6 +3738,123 @@ export const removeCmrDocumentFromCache = (documentId) => {
   }
 };
 
+
+// ========================
+// FUNKCJE DELIVERY NOTES CMR
+// ========================
+
+/**
+ * Zapisuje plik Delivery Notes (Blob/File) jako załącznik CMR.
+ * @param {Blob|File} blob - PDF blob wygenerowany przez jsPDF
+ * @param {string} cmrId - ID dokumentu CMR
+ * @param {string} userId - ID użytkownika
+ * @param {string} fileName - Nazwa pliku
+ * @returns {Promise<Object>}
+ */
+export const uploadCmrDeliveryNote = async (blob, cmrId, userId, fileName) => {
+  try {
+    if (!blob || !cmrId || !userId) {
+      throw new Error('Brak wymaganych parametrów');
+    }
+
+    const timestamp = new Date().getTime();
+    const sanitizedFileName = (fileName || 'delivery-notes.pdf').replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storedFileName = `${timestamp}_${sanitizedFileName}`;
+    const storagePath = `cmr-delivery-notes/${cmrId}/${storedFileName}`;
+
+    const fileRef = ref(storage, storagePath);
+    await uploadBytes(fileRef, blob, { contentType: 'application/pdf' });
+
+    const downloadURL = await getDownloadURL(fileRef);
+
+    const attachmentData = {
+      fileName: fileName || 'delivery-notes.pdf',
+      originalFileName: fileName || 'delivery-notes.pdf',
+      storagePath,
+      downloadURL,
+      contentType: 'application/pdf',
+      size: blob.size || 0,
+      cmrId,
+      type: 'delivery-note',
+      uploadedBy: userId,
+      uploadedAt: serverTimestamp()
+    };
+
+    const attachmentRef = await addDoc(collection(db, 'cmrDeliveryNotes'), attachmentData);
+
+    return {
+      id: attachmentRef.id,
+      ...attachmentData,
+      uploadedAt: new Date()
+    };
+  } catch (error) {
+    console.error('Błąd podczas zapisywania Delivery Notes:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera Delivery Notes dla danego CMR
+ */
+export const getCmrDeliveryNotes = async (cmrId) => {
+  try {
+    const q = query(
+      collection(db, 'cmrDeliveryNotes'),
+      where('cmrId', '==', cmrId)
+    );
+
+    const snapshot = await getDocs(q);
+    const notes = [];
+
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      notes.push({
+        id: docSnap.id,
+        ...data,
+        uploadedAt: data.uploadedAt ? data.uploadedAt.toDate() : null
+      });
+    });
+
+    return notes.sort((a, b) => {
+      if (!a.uploadedAt) return 1;
+      if (!b.uploadedAt) return -1;
+      return b.uploadedAt - a.uploadedAt;
+    });
+  } catch (error) {
+    console.error('Błąd podczas pobierania Delivery Notes CMR:', error);
+    return [];
+  }
+};
+
+/**
+ * Usuwa Delivery Note z CMR
+ */
+export const deleteCmrDeliveryNote = async (noteId, userId) => {
+  try {
+    const noteDoc = await getDoc(doc(db, 'cmrDeliveryNotes', noteId));
+
+    if (!noteDoc.exists()) {
+      throw new Error('Delivery Note nie został znaleziony');
+    }
+
+    const noteData = noteDoc.data();
+
+    if (noteData.storagePath) {
+      const fileRef = ref(storage, noteData.storagePath);
+      try {
+        await deleteObject(fileRef);
+      } catch (storageError) {
+        console.warn('Nie udało się usunąć pliku z Storage:', storageError);
+      }
+    }
+
+    await deleteDoc(doc(db, 'cmrDeliveryNotes', noteId));
+    console.log(`Delivery Note ${noteData.fileName} usunięty przez ${userId}`);
+  } catch (error) {
+    console.error('Błąd podczas usuwania Delivery Note:', error);
+    throw error;
+  }
+};
 
 // Eksport bezpiecznej funkcji aktualizacji ilości wysłanych
 export { updateLinkedOrderShippedQuantities };

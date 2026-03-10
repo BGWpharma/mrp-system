@@ -2167,9 +2167,6 @@ export const getOrdersWithPagination = async (page = 1, limit = 10, sortField = 
  */
 export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system') => {
   try {
-    console.log(`Rozpoczęcie odświeżania ilości wysłanych dla zamówienia ${orderId}...`);
-    
-    // Pobierz aktualne dane zamówienia
     const orderRef = doc(db, ORDERS_COLLECTION, orderId);
     const orderDoc = await getDoc(orderRef);
     
@@ -2180,44 +2177,22 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
     const orderData = orderDoc.data();
     const items = orderData.items || [];
     
-    console.log(`Zamówienie ma ${items.length} pozycji:`, items.map(item => ({ name: item.name, quantity: item.quantity })));
-    
-    // Inicjalizuj statystyki
     const stats = {
       obsoleteConnections: 0,
       obsoleteItems: []
     };
     
-    // Pobierz wszystkie CMR powiązane z tym zamówieniem
     const { getCmrDocumentsByOrderId, findCmrDocumentsByOrderNumber } = await import('../logistics/cmrService');
     let linkedCMRs = await getCmrDocumentsByOrderId(orderId);
     
-    console.log(`Znaleziono ${linkedCMRs.length} powiązanych CMR dla zamówienia ${orderId}:`, 
-      linkedCMRs.map(cmr => ({ 
-        cmrNumber: cmr.cmrNumber, 
-        status: cmr.status, 
-        itemsCount: cmr.items?.length || 0,
-        linkedOrderId: cmr.linkedOrderId,
-        linkedOrderIds: cmr.linkedOrderIds
-      }))
-    );
-    
-    // Jeśli nie znaleziono CMR przez ID, spróbuj wyszukać przez numer zamówienia
     if (linkedCMRs.length === 0 && orderData.orderNumber) {
-      console.log(`Próba wyszukania CMR przez numer zamówienia: ${orderData.orderNumber}`);
       const cmrsByOrderNumber = await findCmrDocumentsByOrderNumber(orderData.orderNumber);
-      
       if (cmrsByOrderNumber.length > 0) {
-        console.log(`✅ Znaleziono ${cmrsByOrderNumber.length} CMR przez numer zamówienia`);
         linkedCMRs = cmrsByOrderNumber;
       }
     }
     
-    // BEZPIECZNA LOGIKA: Jeśli nie znaleziono CMR, ZACHOWAJ ISTNIEJĄCE DANE
     if (linkedCMRs.length === 0) {
-      console.log('⚠️ Nie znaleziono powiązanych CMR - zachowuję istniejące dane ilości wysłanych');
-
-      // Nie resetuj - tylko zaktualizuj timestamp ostatniego sprawdzenia
       await updateDoc(orderRef, {
         updatedBy: userId,
         updatedAt: serverTimestamp(),
@@ -2225,11 +2200,9 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
         lastCmrRefreshStatus: 'no_cmrs_found_preserved_existing_data'
       });
 
-      console.log('✅ Zachowano istniejące dane - brak CMR do przetworzenia');
-
       return {
         success: true,
-        updatedItems: items, // Zwróć oryginalne dane bez zmian
+        updatedItems: items,
         stats: {
           processedCMRs: 0,
           shippedItems: items.filter(item => (parseFloat(item.shippedQuantity) || 0) > 0).length,
@@ -2242,101 +2215,30 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
       };
     }
     
-    // KROK 1: NATYCHMIASTOWE RESETOWANIE - zapisz reset do bazy przed przeliczaniem
-    console.log('🔄 KROK 1: Resetowanie wszystkich ilości wysłanych i historii CMR...');
     const resetItems = items.map(item => ({
       ...item,
       shippedQuantity: 0,
       lastShipmentDate: null,
       lastCmrNumber: null,
-      cmrHistory: [], // CAŁKOWITE WYCZYSZCZENIE historii CMR
-      resetAt: new Date().toISOString(), // Znacznik czasu resetu
+      cmrHistory: [],
+      resetAt: new Date().toISOString(),
       resetReason: 'refresh_cmr_operation'
     }));
     
-    // NATYCHMIAST zapisz reset do bazy danych
-    console.log('💾 Zapisywanie zresetowanych danych do bazy...');
     await updateDoc(orderRef, {
       items: resetItems,
       updatedBy: userId,
       updatedAt: serverTimestamp(),
       lastCmrRefreshReset: serverTimestamp()
     });
-    console.log('✅ Reset zapisany - wszystkie ilości wysłane i cmrHistory wyzerowane');
     
-    // KROK 2: Oblicz ponownie ilości wysłane na podstawie wszystkich CMR
-    console.log('🔄 KROK 2: Przeliczanie ilości na podstawie istniejących CMR...');
     let updatedItems = [...resetItems];
     let processedCMRs = 0;
     
-    // Najpierw zbierz wszystkie dane z CMR dla każdej pozycji
-    const itemCmrData = new Map(); // key: orderItemIndex, value: array of CMR entries
-    
-    // Funkcja pomocnicza do obliczania podobieństwa stringów (Levenshtein distance)
-    const calculateStringSimilarity = (str1, str2) => {
-      if (!str1 || !str2) return 0;
-      
-      const s1 = str1.toLowerCase().trim();
-      const s2 = str2.toLowerCase().trim();
-      
-      if (s1 === s2) return 1;
-      
-      const longer = s1.length > s2.length ? s1 : s2;
-      const shorter = s1.length > s2.length ? s2 : s1;
-      
-      if (longer.length === 0) return 1;
-      
-      const editDistance = levenshteinDistance(longer, shorter);
-      return (longer.length - editDistance) / longer.length;
-    };
-    
-    // Funkcja do obliczania odległości Levenshtein
-    const levenshteinDistance = (str1, str2) => {
-      const matrix = [];
-      for (let i = 0; i <= str2.length; i++) {
-        matrix[i] = [i];
-      }
-      for (let j = 0; j <= str1.length; j++) {
-        matrix[0][j] = j;
-      }
-      for (let i = 1; i <= str2.length; i++) {
-        for (let j = 1; j <= str1.length; j++) {
-          if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-            matrix[i][j] = matrix[i - 1][j - 1];
-          } else {
-            matrix[i][j] = Math.min(
-              matrix[i - 1][j - 1] + 1,
-              matrix[i][j - 1] + 1,
-              matrix[i - 1][j] + 1
-            );
-          }
-        }
-      }
-      return matrix[str2.length][str1.length];
-    };
+    const itemCmrData = new Map();
     
     for (const cmr of linkedCMRs) {
-      console.log(`Sprawdzanie CMR ${cmr.cmrNumber} (status: ${cmr.status})...`);
-      
-      // NOWA FUNKCJONALNOŚĆ: Sprawdź czy dokument CMR nadal istnieje w bazie danych
-      try {
-        const { getCmrDocumentById } = await import('../logistics/cmrService');
-        const cmrExists = await getCmrDocumentById(cmr.id);
-        
-        if (!cmrExists) {
-          console.warn(`⚠️ CMR ${cmr.cmrNumber} (ID: ${cmr.id}) nie istnieje w bazie danych - pomijam`);
-          continue;
-        }
-        
-        console.log(`✅ CMR ${cmr.cmrNumber} istnieje w bazie danych`);
-      } catch (error) {
-        console.warn(`⚠️ Nie można sprawdzić istnienia CMR ${cmr.cmrNumber} (ID: ${cmr.id}): ${error.message} - pomijam`);
-        continue;
-      }
-      
-      // Przetwarzaj tylko CMR w statusie "W transporcie", "Dostarczone" lub "Zakończony"
       if (cmr.status === 'W transporcie' || cmr.status === 'Dostarczone' || cmr.status === 'Zakończony') {
-        console.log(`Przetwarzanie CMR ${cmr.cmrNumber} z ${cmr.items?.length || 0} pozycjami...`);
         processedCMRs++;
         
         if (cmr.items && cmr.items.length > 0) {
@@ -2344,40 +2246,19 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
             const cmrItem = cmr.items[i];
             const quantity = parseFloat(cmrItem.quantity) || parseFloat(cmrItem.numberOfPackages) || 0;
             
-            console.log(`CMR pozycja ${i}: "${cmrItem.description}", ilość: ${quantity}`);
-            console.log(`🔍 DEBUG CMR Item:`, {
-              orderItemId: cmrItem.orderItemId,
-              orderId: cmrItem.orderId,
-              orderNumber: cmrItem.orderNumber,
-              expectedOrderId: orderId,
-              expectedOrderNumber: orderData.orderNumber,
-              description: cmrItem.description
-            });
+            if (quantity <= 0) continue;
             
-            if (quantity <= 0) {
-              console.log(`Pomijam pozycję z zerową ilością`);
-              continue;
-            }
-            
-            // Ulepszone dopasowanie pozycji w zamówieniu z priorytetem dla orderItemId
             let orderItemIndex = -1;
             
-            // 1. NOWY: Sprawdź orderItemId z priorytetem dla orderId, backup dla orderNumber
             if (cmrItem.orderItemId && (
-                cmrItem.orderId === orderId ||                           // Sprawdź orderId
-                (!cmrItem.orderId && cmrItem.orderNumber === orderData.orderNumber) // Backup: sprawdź orderNumber
+                cmrItem.orderId === orderId ||
+                (!cmrItem.orderId && cmrItem.orderNumber === orderData.orderNumber)
             )) {
               orderItemIndex = updatedItems.findIndex(orderItem => orderItem.id === cmrItem.orderItemId);
-              if (orderItemIndex !== -1) {
-                console.log(`✅ Dopasowano przez orderItemId: ${cmrItem.orderItemId} dla pozycji "${cmrItem.description}"`);
-              } else {
+              if (orderItemIndex === -1) {
                 console.warn(`⚠️ NIEAKTUALNE powiązanie: orderItemId ${cmrItem.orderItemId} nie istnieje w zamówieniu "${cmrItem.description}"`);
                 stats.obsoleteConnections++;
-                
-                // Zapisz informacje o nieaktualnym powiązaniu do późniejszego oczyszczenia
-                if (!stats.obsoleteItems) {
-                  stats.obsoleteItems = [];
-                }
+                if (!stats.obsoleteItems) stats.obsoleteItems = [];
                 stats.obsoleteItems.push({
                   cmrId: cmr.id,
                   cmrNumber: cmr.cmrNumber,
@@ -2387,12 +2268,8 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
                 });
               }
             } else if (cmrItem.orderItemId && cmrItem.orderId && cmrItem.orderId !== orderId) {
-              // Pozycja CMR ma orderItemId ale dla innego zamówienia (przez orderId)
-              console.log(`⏭️ Pomijam pozycję CMR z innego zamówienia (orderId): orderItemId ${cmrItem.orderItemId}, orderId ${cmrItem.orderId} vs ${orderId}`);
               continue;
             } else if (cmrItem.orderItemId && cmrItem.orderNumber && cmrItem.orderNumber !== orderData.orderNumber) {
-              // Pozycja CMR ma orderItemId ale dla innego zamówienia (przez orderNumber)
-              console.log(`⏭️ Pomijam pozycję CMR z innego zamówienia (orderNumber): orderItemId ${cmrItem.orderItemId}, orderNumber ${cmrItem.orderNumber} vs ${orderData.orderNumber}`);
               continue;
             }
             
@@ -2449,92 +2326,45 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
                 );
               }
               
-              // 2.6. Ostatnia próba - dopasowanie według indeksu (tylko jeśli liczba pozycji się zgadza)
               if (orderItemIndex === -1 && updatedItems.length === cmr.items.length && i < updatedItems.length) {
-                console.log(`Próba dopasowania według indeksu ${i}`);
                 orderItemIndex = i;
               }
             }
             
-            console.log(`Dopasowanie dla "${cmrItem.description}": indeks ${orderItemIndex}`);
-            
-            // Dodatkowe debugowanie w przypadku braku dopasowania
-            if (orderItemIndex === -1) {
-              console.log(`🔍 Szczegółowa analiza dopasowania dla "${cmrItem.description}":`);
-              console.log(`  Znormalizowana nazwa CMR: "${normalizedCmrName}"`);
-              
-              // Sprawdź podobieństwo z każdą pozycją zamówienia
-              updatedItems.forEach((orderItem, idx) => {
-                const normalizedOrderName = normalizeProductName(orderItem.name);
-                const similarity = calculateStringSimilarity(cmrItem.description, orderItem.name);
-                
-                if (similarity > 0.7 || normalizedOrderName.includes(normalizedCmrName) || normalizedCmrName.includes(normalizedOrderName)) {
-                  console.log(`  Możliwe dopasowanie ${idx}: "${orderItem.name}" (norm: "${normalizedOrderName}") - podobieństwo: ${similarity.toFixed(2)}`);
-                }
-              });
-            }
-            
             if (orderItemIndex !== -1) {
-              // Zbierz dane CMR dla tej pozycji
               if (!itemCmrData.has(orderItemIndex)) {
                 itemCmrData.set(orderItemIndex, []);
               }
               
-              const cmrEntry = {
+              itemCmrData.get(orderItemIndex).push({
                 cmrNumber: cmr.cmrNumber,
                 quantity: quantity,
                 shipmentDate: cmr.issueDate ? (cmr.issueDate.toISOString ? cmr.issueDate.toISOString() : cmr.issueDate) : new Date().toISOString(),
                 unit: cmrItem.unit || updatedItems[orderItemIndex].unit || 'szt.'
-              };
-              
-              itemCmrData.get(orderItemIndex).push(cmrEntry);
-              console.log(`✅ Zapisano dane CMR ${cmr.cmrNumber} dla pozycji "${updatedItems[orderItemIndex].name}": ${quantity}`);
-              console.log(`🔍 DEBUG Zapisano CMR:`, {
-                orderItemIndex: orderItemIndex,
-                orderItemId: updatedItems[orderItemIndex].id,
-                orderItemName: updatedItems[orderItemIndex].name,
-                cmrNumber: cmr.cmrNumber,
-                quantity: quantity,
-                cmrItemOrderId: cmrItem.orderId,
-                cmrItemOrderItemId: cmrItem.orderItemId
               });
             } else {
-              console.warn(`❌ Nie znaleziono odpowiadającej pozycji w zamówieniu dla "${cmrItem.description}" z CMR ${cmr.cmrNumber}`);
-              console.log('Dostępne pozycje w zamówieniu:', updatedItems.map((item, idx) => `${idx}: "${item.name}"`));
+              console.warn(`❌ Nie znaleziono pozycji w zamówieniu dla "${cmrItem.description}" z CMR ${cmr.cmrNumber}`);
             }
           }
-        } else {
-          console.log(`CMR ${cmr.cmrNumber} nie ma pozycji`);
         }
-      } else {
-        console.log(`Pomijam CMR ${cmr.cmrNumber} (status: ${cmr.status})`);
       }
     }
     
-    // Teraz zaktualizuj pozycje zamówienia na podstawie zebranych danych
-    console.log(`🔍 DEBUG: Rozpoczynanie sumowania dla ${itemCmrData.size} pozycji zamówienia`);
     itemCmrData.forEach((cmrEntries, orderItemIndex) => {
       const orderItem = updatedItems[orderItemIndex];
-      console.log(`🔍 DEBUG: Sumowanie dla pozycji ${orderItemIndex} "${orderItem.name}" (ID: ${orderItem.id}) - ${cmrEntries.length} wpisów CMR`);
       
-      // Usuń duplikaty CMR (jeśli ten sam CMR pojawia się wielokrotnie)
       const uniqueCmrEntries = cmrEntries.reduce((unique, entry) => {
         const existingIndex = unique.findIndex(e => e.cmrNumber === entry.cmrNumber);
         if (existingIndex === -1) {
           unique.push(entry);
-        } else {
-          // Jeśli CMR już istnieje, zachowaj większą ilość
-          if (entry.quantity > unique[existingIndex].quantity) {
-            unique[existingIndex] = entry;
-          }
+        } else if (entry.quantity > unique[existingIndex].quantity) {
+          unique[existingIndex] = entry;
         }
         return unique;
       }, []);
       
-      // Oblicz łączną ilość wysłaną
       const totalShippedQuantity = uniqueCmrEntries.reduce((total, entry) => total + entry.quantity, 0);
       
-      // Znajdź najnowszą datę wysyłki i ostatni numer CMR
       const sortedEntries = uniqueCmrEntries.sort((a, b) => new Date(b.shipmentDate) - new Date(a.shipmentDate));
       const lastShipmentDate = sortedEntries[0]?.shipmentDate || new Date().toISOString();
       const lastCmrNumber = sortedEntries[0]?.cmrNumber || '';
@@ -2546,30 +2376,14 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
         lastCmrNumber: lastCmrNumber,
         cmrHistory: uniqueCmrEntries
       };
-      
-      console.log(`✅ Zaktualizowano pozycję "${orderItem.name}": łączna ilość wysłana = ${totalShippedQuantity} (z ${uniqueCmrEntries.length} CMR)`);
-      console.log(`🔍 DEBUG Pozycja zamówienia:`, {
-        orderItemIndex: orderItemIndex,
-        orderItemId: orderItem.id,
-        orderItemName: orderItem.name,
-        totalShippedQuantity: totalShippedQuantity,
-        cmrEntriesCount: uniqueCmrEntries.length
-      });
-      uniqueCmrEntries.forEach(entry => {
-        console.log(`  - CMR ${entry.cmrNumber}: ${entry.quantity} ${entry.unit}`);
-      });
     });
     
-    // Zapisz zaktualizowane dane do bazy
     await updateDoc(orderRef, {
       items: updatedItems,
       updatedBy: userId,
       updatedAt: serverTimestamp()
     });
     
-    console.log(`✅ Odświeżono ilości wysłane dla zamówienia ${orderId}`);
-    
-    // Zwróć statystyki
     const totalShippedItems = updatedItems.filter(item => 
       parseFloat(item.shippedQuantity) > 0
     ).length;
@@ -2578,7 +2392,7 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
       total + (item.cmrHistory ? item.cmrHistory.length : 0), 0
     );
     
-    console.log(`Statystyki: ${totalShippedItems} pozycji wysłanych, ${totalCmrReferences} odniesień do CMR, przetworzono ${processedCMRs} CMR`);
+    console.log(`✅ Refresh zamówienia ${orderId}: ${processedCMRs} CMR, ${totalShippedItems} pozycji wysłanych, ${totalCmrReferences} odniesień`);
     
     updateOrderInCache(orderId, { items: updatedItems });
     return { 

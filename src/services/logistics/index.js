@@ -40,6 +40,9 @@ export {
   uploadCmrOtherAttachment,
   getCmrOtherAttachments,
   deleteCmrOtherAttachment,
+  uploadCmrDeliveryNote,
+  getCmrDeliveryNotes,
+  deleteCmrDeliveryNote,
   getCmrDocumentsOptimized,
   clearCmrDocumentsCache,
   updateCmrDocumentInCache,
@@ -51,3 +54,12 @@ export {
   checkCmrItemsForMigration,
   migrateCmrItemsWithPalletInfo
 } from './cmrMigrationService';
+
+export {
+  resolveItemsEcoStatus,
+  groupCmrItemsForDeliveryNotes,
+  generateDeliveryNoteNumber,
+  generateDeliveryNoteText,
+  generateDeliveryNoteMetadata,
+  generateDeliveryNotePdf
+} from './deliveryNoteService';

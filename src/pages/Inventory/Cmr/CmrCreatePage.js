@@ -30,7 +30,7 @@ const CmrCreatePage = () => {
       console.log('CmrCreatePage - Wynik createCmrDocument:', result);
       
       showSuccess('Dokument CMR został utworzony pomyślnie');
-      navigate('/inventory/cmr');
+      navigate(`/inventory/cmr/${result.id}`);
     } catch (error) {
       console.error('CmrCreatePage - Błąd podczas tworzenia dokumentu CMR:', error);
       showError('Nie udało się utworzyć dokumentu CMR: ' + error.message);
