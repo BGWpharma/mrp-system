@@ -1,59 +1,37 @@
-// Wspólne style dla formularzy produkcyjnych i magazynowych
-// z obsługą jasnego i ciemnego motywu
+import { alpha } from '@mui/material/styles';
 
 export const getFormHeaderStyles = (theme, isEditMode = false) => ({
   mb: { xs: 2, sm: 3 },
   p: { xs: 2, sm: 3 },
   borderRadius: 2,
-  background: theme.palette.mode === 'dark' 
-    ? isEditMode
-      ? 'linear-gradient(135deg, rgba(255,152,0,0.15) 0%, rgba(255,193,7,0.1) 100%)'
-      : 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(76,175,80,0.1) 100%)'
-    : isEditMode
-      ? 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)'
-      : 'linear-gradient(135deg, #f5f5f5 0%, #e8f5e8 100%)',
+  background: theme.palette.mode === 'dark'
+    ? alpha(isEditMode ? theme.palette.warning.main : theme.palette.success.main, 0.06)
+    : alpha(isEditMode ? theme.palette.warning.main : theme.palette.success.main, 0.04),
   border: '1px solid',
-  borderColor: isEditMode ? 'warning.light' : 'divider',
+  borderColor: isEditMode
+    ? alpha(theme.palette.warning.main, 0.3)
+    : theme.palette.divider,
   boxShadow: theme.palette.mode === 'dark'
     ? '0 2px 8px rgba(0,0,0,0.3)'
-    : '0 2px 8px rgba(0,0,0,0.08)'
+    : '0 2px 8px rgba(0,0,0,0.06)'
 });
 
 export const getFormSectionStyles = (theme, color = 'primary') => {
-  const colorMap = {
-    primary: {
-      dark: 'linear-gradient(45deg, rgba(33,150,243,0.12) 30%, rgba(156,39,176,0.12) 90%)',
-      light: 'linear-gradient(45deg, #e3f2fd 30%, #f3e5f5 90%)'
-    },
-    warning: {
-      dark: 'linear-gradient(45deg, rgba(255,152,0,0.12) 30%, rgba(76,175,80,0.12) 90%)',
-      light: 'linear-gradient(45deg, #fff3e0 30%, #e8f5e8 90%)'
-    },
-    success: {
-      dark: 'linear-gradient(45deg, rgba(156,39,176,0.12) 30%, rgba(76,175,80,0.12) 90%)',
-      light: 'linear-gradient(45deg, #f3e5f5 30%, #e8f5e8 90%)'
-    },
-    info: {
-      dark: 'linear-gradient(45deg, rgba(33,150,243,0.12) 30%, rgba(0,188,212,0.12) 90%)',
-      light: 'linear-gradient(45deg, #e3f2fd 30%, #e0f7fa 90%)'
-    }
-  };
+  const paletteColor = theme.palette[color]?.main || theme.palette.primary.main;
 
   return {
     mt: 2,
     mb: 2,
     p: 2,
     borderRadius: 2,
-    background: theme.palette.mode === 'dark'
-      ? colorMap[color].dark
-      : colorMap[color].light,
+    background: alpha(paletteColor, theme.palette.mode === 'dark' ? 0.06 : 0.03),
     border: '1px solid',
-    borderColor: `${color}.light`,
-    transition: 'all 0.3s ease',
+    borderColor: alpha(paletteColor, theme.palette.mode === 'dark' ? 0.15 : 0.12),
+    transition: 'box-shadow 0.15s ease',
     '&:hover': {
       boxShadow: theme.palette.mode === 'dark'
-        ? '0 4px 12px rgba(0,0,0,0.3)'
-        : '0 4px 12px rgba(0,0,0,0.1)'
+        ? `0 2px 8px ${alpha(paletteColor, 0.15)}`
+        : `0 2px 8px ${alpha(paletteColor, 0.1)}`
     }
   };
 };
@@ -70,9 +48,7 @@ export const getFormPaperStyles = (theme) => ({
   boxShadow: theme.palette.mode === 'dark'
     ? '0 8px 32px rgba(0,0,0,0.4)'
     : '0 8px 32px rgba(0,0,0,0.12)',
-  background: theme.palette.mode === 'dark'
-    ? theme.palette.background.paper
-    : '#ffffff'
+  background: theme.palette.background.paper
 });
 
 export const getFormButtonStyles = (variant = 'contained') => ({
@@ -85,20 +61,19 @@ export const getFormButtonStyles = (variant = 'contained') => ({
   boxShadow: variant === 'contained' ? 3 : 0,
   '&:hover': {
     boxShadow: variant === 'contained' ? 6 : 0,
-    transform: 'translateY(-2px)',
-    transition: 'all 0.3s ease'
+    transition: 'box-shadow 0.15s ease'
   }
 });
 
 export const getFormFieldStyles = () => ({
   '& .MuiOutlinedInput-root': {
     borderRadius: 2,
-    transition: 'all 0.3s ease',
+    transition: 'box-shadow 0.15s ease',
     '&:hover': {
-      boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+      boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
     },
     '&.Mui-focused': {
-      boxShadow: '0 4px 12px rgba(0,0,0,0.12)'
+      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
     }
   }
 });
@@ -108,7 +83,7 @@ export const getInfoCardStyles = (theme, severity = 'info') => ({
   borderRadius: 2,
   boxShadow: theme.palette.mode === 'dark'
     ? '0 2px 8px rgba(0,0,0,0.3)'
-    : '0 2px 8px rgba(0,0,0,0.08)',
+    : '0 2px 8px rgba(0,0,0,0.06)',
   '& .MuiAlert-message': {
     fontSize: { xs: '0.75rem', sm: '0.875rem' }
   }
@@ -135,4 +110,3 @@ export const getSectionHeaderStyles = (theme, icon = null) => ({
     fontSize: { xs: '1.25rem', sm: '1.5rem' }
   }
 });
-

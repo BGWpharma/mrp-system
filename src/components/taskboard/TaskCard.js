@@ -30,6 +30,7 @@ import { format, isToday, isTomorrow, isPast, differenceInDays } from 'date-fns'
 import { pl } from 'date-fns/locale';
 import TaskDetailsDialog from './TaskDetailsDialog';
 import MentionText from './MentionText';
+import ConfirmDialog from '../common/ConfirmDialog';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {}, disableDrag = false }) => {
@@ -40,6 +41,7 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [isHovered, setIsHovered] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
 
   // Drag & Drop
   const {
@@ -164,16 +166,20 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
   };
 
   const handleDeleteTask = async () => {
-    if (!window.confirm(t('deleteTaskConfirm'))) {
-      return;
-    }
-
-    try {
-      await deleteTask(task.id);
-      handleMenuClose();
-    } catch (error) {
-      console.error('Błąd podczas usuwania zadania:', error);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: t('deleteTaskConfirm'),
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteTask(task.id);
+          handleMenuClose();
+        } catch (error) {
+          console.error('Błąd podczas usuwania zadania:', error);
+        }
+      }
+    });
   };
 
   // Oblicz statystyki podzadań
@@ -472,6 +478,14 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onSave={onRefresh}
+      />
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
       />
     </>
   );

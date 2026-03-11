@@ -28,6 +28,7 @@ import {
 import { getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 const WarehousesList = () => {
   const [warehouses, setWarehouses] = useState([]);
@@ -41,6 +42,7 @@ const WarehousesList = () => {
     description: ''
   });
   const [saving, setSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
 
   const { showSuccess, showError } = useNotification();
   const { currentUser } = useAuth();
@@ -121,18 +123,22 @@ const WarehousesList = () => {
   };
 
   const handleDeleteWarehouse = async (warehouseId) => {
-    if (!window.confirm('Czy na pewno chcesz usunąć ten magazyn? Ta operacja jest nieodwracalna.')) {
-      return;
-    }
-    
-    try {
-      await deleteWarehouse(warehouseId);
-      showSuccess('Magazyn został usunięty');
-      fetchWarehouses();
-    } catch (error) {
-      showError('Błąd podczas usuwania magazynu: ' + error.message);
-      console.error('Error deleting warehouse:', error);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: 'Czy na pewno chcesz usunąć ten magazyn? Ta operacja jest nieodwracalna.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteWarehouse(warehouseId);
+          showSuccess('Magazyn został usunięty');
+          fetchWarehouses();
+        } catch (error) {
+          showError('Błąd podczas usuwania magazynu: ' + error.message);
+          console.error('Error deleting warehouse:', error);
+        }
+      }
+    });
   };
 
   return (
@@ -256,6 +262,14 @@ const WarehousesList = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 };

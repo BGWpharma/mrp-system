@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import ConfirmDialog from '../common/ConfirmDialog';
 import { Link } from 'react-router-dom';
 import {
   Box,
@@ -79,6 +80,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
   const { currentUser } = useAuth();
   
   // Stan komponentu
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const [reservations, setReservations] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
@@ -360,7 +362,6 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
   
   // Usuń rezerwację
   const handleCancelReservation = async (reservationId) => {
-    // Znajdź rezerwację żeby sprawdzić jej status
     const reservation = reservations.find(r => r.id === reservationId);
     
     let confirmMessage = 'Czy na pewno chcesz usunąć tę rezerwację?';
@@ -368,19 +369,23 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
       confirmMessage = 'Ta rezerwacja została już dostarczona. Czy na pewno chcesz ją usunąć? To może wpłynąć na śledzenie dostaw.';
     }
     
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-    
-    try {
-      await cancelPOReservation(reservationId, currentUser.uid);
-      showSuccess('Rezerwacja została usunięta');
-      loadReservations();
-      onUpdate?.();
-    } catch (error) {
-      console.error('Błąd podczas usuwania rezerwacji:', error);
-      showError(error.message || 'Nie udało się usunąć rezerwacji');
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: confirmMessage,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await cancelPOReservation(reservationId, currentUser.uid);
+          showSuccess('Rezerwacja została usunięta');
+          loadReservations();
+          onUpdate?.();
+        } catch (error) {
+          console.error('Błąd podczas usuwania rezerwacji:', error);
+          showError(error.message || 'Nie udało się usunąć rezerwacji');
+        }
+      }
+    });
   };
   
   // Otwórz dialog konwersji
@@ -437,72 +442,68 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
 
   // Synchronizuj rezerwacje z partiami magazynowymi
   const handleSyncReservations = async () => {
-    if (!window.confirm('Czy chcesz zsynchronizować rezerwacje PO z partiami magazynowymi? To może pomóc w przypadku problemów z wyświetlaniem partii.')) {
-      return;
-    }
-    
-    try {
-      setSyncing(true);
-      const result = await syncPOReservationsWithBatches(taskId, currentUser.uid);
-      
-      if (result.syncedCount > 0) {
-        showSuccess(`Zsynchronizowano ${result.syncedCount} z ${result.totalReservations} rezerwacji`);
-      } else {
-        showInfo('Wszystkie rezerwacje są już zsynchronizowane');
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie',
+      message: 'Czy chcesz zsynchronizować rezerwacje PO z partiami magazynowymi? To może pomóc w przypadku problemów z wyświetlaniem partii.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          setSyncing(true);
+          const result = await syncPOReservationsWithBatches(taskId, currentUser.uid);
+          if (result.syncedCount > 0) {
+            showSuccess(`Zsynchronizowano ${result.syncedCount} z ${result.totalReservations} rezerwacji`);
+          } else {
+            showInfo('Wszystkie rezerwacje są już zsynchronizowane');
+          }
+          await loadReservations();
+          if (reservations.length > 0) {
+            await calculateBatchAvailableQuantities();
+          }
+          if (onUpdate) {
+            onUpdate();
+          }
+        } catch (error) {
+          console.error('Błąd podczas synchronizacji:', error);
+          showError('Nie udało się zsynchronizować rezerwacji: ' + error.message);
+        } finally {
+          setSyncing(false);
+        }
       }
-      
-      // Odśwież listę rezerwacji
-      await loadReservations();
-      
-      // Odśwież dostępne ilości w partiach
-      if (reservations.length > 0) {
-        await calculateBatchAvailableQuantities();
-      }
-      
-      if (onUpdate) {
-        onUpdate();
-      }
-    } catch (error) {
-      console.error('Błąd podczas synchronizacji:', error);
-      showError('Nie udało się zsynchronizować rezerwacji: ' + error.message);
-    } finally {
-      setSyncing(false);
-    }
+    });
   };
 
   // Odśwież ilości w powiązanych partiach
   const handleRefreshQuantities = async () => {
-    if (!window.confirm('Czy chcesz odświeżyć ilości w powiązanych partiach? To zaktualizuje wszystkie rezerwacje PO z aktualnymi ilościami w magazynie.')) {
-      return;
-    }
-    
-    try {
-      setRefreshing(true);
-      const result = await refreshLinkedBatchesQuantities();
-      
-      if (result.updatedCount > 0) {
-        showSuccess(`Odświeżono ilości w ${result.updatedCount} z ${result.totalReservations} rezerwacji`);
-      } else {
-        showInfo('Wszystkie ilości są aktualne');
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie',
+      message: 'Czy chcesz odświeżyć ilości w powiązanych partiach? To zaktualizuje wszystkie rezerwacje PO z aktualnymi ilościami w magazynie.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          setRefreshing(true);
+          const result = await refreshLinkedBatchesQuantities();
+          if (result.updatedCount > 0) {
+            showSuccess(`Odświeżono ilości w ${result.updatedCount} z ${result.totalReservations} rezerwacji`);
+          } else {
+            showInfo('Wszystkie ilości są aktualne');
+          }
+          await loadReservations();
+          if (reservations.length > 0) {
+            await calculateBatchAvailableQuantities();
+          }
+          if (onUpdate) {
+            onUpdate();
+          }
+        } catch (error) {
+          console.error('Błąd podczas odświeżania ilości:', error);
+          showError('Nie udało się odświeżyć ilości: ' + error.message);
+        } finally {
+          setRefreshing(false);
+        }
       }
-      
-      // Odśwież listę rezerwacji
-      await loadReservations();
-      
-      // Odśwież dostępne ilości w partiach
-      if (reservations.length > 0) {
-        await calculateBatchAvailableQuantities();
-      }
-      
-      if (onUpdate) {
-        onUpdate();
-      }
-    } catch (error) {
-      console.error('Błąd podczas odświeżania ilości:', error);
-      showError('Nie udało się odświeżyć ilości: ' + error.message);
-    } finally {
-      setRefreshing(false);
-    }
+    });
   };
 
   // Debuguj konkretną rezerwację - sprawdź partie magazynowe
@@ -1141,6 +1142,14 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
           <Button onClick={handleCloseDialog}>{t('common:common.close')}</Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 };

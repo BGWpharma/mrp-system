@@ -35,6 +35,7 @@ import { unarchiveProductionTask } from '../../services/production/productionSer
 import { unarchiveBatch, unarchiveInventoryItem } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { runAutoArchive } from '../../services/cloudFunctionsService';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 const ENTITY_TYPES = {
   ORDER: 'order',
@@ -56,6 +57,7 @@ const ArchiveManager = () => {
   const { t } = useTranslation();
   const { showSuccess, showError } = useNotification();
 
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const [archivedItems, setArchivedItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [unarchiving, setUnarchiving] = useState(null);
@@ -207,60 +209,71 @@ const ArchiveManager = () => {
   }, [fetchArchivedItems, fetchArchiveLogs]);
 
   const handleUnarchive = async (item) => {
-    if (!window.confirm(t('common.confirmUnarchive'))) return;
-
-    setUnarchiving(item.id);
-    try {
-      let result;
-      switch (item.type) {
-        case ENTITY_TYPES.ORDER:
-          result = await unarchiveOrder(item.id);
-          break;
-        case ENTITY_TYPES.PURCHASE_ORDER:
-          result = await unarchivePurchaseOrder(item.id);
-          break;
-        case ENTITY_TYPES.PRODUCTION_TASK:
-          result = await unarchiveProductionTask(item.id);
-          break;
-        case ENTITY_TYPES.BATCH:
-          result = await unarchiveBatch(item.id);
-          break;
-        case ENTITY_TYPES.INVENTORY_ITEM:
-          result = await unarchiveInventoryItem(item.id);
-          break;
-        default:
-          throw new Error(`Nieznany typ: ${item.type}`);
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie',
+      message: t('common.confirmUnarchive'),
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setUnarchiving(item.id);
+        try {
+          let result;
+          switch (item.type) {
+            case ENTITY_TYPES.ORDER:
+              result = await unarchiveOrder(item.id);
+              break;
+            case ENTITY_TYPES.PURCHASE_ORDER:
+              result = await unarchivePurchaseOrder(item.id);
+              break;
+            case ENTITY_TYPES.PRODUCTION_TASK:
+              result = await unarchiveProductionTask(item.id);
+              break;
+            case ENTITY_TYPES.BATCH:
+              result = await unarchiveBatch(item.id);
+              break;
+            case ENTITY_TYPES.INVENTORY_ITEM:
+              result = await unarchiveInventoryItem(item.id);
+              break;
+            default:
+              throw new Error(`Nieznany typ: ${item.type}`);
+          }
+          if (result?.success) {
+            showSuccess(t('common.unarchiveSuccess'));
+            setArchivedItems(prev => prev.filter(i => i.id !== item.id));
+          }
+        } catch (error) {
+          console.error('Błąd podczas przywracania:', error);
+          showError(error.message || 'Błąd podczas przywracania elementu');
+        } finally {
+          setUnarchiving(null);
+        }
       }
-
-      if (result?.success) {
-        showSuccess(t('common.unarchiveSuccess'));
-        setArchivedItems(prev => prev.filter(i => i.id !== item.id));
-      }
-    } catch (error) {
-      console.error('Błąd podczas przywracania:', error);
-      showError(error.message || 'Błąd podczas przywracania elementu');
-    } finally {
-      setUnarchiving(null);
-    }
+    });
   };
 
   const handleRunAutoArchive = async () => {
-    if (!window.confirm('Czy na pewno chcesz uruchomić automatyczną archiwizację? Zarchiwizowane zostaną dokumenty spełniające kryteria (bez aktualizacji od roku).')) return;
-
-    setRunningAutoArchive(true);
-    try {
-      const result = await runAutoArchive();
-      if (result?.success) {
-        showSuccess(`Archiwizacja zakończona. Zarchiwizowano ${result.totalArchived} elementów.`);
-        fetchArchivedItems();
-        fetchArchiveLogs();
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie',
+      message: 'Czy na pewno chcesz uruchomić automatyczną archiwizację? Zarchiwizowane zostaną dokumenty spełniające kryteria (bez aktualizacji od roku).',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setRunningAutoArchive(true);
+        try {
+          const result = await runAutoArchive();
+          if (result?.success) {
+            showSuccess(`Archiwizacja zakończona. Zarchiwizowano ${result.totalArchived} elementów.`);
+            fetchArchivedItems();
+            fetchArchiveLogs();
+          }
+        } catch (error) {
+          console.error('Błąd podczas uruchamiania archiwizacji:', error);
+          showError(error.message || 'Błąd podczas uruchamiania automatycznej archiwizacji');
+        } finally {
+          setRunningAutoArchive(false);
+        }
       }
-    } catch (error) {
-      console.error('Błąd podczas uruchamiania archiwizacji:', error);
-      showError(error.message || 'Błąd podczas uruchamiania automatycznej archiwizacji');
-    } finally {
-      setRunningAutoArchive(false);
-    }
+    });
   };
 
   const filteredItems = filterType === 'all'
@@ -451,6 +464,14 @@ const ArchiveManager = () => {
           </TableContainer>
         </Box>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 };

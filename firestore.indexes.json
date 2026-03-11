@@ -1364,6 +1364,14 @@
         { "fieldPath": "customer.id", "order": "ASCENDING" },
         { "fieldPath": "issueDate", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isRefInvoice", "order": "ASCENDING" },
+        { "fieldPath": "issueDate", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

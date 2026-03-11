@@ -58,6 +58,7 @@ import { formatDate, formatDateTime, formatQuantity } from '../../utils/formatti
 import { preciseAdd } from '../../utils/calculations';
 import { Timestamp } from 'firebase/firestore';
 import BackButton from '../../components/common/BackButton';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import ROUTES from '../../constants/routes';
 
 const LabelDialog = lazy(() => import('../../components/inventory/LabelDialog'));
@@ -121,6 +122,7 @@ const ItemDetailsPage = () => {
   const [awaitingOrdersLoading, setAwaitingOrdersLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [assignedCustomers, setAssignedCustomers] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
 
   
   // Dodajemy wykrywanie urządzeń mobilnych
@@ -432,98 +434,97 @@ const ItemDetailsPage = () => {
 
   // Funkcja do usuwania rezerwacji
   const handleDeleteReservation = useCallback(async (taskId) => {
-    if (!window.confirm('Czy na pewno chcesz usunąć tę rezerwację? Ta operacja jest nieodwracalna.')) {
-      return;
-    }
-    
-    try {
-      let success = true;
-      let allMessage = '';
-      
-      // Pobierz aktualną rezerwację
-      const reservation = reservations.find(r => r.taskId === taskId);
-      
-      if (reservation && reservation.batches && reservation.batches.length > 0) {
-        // Usuń wszystkie rezerwacje dla wszystkich partii
-        for (const batch of reservation.batches) {
-          try {
-            const result = await deleteReservation(batch.reservationId, currentUser.uid);
-            if (!result.success) {
-              success = false;
-              allMessage += result.message + '; ';
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: 'Czy na pewno chcesz usunąć tę rezerwację? Ta operacja jest nieodwracalna.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          let success = true;
+          let allMessage = '';
+          const reservation = reservations.find(r => r.taskId === taskId);
+          if (reservation && reservation.batches && reservation.batches.length > 0) {
+            for (const batch of reservation.batches) {
+              try {
+                const result = await deleteReservation(batch.reservationId, currentUser.uid);
+                if (!result.success) {
+                  success = false;
+                  allMessage += result.message + '; ';
+                }
+              } catch (error) {
+                console.error(`Błąd podczas usuwania rezerwacji partii ${batch.batchNumber}:`, error);
+                success = false;
+                allMessage += error.message + '; ';
+              }
             }
-          } catch (error) {
-            console.error(`Błąd podczas usuwania rezerwacji partii ${batch.batchNumber}:`, error);
-            success = false;
-            allMessage += error.message + '; ';
           }
+          if (success) {
+            showSuccess('Rezerwacja została usunięta');
+          } else {
+            showError(allMessage || 'Nie udało się usunąć wszystkich rezerwacji');
+          }
+          await fetchReservations(item);
+        } catch (error) {
+          console.error('Błąd podczas usuwania rezerwacji:', error);
+          showError(error.message || 'Wystąpił błąd podczas usuwania rezerwacji');
         }
       }
-      
-      if (success) {
-        showSuccess('Rezerwacja została usunięta');
-      } else {
-        showError(allMessage || 'Nie udało się usunąć wszystkich rezerwacji');
-      }
-      
-      // Odśwież dane
-      await fetchReservations(item);
-    } catch (error) {
-      console.error('Błąd podczas usuwania rezerwacji:', error);
-      showError(error.message || 'Wystąpił błąd podczas usuwania rezerwacji');
-    }
+    });
   }, [reservations, currentUser, showSuccess, showError, fetchReservations, item]);
 
   // Funkcja do czyszczenia rezerwacji z usuniętych zadań
   const handleCleanupDeletedTaskReservations = useCallback(async () => {
-    if (!window.confirm('Czy na pewno chcesz usunąć wszystkie rezerwacje dla usuniętych zadań produkcyjnych? Ta operacja jest nieodwracalna.')) {
-      return;
-    }
-    
-    setUpdatingReservations(true);
-    try {
-      const result = await cleanupDeletedTaskReservations();
-      
-      if (result.count > 0) {
-        showSuccess(`Usunięto ${result.count} rezerwacji z usuniętych zadań produkcyjnych.`);
-      } else {
-        showSuccess(t('inventory.states.reservationsTab.noReservationsToClean'));
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: 'Czy na pewno chcesz usunąć wszystkie rezerwacje dla usuniętych zadań produkcyjnych? Ta operacja jest nieodwracalna.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setUpdatingReservations(true);
+        try {
+          const result = await cleanupDeletedTaskReservations();
+          if (result.count > 0) {
+            showSuccess(`Usunięto ${result.count} rezerwacji z usuniętych zadań produkcyjnych.`);
+          } else {
+            showSuccess(t('inventory.states.reservationsTab.noReservationsToClean'));
+          }
+          await fetchReservations(item);
+        } catch (error) {
+          console.error('Błąd podczas czyszczenia rezerwacji:', error);
+          showError('Wystąpił błąd podczas czyszczenia rezerwacji');
+        } finally {
+          setUpdatingReservations(false);
+        }
       }
-      
-      // Odśwież dane po aktualizacji
-      await fetchReservations(item);
-    } catch (error) {
-      console.error('Błąd podczas czyszczenia rezerwacji:', error);
-      showError('Wystąpił błąd podczas czyszczenia rezerwacji');
-    } finally {
-      setUpdatingReservations(false);
-    }
+    });
   }, [showSuccess, showError, fetchReservations, item, t]);
 
   // Funkcja do czyszczenia wszystkich rezerwacji dla produktu
   const handleCleanupAllItemReservations = useCallback(async () => {
-    if (!window.confirm('Czy na pewno chcesz usunąć WSZYSTKIE rezerwacje dla tego produktu? Ta operacja jest nieodwracalna i wpłynie na zadania produkcyjne korzystające z tego surowca.')) {
-      return;
-    }
-    
-    setUpdatingReservations(true);
-    try {
-      const result = await cleanupItemReservations(item.id, currentUser.uid);
-      
-      if (result.count > 0) {
-        showSuccess(`Usunięto wszystkie ${result.count} rezerwacji dla produktu.`);
-      } else {
-        showSuccess(t('inventory.states.reservationsTab.noReservationsToClean'));
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: 'Czy na pewno chcesz usunąć WSZYSTKIE rezerwacje dla tego produktu? Ta operacja jest nieodwracalna i wpłynie na zadania produkcyjne korzystające z tego surowca.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setUpdatingReservations(true);
+        try {
+          const result = await cleanupItemReservations(item.id, currentUser.uid);
+          if (result.count > 0) {
+            showSuccess(`Usunięto wszystkie ${result.count} rezerwacji dla produktu.`);
+          } else {
+            showSuccess(t('inventory.states.reservationsTab.noReservationsToClean'));
+          }
+          await fetchReservations(item);
+        } catch (error) {
+          console.error('Błąd podczas czyszczenia rezerwacji:', error);
+          showError('Wystąpił błąd podczas czyszczenia rezerwacji');
+        } finally {
+          setUpdatingReservations(false);
+        }
       }
-      
-      // Odśwież dane po aktualizacji
-      await fetchReservations(item);
-    } catch (error) {
-      console.error('Błąd podczas czyszczenia rezerwacji:', error);
-      showError('Wystąpił błąd podczas czyszczenia rezerwacji');
-    } finally {
-      setUpdatingReservations(false);
-    }
+    });
   }, [item, currentUser, showSuccess, showError, fetchReservations, t]);
 
   // Funkcja do odświeżania ilości towaru
@@ -1069,6 +1070,14 @@ const ItemDetailsPage = () => {
           />
         </Suspense>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Container>
   );
 };

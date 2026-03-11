@@ -82,6 +82,7 @@ import { getUsersDisplayNames } from '../../services/userService';
 import { useUserNames } from '../../hooks/useUserNames';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 const StocktakingDetailsPage = () => {
   const { id } = useParams();
@@ -91,6 +92,7 @@ const StocktakingDetailsPage = () => {
   const { t } = useTranslation('stocktaking');
   const { canCompleteStocktaking, loading: permissionsLoading } = usePermissions();
   
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const [stocktaking, setStocktaking] = useState(null);
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
@@ -756,24 +758,7 @@ const StocktakingDetailsPage = () => {
     }
   };
 
-  const handleCompleteStocktaking = async () => {
-    // Sprawdź uprawnienia użytkownika
-    if (!canCompleteStocktaking) {
-      showError('Nie masz uprawnień do kończenia inwentaryzacji. Skontaktuj się z administratorem.');
-      return;
-    }
-    
-    // Sprawdź czy są pozycje bez uzupełnionej ilości
-    const incompleteItems = items.filter(item => item.countedQuantity === null || item.countedQuantity === undefined);
-    
-    if (incompleteItems.length > 0) {
-      const proceed = window.confirm(
-        `Uwaga: ${incompleteItems.length} pozycji nie ma uzupełnionej ilości policzonej. Czy chcesz kontynuować?`
-      );
-      if (!proceed) return;
-    }
-    
-    // Sprawdź wpływ korekt na rezerwacje przed otwarciem dialogu
+  const proceedToCompleteStocktaking = async () => {
     if (confirmAdjustInventory) {
       setCheckingReservations(true);
       try {
@@ -786,8 +771,31 @@ const StocktakingDetailsPage = () => {
         setCheckingReservations(false);
       }
     }
-    
     setConfirmDialogOpen(true);
+  };
+
+  const handleCompleteStocktaking = async () => {
+    if (!canCompleteStocktaking) {
+      showError('Nie masz uprawnień do kończenia inwentaryzacji. Skontaktuj się z administratorem.');
+      return;
+    }
+    
+    const incompleteItems = items.filter(item => item.countedQuantity === null || item.countedQuantity === undefined);
+    
+    if (incompleteItems.length > 0) {
+      setConfirmDialog({
+        open: true,
+        title: 'Potwierdzenie',
+        message: `Uwaga: ${incompleteItems.length} pozycji nie ma uzupełnionej ilości policzonej. Czy chcesz kontynuować?`,
+        onConfirm: async () => {
+          setConfirmDialog(prev => ({ ...prev, open: false }));
+          await proceedToCompleteStocktaking();
+        }
+      });
+      return;
+    }
+    
+    await proceedToCompleteStocktaking();
   };
   
   // Funkcja do sprawdzania rezerwacji przy zmianie opcji dostosowywania stanów
@@ -2103,6 +2111,14 @@ const StocktakingDetailsPage = () => {
           )}
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Container>
   );
 };

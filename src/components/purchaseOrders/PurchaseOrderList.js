@@ -5,7 +5,8 @@ import {
   TableHead, TableRow, Button, TextField, Box, Chip, IconButton, Dialog,
   DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Select, FormControl, InputLabel, 
   Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter, CircularProgress,
-  Fade, Skeleton, List, ListItem, ListItemIcon, ListItemText as MuiListItemText, Alert
+  Fade, Skeleton, List, ListItem, ListItemIcon, ListItemText as MuiListItemText, Alert,
+  Card, CardContent, useTheme, useMediaQuery
 } from '@mui/material';
 import { format, isValid } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -42,6 +43,8 @@ import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { usePurchaseOrderListState } from '../../contexts/PurchaseOrderListStateContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import PurchaseOrderReportDialog from './PurchaseOrderReportDialog';
+import EmptyState from '../common/EmptyState';
+import TableSkeleton from '../common/TableSkeleton';
 import POOrderReminderDialog from './POOrderReminderDialog';
 import { generatePurchaseOrderReport, getUnorderedMaterialAlertsCount } from '../../services/purchaseOrders';
 
@@ -190,6 +193,8 @@ PurchaseOrderRow.displayName = 'PurchaseOrderRow';
 
 const PurchaseOrderList = () => {
   const { t } = useTranslation('purchaseOrders');
+  const muiTheme = useTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
@@ -1034,6 +1039,59 @@ const PurchaseOrderList = () => {
       
       <Fade in={!loading} timeout={300}>
         <Paper>
+          {isMobile ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, p: 1 }}>
+              {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : filteredPOs.length === 0 ? (
+                <Typography variant="body1" align="center" sx={{ py: 2 }}>
+                  {t('purchaseOrders.noOrdersFound')}
+                </Typography>
+              ) : (
+                (showArchived ? filteredPOs : filteredPOs.filter(po => !po.archived)).map((po) => (
+                  <Card key={po.id} variant="outlined" sx={{ borderRadius: 2, opacity: po.archived ? 0.5 : 1 }}>
+                    <CardContent sx={{ pb: 1, '&:last-child': { pb: 1 } }}>
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        {po.number || `#${po.id.substring(0, 8).toUpperCase()}`}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {po.supplier ? po.supplier.name : '-'}
+                      </Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatDateValue(po.orderDate)}
+                        </Typography>
+                        <Typography variant="body2" fontWeight={600}>
+                          {po.totalGross !== undefined ? `${Number(po.totalGross).toFixed(2)} ${formatCurrencySymbol(po.currency || 'PLN')}` : '-'}
+                        </Typography>
+                      </Box>
+                      {po.expectedDeliveryDate && (
+                        <Typography variant="caption" color="text.secondary">
+                          Dostawa: {formatDateValue(po.expectedDeliveryDate)}
+                        </Typography>
+                      )}
+                    </CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, pb: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        {getStatusChip(po.status, po)}
+                        {getPaymentStatusChip(po.paymentStatus, po)}
+                      </Box>
+                      <Box>
+                        <IconButton size="small" component={Link} to={`/purchase-orders/${po.id}`}>
+                          <ViewIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" component={Link} to={`/purchase-orders/${po.id}/edit`}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    </Box>
+                  </Card>
+                ))
+              )}
+            </Box>
+          ) : (
           <TableContainer>
             <Table>
               <TableHead>
@@ -1047,57 +1105,14 @@ const PurchaseOrderList = () => {
                   <TableCell align="right">{t('purchaseOrders.table.actions')}</TableCell>
                 </TableRow>
               </TableHead>
+              {loading ? (
+                <TableSkeleton columns={6} rows={5} />
+              ) : (
               <TableBody>
-                {loading ? (
-                  Array.from({ length: pageSize }).map((_, index) => (
-                    <TableRow key={index}>
-                      {visibleColumns['number'] && (
-                        <TableCell>
-                          <Skeleton variant="text" width="80%" height={24} />
-                        </TableCell>
-                      )}
-                      {visibleColumns['supplier'] && (
-                        <TableCell>
-                          <Skeleton variant="text" width="70%" height={24} />
-                        </TableCell>
-                      )}
-                      {visibleColumns['orderDate'] && (
-                        <TableCell>
-                          <Skeleton variant="text" width="60%" height={24} />
-                        </TableCell>
-                      )}
-                      {visibleColumns['expectedDeliveryDate'] && (
-                        <TableCell>
-                          <Skeleton variant="text" width="60%" height={24} />
-                        </TableCell>
-                      )}
-                      {visibleColumns['value'] && (
-                        <TableCell>
-                          <Skeleton variant="text" width="50%" height={24} />
-                        </TableCell>
-                      )}
-                      {visibleColumns['statusAndPayment'] && (
-                        <TableCell>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            <Skeleton variant="rectangular" width={80} height={24} />
-                            <Skeleton variant="rectangular" width={100} height={24} />
-                          </Box>
-                        </TableCell>
-                      )}
-                      <TableCell align="right">
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                          <Skeleton variant="circular" width={24} height={24} />
-                          <Skeleton variant="circular" width={24} height={24} />
-                          <Skeleton variant="circular" width={24} height={24} />
-                          <Skeleton variant="circular" width={24} height={24} />
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : filteredPOs.length === 0 ? (
+                {filteredPOs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
-                      <Typography variant="body1">{t('purchaseOrders.noOrdersFound')}</Typography>
+                    <TableCell colSpan={7} align="center" sx={{ py: 0 }}>
+                      <EmptyState title={t('purchaseOrders.noOrdersFound')} />
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1117,9 +1132,10 @@ const PurchaseOrderList = () => {
                   ))
                 )}
               </TableBody>
-
+              )}
             </Table>
           </TableContainer>
+          )}
         </Paper>
       </Fade>
       

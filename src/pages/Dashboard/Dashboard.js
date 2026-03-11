@@ -11,27 +11,42 @@ import {
   Alert,
   Snackbar,
   useTheme,
-  Fade
+  Fade,
+  Grid
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
-  Announcement as AnnouncementIcon
+  Announcement as AnnouncementIcon,
+  Receipt as ReceiptIcon,
+  PrecisionManufacturing as PrecisionManufacturingIcon,
+  ShoppingCart as ShoppingCartIcon,
+  Warehouse as WarehouseIcon
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { formatTimestamp } from '../../utils/dateUtils';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useServiceData } from '../../hooks/useServiceData';
 import { db } from '../../services/firebase/config';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { createRealtimeNotification } from '../../services/notificationService';
 import { getAllActiveUsers } from '../../services/userService';
+import { getAllDashboardStats } from '../../services/dashboardStatsService';
+import DataCard from '../../components/common/DataCard';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const { t } = useTranslation('dashboard');
   const theme = useTheme();
-  
+  const navigate = useNavigate();
+
+  // KPI data — server-side count zamiast pobierania pełnych kolekcji
+  const { data: dashboardStats, loading: statsLoading } = useServiceData(
+    'dashboard:stats', getAllDashboardStats, { ttl: 3 * 60 * 1000 }
+  );
+
   // Stan dla systemu ogłoszeń
   const [announcement, setAnnouncement] = useState('');
   const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false);
@@ -242,7 +257,7 @@ const Dashboard = () => {
     <Box sx={{ 
       minHeight: '100vh'
     }}>
-      <Container maxWidth="md" sx={{ pt: 4, pb: 4 }}>
+      <Container maxWidth="lg" sx={{ pt: 4, pb: 4 }}>
         {/* Logo Animowane */}
         <Fade in timeout={1000}>
           <Box sx={{ 
@@ -299,6 +314,65 @@ const Dashboard = () => {
           >
             {t('welcome', { name: currentUser.displayName || currentUser.email })}
           </Typography>
+        </Fade>
+
+        {/* KPI Cards */}
+        <Fade in timeout={1500}>
+          <Box sx={{ mb: 4 }}>
+            <Grid container spacing={3}>
+              <Grid item xs={12} sm={6} md={3}>
+                <DataCard
+                  title={t('kpi.orders.title')}
+                  value={dashboardStats?.orders?.total ?? 0}
+                  subValue={dashboardStats?.orders?.inProgress ?? 0}
+                  subValueLabel={t('kpi.orders.inProgress')}
+                  icon={<ReceiptIcon />}
+                  color="primary"
+                  loading={statsLoading}
+                  action={t('kpi.orders.action')}
+                  onActionClick={() => navigate('/orders')}
+                  hoverable
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <DataCard
+                  title={t('kpi.production.title')}
+                  value={dashboardStats?.production?.activeCount ?? 0}
+                  subValueLabel={t('kpi.production.activeTasks')}
+                  icon={<PrecisionManufacturingIcon />}
+                  color="warning"
+                  loading={statsLoading}
+                  action={t('kpi.production.action')}
+                  onActionClick={() => navigate('/production')}
+                  hoverable
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <DataCard
+                  title={t('kpi.purchaseOrders.title')}
+                  value={dashboardStats?.purchaseOrders?.total ?? 0}
+                  icon={<ShoppingCartIcon />}
+                  color="info"
+                  loading={statsLoading}
+                  action={t('kpi.purchaseOrders.action')}
+                  onActionClick={() => navigate('/purchase-orders')}
+                  hoverable
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <DataCard
+                  title={t('kpi.inventory.title')}
+                  value={dashboardStats?.inventory?.total ?? 0}
+                  icon={<WarehouseIcon />}
+                  color="success"
+                  loading={statsLoading}
+                  action={t('kpi.inventory.action')}
+                  onActionClick={() => navigate('/inventory')}
+                  hoverable
+                />
+              </Grid>
+            </Grid>
+          </Box>
         </Fade>
 
         {/* Sekcja Ogłoszeń - Clean Design */}

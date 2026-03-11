@@ -6,7 +6,8 @@ import {
   TableHead, TableRow, Button, TextField, Box, IconButton, Dialog,
   DialogActions, DialogContent, DialogContentText, DialogTitle,
   CircularProgress, Alert, Chip, Tooltip, Divider, List, ListItem, ListItemText,
-  ListItemIcon, Collapse, FormControlLabel, Checkbox, TablePagination
+  ListItemIcon, Collapse, FormControlLabel, Checkbox, TablePagination,
+  Card, CardContent, useTheme, useMediaQuery
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -35,9 +36,12 @@ import {
 } from '../../services/suppliers';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
+import TableSkeleton from '../common/TableSkeleton';
 
 const SuppliersList = () => {
   const { t } = useTranslation('suppliers');
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
   const { currentUser } = useAuth();
@@ -305,14 +309,6 @@ const SuppliersList = () => {
     }));
   };
   
-  if (loading) {
-    return (
-      <Container>
-        <Typography variant="h6">{t('suppliers.loading')}</Typography>
-      </Container>
-    );
-  }
-  
   return (
     <Container>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
@@ -388,10 +384,62 @@ const SuppliersList = () => {
         />
       </Box>
       
-      {filteredSuppliers.length === 0 ? (
-        <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="body1">{t('suppliers.noResultsFound')}</Typography>
-        </Paper>
+      {isMobile ? (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {paginatedSuppliers.length === 0 ? (
+            <Typography variant="body1" align="center" sx={{ py: 2 }}>
+              {t('suppliers.noResultsFound')}
+            </Typography>
+          ) : (
+            paginatedSuppliers.map((supplier) => (
+              <Card key={supplier.id} variant="outlined" sx={{ borderRadius: 2 }}>
+                <CardContent sx={{ pb: 1, '&:last-child': { pb: 1 } }}>
+                  <Typography variant="subtitle2" fontWeight={600}>
+                    {supplier.name}
+                  </Typography>
+                  {supplier.contactPerson && (
+                    <Typography variant="body2" color="text.secondary">
+                      {supplier.contactPerson}
+                    </Typography>
+                  )}
+                  {supplier.email && (
+                    <Typography variant="body2" color="text.secondary">
+                      {supplier.email}
+                    </Typography>
+                  )}
+                  {supplier.phone && (
+                    <Typography variant="body2" color="text.secondary">
+                      {supplier.phone}
+                    </Typography>
+                  )}
+                </CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', px: 2, pb: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                  <Box>
+                    <IconButton size="small" component={RouterLink} to={`/suppliers/${supplier.id}/view`}>
+                      <ViewIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" component={RouterLink} to={`/suppliers/${supplier.id}/edit`}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                </Box>
+              </Card>
+            ))
+          )}
+          <TablePagination
+            component="div"
+            count={filteredSuppliers.length}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={[5, 10, 25, 50]}
+            labelRowsPerPage={t('common.rowsPerPage', 'Wierszy na stronie:')}
+            labelDisplayedRows={({ from, to, count }) => 
+              `${from}-${to} ${t('common.of', 'z')} ${count !== -1 ? count : `więcej niż ${to}`}`
+            }
+          />
+        </Box>
       ) : (
         <TableContainer component={Paper}>
           <Table>
@@ -405,6 +453,9 @@ const SuppliersList = () => {
                 <TableCell>{t('suppliers.table.actions')}</TableCell>
               </TableRow>
             </TableHead>
+            {loading ? (
+              <TableSkeleton columns={5} rows={5} />
+            ) : (
             <TableBody>
               {paginatedSuppliers.map((supplier) => (
                 <TableRow key={supplier.id} hover>
@@ -442,6 +493,7 @@ const SuppliersList = () => {
                 </TableRow>
               ))}
             </TableBody>
+            )}
           </Table>
           <TablePagination
             component="div"

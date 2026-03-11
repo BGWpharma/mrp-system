@@ -1,5 +1,6 @@
 // src/components/recipes/RecipeList.js
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import ConfirmDialog from '../common/ConfirmDialog';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Table, 
@@ -70,6 +71,8 @@ import { formatDate } from '../../utils/formatting';
 import searchService from '../../services/searchService';
 import { getAllWorkstations } from '../../services/production/workstationService';
 import { useRecipeListState } from '../../contexts/RecipeListStateContext';
+import EmptyState from '../common/EmptyState';
+import TableSkeleton from '../common/TableSkeleton';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
   flexCenter, 
@@ -93,6 +96,7 @@ const RecipeList = () => {
   const [recipes, setRecipes] = useState([]);
   const [filteredRecipes, setFilteredRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const { showSuccess, showError, showInfo } = useNotification();
   const { t } = useTranslation('recipes');
   const navigate = useNavigate();
@@ -522,29 +526,30 @@ const RecipeList = () => {
   };
 
   const handleDeleteRecipe = async (recipeId) => {
-    if (window.confirm(t('recipes.messages.confirmDelete'))) {
-      try {
-        await deleteRecipe(recipeId);
-        showSuccess(t('recipes.messages.recipeDeleted'));
-        
-        // Odśwież właściwą listę po usunięciu
-        if (tabValue === 0) {
-          // Odśwież również indeks wyszukiwania po usunięciu receptury
-          await searchService.refreshIndex('recipes');
-          fetchRecipes();
-        } else {
-          // W widoku grupowanym - odśwież tylko dane dla aktualnie rozwiniętego klienta
-          if (expandedPanel) {
-            // Odśwież indeks przed pobraniem nowych danych
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: t('recipes.messages.confirmDelete'),
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteRecipe(recipeId);
+          showSuccess(t('recipes.messages.recipeDeleted'));
+          if (tabValue === 0) {
             await searchService.refreshIndex('recipes');
-            fetchRecipesForCustomer(expandedPanel);
+            fetchRecipes();
+          } else {
+            if (expandedPanel) {
+              await searchService.refreshIndex('recipes');
+              fetchRecipesForCustomer(expandedPanel);
+            }
           }
+        } catch (error) {
+          console.error('Błąd podczas usuwania receptury:', error);
+          showError(t('recipes.messages.deleteError', { error: error.message }));
         }
-      } catch (error) {
-        console.error('Błąd podczas usuwania receptury:', error);
-        showError(t('recipes.messages.deleteError', { error: error.message }));
       }
-    }
+    });
   };
   
   const handleCustomerFilterChange = (event) => {
@@ -1957,8 +1962,8 @@ const RecipeList = () => {
           <TableBody>
             {recipesToRender.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">
-                  {t('recipes.list.noRecipesFound')}
+                <TableCell colSpan={6} align="center" sx={{ py: 0 }}>
+                  <EmptyState title={t('recipes.list.noRecipesFound')} />
                 </TableCell>
               </TableRow>
             ) : (
@@ -2424,14 +2429,15 @@ const RecipeList = () => {
         </Tabs>
       </Box>
       
-      {loading && tabValue === 0 ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        tabValue === 0 ? (
+      {tabValue === 0 ? (
           <>
-            {renderRecipesTable(filteredRecipes)}
+            {loading ? (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableSkeleton columns={5} rows={5} />
+                </Table>
+              </TableContainer>
+            ) : renderRecipesTable(filteredRecipes)}
             
             {/* Kontrolki paginacji dostosowane do urządzeń mobilnych */}
             <Box sx={{ 
@@ -2489,8 +2495,7 @@ const RecipeList = () => {
           </>
         ) : (
           renderGroupedRecipes()
-        )
-      )}
+        )}
 
       {/* Dialog filtrowania eksportu z dostawcami */}
       <Dialog 
@@ -2843,6 +2848,14 @@ const RecipeList = () => {
           </Typography>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 };

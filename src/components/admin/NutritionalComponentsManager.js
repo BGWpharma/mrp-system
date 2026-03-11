@@ -42,11 +42,13 @@ import {
 } from '../../services/products';
 import { useNotification } from '../../hooks/useNotification';
 import { NUTRITIONAL_CATEGORIES } from '../../utils/constants';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 const NutritionalComponentsManager = () => {
   const { components, loading, error, usingFallback, refreshComponents } = useNutritionalComponents();
   const { showSuccess, showError } = useNotification();
   
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingComponent, setEditingComponent] = useState(null);
   const [expanded, setExpanded] = useState(false);
@@ -119,16 +121,22 @@ const NutritionalComponentsManager = () => {
   };
 
   const handleDelete = async (component) => {
-    if (window.confirm(`Czy na pewno chcesz usunąć składnik ${component.code} - ${component.name}?`)) {
-      try {
-        await deleteNutritionalComponent(component.id);
-        showSuccess('Składnik odżywczy został usunięty');
-        await refreshComponents();
-      } catch (error) {
-        console.error('Błąd przy usuwaniu składnika:', error);
-        showError('Wystąpił błąd podczas usuwania składnika');
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: `Czy na pewno chcesz usunąć składnik ${component.code} - ${component.name}?`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteNutritionalComponent(component.id);
+          showSuccess('Składnik odżywczy został usunięty');
+          await refreshComponents();
+        } catch (error) {
+          console.error('Błąd przy usuwaniu składnika:', error);
+          showError('Wystąpił błąd podczas usuwania składnika');
+        }
       }
-    }
+    });
   };
 
   const getCategoryColor = (category) => {
@@ -310,6 +318,14 @@ const NutritionalComponentsManager = () => {
         </Button>
       </DialogActions>
     </Dialog>
+
+    <ConfirmDialog
+      open={confirmDialog.open}
+      title={confirmDialog.title}
+      message={confirmDialog.message}
+      onConfirm={confirmDialog.onConfirm}
+      onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+    />
     </>
   );
 };

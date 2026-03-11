@@ -34,7 +34,9 @@ import {
   Divider,
   Link,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -84,9 +86,13 @@ import { db } from '../../services/firebase/config';
 import { useOrderListState } from '../../contexts/OrderListStateContext';
 import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 import { useBroadcastSync } from '../../hooks/useBroadcastSync';
+import EmptyState from '../common/EmptyState';
+import TableSkeleton from '../common/TableSkeleton';
 
 const OrdersList = () => {
   const { t } = useTranslation('orders');
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
   // Użyj kontekstu dla zarządzania stanem listy
   const { state, actions } = useOrderListState();
@@ -1726,12 +1732,61 @@ const OrdersList = () => {
           </Card>
         </Collapse>
 
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
           <>
+            {isMobile ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {displayedOrders.length === 0 ? (
+                  <Typography variant="body1" align="center" sx={{ py: 2 }}>
+                    {t('orders.noOrders')}
+                  </Typography>
+                ) : (
+                  displayedOrders.map((order) => (
+                    <Card key={order.id} variant="outlined" sx={{ borderRadius: 2, opacity: order.archived ? 0.5 : 1 }}>
+                      <CardContent sx={{ pb: 1, '&:last-child': { pb: 1 } }}>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          {order.orderNumber || (order.id && order.id.substring(0, 8).toUpperCase())}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {typeof order.customer === 'object' && order.customer !== null 
+                            ? (order.customer?.name || t('orders.constants.noCustomerData')) 
+                            : String(order.customer) || t('orders.constants.noCustomerData')}
+                        </Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            {order.orderDate ? (
+                              typeof order.orderDate === 'object' && typeof order.orderDate.toDate === 'function' 
+                                ? formatDate(order.orderDate.toDate(), false)
+                                : formatDate(order.orderDate, false)
+                            ) : '-'}
+                          </Typography>
+                          <Typography variant="body2" fontWeight={600}>
+                            {formatCurrency(order.calculatedTotalValue !== undefined ? order.calculatedTotalValue : (order.totalValue || 0))}
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, pb: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                        <Chip 
+                          label={order.status} 
+                          size="small"
+                          sx={{
+                            backgroundColor: getStatusChipColor(order.status),
+                            color: 'white'
+                          }}
+                        />
+                        <Box>
+                          <IconButton size="small" component={RouterLink} to={`/orders/${order.id}`}>
+                            <EventNoteIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" component={RouterLink} to={`/orders/edit/${order.id}`}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      </Box>
+                    </Card>
+                  ))
+                )}
+              </Box>
+            ) : (
             <TableContainer>
               <Table sx={{ minWidth: 800 }}>
                 <TableHead>
@@ -1822,11 +1877,14 @@ const OrdersList = () => {
                     <TableCell align="right">{t('orders.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
+                {loading ? (
+                  <TableSkeleton columns={7} rows={5} />
+                ) : (
                 <TableBody>
                   {displayedOrders.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} align="center">
-                        {t('orders.noOrders')}
+                      <TableCell colSpan={8} align="center" sx={{ py: 0 }}>
+                        <EmptyState title={t('orders.noOrders')} />
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -2373,8 +2431,10 @@ const OrdersList = () => {
                     ))
                   )}
                 </TableBody>
+                )}
               </Table>
             </TableContainer>
+            )}
 
             {/* Komponent paginacji */}
             <TablePagination
@@ -2389,7 +2449,6 @@ const OrdersList = () => {
               labelDisplayedRows={({ from, to, count }) => t('orders.pagination.displayedRows', { from, to, count })}
             />
           </>
-        )}
       </Paper>
 
       {/* Dialog potwierdzenia usunięcia */}

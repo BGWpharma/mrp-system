@@ -45,6 +45,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import CustomerForm from './CustomerForm';
+import TableSkeleton from '../common/TableSkeleton';
 
 const CustomersList = () => {
   const { t } = useTranslation('customers');
@@ -211,12 +212,6 @@ const CustomersList = () => {
       </Paper>
 
       <Paper>
-        {customersLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <>
             <TableContainer>
               <Table>
                 <TableHead>
@@ -228,6 +223,9 @@ const CustomersList = () => {
                     <TableCell align="right">{t('customers.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
+                {customersLoading ? (
+                  <TableSkeleton columns={4} rows={5} />
+                ) : (
                 <TableBody>
                   {filteredCustomers.length === 0 ? (
                     <TableRow key="no-customers">
@@ -301,6 +299,7 @@ const CustomersList = () => {
                       ))
                   )}
                 </TableBody>
+                )}
               </Table>
             </TableContainer>
             <TablePagination
@@ -314,8 +313,6 @@ const CustomersList = () => {
               labelRowsPerPage={t('customers.pagination.rowsPerPage')}
               labelDisplayedRows={({ from, to, count }) => t('customers.pagination.displayedRows', { from, to, count })}
             />
-          </>
-        )}
       </Paper>
 
       {/* Dialog potwierdzenia usunięcia */}

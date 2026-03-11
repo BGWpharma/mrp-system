@@ -108,6 +108,7 @@ import { updateCmrDocument } from '../../../services/logistics';
 import { logger } from '../../../utils/logger';
 import StatusChip from '../../../components/common/StatusChip';
 import StatusStepper from '../../../components/common/StatusStepper';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
 // Ikony
 import EditIcon from '@mui/icons-material/Edit';
@@ -260,6 +261,7 @@ const CmrDetailsPage = () => {
   const [linkedOrders, setLinkedOrders] = useState([]);
   const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   
   // Stan dla Tabs
   const [activeTab, setActiveTab] = useState(0);
@@ -1728,18 +1730,22 @@ const CmrDetailsPage = () => {
 
   // Funkcja do usuwania załącznika
   const handleAttachmentDelete = async (attachmentId, fileName) => {
-    if (!window.confirm(`Czy na pewno chcesz usunąć załącznik "${fileName}"?`)) {
-      return;
-    }
-
-    try {
-      await deleteCmrAttachment(attachmentId, currentUser.uid);
-      setAttachments(prev => prev.filter(att => att.id !== attachmentId));
-      showSuccess(`Załącznik "${fileName}" został usunięty`);
-    } catch (error) {
-      console.error('Błąd podczas usuwania załącznika:', error);
-      showError('Nie udało się usunąć załącznika');
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: `Czy na pewno chcesz usunąć załącznik "${fileName}"?`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteCmrAttachment(attachmentId, currentUser.uid);
+          setAttachments(prev => prev.filter(att => att.id !== attachmentId));
+          showSuccess(`Załącznik "${fileName}" został usunięty`);
+        } catch (error) {
+          console.error('Błąd podczas usuwania załącznika:', error);
+          showError('Nie udało się usunąć załącznika');
+        }
+      }
+    });
   };
 
   // Funkcja do pobierania faktur
@@ -1778,18 +1784,22 @@ const CmrDetailsPage = () => {
 
   // Funkcja do usuwania faktury
   const handleInvoiceDelete = async (invoiceId, fileName) => {
-    if (!window.confirm(`Czy na pewno chcesz usunąć fakturę "${fileName}"?`)) {
-      return;
-    }
-
-    try {
-      await deleteCmrInvoice(invoiceId, currentUser.uid);
-      setInvoices(prev => prev.filter(inv => inv.id !== invoiceId));
-      showSuccess(`Faktura "${fileName}" została usunięta`);
-    } catch (error) {
-      console.error('Błąd podczas usuwania faktury:', error);
-      showError('Nie udało się usunąć faktury');
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: `Czy na pewno chcesz usunąć fakturę "${fileName}"?`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteCmrInvoice(invoiceId, currentUser.uid);
+          setInvoices(prev => prev.filter(inv => inv.id !== invoiceId));
+          showSuccess(`Faktura "${fileName}" została usunięta`);
+        } catch (error) {
+          console.error('Błąd podczas usuwania faktury:', error);
+          showError('Nie udało się usunąć faktury');
+        }
+      }
+    });
   };
 
   // Funkcja do pobierania innych załączników
@@ -1868,18 +1878,22 @@ const CmrDetailsPage = () => {
 
   // Funkcja do usuwania innego załącznika
   const handleOtherAttachmentDelete = async (attachmentId, fileName) => {
-    if (!window.confirm(`Czy na pewno chcesz usunąć załącznik "${fileName}"?`)) {
-      return;
-    }
-
-    try {
-      await deleteCmrOtherAttachment(attachmentId, currentUser.uid);
-      setOtherAttachments(prev => prev.filter(att => att.id !== attachmentId));
-      showSuccess(`Załącznik "${fileName}" został usunięty`);
-    } catch (error) {
-      console.error('Błąd podczas usuwania załącznika:', error);
-      showError('Nie udało się usunąć załącznika');
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: `Czy na pewno chcesz usunąć załącznik "${fileName}"?`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteCmrOtherAttachment(attachmentId, currentUser.uid);
+          setOtherAttachments(prev => prev.filter(att => att.id !== attachmentId));
+          showSuccess(`Załącznik "${fileName}" został usunięty`);
+        } catch (error) {
+          console.error('Błąd podczas usuwania załącznika:', error);
+          showError('Nie udało się usunąć załącznika');
+        }
+      }
+    });
   };
 
   // Funkcja formatowania rozmiaru pliku
@@ -3266,7 +3280,7 @@ const CmrDetailsPage = () => {
                                 <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
                                   <IconButton size="small" onClick={() => window.open(note.downloadURL, '_blank')}><OpenInNewIcon sx={{ fontSize: 16 }} /></IconButton>
                                   <IconButton size="small" href={note.downloadURL} component="a" download={note.fileName}><DownloadIcon sx={{ fontSize: 16 }} /></IconButton>
-                                  <IconButton size="small" color="error" onClick={async () => { if (window.confirm(t('details.attachments.confirmDeleteFile', { name: note.fileName }))) { try { await deleteCmrDeliveryNote(note.id, currentUser.uid); setDeliveryNoteAttachments(prev => prev.filter(n => n.id !== note.id)); showSuccess(t('details.attachments.deleted')); } catch (err) { showError(err.message); } } }}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton>
+                                  <IconButton size="small" color="error" onClick={() => { setConfirmDialog({ open: true, title: 'Potwierdzenie usunięcia', message: t('details.attachments.confirmDeleteFile', { name: note.fileName }), onConfirm: async () => { setConfirmDialog(prev => ({ ...prev, open: false })); try { await deleteCmrDeliveryNote(note.id, currentUser.uid); setDeliveryNoteAttachments(prev => prev.filter(n => n.id !== note.id)); showSuccess(t('details.attachments.deleted')); } catch (err) { showError(err.message); } } }); }}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton>
                                 </Box>
                               </TableCell>
                             </TableRow>
@@ -3919,6 +3933,14 @@ const CmrDetailsPage = () => {
         cmrData={cmrData}
         itemsWeightDetails={itemsWeightDetails}
         labelType={currentLabelType}
+      />
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
       />
     </Container>
   );

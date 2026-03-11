@@ -61,6 +61,7 @@ import {
   OPERATIONAL_COST_CATEGORIES,
   getCategoryLabel
 } from '../../../services/finance';
+import ConfirmDialog from '../../common/ConfirmDialog';
 
 /**
  * Dialog do zarządzania kosztami operacyjnymi per miesiąc
@@ -78,6 +79,7 @@ const OperationalCostsDialog = ({
   const { t } = useTranslation('operationalCosts');
 
   // Stan danych
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [monthsData, setMonthsData] = useState([]);
@@ -224,25 +226,28 @@ const OperationalCostsDialog = ({
   };
 
   const handleDelete = async (monthKey, costId, costName) => {
-    if (!window.confirm(`Czy na pewno chcesz usunąć koszt "${costName}"?`)) {
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await deleteOperationalCost(monthKey, costId);
-      showSuccess('Usunięto koszt operacyjny');
-      await fetchData();
-      
-      if (onSave) {
-        onSave();
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: `Czy na pewno chcesz usunąć koszt "${costName}"?`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setSaving(true);
+        try {
+          await deleteOperationalCost(monthKey, costId);
+          showSuccess('Usunięto koszt operacyjny');
+          await fetchData();
+          if (onSave) {
+            onSave();
+          }
+        } catch (err) {
+          console.error('Błąd usuwania kosztu:', err);
+          showError('Nie udało się usunąć kosztu');
+        } finally {
+          setSaving(false);
+        }
       }
-    } catch (err) {
-      console.error('Błąd usuwania kosztu:', err);
-      showError('Nie udało się usunąć kosztu');
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const handleClose = () => {
@@ -665,6 +670,14 @@ const OperationalCostsDialog = ({
           Zamknij
         </Button>
       </DialogActions>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Dialog>
   );
 };

@@ -2,12 +2,10 @@ import { styled, alpha } from '@mui/material/styles';
 import { 
   Card, 
   Paper, 
-  Button, 
   Typography, 
   Box, 
   TableRow, 
   TableCell, 
-  Chip,
   Badge,
   ListItemButton,
   CircularProgress
@@ -129,51 +127,7 @@ export const TableHeaderCell = styled(TableCell)(({ theme }) => ({
  * PRZYCISKI I ETYKIETY
  */
 
-// Przycisk akcji z lepszym efektem hover
-export const ActionButton = styled(Button)(({ theme, color = 'primary' }) => ({
-  borderRadius: 8,
-  textTransform: 'none',
-  fontWeight: 500,
-  boxShadow: 'none',
-  background: theme.palette[color]?.main || theme.palette.primary.main,
-  '&:hover': {
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-    background: theme.palette[color]?.dark || theme.palette.primary.dark,
-  },
-}));
-
-// Etykieta statusu
-export const StatusChip = styled(Chip)(({ theme, statuscolor = 'default' }) => {
-  const getStatusColor = () => {
-    switch (statuscolor) {
-      case 'success': return theme.palette.success;
-      case 'error': return theme.palette.error;
-      case 'warning': return theme.palette.warning;
-      case 'info': return theme.palette.info;
-      case 'primary': return theme.palette.primary;
-      case 'secondary': return theme.palette.secondary;
-      default: return {
-        main: theme.palette.mode === 'dark' ? '#888' : '#AAA',
-        light: theme.palette.mode === 'dark' ? '#666' : '#DDD',
-      };
-    }
-  };
-
-  const color = getStatusColor();
-
-  return {
-    borderRadius: 12,
-    fontWeight: 500,
-    height: 24,
-    fontSize: '0.75rem',
-    backgroundColor: alpha(color.main, theme.palette.mode === 'dark' ? 0.2 : 0.1),
-    color: theme.palette.mode === 'dark' ? color.light : color.main,
-    border: `1px solid ${alpha(color.main, 0.2)}`,
-    '& .MuiChip-label': {
-      padding: '0 8px',
-    },
-  };
-});
+// Badge z powiadomieniami
 
 // Badge z powiadomieniami
 export const NotificationBadge = styled(Badge)(({ theme }) => ({

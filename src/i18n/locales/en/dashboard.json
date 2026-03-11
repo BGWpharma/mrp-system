@@ -64,6 +64,26 @@
     "productionTasks": "Production tasks",
     "goTo": "Go"
   },
+  "kpi": {
+    "orders": {
+      "title": "Orders",
+      "inProgress": "In progress",
+      "action": "See all"
+    },
+    "production": {
+      "title": "Production",
+      "activeTasks": "Active tasks",
+      "action": "See tasks"
+    },
+    "purchaseOrders": {
+      "title": "Purchase Orders",
+      "action": "See PO"
+    },
+    "inventory": {
+      "title": "Inventory",
+      "action": "See inventory"
+    }
+  },
   "statuses": {
     "new": "New",
     "inProgress": "In Progress",

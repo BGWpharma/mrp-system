@@ -1,5 +1,6 @@
 // src/components/recipes/RecipeForm.js
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import ConfirmDialog from '../common/ConfirmDialog';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -285,6 +286,7 @@ const RecipeForm = ({ recipeId }) => {
   const location = useLocation();
   const [loading, setLoading] = useState(!!recipeId);
   const [saving, setSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   
   // Hook do pobierania składników odżywczych z bazy danych
   const { components: nutritionalComponents, loading: loadingComponents, usingFallback, refreshComponents } = useNutritionalComponents();
@@ -1262,10 +1264,39 @@ const RecipeForm = ({ recipeId }) => {
     
     // Jeśli pozycja jest już powiązana z inną recepturą - potwierdź nadpisanie
     if (selectedInventoryItem.recipeId) {
-      const confirmOverwrite = window.confirm(
-        `Pozycja "${selectedInventoryItem.name}" jest powiązana z recepturą "${selectedInventoryItem.recipeInfo?.name || 'nieznaną'}". Czy na pewno chcesz nadpisać to powiązanie?`
-      );
-      if (!confirmOverwrite) return;
+      setConfirmDialog({
+        open: true,
+        title: 'Potwierdzenie',
+        message: `Pozycja "${selectedInventoryItem.name}" jest powiązana z recepturą "${selectedInventoryItem.recipeInfo?.name || 'nieznaną'}". Czy na pewno chcesz nadpisać to powiązanie?`,
+        onConfirm: async () => {
+          setConfirmDialog(prev => ({ ...prev, open: false }));
+          try {
+            setLinkingInventory(true);
+            await updateInventoryItem(selectedInventoryItem.id, {
+              name: selectedInventoryItem.name,
+              recipeId: recipeId,
+              recipeInfo: {
+                name: recipeData.name,
+                yield: recipeData.yield,
+                version: recipeData.version || 1
+              },
+              isFinishedProduct: true
+            }, currentUser.uid);
+            showSuccess(t('recipes.linkInventoryDialog.successMessage', { itemName: selectedInventoryItem.name }));
+            setLinkInventoryDialogOpen(false);
+            setSelectedInventoryItem(null);
+            setInventorySearchQuery('');
+            const updatedItems = await getAllInventoryItems();
+            setInventoryItems(updatedItems);
+          } catch (error) {
+            showError(t('recipes.messages.createProductError', { error: error.message }));
+            console.error('Error linking inventory item:', error);
+          } finally {
+            setLinkingInventory(false);
+          }
+        }
+      });
+      return;
     }
     
     try {
@@ -3934,6 +3965,14 @@ const RecipeForm = ({ recipeId }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 };

@@ -61,6 +61,7 @@ import {
   bulkUpdateSupplierPricesFromCompletedPOs
 } from '../../services/inventory';
 import ArchiveManager from '../../components/admin/ArchiveManager';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { getRandomBatch } from '../../services/cloudFunctionsService';
 
 /**
@@ -70,6 +71,7 @@ const SystemManagementPage = () => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showNotification } = useNotification();
   const [activeTab, setActiveTab] = useState(0);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const [isLoading, setIsLoading] = useState(false);
   const [migrationResults, setMigrationResults] = useState(null);
   const [isLoadingComponents, setIsLoadingComponents] = useState(false);
@@ -329,30 +331,29 @@ const SystemManagementPage = () => {
   };
 
   const handleBulkUpdateSupplierPrices = async () => {
-    if (!window.confirm(`Czy na pewno chcesz zaktualizować ceny dostawców na podstawie zamówień z ostatnich ${priceUpdateDays} dni? Ta operacja może trwać kilka minut.`)) {
-      return;
-    }
-
-    try {
-      setUpdatingPrices(true);
-      showNotification('Rozpoczynam masową aktualizację cen dostawców...', 'info');
-
-      const result = await bulkUpdateSupplierPricesFromCompletedPOs(currentUser.uid, priceUpdateDays);
-
-      if (result.success) {
-        showNotification(
-          `Zakończono masową aktualizację cen dostawców. ${result.message}`,
-          'success'
-        );
-      } else {
-        showNotification('Błąd podczas masowej aktualizacji cen dostawców', 'error');
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie',
+      message: `Czy na pewno chcesz zaktualizować ceny dostawców na podstawie zamówień z ostatnich ${priceUpdateDays} dni? Ta operacja może trwać kilka minut.`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          setUpdatingPrices(true);
+          showNotification('Rozpoczynam masową aktualizację cen dostawców...', 'info');
+          const result = await bulkUpdateSupplierPricesFromCompletedPOs(currentUser.uid, priceUpdateDays);
+          if (result.success) {
+            showNotification(`Zakończono masową aktualizację cen dostawców. ${result.message}`, 'success');
+          } else {
+            showNotification('Błąd podczas masowej aktualizacji cen dostawców', 'error');
+          }
+        } catch (error) {
+          console.error('Błąd podczas masowej aktualizacji cen dostawców:', error);
+          showNotification('Błąd podczas masowej aktualizacji cen dostawców: ' + error.message, 'error');
+        } finally {
+          setUpdatingPrices(false);
+        }
       }
-    } catch (error) {
-      console.error('Błąd podczas masowej aktualizacji cen dostawców:', error);
-      showNotification('Błąd podczas masowej aktualizacji cen dostawców: ' + error.message, 'error');
-    } finally {
-      setUpdatingPrices(false);
-    }
+    });
   };
 
   // Funkcja do sprawdzenia sierocych wpisów historii produkcji
@@ -388,59 +389,58 @@ const SystemManagementPage = () => {
       return;
     }
 
-    const confirmMessage = `Czy na pewno chcesz usunąć ${cleanupResults.orphanedCount} sierocych wpisów historii produkcji? Ta operacja jest nieodwracalna!`;
-    
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-
-    try {
-      setCleanupLoading(true);
-      
-      const results = await cleanupOrphanedProductionHistory(false); // rzeczywiste usuwanie
-      
-      if (results.success) {
-        showSuccess(`Pomyślnie usunięto ${results.deletedCount} sierocych wpisów historii produkcji.`);
-        setCleanupResults(results);
-      } else {
-        showError(`Błąd podczas czyszczenia: ${results.error}`);
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: `Czy na pewno chcesz usunąć ${cleanupResults.orphanedCount} sierocych wpisów historii produkcji? Ta operacja jest nieodwracalna!`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          setCleanupLoading(true);
+          const results = await cleanupOrphanedProductionHistory(false);
+          if (results.success) {
+            showSuccess(`Pomyślnie usunięto ${results.deletedCount} sierocych wpisów historii produkcji.`);
+            setCleanupResults(results);
+          } else {
+            showError(`Błąd podczas czyszczenia: ${results.error}`);
+          }
+        } catch (error) {
+          console.error('Błąd podczas czyszczenia sierocych wpisów:', error);
+          showError('Wystąpił błąd podczas czyszczenia. Sprawdź konsolę.');
+        } finally {
+          setCleanupLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('Błąd podczas czyszczenia sierocych wpisów:', error);
-      showError('Wystąpił błąd podczas czyszczenia. Sprawdź konsolę.');
-    } finally {
-      setCleanupLoading(false);
-    }
+    });
   };
 
   // Funkcja do czyszczenia ujemnych wpisów w cmrHistory
   const handleCleanNegativeCmrEntries = async () => {
-    const confirmMessage = `Czy na pewno chcesz wyczyścić ujemne wpisy w historii CMR? Ta operacja usunie wszystkie ujemne wartości z cmrHistory i przeliczy ilości wysłane. Operacja jest nieodwracalna!`;
-    
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-
-    try {
-      setCmrCleanupLoading(true);
-      setCmrCleanupResults(null);
-      
-      showNotification('Rozpoczynam oczyszczanie ujemnych wpisów CMR...', 'info');
-      
-      const results = await cleanNegativeCmrHistoryEntries(currentUser.uid);
-      
-      if (results.success) {
-        setCmrCleanupResults(results);
-        showSuccess(`Oczyszczanie zakończone: ${results.cleanedOrders} zamówień, ${results.cleanedEntries} ujemnych wpisów usuniętych`);
-      } else {
-        showError(`Błąd podczas oczyszczania: ${results.error || 'Nieznany błąd'}`);
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie',
+      message: 'Czy na pewno chcesz wyczyścić ujemne wpisy w historii CMR? Ta operacja usunie wszystkie ujemne wartości z cmrHistory i przeliczy ilości wysłane. Operacja jest nieodwracalna!',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          setCmrCleanupLoading(true);
+          setCmrCleanupResults(null);
+          showNotification('Rozpoczynam oczyszczanie ujemnych wpisów CMR...', 'info');
+          const results = await cleanNegativeCmrHistoryEntries(currentUser.uid);
+          if (results.success) {
+            setCmrCleanupResults(results);
+            showSuccess(`Oczyszczanie zakończone: ${results.cleanedOrders} zamówień, ${results.cleanedEntries} ujemnych wpisów usuniętych`);
+          } else {
+            showError(`Błąd podczas oczyszczania: ${results.error || 'Nieznany błąd'}`);
+          }
+        } catch (error) {
+          console.error('Błąd podczas oczyszczania ujemnych wpisów CMR:', error);
+          showError('Wystąpił błąd podczas oczyszczania ujemnych wpisów CMR. Sprawdź konsolę.');
+        } finally {
+          setCmrCleanupLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('Błąd podczas oczyszczania ujemnych wpisów CMR:', error);
-      showError('Wystąpił błąd podczas oczyszczania ujemnych wpisów CMR. Sprawdź konsolę.');
-    } finally {
-      setCmrCleanupLoading(false);
-    }
+    });
   };
 
   // Funkcja do sprawdzenia pozycji CMR do migracji
@@ -1322,6 +1322,14 @@ const SystemManagementPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Container>
   );
 };

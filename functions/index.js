@@ -70,6 +70,7 @@ const {
   onInvoiceAttachmentDeleted,
   onCmrInvoiceDeleted,
   retryInvoiceOcr,
+  deleteManualUpload,
 } = require("./triggers/invoiceOcr");
 
 // ============================================================================
@@ -117,6 +118,7 @@ exports.onCmrInvoiceCreated = onCmrInvoiceCreated;
 exports.onInvoiceAttachmentDeleted = onInvoiceAttachmentDeleted;
 exports.onCmrInvoiceDeleted = onCmrInvoiceDeleted;
 exports.retryInvoiceOcr = retryInvoiceOcr;
+exports.deleteManualUpload = deleteManualUpload;
 
 // Expense Invoice OCR Functions
 exports.onExpenseInvoiceUploaded = onExpenseInvoiceUploaded;

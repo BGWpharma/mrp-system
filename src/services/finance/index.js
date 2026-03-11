@@ -2,6 +2,7 @@
 
 export {
   getAllInvoices,
+  getReinvoices,
   getInvoiceById,
   getInvoicesByCustomerId,
   getInvoicesByOrderId,
@@ -29,6 +30,7 @@ export {
   updateProformaUsage,
   removeProformaUsage,
   getAvailableProformaAmount,
+  getAvailableProformaAmountsBatch,
   getAvailableProformasForOrder,
   getAvailableProformasForOrderWithExclusion,
   updateMultipleProformasUsage,
@@ -40,7 +42,10 @@ export {
   migrateInvoiceItemsOrderIds,
   syncProformaNumberInLinkedInvoices,
   getInvoicesUsingProforma,
-  updateInvoicesExchangeRates
+  updateInvoicesExchangeRates,
+  INVOICES_CACHE_KEY,
+  REINVOICES_CACHE_KEY,
+  invalidateInvoicesCache
 } from './invoiceService';
 
 export {

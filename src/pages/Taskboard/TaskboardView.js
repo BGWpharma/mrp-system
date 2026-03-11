@@ -52,6 +52,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { getAccessibleBoards, createBoard, updateBoard, deleteBoard, getOrCreateMainBoard } from '../../services/taskboard';
 import BoardDetail from './BoardDetail';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -87,6 +88,7 @@ const TaskboardView = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const [mainBoard, setMainBoard] = useState(null);
   const [boards, setBoards] = useState([]);
   const [selectedBoard, setSelectedBoard] = useState(null);
@@ -189,22 +191,23 @@ const TaskboardView = () => {
   };
 
   const handleDeleteBoard = async (boardId) => {
-    if (!window.confirm(t('deleteBoardConfirm'))) {
-      return;
-    }
-
-    try {
-      await deleteBoard(boardId);
-      
-      // Jeśli usunięto aktualnie wybraną tablicę, wróć do głównej
-      if (selectedBoard?.id === boardId) {
-        setSelectedBoard(mainBoard);
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: t('deleteBoardConfirm'),
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteBoard(boardId);
+          if (selectedBoard?.id === boardId) {
+            setSelectedBoard(mainBoard);
+          }
+          loadBoards();
+        } catch (error) {
+          console.error('Błąd podczas usuwania tablicy:', error);
+        }
       }
-      
-      loadBoards();
-    } catch (error) {
-      console.error('Błąd podczas usuwania tablicy:', error);
-    }
+    });
   };
 
   const handleSelectBoard = (board) => {
@@ -536,6 +539,14 @@ const TaskboardView = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 };

@@ -39,30 +39,35 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { 
-  getAllInvoices, 
+  getReinvoices,
   deleteInvoice,
-  calculateRequiredAdvancePayment
+  calculateRequiredAdvancePayment,
+  REINVOICES_CACHE_KEY,
+  invalidateInvoicesCache
 } from '../../services/finance';
 import { preciseCompare } from '../../utils/calculations';
-import { getAllCustomers } from '../../services/crm';
+import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/crm';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatCurrency } from '../../utils/formatting';
 import DeleteConfirmationDialog from '../common/DeleteConfirmationDialog';
+import TableSkeleton from '../common/TableSkeleton';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import plLocale from 'date-fns/locale/pl';
 import { format } from 'date-fns';
+import { useServiceData } from '../../hooks/useServiceData';
 
 const ReinvoicesList = () => {
+  const { data: cachedReinvoices, loading: reinvoicesCacheLoading } = useServiceData(REINVOICES_CACHE_KEY, getReinvoices, { ttl: 5 * 60 * 1000 });
+  const { data: customers, loading: customersLoading } = useServiceData(CUSTOMERS_CACHE_KEY, getAllCustomers, { ttl: 10 * 60 * 1000 });
+  
   const [invoices, setInvoices] = useState([]);
   const [filteredInvoices, setFilteredInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState(null);
-  const [customers, setCustomers] = useState([]);
-  const [customersLoading, setCustomersLoading] = useState(false);
 
   // Filtry
   const [searchTerm, setSearchTerm] = useState('');
@@ -86,61 +91,20 @@ const ReinvoicesList = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    let cancelled = false;
-
-    fetchInvoices();
-
-    const loadCustomers = async () => {
-      try {
-        setCustomersLoading(true);
-        const customersData = await getAllCustomers();
-        if (cancelled) return;
-        setCustomers(customersData);
-      } catch (error) {
-        if (cancelled) return;
-        console.error('Error fetching customers:', error);
-      } finally {
-        if (!cancelled) {
-          setCustomersLoading(false);
-        }
-      }
-    };
-    loadCustomers();
-
-    return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (cachedReinvoices && cachedReinvoices.length >= 0) {
+      setInvoices(cachedReinvoices);
+      setLoading(false);
+    } else if (!reinvoicesCacheLoading) {
+      setLoading(false);
+    }
+  }, [cachedReinvoices, reinvoicesCacheLoading]);
 
   useEffect(() => {
     applyFiltersAndSearch();
   }, [invoices, searchTerm, filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchInvoices = async () => {
-    try {
-      setLoading(true);
-      const allInvoices = await getAllInvoices();
-      
-      // Filtruj tylko Reinvoice
-      const reinvoices = allInvoices.filter(invoice => invoice.isRefInvoice === true);
-      
-      setInvoices(reinvoices);
-    } catch (error) {
-      console.error('Error fetching reinvoices:', error);
-      showError(t('errors.fetchFailed'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCustomers = async () => {
-    try {
-      setCustomersLoading(true);
-      const customersData = await getAllCustomers();
-      setCustomers(customersData);
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-    } finally {
-      setCustomersLoading(false);
-    }
+  const fetchInvoices = () => {
+    invalidateInvoicesCache();
   };
 
   const applyFiltersAndSearch = () => {
@@ -421,14 +385,6 @@ const ReinvoicesList = () => {
 
   const paginatedInvoices = filteredInvoices.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   return (
     <Box>
       {/* Nagłówek z akcjami */}
@@ -614,6 +570,9 @@ const ReinvoicesList = () => {
               <TableCell align="center">{t('table.actions')}</TableCell>
             </TableRow>
           </TableHead>
+          {loading ? (
+            <TableSkeleton columns={6} rows={5} />
+          ) : (
           <TableBody>
             {paginatedInvoices.length === 0 ? (
               <TableRow>
@@ -701,6 +660,7 @@ const ReinvoicesList = () => {
               ))
             )}
           </TableBody>
+          )}
         </Table>
         
         <TablePagination

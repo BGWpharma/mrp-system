@@ -36,6 +36,8 @@ import Register from './pages/Auth/Register';
 
 // Common Components - ładowane statycznie bo są potrzebne w każdym widoku
 import BackgroundEffects from './components/common/BackgroundEffects';
+import AppBreadcrumbs from './components/common/AppBreadcrumbs';
+import PageTransition from './components/common/PageTransition';
 import Navbar from './components/common/Navbar';
 import Sidebar from './components/common/Sidebar';
 import UpdateNotification from './components/common/UpdateNotification';
@@ -606,9 +608,11 @@ function PrivateLayout({ children }) {
         <div className="content-container">
           <Sidebar onToggle={handleSidebarToggle} />
           <main className={`main-content ${isSidebarCollapsed || !isOpen ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
-            {/* ✅ Suspense wrapper dla lazy-loaded komponentów */}
+            <AppBreadcrumbs />
             <Suspense fallback={<PageLoading />}>
-              {children}
+              <PageTransition>
+                {children}
+              </PageTransition>
             </Suspense>
           </main>
         </div>

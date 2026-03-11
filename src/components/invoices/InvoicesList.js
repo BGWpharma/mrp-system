@@ -29,7 +29,9 @@ import {
   TableSortLabel,
   Link,
   Menu,
-  Tooltip
+  Tooltip,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -55,10 +57,12 @@ import {
   getAllInvoices, 
   updateInvoiceStatus, 
   deleteInvoice,
-  getAvailableProformaAmount,
+  getAvailableProformaAmountsBatch,
   calculateRequiredAdvancePayment,
   getInvoiceById,
-  updateInvoicesExchangeRates
+  updateInvoicesExchangeRates,
+  INVOICES_CACHE_KEY,
+  invalidateInvoicesCache
 } from '../../services/finance';
 import { preciseCompare, preciseSubtract } from '../../utils/calculations';
 import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/crm';
@@ -77,11 +81,17 @@ import { format } from 'date-fns';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useInvoiceListState } from '../../contexts/InvoiceListStateContext';
 import InvoiceExpandedDetails from './InvoiceExpandedDetails';
+import EmptyState from '../common/EmptyState';
+import TableSkeleton from '../common/TableSkeleton';
 
 const InvoicesList = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
   // Stan z kontekstu
   const { state: listState, actions: listActions } = useInvoiceListState();
   
+  const { data: cachedInvoices, loading: invoicesCacheLoading, refresh: refreshInvoicesCache } = useServiceData(INVOICES_CACHE_KEY, getAllInvoices, { ttl: 5 * 60 * 1000 });
   const [invoices, setInvoices] = useState([]);
   const [filteredInvoices, setFilteredInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -118,8 +128,17 @@ const InvoicesList = () => {
   const tableSort = listState.tableSort;
 
   useEffect(() => {
+    if (cachedInvoices && cachedInvoices.length > 0) {
+      setInvoices(cachedInvoices);
+      setLoading(false);
+      fetchProformaAmounts(cachedInvoices);
+    } else if (!invoicesCacheLoading) {
+      setLoading(false);
+    }
+  }, [cachedInvoices, invoicesCacheLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     let cancelled = false;
-    fetchInvoices().then(() => { if (cancelled) return; });
     fetchOrders().then(() => { if (cancelled) return; });
     return () => { cancelled = true; };
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -344,68 +363,46 @@ const InvoicesList = () => {
     setFilteredInvoices(results);
   }, [invoices, listState.searchTerm, listState.filters, tableSort]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Nasłuchuj powrotu do karty/okna aby odświeżyć dane
   useEffect(() => {
+    let lastRefresh = Date.now();
+    const MIN_REFRESH_INTERVAL = 60 * 1000;
+
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        // Odśwież dostępne kwoty proform gdy użytkownik powróci do karty
+      if (!document.hidden && Date.now() - lastRefresh > MIN_REFRESH_INTERVAL) {
+        lastRefresh = Date.now();
         if (invoices.length > 0) {
           fetchProformaAmounts(invoices);
         }
       }
     };
 
-    const handleFocus = () => {
-      // Odśwież dostępne kwoty proform gdy okno otrzyma focus
-      if (invoices.length > 0) {
-        fetchProformaAmounts(invoices);
-      }
-    };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [invoices, fetchProformaAmounts]);
 
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [invoices]); // fetchProformaAmounts is stable ([] deps) and declared below
-
-  const fetchProformaAmounts = useCallback(async (invoices) => {
-    const amounts = {};
-    const proformaInvoices = invoices.filter(inv => inv.isProforma);
-    
-    await Promise.all(
-      proformaInvoices.map(async (invoice) => {
-        try {
-          const amountInfo = await getAvailableProformaAmount(invoice.id);
-          amounts[invoice.id] = amountInfo;
-        } catch (error) {
-          console.error(`Błąd podczas pobierania kwoty proformy ${invoice.id}:`, error);
-          amounts[invoice.id] = null;
-        }
-      })
-    );
-    
-    setProformaAmounts(amounts);
+  const fetchProformaAmounts = useCallback(async (invoicesList) => {
+    try {
+      const proformaInvoices = invoicesList.filter(inv => inv.isProforma);
+      if (proformaInvoices.length === 0) {
+        setProformaAmounts({});
+        return;
+      }
+      const amounts = await getAvailableProformaAmountsBatch(proformaInvoices);
+      setProformaAmounts(amounts);
+    } catch (error) {
+      console.error('Błąd podczas pobierania kwot proform:', error);
+    }
   }, []);
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
     try {
-      const fetchedInvoices = await getAllInvoices();
-      setInvoices(fetchedInvoices);
-      // setFilteredInvoices będzie ustawione automatycznie przez useEffect
-      
-      // Pobierz dostępne kwoty dla proform
-      await fetchProformaAmounts(fetchedInvoices);
+      invalidateInvoicesCache();
     } catch (error) {
       showError(t('invoices.notifications.errors.fetchInvoices') + ': ' + error.message);
       console.error('Error fetching invoices:', error);
-    } finally {
-      setLoading(false);
     }
-  }, [fetchProformaAmounts, showError, t]);
+  }, [showError, t]);
 
   const fetchOrders = useCallback(async () => {
     setOrdersLoading(true);
@@ -485,7 +482,7 @@ const InvoicesList = () => {
     try {
       await deleteInvoice(invoiceToDelete.id);
       setInvoices(prev => prev.filter(i => i.id !== invoiceToDelete.id));
-      // setFilteredInvoices będzie ustawione automatycznie przez useEffect
+      invalidateInvoicesCache();
       showSuccess(t('invoices.notifications.invoiceDeleted'));
     } catch (error) {
       showError(t('invoices.notifications.errors.deleteInvoice') + ': ' + error.message);
@@ -1008,12 +1005,58 @@ const InvoicesList = () => {
         </Collapse>
       </Paper>
 
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
         <>
+          {isMobile ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {filteredInvoices.length === 0 ? (
+                <Typography variant="body1" align="center" sx={{ py: 2 }}>
+                  {t('invoices.noInvoicesFound')}
+                </Typography>
+              ) : (
+                paginatedInvoices.map((invoice) => (
+                  <Card key={invoice.id} variant="outlined" sx={{ borderRadius: 2 }}>
+                    <CardContent sx={{ pb: 1, '&:last-child': { pb: 1 } }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          {invoice.number}
+                        </Typography>
+                        {invoice.isProforma && (
+                          <Chip label={t('invoices.proforma')} size="small" color="primary" variant="outlined" sx={{ height: 'auto', fontSize: '0.7rem', py: 0.25 }} />
+                        )}
+                      </Box>
+                      <Typography variant="body2" color="text.secondary">
+                        {invoice.customer?.name}
+                      </Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatDate(invoice.issueDate)}
+                        </Typography>
+                        <Typography variant="body2" fontWeight={600}>
+                          {formatCurrency(invoice.total, invoice.currency)}
+                        </Typography>
+                      </Box>
+                    </CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, pb: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        {renderInvoiceStatus(invoice.status)}
+                      </Box>
+                      <Box>
+                        <IconButton size="small" component={RouterLink} to={`/invoices/${invoice.id}`}>
+                          <ViewIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" component={RouterLink} to={`/invoices/${invoice.id}/edit`}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" onClick={() => handleDeleteClick(invoice)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    </Box>
+                  </Card>
+                ))
+              )}
+            </Box>
+          ) : (
           <TableContainer component={Paper}>
             <Table>
                 <TableHead>
@@ -1030,11 +1073,14 @@ const InvoicesList = () => {
                     <TableCell align="right">{t('invoices.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
+                {loading ? (
+                  <TableSkeleton columns={9} rows={5} />
+                ) : (
                 <TableBody>
                   {filteredInvoices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} align="center">
-                        {t('invoices.noInvoicesFound')}
+                      <TableCell colSpan={10} align="center" sx={{ py: 0 }}>
+                        <EmptyState title={t('invoices.noInvoicesFound')} />
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -1354,8 +1400,10 @@ const InvoicesList = () => {
                       ))
                   )}
                 </TableBody>
+                )}
               </Table>
             </TableContainer>
+          )}
           <TablePagination
             rowsPerPageOptions={[10, 25, 50, 100]}
             component="div"
@@ -1372,7 +1420,6 @@ const InvoicesList = () => {
             }
           />
         </>
-      )}
 
       <DeleteConfirmationDialog
         open={deleteDialogOpen}

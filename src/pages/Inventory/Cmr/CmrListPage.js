@@ -33,7 +33,9 @@ import {
   useTheme,
   useMediaQuery,
   Fade,
-  Tooltip
+  Tooltip,
+  Card,
+  CardContent
 } from '@mui/material';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -61,6 +63,8 @@ import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../../services/crm';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { useTheme as useThemeContext } from '../../../contexts/ThemeContext';
 import StatusChip from '../../../components/common/StatusChip';
+import EmptyState from '../../../components/common/EmptyState';
+import TableSkeleton from '../../../components/common/TableSkeleton';
 
 // Ikony
 import AddIcon from '@mui/icons-material/Add';
@@ -805,20 +809,58 @@ const CmrListPage = () => {
           </Box>
         </Box>
         
-        {/* Zaktualizowana tabela z loading stanami */}
-        {(loading || mainTableLoading) ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-            <CircularProgress />
-          </Box>
-        ) : cmrDocuments.length === 0 ? (
-          <Paper sx={{ p: 3, textAlign: 'center' }}>
-            <Typography variant="body1">
-              {totalItems === 0 && !searchTerm && !statusFilter
+        {isMobile ? (
+          (loading || mainTableLoading) ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : cmrDocuments.length === 0 ? (
+            <EmptyState
+              title={totalItems === 0 && !searchTerm && !statusFilter
                 ? translate('cmr.noDocuments')
                 : 'Brak dokumentów CMR spełniających kryteria wyszukiwania.'
               }
-            </Typography>
-          </Paper>
+            />
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {cmrDocuments.map((cmr) => (
+                <Card key={cmr.id} variant="outlined" sx={{ borderRadius: 2 }}>
+                  <CardContent sx={{ pb: 1, '&:last-child': { pb: 1 } }}>
+                    <Typography variant="subtitle2" fontWeight={600}>
+                      {cmr.cmrNumber}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatDate(cmr.issueDate)}
+                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+                      <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: '45%' }}>
+                        {cmr.sender}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: '45%', textAlign: 'right' }}>
+                        → {cmr.recipient}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, pb: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                      <StatusChip status={cmr.status} size="small" />
+                      {getPaymentStatusChip(cmr.paymentStatus, cmr)}
+                    </Box>
+                    <Box>
+                      <IconButton size="small" component={RouterLink} to={`/inventory/cmr/${cmr.id}`}>
+                        <VisibilityIcon fontSize="small" />
+                      </IconButton>
+                      {cmr.status !== CMR_STATUSES.COMPLETED && cmr.status !== CMR_STATUSES.CANCELED && (
+                        <IconButton size="small" component={RouterLink} to={`/inventory/cmr/${cmr.id}/edit`}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                  </Box>
+                </Card>
+              ))}
+            </Box>
+          )
         ) : (
           <Fade in={showContent && !mainTableLoading} timeout={300}>
             <TableContainer component={Paper}>
@@ -897,8 +939,23 @@ const CmrListPage = () => {
                     <TableCell>{translate('cmr.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
+                {(loading || mainTableLoading) ? (
+                  <TableSkeleton columns={5} rows={5} />
+                ) : (
                 <TableBody>
-                  {cmrDocuments.map((cmr) => (
+                  {cmrDocuments.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 0 }}>
+                        <EmptyState
+                          title={totalItems === 0 && !searchTerm && !statusFilter
+                            ? translate('cmr.noDocuments')
+                            : 'Brak dokumentów CMR spełniających kryteria wyszukiwania.'
+                          }
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                  cmrDocuments.map((cmr) => (
                     <TableRow key={cmr.id}>
                       <TableCell>{cmr.cmrNumber}</TableCell>
                       <TableCell>{formatDate(cmr.issueDate)}</TableCell>
@@ -941,8 +998,10 @@ const CmrListPage = () => {
                         </IconButton>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ))
+                  )}
                 </TableBody>
+                )}
               </Table>
             </TableContainer>
           </Fade>

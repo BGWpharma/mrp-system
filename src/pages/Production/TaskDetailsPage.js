@@ -171,6 +171,7 @@ import { useTaskMaterialFetcher } from '../../hooks/production/useTaskMaterialFe
 // ✅ REFAKTORYZACJA: Wydzielone komponenty renderujące
 import MaterialCostsSummary from '../../components/production/MaterialCostsSummary';
 import TaskDialogsContainer from '../../components/production/TaskDialogsContainer';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 // ✅ Dodatkowy styl mt4 (nie ma w common styles)
 const mt4 = { mt: 4 };
@@ -212,6 +213,7 @@ const TaskDetailsPage = () => {
     closeDialog,
   } = useTaskDialogs();
   
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   // ✅ REFAKTORYZACJA: Usunięto nieużywane stany dialogów
@@ -1259,18 +1261,22 @@ const TaskDetailsPage = () => {
   };
 
   const handleDeleteComment = async (commentId) => {
-    if (!window.confirm(t('comments.deleteConfirm'))) {
-      return;
-    }
-
-    try {
-      const isAdmin = currentUser?.role === 'administrator';
-      await deleteTaskComment(id, commentId, currentUser.uid, isAdmin);
-      showSuccess(t('comments.deleteSuccess'));
-    } catch (error) {
-      console.error('Błąd usuwania komentarza:', error);
-      showError(t('comments.deleteError') + ': ' + error.message);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: t('comments.deleteConfirm'),
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          const isAdmin = currentUser?.role === 'administrator';
+          await deleteTaskComment(id, commentId, currentUser.uid, isAdmin);
+          showSuccess(t('comments.deleteSuccess'));
+        } catch (error) {
+          console.error('Błąd usuwania komentarza:', error);
+          showError(t('comments.deleteError') + ': ' + error.message);
+        }
+      }
+    });
   };
 
   // ✅ REFAKTORYZACJA: getStatusColor, getStatusActions przeniesione do utils/taskFormatters
@@ -3517,6 +3523,14 @@ const TaskDetailsPage = () => {
           Nie udało się załadować danych zadania. Spróbuj ponownie.
         </Typography>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Container>
   );
 };

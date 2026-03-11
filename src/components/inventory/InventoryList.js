@@ -88,6 +88,8 @@ import { INVENTORY_CATEGORIES } from '../../utils/constants';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useServiceData } from '../../hooks/useServiceData';
 import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../services/crm';
+import EmptyState from '../common/EmptyState';
+import TableSkeleton from '../common/TableSkeleton';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
   flexCenter, 
@@ -107,6 +109,8 @@ import ExpiryDatesPage from '../../pages/Inventory/ExpiryDatesPage';
 import SuppliersPage from '../../pages/Suppliers/SuppliersPage';
 import StocktakingPage from '../../pages/Inventory/StocktakingPage';
 
+import ConfirmDialog from '../common/ConfirmDialog';
+
 const LabelDialog = lazy(() => import('./LabelDialog'));
 
 // Definicje stałych
@@ -117,6 +121,7 @@ const InventoryList = () => {
   const [inventoryItems, setInventoryItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const [showArchived, setShowArchived] = useState(false);
   const [expiringCount, setExpiringCount] = useState(0);
   const [expiredCount, setExpiredCount] = useState(0);
@@ -531,15 +536,21 @@ const InventoryList = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Czy na pewno chcesz usunąć tę pozycję ze stanów?')) {
-      try {
-        await deleteInventoryItem(id);
-        fetchInventoryItems();
-        showSuccess('Pozycja została usunięta');
-      } catch (error) {
-        showError('Błąd podczas usuwania pozycji: ' + error.message);
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: 'Czy na pewno chcesz usunąć tę pozycję ze stanów?',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteInventoryItem(id);
+          fetchInventoryItems();
+          showSuccess('Pozycja została usunięta');
+        } catch (error) {
+          showError('Błąd podczas usuwania pozycji: ' + error.message);
+        }
       }
-    }
+    });
   };
 
   const getStockLevelIndicator = (quantity, minStock, maxStock) => {
@@ -834,17 +845,21 @@ const InventoryList = () => {
   };
 
   const handleDeleteWarehouse = async (warehouseId) => {
-    if (!window.confirm('Czy na pewno chcesz usunąć tę lokalizację? Ta operacja jest nieodwracalna.')) {
-      return;
-    }
-    
-    try {
-      await deleteWarehouse(warehouseId);
-      fetchWarehouses();
-      showSuccess('Lokalizacja została usunięta');
-    } catch (error) {
-      showError('Błąd podczas usuwania lokalizacji: ' + error.message);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: 'Czy na pewno chcesz usunąć tę lokalizację? Ta operacja jest nieodwracalna.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteWarehouse(warehouseId);
+          fetchWarehouses();
+          showSuccess('Lokalizacja została usunięta');
+        } catch (error) {
+          showError('Błąd podczas usuwania lokalizacji: ' + error.message);
+        }
+      }
+    });
   };
 
   // Funkcja otwierająca dialog etykiet
@@ -969,71 +984,76 @@ const InventoryList = () => {
 
   // Funkcja do usuwania rezerwacji
   const handleDeleteReservation = async (reservationId) => {
-    if (!window.confirm('Czy na pewno chcesz usunąć tę rezerwację? Ta operacja jest nieodwracalna.')) {
-      return;
-    }
-    
-    try {
-      await deleteReservation(reservationId, currentUser.uid);
-      showSuccess('Rezerwacja została usunięta');
-      // Odśwież dane
-      await fetchReservations(selectedItem);
-    } catch (error) {
-      console.error('Błąd podczas usuwania rezerwacji:', error);
-      showError(error.message);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: 'Czy na pewno chcesz usunąć tę rezerwację? Ta operacja jest nieodwracalna.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteReservation(reservationId, currentUser.uid);
+          showSuccess('Rezerwacja została usunięta');
+          await fetchReservations(selectedItem);
+        } catch (error) {
+          console.error('Błąd podczas usuwania rezerwacji:', error);
+          showError(error.message);
+        }
+      }
+    });
   };
 
   // Funkcja do aktualizacji informacji o zadaniach w rezerwacjach
   const handleUpdateReservationTasks = async () => {
-    if (!window.confirm('Czy na pewno chcesz zaktualizować dane zadań we wszystkich rezerwacjach? To może zająć dłuższą chwilę.')) {
-      return;
-    }
-    
-    setUpdatingTasks(true);
-    try {
-      const result = await updateReservationTasks();
-      
-      showSuccess(`Zaktualizowano ${result.updated.length} rezerwacji. ${result.notUpdated.length} rezerwacji nie ma przypisanych zadań.`);
-      
-      // Odśwież dane po aktualizacji
-      if (selectedItem) {
-        await fetchReservations(selectedItem);
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie',
+      message: 'Czy na pewno chcesz zaktualizować dane zadań we wszystkich rezerwacjach? To może zająć dłuższą chwilę.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setUpdatingTasks(true);
+        try {
+          const result = await updateReservationTasks();
+          showSuccess(`Zaktualizowano ${result.updated.length} rezerwacji. ${result.notUpdated.length} rezerwacji nie ma przypisanych zadań.`);
+          if (selectedItem) {
+            await fetchReservations(selectedItem);
+          }
+        } catch (error) {
+          console.error('Błąd podczas aktualizacji rezerwacji:', error);
+          showError('Wystąpił błąd podczas aktualizacji rezerwacji');
+        } finally {
+          setUpdatingTasks(false);
+        }
       }
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji rezerwacji:', error);
-      showError('Wystąpił błąd podczas aktualizacji rezerwacji');
-    } finally {
-      setUpdatingTasks(false);
-    }
+    });
   };
 
   // Funkcja do czyszczenia rezerwacji z usuniętych zadań
   const handleCleanupDeletedTaskReservations = async () => {
-    if (!window.confirm('Czy na pewno chcesz usunąć wszystkie rezerwacje dla usuniętych zadań produkcyjnych? Ta operacja jest nieodwracalna.')) {
-      return;
-    }
-    
-    setCleaningReservations(true);
-    try {
-      const result = await cleanupDeletedTaskReservations();
-      
-      if (result.count > 0) {
-        showSuccess(`Usunięto ${result.count} rezerwacji z usuniętych zadań produkcyjnych.`);
-      } else {
-        showSuccess(t('inventory:states.reservationsTab.noReservationsToClean'));
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: 'Czy na pewno chcesz usunąć wszystkie rezerwacje dla usuniętych zadań produkcyjnych? Ta operacja jest nieodwracalna.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setCleaningReservations(true);
+        try {
+          const result = await cleanupDeletedTaskReservations();
+          if (result.count > 0) {
+            showSuccess(`Usunięto ${result.count} rezerwacji z usuniętych zadań produkcyjnych.`);
+          } else {
+            showSuccess(t('inventory:states.reservationsTab.noReservationsToClean'));
+          }
+          if (selectedItem) {
+            await fetchReservations(selectedItem);
+          }
+        } catch (error) {
+          console.error('Błąd podczas czyszczenia rezerwacji:', error);
+          showError('Wystąpił błąd podczas czyszczenia rezerwacji');
+        } finally {
+          setCleaningReservations(false);
+        }
       }
-      
-      // Odśwież dane po aktualizacji
-      if (selectedItem) {
-        await fetchReservations(selectedItem);
-      }
-    } catch (error) {
-      console.error('Błąd podczas czyszczenia rezerwacji:', error);
-      showError('Wystąpił błąd podczas czyszczenia rezerwacji');
-    } finally {
-      setCleaningReservations(false);
-    }
+    });
   };
 
   // Funkcja do pobierania pozycji z wybranego magazynu
@@ -2120,35 +2140,32 @@ const InventoryList = () => {
 
   // Funkcja do przeliczania ilości wszystkich pozycji magazynowych z partii
   const handleRecalculateAllQuantities = async () => {
-    if (!window.confirm('Czy na pewno chcesz przeliczać ilości wszystkich pozycji magazynowych na podstawie partii? To może zająć kilka minut dla dużych baz danych.')) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      console.log('🔄 Rozpoczynanie przeliczania wszystkich ilości...');
-      
-      const results = await recalculateAllInventoryQuantities();
-      
-      console.log('✅ Przeliczanie zakończone:', results);
-      
-      const changedItems = results.items.filter(item => !item.error && item.difference !== 0);
-      
-      showSuccess(
-        `Przeliczono ilości dla ${results.success} pozycji. ` +
-        `Zaktualizowano ${changedItems.length} pozycji. ` +
-        `Błędy: ${results.failed}`
-      );
-      
-      // Odśwież listę pozycji
-      await fetchInventoryItems(tableSort.field, tableSort.order);
-      
-    } catch (error) {
-      console.error('❌ Błąd podczas przeliczania ilości:', error);
-      showError(`Nie udało się przeliczać ilości: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie',
+      message: 'Czy na pewno chcesz przeliczać ilości wszystkich pozycji magazynowych na podstawie partii? To może zająć kilka minut dla dużych baz danych.',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          setLoading(true);
+          console.log('🔄 Rozpoczynanie przeliczania wszystkich ilości...');
+          const results = await recalculateAllInventoryQuantities();
+          console.log('✅ Przeliczanie zakończone:', results);
+          const changedItems = results.items.filter(item => !item.error && item.difference !== 0);
+          showSuccess(
+            `Przeliczono ilości dla ${results.success} pozycji. ` +
+            `Zaktualizowano ${changedItems.length} pozycji. ` +
+            `Błędy: ${results.failed}`
+          );
+          await fetchInventoryItems(tableSort.field, tableSort.order);
+        } catch (error) {
+          console.error('❌ Błąd podczas przeliczania ilości:', error);
+          showError(`Nie udało się przeliczać ilości: ${error.message}`);
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
   };
 
   const handleMenuItemClick = (action) => {
@@ -2409,61 +2426,12 @@ const InventoryList = () => {
             <Fade in={mainTableLoading} timeout={200}>
               <TableContainer component={Paper} sx={{ mt: 3 }}>
                 <Table>
-                  <TableHead>
-                    <TableRow>
-                      {visibleColumns.name && <TableCell>{t('inventory.states.table.sku')}</TableCell>}
-                      {visibleColumns.category && <TableCell>{t('inventory.states.table.category')}</TableCell>}
-                      {visibleColumns.casNumber && <TableCell>{t('inventory.states.table.casNumber')}</TableCell>}
-                      {visibleColumns.barcode && <TableCell>{t('inventory.states.table.barcode')}</TableCell>}
-                      {visibleColumns.totalQuantity && <TableCell>{t('inventory.states.table.totalQuantity')}</TableCell>}
-                      {visibleColumns.reservedQuantity && <TableCell>{t('inventory.states.table.reservedQuantity')}</TableCell>}
-                      {visibleColumns.availableQuantity && <TableCell>{t('inventory.states.table.availableQuantity')}</TableCell>}
-                      {visibleColumns.status && <TableCell>{t('inventory.states.table.status')}</TableCell>}
-                      {visibleColumns.customers && <TableCell>Klienci</TableCell>}
-                      {visibleColumns.location && <TableCell>{t('inventory.states.table.location')}</TableCell>}
-                      {visibleColumns.actions && <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {Array.from({ length: pageSize }).map((_, index) => (
-                      <TableRow key={index}>
-                        {visibleColumns.name && (
-                          <TableCell>
-                            <Skeleton variant="text" width="80%" height={24} />
-                            <Skeleton variant="text" width="60%" height={16} />
-                          </TableCell>
-                        )}
-                        {visibleColumns.category && <TableCell><Skeleton variant="text" width="70%" /></TableCell>}
-                        {visibleColumns.casNumber && <TableCell><Skeleton variant="text" width="60%" /></TableCell>}
-                        {visibleColumns.barcode && <TableCell><Skeleton variant="text" width="60%" /></TableCell>}
-                        {visibleColumns.totalQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
-                        {visibleColumns.reservedQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
-                        {visibleColumns.availableQuantity && <TableCell><Skeleton variant="text" width="50%" /></TableCell>}
-                        {visibleColumns.status && <TableCell><Skeleton variant="rectangular" width={60} height={24} /></TableCell>}
-                        {visibleColumns.customers && <TableCell><Skeleton variant="text" width="70%" /></TableCell>}
-                        {visibleColumns.location && <TableCell><Skeleton variant="text" width="60%" /></TableCell>}
-                        {visibleColumns.actions && (
-                          <TableCell align="right">
-                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                              <Skeleton variant="circular" width={24} height={24} />
-                              <Skeleton variant="circular" width={24} height={24} />
-                              <Skeleton variant="circular" width={24} height={24} />
-                              <Skeleton variant="circular" width={24} height={24} />
-                            </Box>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
+                  <TableSkeleton columns={Object.values(visibleColumns).filter(Boolean).length - (visibleColumns.actions ? 1 : 0)} rows={5} hasActions={!!visibleColumns.actions} />
                 </Table>
               </TableContainer>
             </Fade>
           ) : displayedItems.length === 0 ? (
-            <Fade in={!mainTableLoading} timeout={300}>
-              <Typography variant="body1" align="center">
-                {t('inventory.states.noItemsFound')}
-              </Typography>
-            </Fade>
+            <EmptyState title={t('inventory.states.noItemsFound')} />
           ) : (
             <Fade in={showContent} timeout={300}>
               <div>
@@ -3893,6 +3861,13 @@ const InventoryList = () => {
         </DialogActions>
       </Dialog>
 
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </div>
   );
 };

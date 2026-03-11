@@ -64,6 +64,26 @@
     "productionTasks": "Zadania produkcyjne",
     "goTo": "Przejdź"
   },
+  "kpi": {
+    "orders": {
+      "title": "Zamówienia",
+      "inProgress": "W realizacji",
+      "action": "Zobacz wszystkie"
+    },
+    "production": {
+      "title": "Produkcja",
+      "activeTasks": "Aktywne zadania",
+      "action": "Zobacz zadania"
+    },
+    "purchaseOrders": {
+      "title": "Zamówienia zakupu",
+      "action": "Zobacz PO"
+    },
+    "inventory": {
+      "title": "Magazyn",
+      "action": "Zobacz magazyn"
+    }
+  },
   "statuses": {
     "new": "Nowe",
     "inProgress": "W realizacji",

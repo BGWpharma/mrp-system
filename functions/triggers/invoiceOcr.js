@@ -1696,10 +1696,124 @@ const retryInvoiceOcr = onCall(
     },
 );
 
+// ============================================================================
+// CALLABLE: Delete manual upload
+// ============================================================================
+
+/**
+ * Delete a manually uploaded purchase invoice (sourceType === "manual_upload")
+ * Deletes both the Firestore document and the Storage file.
+ * Protected invoices (posted/proforma_posted) cannot be deleted.
+ */
+const deleteManualUpload = onCall(
+    {
+      region: "europe-central2",
+    },
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "User must be authenticated");
+      }
+
+      const {invoiceId} = request.data;
+      if (!invoiceId) {
+        throw new HttpsError("invalid-argument", "invoiceId is required");
+      }
+
+      logger.info("[Delete Manual] Starting deletion", {
+        invoiceId,
+        userId: request.auth.uid,
+      });
+
+      const db = admin.firestore();
+
+      try {
+        const invoiceDoc = await db
+            .collection("purchaseInvoices")
+            .doc(invoiceId)
+            .get();
+
+        if (!invoiceDoc.exists) {
+          throw new HttpsError("not-found", "Invoice not found");
+        }
+
+        const data = invoiceDoc.data();
+
+        if (data.sourceType !== "manual_upload") {
+          throw new HttpsError(
+              "failed-precondition",
+              "Only manual uploads can be deleted this way",
+          );
+        }
+
+        if (data.status === "posted" || data.status === "proforma_posted") {
+          throw new HttpsError(
+              "failed-precondition",
+              "Cannot delete posted invoice",
+          );
+        }
+
+        // Unlink proformas if any
+        if (data.proformaSettlements && data.proformaSettlements.length > 0) {
+          try {
+            await unlinkAllProformasFromInvoice(
+                db, "purchaseInvoices", invoiceId,
+            );
+          } catch (unlinkErr) {
+            logger.warn("[Delete Manual] Failed to unlink proformas", {
+              error: unlinkErr.message,
+            });
+          }
+        }
+
+        // Delete the storage file
+        const storagePath = data.sourceFile?.storagePath;
+        if (storagePath) {
+          try {
+            const bucket = admin.storage().bucket();
+            await bucket.file(storagePath).delete();
+            logger.info("[Delete Manual] Deleted storage file", {storagePath});
+          } catch (storageErr) {
+            if (storageErr.code === 404) {
+              logger.info("[Delete Manual] Storage file already gone", {
+                storagePath,
+              });
+            } else {
+              logger.warn("[Delete Manual] Failed to delete storage file", {
+                error: storageErr.message,
+                storagePath,
+              });
+            }
+          }
+        }
+
+        // Delete the Firestore document
+        await db.collection("purchaseInvoices").doc(invoiceId).delete();
+
+        logger.info("[Delete Manual] ✅ Manual upload deleted", {
+          invoiceId,
+          storagePath,
+          deletedBy: request.auth.uid,
+        });
+
+        return {success: true, invoiceId};
+      } catch (error) {
+        if (error instanceof HttpsError) {
+          throw error;
+        }
+        logger.error("[Delete Manual] ❌ Error", {
+          error: error.message,
+          invoiceId,
+        });
+        throw new HttpsError("internal", `Delete failed: ${error.message}`);
+      }
+    },
+);
+
 module.exports = {
   onInvoiceAttachmentUploaded,
   onCmrInvoiceCreated,
   onInvoiceAttachmentDeleted,
   onCmrInvoiceDeleted,
   retryInvoiceOcr,
+  deleteManualUpload,
 };

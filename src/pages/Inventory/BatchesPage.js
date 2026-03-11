@@ -78,6 +78,7 @@ import { auth } from '../../services/firebase/config';
 import { getTaskById } from '../../services/production/productionService';
 import BatchVisualization from '../../components/inventory/BatchVisualization';
 import BatchDetailsDialog from '../../components/inventory/BatchDetailsDialog';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 const LabelDialog = lazy(() => import('../../components/inventory/LabelDialog'));
 
@@ -87,6 +88,7 @@ const BatchesPage = () => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { showError, showSuccess } = useNotification();
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const { currentUser } = useAuth();
   const { t } = useTranslation('inventory');
   const [localUser, setLocalUser] = useState(null);
@@ -862,41 +864,38 @@ const BatchesPage = () => {
   };
   
   const handleDeleteCertificate = async (batch) => {
-    if (!window.confirm(t('inventory.batches.confirmDeleteCertificate'))) {
-      return;
-    }
-    
-    try {
-      setUploadingCertificate(true);
-      // Używamy wielu źródeł danych użytkownika
-      const effectiveUser = localUser || currentUser || auth.currentUser;
-      // Sprawdź czy user istnieje i pobierz uid lub użyj 'unknown'
-      const userId = effectiveUser?.uid || 'unknown';
-      await deleteBatchCertificate(batch.id, userId);
-      showSuccess(t('inventory.batches.certificateDeletedSuccessfully'));
-      
-      // Odśwież dane partii
-      const refreshedBatches = await getItemBatches(id);
-      const warehousesData = await getAllWarehouses();
-      
-      // Dodaj informacje o magazynie
-      const enhancedBatches = refreshedBatches.map(batch => {
-        const warehouse = warehousesData.find(w => w.id === batch.warehouseId);
-        return {
-          ...batch,
-          warehouseName: warehouse?.name || 'Magazyn podstawowy',
-          warehouseAddress: warehouse?.address || '',
-        };
-      });
-      
-      setBatches(enhancedBatches);
-      setFilteredBatches(enhancedBatches);
-    } catch (error) {
-      console.error(t('inventory.batches.errorDeletingCertificate'), error);
-      showError(error.message || t('inventory.batches.errorDeletingCertificateMessage'));
-    } finally {
-      setUploadingCertificate(false);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: t('inventory.batches.confirmDeleteCertificate'),
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          setUploadingCertificate(true);
+          const effectiveUser = localUser || currentUser || auth.currentUser;
+          const userId = effectiveUser?.uid || 'unknown';
+          await deleteBatchCertificate(batch.id, userId);
+          showSuccess(t('inventory.batches.certificateDeletedSuccessfully'));
+          const refreshedBatches = await getItemBatches(id);
+          const warehousesData = await getAllWarehouses();
+          const enhancedBatches = refreshedBatches.map(batch => {
+            const warehouse = warehousesData.find(w => w.id === batch.warehouseId);
+            return {
+              ...batch,
+              warehouseName: warehouse?.name || 'Magazyn podstawowy',
+              warehouseAddress: warehouse?.address || '',
+            };
+          });
+          setBatches(enhancedBatches);
+          setFilteredBatches(enhancedBatches);
+        } catch (error) {
+          console.error(t('inventory.batches.errorDeletingCertificate'), error);
+          showError(error.message || t('inventory.batches.errorDeletingCertificateMessage'));
+        } finally {
+          setUploadingCertificate(false);
+        }
+      }
+    });
   };
 
   const handleArchiveBatch = async (batch) => {
@@ -2323,6 +2322,14 @@ const BatchesPage = () => {
         open={detailsDialogOpen}
         onClose={handleCloseDetailsDialog}
         batch={selectedBatchForDetails}
+      />
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
       />
     </Container>
   );

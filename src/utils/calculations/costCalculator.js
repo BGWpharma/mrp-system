@@ -7,7 +7,7 @@
  * - Rentowność zamówień klientów
  */
 
-import { getExchangeRate } from '../../services/finance';
+import { getExchangeRate } from '../../services/finance/exchangeRateService';
 
 /**
  * Oblicza koszt materiałów na podstawie listy składników i mapy cen

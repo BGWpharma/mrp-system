@@ -47,6 +47,7 @@ import { db } from '../../services/firebase/config';
 import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 import ColumnList from '../../components/taskboard/ColumnList';
 import BoardSettingsDialog from '../../components/taskboard/BoardSettingsDialog';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 
 const BOARD_ICONS = [
   { name: 'Folder', icon: FolderIcon },
@@ -92,6 +93,7 @@ const BoardDetail = ({
   const [newColumnTitle, setNewColumnTitle] = useState('');
   const [userNamesMap, setUserNamesMap] = useState({});
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
 
   // Pobierz nazwy użytkowników dla wszystkich przypisanych osób (zoptymalizowane)
   useEffect(() => {
@@ -268,15 +270,19 @@ const BoardDetail = ({
       ? t('deleteColumnWithTasks', { count: taskCount })
       : t('deleteColumnConfirm');
 
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-
-    try {
-      await deleteColumn(columnId);
-    } catch (error) {
-      console.error('Błąd podczas usuwania kolumny:', error);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: confirmMessage,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        try {
+          await deleteColumn(columnId);
+        } catch (error) {
+          console.error('Błąd podczas usuwania kolumny:', error);
+        }
+      }
+    });
   }, [tasks, t]);
 
   // Optimistic update dla zadań
@@ -474,6 +480,14 @@ const BoardDetail = ({
         onBoardUpdated={() => {
           // Board zostanie automatycznie zaktualizowany przez real-time listener
         }}
+      />
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
       />
     </Container>
   );

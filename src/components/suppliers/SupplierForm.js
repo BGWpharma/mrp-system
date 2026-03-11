@@ -20,6 +20,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { getSupplierById, createSupplier, updateSupplier } from '../../services/suppliers';
 import { validateNipFormat, getBasicCompanyDataByNip } from '../../services/nipValidationService';
 import SupplierProductCatalog from './SupplierProductCatalog';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 const SupplierForm = ({ viewOnly = false, supplierId }) => {
   const { t } = useTranslation('suppliers');
@@ -29,6 +30,7 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
   
   const [loading, setLoading] = useState(!!supplierId);
   const [saving, setSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
   const [verifyingNip, setVerifyingNip] = useState(false);
   
   const [supplierData, setSupplierData] = useState({
@@ -227,23 +229,24 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
   
   const handleDeleteAddress = (index) => {
     if (viewOnly) return;
-    if (!window.confirm(t('suppliers.form.addresses.confirmDelete'))) {
-      return;
-    }
-    
-    const updatedAddresses = [...supplierData.addresses];
-    const deletedAddress = updatedAddresses[index];
-    updatedAddresses.splice(index, 1);
-    
-    // Jeśli usunięto główny adres, a lista nie jest pusta, ustaw pierwszy jako główny
-    if (deletedAddress.isMain && updatedAddresses.length > 0) {
-      updatedAddresses[0].isMain = true;
-    }
-    
-    setSupplierData(prev => ({
-      ...prev,
-      addresses: updatedAddresses
-    }));
+    setConfirmDialog({
+      open: true,
+      title: 'Potwierdzenie usunięcia',
+      message: t('suppliers.form.addresses.confirmDelete'),
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        const updatedAddresses = [...supplierData.addresses];
+        const deletedAddress = updatedAddresses[index];
+        updatedAddresses.splice(index, 1);
+        if (deletedAddress.isMain && updatedAddresses.length > 0) {
+          updatedAddresses[0].isMain = true;
+        }
+        setSupplierData(prev => ({
+          ...prev,
+          addresses: updatedAddresses
+        }));
+      }
+    });
   };
   
   const handleSubmit = async (e) => {
@@ -585,6 +588,14 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
             </Button>
           </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Container>
   );
 };

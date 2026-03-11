@@ -17,8 +17,18 @@ import { db, storage } from '../firebase/config';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { preciseCompare } from '../../utils/calculations';
 import { generateFSNumber, generateFPFNumber, generateFKNumber } from '../../utils/calculations';
+import { ServiceCacheManager } from '../cache/serviceCacheManager';
 
 const INVOICES_COLLECTION = 'invoices';
+
+export const INVOICES_CACHE_KEY = 'invoices:all';
+export const REINVOICES_CACHE_KEY = 'invoices:reinvoices';
+const PROFORMA_AMOUNTS_CACHE_KEY = 'invoices:proformaAmounts';
+const INVOICES_CACHE_TTL = 5 * 60 * 1000;
+
+export const invalidateInvoicesCache = () => {
+  ServiceCacheManager.invalidateByPrefix('invoices:');
+};
 
 /**
  * Sprawdza czy obiekt jest specjalnym obiektem Firestore (FieldValue, serverTimestamp itp.)
@@ -144,6 +154,110 @@ export const getAllInvoices = async (filters = null) => {
     return invoices;
   } catch (error) {
     console.error('Błąd podczas pobierania faktur:', error);
+    throw error;
+  }
+};
+
+const convertInvoiceTimestamps = (doc) => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    ...data,
+    issueDate: data.issueDate && typeof data.issueDate.toDate === 'function' ? data.issueDate.toDate() : data.issueDate,
+    dueDate: data.dueDate && typeof data.dueDate.toDate === 'function' ? data.dueDate.toDate() : data.dueDate,
+    paymentDate: data.paymentDate && typeof data.paymentDate.toDate === 'function' ? data.paymentDate.toDate() : data.paymentDate,
+    createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : data.createdAt,
+    updatedAt: data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate() : data.updatedAt
+  };
+};
+
+/**
+ * Pobiera tylko reinvoice (faktury refakturujące) z Firestore z filtrem po stronie serwera
+ */
+export const getReinvoices = async () => {
+  try {
+    const reinvoicesQuery = query(
+      collection(db, INVOICES_COLLECTION),
+      where('isRefInvoice', '==', true),
+      orderBy('issueDate', 'desc')
+    );
+    const querySnapshot = await getDocs(reinvoicesQuery);
+    return querySnapshot.docs.map(convertInvoiceTimestamps);
+  } catch (error) {
+    console.error('Błąd podczas pobierania reinvoices:', error);
+    throw error;
+  }
+};
+
+/**
+ * Batch: Oblicza dostępne kwoty dla wielu proform naraz.
+ * Zamiast N osobnych zapytań getAvailableProformaAmount, używa jednego query
+ * na faktury z alokacjami proform i oblicza wszystko w pamięci.
+ */
+export const getAvailableProformaAmountsBatch = async (proformaInvoices) => {
+  if (!proformaInvoices || proformaInvoices.length === 0) return {};
+
+  const cached = ServiceCacheManager.get(PROFORMA_AMOUNTS_CACHE_KEY);
+  if (cached) return cached;
+
+  try {
+    const proformaIds = proformaInvoices.map(inv => inv.id);
+
+    const allInvoicesQuery = query(
+      collection(db, INVOICES_COLLECTION),
+      where('isProforma', '==', false),
+      orderBy('issueDate', 'desc')
+    );
+    const snapshot = await getDocs(allInvoicesQuery);
+
+    const usageMap = {};
+    proformaIds.forEach(id => { usageMap[id] = 0; });
+
+    snapshot.docs.forEach(docSnap => {
+      const data = docSnap.data();
+      if (data.proformAllocation && Array.isArray(data.proformAllocation)) {
+        data.proformAllocation.forEach(alloc => {
+          if (alloc.proformaId && proformaIds.includes(alloc.proformaId)) {
+            usageMap[alloc.proformaId] = (usageMap[alloc.proformaId] || 0) + (alloc.amount || 0);
+          }
+        });
+      }
+    });
+
+    const amounts = {};
+    proformaInvoices.forEach(proforma => {
+      const total = parseFloat(proforma.total || 0);
+      const paid = parseFloat(proforma.totalPaid || 0);
+      const used = usageMap[proforma.id] || 0;
+      const available = Math.max(0, paid - used);
+      const requiredAdvancePaymentPercentage = parseFloat(proforma.requiredAdvancePaymentPercentage || 0);
+
+      let isReadyForSettlement;
+      let requiredPaymentAmount;
+
+      if (requiredAdvancePaymentPercentage > 0) {
+        requiredPaymentAmount = total * requiredAdvancePaymentPercentage / 100;
+        isReadyForSettlement = preciseCompare(paid, requiredPaymentAmount, 0.01) >= 0;
+      } else {
+        requiredPaymentAmount = total;
+        isReadyForSettlement = preciseCompare(paid, total, 0.01) >= 0;
+      }
+
+      amounts[proforma.id] = {
+        total,
+        paid,
+        used,
+        available,
+        isReadyForSettlement,
+        requiredPaymentAmount,
+        requiredAdvancePaymentPercentage
+      };
+    });
+
+    ServiceCacheManager.set(PROFORMA_AMOUNTS_CACHE_KEY, amounts, 2 * 60 * 1000);
+    return amounts;
+  } catch (error) {
+    console.error('Błąd podczas batch pobierania kwot proform:', error);
     throw error;
   }
 };
@@ -360,6 +474,7 @@ export const createInvoice = async (invoiceData, userId) => {
       }
     }
     
+    invalidateInvoicesCache();
     return newInvoiceId;
   } catch (error) {
     console.error('Błąd podczas tworzenia faktury:', error);
@@ -751,9 +866,9 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
       await recalculatePaymentStatus(invoiceId, userId);
     } catch (paymentStatusError) {
       console.warn('Błąd podczas automatycznego przeliczania statusu płatności:', paymentStatusError);
-      // Nie przerywamy procesu aktualizacji faktury z powodu błędu statusu płatności
     }
     
+    invalidateInvoicesCache();
     return true;
   } catch (error) {
     console.error('Błąd podczas aktualizacji faktury:', error);
@@ -799,6 +914,7 @@ export const deleteInvoice = async (invoiceId) => {
     }
     
     await deleteDoc(doc(db, INVOICES_COLLECTION, invoiceId));
+    invalidateInvoicesCache();
     return true;
   } catch (error) {
     console.error('Błąd podczas usuwania faktury:', error);
@@ -843,6 +959,7 @@ export const updateInvoiceStatus = async (invoiceId, status, userId) => {
     }
     
     await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), updateData);
+    invalidateInvoicesCache();
     return true;
   } catch (error) {
     console.error('Błąd podczas aktualizacji statusu faktury:', error);
@@ -1266,6 +1383,7 @@ export const addPaymentToInvoice = async (invoiceId, paymentData, userId) => {
     });
 
     console.log(`Dodano płatność do faktury ${invoiceId}`);
+    invalidateInvoicesCache();
     return { success: true, paymentId: newPayment.id, totalPaid, paymentStatus };
   } catch (error) {
     console.error('Błąd podczas dodawania płatności:', error);
@@ -1358,6 +1476,7 @@ export const removePaymentFromInvoice = async (invoiceId, paymentId, userId) => 
     });
 
     console.log(`Usunięto płatność ${paymentId} z faktury ${invoiceId}`);
+    invalidateInvoicesCache();
     return { success: true, totalPaid, paymentStatus };
   } catch (error) {
     console.error('Błąd podczas usuwania płatności:', error);
@@ -1461,6 +1580,7 @@ export const updatePaymentInInvoice = async (invoiceId, paymentId, updatedPaymen
     });
 
     console.log(`Zaktualizowano płatność ${paymentId} w fakturze ${invoiceId}`);
+    invalidateInvoicesCache();
     return { success: true, totalPaid, paymentStatus };
   } catch (error) {
     console.error('Błąd podczas edycji płatności:', error);
@@ -1792,6 +1912,7 @@ export const updateProformaUsage = async (proformaId, usedAmount, targetInvoiceI
     
     console.log(`[updateProformaUsage] ✅ Zaktualizowano proformę ${proformaData.number}, pozostało: ${(maxLimit - newUsed).toFixed(2)}`);
     
+    invalidateInvoicesCache();
     return { success: true, remainingAmount: maxLimit - newUsed };
   } catch (error) {
     console.error('Błąd podczas aktualizacji wykorzystania proformy:', error);
@@ -1828,6 +1949,7 @@ export const removeProformaUsage = async (proformaId, usedAmount, targetInvoiceI
     
     console.log(`[removeProformaUsage] ✅ Usunięto wykorzystanie z proformy ${proformaData.number}`);
     
+    invalidateInvoicesCache();
     return { success: true };
   } catch (error) {
     console.error('Błąd podczas usuwania wykorzystania proformy:', error);
