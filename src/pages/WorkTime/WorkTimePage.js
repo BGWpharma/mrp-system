@@ -56,25 +56,8 @@ const WorkTimePage = () => {
   const [savingStart, setSavingStart] = useState(false);
   const [savingEnd, setSavingEnd] = useState(false);
 
-  const roundUp30 = (date) => {
-    const d = new Date(date);
-    const minutes = d.getMinutes();
-    const rounded = Math.ceil(minutes / 30) * 30;
-    d.setMinutes(rounded, 0, 0);
-    return d;
-  };
-
-  const roundDown30 = (date) => {
-    const d = new Date(date);
-    const minutes = d.getMinutes();
-    const rounded = Math.floor(minutes / 30) * 30;
-    d.setMinutes(rounded, 0, 0);
-    return d;
-  };
-
-  // Zegary — start zaokrąglony w górę, koniec w dół
-  const [startTime, setStartTime] = useState(() => roundUp30(new Date()));
-  const [endTime, setEndTime] = useState(() => roundDown30(new Date()));
+  const [startTime, setStartTime] = useState(() => new Date());
+  const [endTime, setEndTime] = useState(() => new Date());
   const [startSaved, setStartSaved] = useState(false); // czy start został już zapisany
 
   // Otwarty wpis (rozpoczęta praca bez zakończenia)
@@ -247,8 +230,8 @@ const WorkTimePage = () => {
     setEmployee(null);
     setOpenEntry(null);
     setStartSaved(false);
-    setStartTime(roundUp30(new Date()));
-    setEndTime(roundDown30(new Date()));
+    setStartTime(new Date());
+    setEndTime(new Date());
     setStartError('');
     setEndError('');
     setShowHistory(false);
@@ -260,8 +243,8 @@ const WorkTimePage = () => {
   const handleNewEntry = () => {
     setOpenEntry(null);
     setStartSaved(false);
-    setStartTime(roundUp30(new Date()));
-    setEndTime(roundDown30(new Date()));
+    setStartTime(new Date());
+    setEndTime(new Date());
     setStartError('');
     setEndError('');
     setStep('clocks');
@@ -498,7 +481,6 @@ const WorkTimePage = () => {
                                   }
                                 }}
                                 ampm={false}
-                                minutesStep={30}
                                 minTime={minStartTime}
                                 slotProps={{ actionBar: { sx: { display: 'none' } } }}
                               />
@@ -577,7 +559,6 @@ const WorkTimePage = () => {
                                   }
                                 }}
                                 ampm={false}
-                                minutesStep={30}
                                 minTime={minEndTime}
                                 maxTime={maxEndTime}
                                 slotProps={{ actionBar: { sx: { display: 'none' } } }}
