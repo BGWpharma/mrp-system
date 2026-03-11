@@ -356,7 +356,14 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
   };
 
   const getStatusColor = (status) => {
-    return getStatusMainColor(status);
+    switch (status) {
+      case 'Zaplanowane': return '#6366f1';
+      case 'W trakcie':   return '#f59e0b';
+      case 'Zakończone':  return '#10b981';
+      case 'Anulowane':   return '#ef4444';
+      case 'Wstrzymane':  return '#64748b';
+      default:            return getStatusMainColor(status);
+    }
   };
 
   const statusColor = getStatusColor(task.status);
@@ -1241,9 +1248,16 @@ const ProductionTimeline = React.memo(({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [focusedMOId]);
 
-  // Funkcje pomocnicze dla kolorów
+  // Funkcje pomocnicze dla kolorów – spójne z legendą harmonogramu (CSS variables)
   const getStatusColor = (status) => {
-    return getStatusMainColor(status);
+    switch (status) {
+      case 'Zaplanowane': return '#6366f1';
+      case 'W trakcie':   return '#f59e0b';
+      case 'Zakończone':  return '#10b981';
+      case 'Anulowane':   return '#ef4444';
+      case 'Wstrzymane':  return '#64748b';
+      default:            return getStatusMainColor(status);
+    }
   };
 
   const getWorkstationColor = useCallback((workstationId) => {
