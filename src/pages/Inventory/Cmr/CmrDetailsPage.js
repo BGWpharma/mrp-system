@@ -109,6 +109,7 @@ import { logger } from '../../../utils/logger';
 import StatusChip from '../../../components/common/StatusChip';
 import StatusStepper from '../../../components/common/StatusStepper';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import DetailPageLayout from '../../../components/common/DetailPageLayout';
 
 // Ikony
 import EditIcon from '@mui/icons-material/Edit';
@@ -1915,42 +1916,23 @@ const CmrDetailsPage = () => {
     }
   }, [id]);
   
-  if (loading) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Box sx={{ ...loadingContainer, mt: 4 }}>
-          <CircularProgress />
-        </Box>
-      </Container>
-    );
-  }
-  
-  if (!cmrData) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Alert severity="error">
-          {t('details.errors.loadingDocument')}
-        </Alert>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={handleBack}
-          sx={mt2}
-        >
-          {t('details.backToList')}
-        </Button>
-      </Container>
-    );
-  }
-  
-  const isEditable = cmrData.status === CMR_STATUSES.DRAFT || cmrData.status === CMR_STATUSES.ISSUED || cmrData.status === CMR_STATUSES.COMPLETED;
-  logger.log('CMR Status:', cmrData.status);
+  const isEditable = cmrData?.status === CMR_STATUSES.DRAFT || cmrData?.status === CMR_STATUSES.ISSUED || cmrData?.status === CMR_STATUSES.COMPLETED;
+  logger.log('CMR Status:', cmrData?.status);
   logger.log('Is Editable:', isEditable);
   logger.log('CMR_STATUSES.DRAFT:', CMR_STATUSES.DRAFT);
   logger.log('CMR_STATUSES.ISSUED:', CMR_STATUSES.ISSUED);
   
   return (
-    <Container maxWidth="xl" sx={{ mt: 2, mb: 4 }}>
+    <DetailPageLayout
+      loading={loading}
+      error={!cmrData && !loading}
+      errorMessage={t('details.errors.loadingDocument')}
+      backTo="/inventory/cmr"
+      backLabel={t('details.backToList')}
+      maxWidth="xl"
+    >
+      {cmrData && (
+        <>
       <GlobalStyles>{globalPrintCss}</GlobalStyles>
       
       {/* Header z tytułem i akcjami */}
@@ -3942,7 +3924,9 @@ const CmrDetailsPage = () => {
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
       />
-    </Container>
+        </>
+      )}
+    </DetailPageLayout>
   );
 };
 

@@ -66,7 +66,10 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { formatCurrency } from '../../utils/formatting';
+import { alpha, useTheme } from '@mui/material/styles';
+import Grid from '@mui/material/Grid';
+import EmptyState from '../../components/common/EmptyState';
+import TableSkeleton from '../../components/common/TableSkeleton';
 
 const NotesCell = React.memo(({ forecastId, materialIdx, notes, onSave, editLabel }) => {
   const [editing, setEditing] = useState(false);
@@ -122,6 +125,7 @@ const NotesCell = React.memo(({ forecastId, materialIdx, notes, onSave, editLabe
 const ProcurementForecastsPage = ({ embedded = false }) => {
   const { t } = useTranslation('inventory');
   const navigate = useNavigate();
+  const theme = useTheme();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
 
@@ -166,6 +170,8 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
     if (statusFilter === 'archived' && f.status !== 'archived') return false;
     return true;
   });
+
+  const totalShortageItems = forecasts.reduce((sum, f) => sum + (f.materialsWithShortage || 0), 0);
 
   const handleDelete = async () => {
     if (!forecastToDelete) return;
@@ -671,16 +677,16 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
   };
 
   if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-        <CircularProgress />
-      </Box>
+    return embedded ? (
+      <Box sx={{ mt: 1 }}><TableSkeleton columns={7} rows={5} /></Box>
+    ) : (
+      <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}><TableSkeleton columns={7} rows={5} /></Container>
     );
   }
 
   const content = (
     <>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box>
           <Typography variant="h5" component="h2" gutterBottom>
             {t('states.procurementForecasts.title')}
@@ -695,6 +701,21 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
           </IconButton>
         </Tooltip>
       </Box>
+
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={6}>
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+            <Typography variant="caption" color="text.secondary">{t('states.procurementForecasts.filterAll', 'Wszystkie prognozy')}</Typography>
+            <Typography variant="h5" fontWeight={700}>{forecasts.length}</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, borderColor: totalShortageItems > 0 ? 'error.main' : 'divider' }}>
+            <Typography variant="caption" color="text.secondary">{t('states.procurementForecasts.details.materialsWithShortage', 'Materiały z brakami')}</Typography>
+            <Typography variant="h5" fontWeight={700} color={totalShortageItems > 0 ? 'error.main' : 'text.primary'}>{totalShortageItems}</Typography>
+          </Paper>
+        </Grid>
+      </Grid>
 
       <Box sx={{ mb: 2 }}>
         <ToggleButtonGroup
@@ -716,14 +737,13 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
       </Box>
 
       {filteredForecasts.length === 0 ? (
-        <Alert severity="info" icon={<InfoIcon />}>
-          <Typography variant="body1">{t('states.procurementForecasts.noForecasts')}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {t('states.procurementForecasts.noForecastsHint')}
-          </Typography>
-        </Alert>
+        <EmptyState
+          icon={<CalculateIcon />}
+          title={t('states.procurementForecasts.noForecasts')}
+          description={t('states.procurementForecasts.noForecastsHint')}
+        />
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
           <Table>
             <TableHead>
               <TableRow>
@@ -739,9 +759,6 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                 </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 'bold' }}>
                   {t('states.procurementForecasts.materialsCount')} / {t('states.procurementForecasts.shortageCount')}
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  {t('states.procurementForecasts.shortageValue')}
                 </TableCell>
                 <TableCell sx={{ fontWeight: 'bold' }}>
                   {t('states.procurementForecasts.createdAt')}
@@ -759,7 +776,11 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                 <React.Fragment key={forecast.id}>
                   <TableRow
                     hover
-                    sx={{ cursor: 'pointer', '& > *': { borderBottom: expandedId === forecast.id ? 'none' : undefined } }}
+                    sx={{
+                      cursor: 'pointer',
+                      '& > *': { borderBottom: expandedId === forecast.id ? 'none' : undefined },
+                      '&:nth-of-type(even)': { bgcolor: alpha(theme.palette.action.hover, 0.3) }
+                    }}
                     onClick={() => handleToggleExpand(forecast.id)}
                   >
                     <TableCell>
@@ -793,15 +814,6 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                           <Chip size="small" color="success" icon={<CheckCircleIcon />} label="0" />
                         )}
                       </Box>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Typography
-                        variant="body2"
-                        color={forecast.totalShortageValue > 0 ? 'error.main' : 'text.primary'}
-                        fontWeight={forecast.totalShortageValue > 0 ? 600 : 400}
-                      >
-                        {formatCurrency(forecast.totalShortageValue)}
-                      </Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
@@ -862,7 +874,7 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell colSpan={9} sx={{ py: 0, px: 2 }}>
+                    <TableCell colSpan={8} sx={{ py: 0, px: 2 }}>
                       <Collapse in={expandedId === forecast.id} timeout="auto" unmountOnExit>
                         <Box sx={{ py: 2 }}>
                           <Divider sx={{ mb: 2 }} />
@@ -887,14 +899,6 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                               </Typography>
                               <Typography variant="body2" color="error.main" fontWeight={600}>
                                 {forecast.materialsWithShortage}
-                              </Typography>
-                            </Box>
-                            <Box>
-                              <Typography variant="caption" color="text.secondary">
-                                {t('states.procurementForecasts.details.totalShortageValue')}
-                              </Typography>
-                              <Typography variant="body2" color="error.main" fontWeight={600}>
-                                {formatCurrency(forecast.totalShortageValue)}
                               </Typography>
                             </Box>
                           </Stack>
@@ -929,7 +933,7 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteDialogOpen(false)}>
-            Anuluj
+            {t('states.procurementForecasts.cancel', 'Anuluj')}
           </Button>
           <Button onClick={handleDelete} color="error" variant="contained">
             {t('states.procurementForecasts.delete')}

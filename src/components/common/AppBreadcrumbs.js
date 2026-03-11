@@ -2,72 +2,7 @@ import React from 'react';
 import { Breadcrumbs as MuiBreadcrumbs, Link, Typography, Box } from '@mui/material';
 import { Home as HomeIcon, NavigateNext as NavigateNextIcon } from '@mui/icons-material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
-
-const ROUTE_LABELS = {
-  'analytics': 'Analityka',
-  'financial-report': 'Raport finansowy',
-  'production-time': 'Czas produkcji',
-  'mo-consumption': 'Zużycie MO',
-  'production-costs': 'Koszty produkcji',
-  'cashflow': 'Cashflow',
-  'eco-report': 'Raport ekologiczny',
-  'weekly-sprint': 'Sprint tygodniowy',
-  'admin': 'Administracja',
-  'users': 'Użytkownicy',
-  'system': 'System',
-  'bug-reports': 'Zgłoszenia błędów',
-  'recipes': 'Receptury',
-  'new': 'Nowy',
-  'edit': 'Edycja',
-  'production': 'Produkcja',
-  'new-task': 'Nowe zadanie',
-  'timeline': 'Oś czasu',
-  'calculator': 'Kalkulator',
-  'forecast': 'Prognoza',
-  'forms': 'Formularze',
-  'completed-mo': 'Zakończone MO',
-  'production-control': 'Kontrola produkcji',
-  'production-shift': 'Zmiana produkcyjna',
-  'responses': 'Odpowiedzi',
-  'tasks': 'Zadania',
-  'consumption': 'Zużycie',
-  'reports': 'Raporty',
-  'create-from-order': 'Z zamówienia',
-  'workstations': 'Stanowiska',
-  'inventory': 'Magazyn',
-  'batches': 'Partie',
-  'batch': 'Partia',
-  'stocktaking': 'Inwentaryzacja',
-  'cmr': 'CMR',
-  'warehouses': 'Magazyny',
-  'procurement-forecasts': 'Prognozy zakupów',
-  'orders': 'Zamówienia',
-  'customers': 'Klienci',
-  'price-lists': 'Cenniki',
-  'sales': 'Sprzedaż',
-  'material-advances': 'Zaliczki materiałowe',
-  'factory-costs': 'Koszty fabryczne',
-  'quotation': 'Wycena',
-  'invoices': 'Faktury',
-  'company-settings': 'Dane firmy',
-  'purchase-orders': 'Zamówienia zakupu',
-  'suppliers': 'Dostawcy',
-  'crm': 'CRM',
-  'contacts': 'Kontakty',
-  'interactions': 'Interakcje',
-  'opportunities': 'Szanse sprzedaży',
-  'hall-data': 'Dane hali',
-  'conditions': 'Warunki',
-  'machines': 'Maszyny',
-  'taskboard': 'Tablica zadań',
-  'ai-assistant': 'Asystent AI',
-  'kiosk': 'Kiosk',
-  'work-time': 'Czas pracy',
-  'schedule': 'Harmonogram',
-  'notifications': 'Powiadomienia',
-  'history': 'Historia',
-  'reinvoices': 'Refaktury',
-};
+import { useTranslation } from '../../hooks/useTranslation';
 
 const isIdSegment = (segment) => {
   if (segment.length >= 15) return true;
@@ -77,16 +12,23 @@ const isIdSegment = (segment) => {
 
 const AppBreadcrumbs = () => {
   const location = useLocation();
+  const { t } = useTranslation('navigation');
   const pathSegments = location.pathname.split('/').filter(Boolean);
 
   if (pathSegments.length === 0) return null;
 
+  const getLabel = (segment) => {
+    const key = `breadcrumbs.${segment}`;
+    const translated = t(key);
+    if (translated !== key && translated !== `breadcrumbs.${segment}`) return translated;
+    if (isIdSegment(segment)) return t('breadcrumbs.details');
+    return segment;
+  };
+
   const crumbs = pathSegments.map((segment, index) => {
     const path = '/' + pathSegments.slice(0, index + 1).join('/');
     const isLast = index === pathSegments.length - 1;
-    const label = ROUTE_LABELS[segment] || (isIdSegment(segment) ? 'Szczegóły' : segment);
-
-    return { label, path, isLast };
+    return { label: getLabel(segment), path, isLast };
   });
 
   return (
@@ -107,7 +49,7 @@ const AppBreadcrumbs = () => {
           sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: 'inherit' }}
         >
           <HomeIcon sx={{ fontSize: 16 }} />
-          Dashboard
+          {t('breadcrumbs.home')}
         </Link>
         {crumbs.map((crumb) =>
           crumb.isLast ? (

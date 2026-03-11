@@ -70,7 +70,6 @@ import {
   Tooltip,
   Tabs,
   Tab,
-  Container,
   useMediaQuery,
   useTheme,
   Badge,
@@ -172,6 +171,7 @@ import { useTaskMaterialFetcher } from '../../hooks/production/useTaskMaterialFe
 import MaterialCostsSummary from '../../components/production/MaterialCostsSummary';
 import TaskDialogsContainer from '../../components/production/TaskDialogsContainer';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import DetailPageLayout from '../../components/common/DetailPageLayout';
 
 // ✅ Dodatkowy styl mt4 (nie ma w common styles)
 const mt4 = { mt: 4 };
@@ -3115,17 +3115,15 @@ const TaskDetailsPage = () => {
     };
 
     return (
-      <Container maxWidth="xl">
-      {loading ? (
-        // ⚡ OPTYMALIZACJA: Skeleton loading zamiast CircularProgress dla lepszego UX
-        <Box sx={mt4}>
-          <Skeleton variant="rectangular" height={60} sx={skeletonStyle} />
-          <Skeleton variant="rectangular" height={400} sx={skeletonStyle} />
-          <Skeleton variant="text" width="60%" height={40} />
-          <Skeleton variant="text" width="40%" height={40} />
-          <Skeleton variant="rectangular" height={200} sx={{ ...mt2, borderRadius: 1 }} />
-        </Box>
-      ) : task ? (
+      <DetailPageLayout
+        loading={loading}
+        error={!task && !loading}
+        errorMessage={t('taskNotFound', 'Nie udało się załadować danych zadania.')}
+        backTo="/production"
+        backLabel={t('backToTaskList')}
+        maxWidth="xl"
+      >
+        {task && (
         <>
           {/* Pasek nawigacyjny i przyciski akcji (Edytuj, Usuń) - pozostaje na górze */}
           <Box sx={headerBoxStyle}>
@@ -3518,20 +3516,16 @@ const TaskDetailsPage = () => {
             currentUser={currentUser}
           />
         </>
-      ) : (
-        <Typography variant="body1" color="textSecondary">
-          Nie udało się załadować danych zadania. Spróbuj ponownie.
-        </Typography>
-      )}
+        )}
 
-      <ConfirmDialog
-        open={confirmDialog.open}
-        title={confirmDialog.title}
-        message={confirmDialog.message}
-        onConfirm={confirmDialog.onConfirm}
-        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
-      />
-    </Container>
+        <ConfirmDialog
+          open={confirmDialog.open}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        />
+      </DetailPageLayout>
   );
 };
 

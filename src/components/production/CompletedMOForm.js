@@ -20,8 +20,8 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { formatDateForInput } from '../../utils/dateUtils';
-import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon, Print as PrintIcon, Assignment as AssignmentIcon } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
+import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon, Print as PrintIcon, Assignment as AssignmentIcon, Person as PersonIcon, BarChart as BarChartIcon } from '@mui/icons-material';
+import { useTheme, alpha } from '@mui/material/styles';
 import { getMONumbersForSelect } from '../../services/production/moService';
 import { db, storage } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, query, where, getDocs } from 'firebase/firestore';
@@ -73,9 +73,10 @@ const ExistingAttachment = ({ fileUrl, fileName, onRemove, t }) => {
     <Box sx={{ 
       mt: 1, 
       p: 2, 
-      border: '1px solid #e0e0e0', 
+      border: 1, 
+      borderColor: 'divider', 
       borderRadius: 1, 
-      backgroundColor: 'rgba(0, 0, 0, 0.02)',
+      bgcolor: 'action.hover',
       display: 'flex',
       alignItems: 'center',
       gap: 2
@@ -875,8 +876,8 @@ const CompletedMOForm = () => {
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 1, total: 4 })}
             </Typography>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              👤 {t('sections.identification')}
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
+              <PersonIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} /> {t('sections.identification')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -930,8 +931,8 @@ const CompletedMOForm = () => {
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 2, total: 4 })}
             </Typography>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main' }}>
-              📋 {t('sections.moReport')}
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main', display: 'flex', alignItems: 'center' }}>
+              <AssignmentIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} /> {t('sections.moReport')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -976,8 +977,8 @@ const CompletedMOForm = () => {
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 3, total: 4 })}
             </Typography>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main' }}>
-              📊 {t('sections.lossReport')}
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main', display: 'flex', alignItems: 'center' }}>
+              <BarChartIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} /> {t('sections.lossReport')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -1057,8 +1058,8 @@ const CompletedMOForm = () => {
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'info.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 4, total: 4 })}
             </Typography>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'info.main' }}>
-              📎 {t('sections.attachments')}
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'info.main', display: 'flex', alignItems: 'center' }}>
+              <AttachFileIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} /> {t('sections.attachments')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -1081,9 +1082,10 @@ const CompletedMOForm = () => {
                   <Box sx={{ 
                     mt: 1, 
                     p: 2, 
-                    border: '1px solid #e0e0e0', 
+                    border: 1, 
+                    borderColor: 'divider', 
                     borderRadius: 1, 
-                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                    bgcolor: (theme) => alpha(theme.palette.success.main, 0.1),
                     display: 'flex',
                     alignItems: 'center',
                     gap: 2

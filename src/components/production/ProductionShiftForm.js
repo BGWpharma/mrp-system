@@ -24,7 +24,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { Send as SendIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { Send as SendIcon, ArrowBack as ArrowBackIcon, Person as PersonIcon, Group as GroupIcon, BarChart as BarChartIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { getMONumbersForSelect } from '../../services/production/moService';
 import { addProductionSessionFromShiftReport, updateProductionSession, parseShiftTime } from '../../services/production/productionService';
@@ -615,8 +615,8 @@ const ProductionShiftForm = () => {
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 1, total: 3 })}
             </Typography>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              👤 {t('sections.identification')}
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
+              <PersonIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} /> {t('sections.identification')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -693,8 +693,8 @@ const ProductionShiftForm = () => {
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 2, total: 3 })}
             </Typography>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main' }}>
-              👥 {t('sections.shiftWorkers')}
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main', display: 'flex', alignItems: 'center' }}>
+              <GroupIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} /> {t('sections.shiftWorkers')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -766,8 +766,8 @@ const ProductionShiftForm = () => {
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 3, total: 3 })}
             </Typography>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main' }}>
-              📊 {t('sections.shiftReport')}
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main', display: 'flex', alignItems: 'center' }}>
+              <BarChartIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} /> {t('sections.shiftReport')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               {t('helpers.oneProductPerReport')}

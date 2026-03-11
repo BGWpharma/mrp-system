@@ -31,8 +31,8 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon, Sensors as SensorsIcon } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
+import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon, Sensors as SensorsIcon, Opacity as OpacityIcon, Thermostat as ThermostatIcon, AccessTime as AccessTimeIcon, WarningAmber as WarningAmberIcon, CheckCircle as CheckCircleIcon } from '@mui/icons-material';
+import { useTheme, alpha } from '@mui/material/styles';
 import { getMONumbersForSelect } from '../../services/production/moService';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { db, storage } from '../../services/firebase/config';
@@ -186,9 +186,10 @@ const ExistingAttachment = ({ fileUrl, fileName, onRemove, fieldName }) => {
     <Box sx={{ 
       mt: 1, 
       p: 2, 
-      border: '1px solid #e0e0e0', 
+      border: 1, 
+      borderColor: 'divider',
       borderRadius: 1, 
-      backgroundColor: 'rgba(0, 0, 0, 0.02)',
+      bgcolor: 'action.hover',
       display: 'flex',
       alignItems: 'center',
       gap: 2
@@ -265,9 +266,10 @@ const FilePreview = ({ file, onRemove, fieldName }) => {
     <Box sx={{ 
       mt: 1, 
       p: 2, 
-      border: '1px solid #2196f3', 
+      border: 1, 
+      borderColor: 'primary.main',
       borderRadius: 1, 
-      backgroundColor: 'rgba(33, 150, 243, 0.08)',
+      bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
       display: 'flex',
       alignItems: 'center',
       gap: 2
@@ -821,12 +823,12 @@ const ProductionControlForm = ({
       const actualTimestamp = formatSensorTimestamp(data.timestamp);
       
       let message = t('productionForms.productionControl.sensorDialog.dataFetchedFrom', { sensorName: selectedSensor }) + '\n\n' +
-                   `🌡️ ${t('productionForms.productionControl.sensorDialog.temperature')}: ${data.temperature.toFixed(1)}°C (${temperatureStatus})\n` +
-                   `💧 ${t('productionForms.productionControl.sensorDialog.humidity')}: ${data.humidity.toFixed(1)}% (${humidityStatus})\n` +
-                   `⏰ ${t('productionForms.productionControl.sensorDialog.actualReadTime')}: ${actualTimestamp.full}`;
+                   `${t('productionForms.productionControl.sensorDialog.temperature')}: ${data.temperature.toFixed(1)}°C (${temperatureStatus})\n` +
+                   `${t('productionForms.productionControl.sensorDialog.humidity')}: ${data.humidity.toFixed(1)}% (${humidityStatus})\n` +
+                   `${t('productionForms.productionControl.sensorDialog.actualReadTime')}: ${actualTimestamp.full}`;
       
       if (data.timeDifference > 0) {
-        message += '\n\n⚠️ ' + t('productionForms.productionControl.sensorDialog.timeDifferenceMessage', { minutes: data.timeDifference });
+        message += '\n\n' + t('productionForms.productionControl.sensorDialog.timeDifferenceMessage', { minutes: data.timeDifference });
       }
       
       showSensorInfoDialog(t('productionForms.productionControl.sensorDialog.successTitle'), message);
@@ -1484,8 +1486,8 @@ const ProductionControlForm = ({
                     <strong>{t('productionForms.productionControl.lastFetched')}</strong><br />
                     {formatSensorTimestamp(sensorData.timestamp).full}
                     {sensorData.timeDifference > 0 && (
-                      <span style={{ color: '#ff9800', fontWeight: 'bold' }}>
-                        <br />⚠️ {t('productionForms.productionControl.timeDifference', { minutes: sensorData.timeDifference })}
+                      <span style={{ color: theme.palette.warning.main, fontWeight: 'bold', display: 'inline-flex', alignItems: 'center' }}>
+                        <br /><WarningAmberIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} /> {t('productionForms.productionControl.timeDifference', { minutes: sensorData.timeDifference })}
                       </span>
                     )}
                   </Typography>
@@ -1516,9 +1518,11 @@ const ProductionControlForm = ({
                     fontSize: { xs: '1rem', sm: '1.1rem' },
                     fontWeight: 'bold',
                     color: 'primary.main',
-                    mb: 2
+                    mb: 2,
+                    display: 'flex',
+                    alignItems: 'center'
                   }}>
-                    💧 {t('productionForms.productionControl.humidityLabel')}
+                    <OpacityIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} /> {t('productionForms.productionControl.humidityLabel')}
                   </FormLabel>
                   
                   <Box sx={{ mt: 2 }}>
@@ -1642,9 +1646,11 @@ const ProductionControlForm = ({
                     fontSize: { xs: '1rem', sm: '1.1rem' },
                     fontWeight: 'bold',
                     color: 'primary.main',
-                    mb: 2
+                    mb: 2,
+                    display: 'flex',
+                    alignItems: 'center'
                   }}>
-                    🌡️ {t('productionForms.productionControl.temperatureLabel')}
+                    <ThermostatIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} /> {t('productionForms.productionControl.temperatureLabel')}
                   </FormLabel>
                   
                   <Box sx={{ mt: 2 }}>
@@ -2036,9 +2042,11 @@ const ProductionControlForm = ({
         borderBottom: '1px solid',
         borderColor: 'divider'
       }}>
-        <Box sx={{ fontSize: { xs: '1.2rem', sm: '1.5rem' } }}>
-          {sensorInfoDialog.isError ? '⚠️' : '✅'}
-        </Box>
+        {sensorInfoDialog.isError ? (
+          <WarningAmberIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} />
+        ) : (
+          <CheckCircleIcon sx={{ fontSize: 18, mr: 0.5, verticalAlign: 'middle' }} />
+        )}
         <Box>{sensorInfoDialog.title}</Box>
       </DialogTitle>
       <DialogContent sx={{ py: { xs: 2, sm: 3 } }}>

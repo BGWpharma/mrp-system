@@ -77,6 +77,7 @@ import { createPurchaseOrderPdfGenerator } from './PurchaseOrderPdfGenerator';
 import CoAMigrationDialog from './CoAMigrationDialog';
 import StatusChip from '../common/StatusChip';
 import StatusStepper from '../common/StatusStepper';
+import DetailPageLayout from '../common/DetailPageLayout';
 
 const PurchaseOrderDetails = ({ orderId }) => {
   const { t } = useTranslation('purchaseOrders');
@@ -785,14 +786,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
     return expiryInfo.expiryDate;
   };
   
-  if (loading) {
-    return <Typography>{t('purchaseOrders.loadingOrderDetails')}</Typography>;
-  }
-  
-  if (!purchaseOrder) {
-    return <Typography>{t('purchaseOrders.orderNotFound')}</Typography>;
-  }
-  
   const handleEditClick = () => {
     navigate(`/purchase-orders/${orderId}/edit`);
   };
@@ -1445,14 +1438,15 @@ const PurchaseOrderDetails = ({ orderId }) => {
   };
   
   return (
-    <Container maxWidth="lg" sx={{ my: 4 }}>
-      {loading ? (
-        <Box sx={{ ...loadingContainer, height: '50vh' }}>
-          <CircularProgress />
-        </Box>
-      ) : purchaseOrder ? (
-        <>
-          <Box sx={{ mb: 4, ...flexBetween }}>
+    <DetailPageLayout
+      loading={loading}
+      error={!purchaseOrder && !loading}
+      errorMessage={t('purchaseOrders.orderNotFound')}
+      backTo="/purchase-orders"
+      backLabel={t('purchaseOrders.backToList', 'Powrót do listy')}
+      maxWidth="lg"
+    >
+      <Box sx={{ mb: 4, ...flexBetween }}>
             <Button
               component={Link}
               to="/purchase-orders"
@@ -3306,11 +3300,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
               </Typography>
             )}
           </Paper>
-        </>
-      ) : (
-        <Typography>{t('purchaseOrders.orderNotFound')}</Typography>
-      )}
-
       {/* Dialog usuwania */}
       <Dialog
         open={deleteDialogOpen}
@@ -3704,7 +3693,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
         relatedBatches={relatedBatches}
         onMigrationComplete={handleCoAMigrationComplete}
       />
-    </Container>
+    </DetailPageLayout>
   );
 };
 

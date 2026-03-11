@@ -94,6 +94,7 @@ import {
   p2,
   p3
 } from '../../styles/muiCommonStyles';
+import DetailPageLayout from '../common/DetailPageLayout';
 import StatusChip from '../common/StatusChip';
 
 // 🚀 CACHE SYSTEM dla optymalizacji zapytań
@@ -1750,38 +1751,43 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     }
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   // Jeśli jesteśmy na ścieżce zamówienia zakupowego, nie renderujemy nic
   if (location.pathname.includes('/purchase-orders/')) {
     return null;
   }
 
+  if (!order && !loading) {
+    return (
+      <DetailPageLayout
+        loading={false}
+        error={true}
+        errorMessage={t('orderDetails.notifications.orderNotFound')}
+        backTo="/orders"
+        backLabel={t('orderDetails.actions.back')}
+        maxWidth="lg"
+      />
+    );
+  }
+
   if (!order) {
     return (
-      <Box sx={{ textAlign: 'center', mt: 4 }}>
-        <Typography variant="h6" color="error">
-          {t('orderDetails.notifications.orderNotFound')}
-        </Typography>
-        <Button 
-          startIcon={<ArrowBackIcon />} 
-          onClick={handleBackClick}
-          sx={{ mt: 2 }}
-        >
-          {t('orderDetails.actions.back')}
-        </Button>
-      </Box>
+      <DetailPageLayout
+        loading={true}
+        error={false}
+        maxWidth="lg"
+      />
     );
   }
 
   return (
-    <div>
+    <DetailPageLayout
+      loading={loading}
+      error={!order && !loading}
+      errorMessage={t('orderDetails.notifications.orderNotFound')}
+      backTo="/orders"
+      backLabel={t('orderDetails.actions.back')}
+      maxWidth="lg"
+    >
       <Box sx={{ pb: 4 }}>
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button 
@@ -3241,7 +3247,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
         </Dialog>
 
       </Box>
-    </div>
+    </DetailPageLayout>
   );
 };
 

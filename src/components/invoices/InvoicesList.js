@@ -363,6 +363,20 @@ const InvoicesList = () => {
     setFilteredInvoices(results);
   }, [invoices, listState.searchTerm, listState.filters, tableSort]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const fetchProformaAmounts = useCallback(async (invoicesList) => {
+    try {
+      const proformaInvoices = invoicesList.filter(inv => inv.isProforma);
+      if (proformaInvoices.length === 0) {
+        setProformaAmounts({});
+        return;
+      }
+      const amounts = await getAvailableProformaAmountsBatch(proformaInvoices);
+      setProformaAmounts(amounts);
+    } catch (error) {
+      console.error('Błąd podczas pobierania kwot proform:', error);
+    }
+  }, []);
+
   useEffect(() => {
     let lastRefresh = Date.now();
     const MIN_REFRESH_INTERVAL = 60 * 1000;
@@ -379,20 +393,6 @@ const InvoicesList = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [invoices, fetchProformaAmounts]);
-
-  const fetchProformaAmounts = useCallback(async (invoicesList) => {
-    try {
-      const proformaInvoices = invoicesList.filter(inv => inv.isProforma);
-      if (proformaInvoices.length === 0) {
-        setProformaAmounts({});
-        return;
-      }
-      const amounts = await getAvailableProformaAmountsBatch(proformaInvoices);
-      setProformaAmounts(amounts);
-    } catch (error) {
-      console.error('Błąd podczas pobierania kwot proform:', error);
-    }
-  }, []);
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
