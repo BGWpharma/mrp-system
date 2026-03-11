@@ -106,6 +106,7 @@ import {
 import RecipeDesignAttachments from './RecipeDesignAttachments';
 import RecipeRulesAttachments from './RecipeRulesAttachments';
 import { Gavel as GavelIcon } from '@mui/icons-material';
+import FormSectionNav from '../common/FormSectionNav';
 
 // Funkcja do generowania unikalnego ID składnika
 const generateIngredientId = () => {
@@ -153,7 +154,7 @@ const SortableIngredientRow = ({
       hover 
       sx={{ 
         '&:nth-of-type(even)': { 
-          bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.2)' : 'rgba(245, 247, 250, 0.5)' 
+          bgcolor: 'action.hover' 
         },
         ...(isDragging && {
           bgcolor: 'action.selected',
@@ -1830,6 +1831,24 @@ const RecipeForm = ({ recipeId }) => {
     handleClosePriceListDialog();
   };
 
+  const basicDataRef = useRef(null);
+  const certificationsRef = useRef(null);
+  const ingredientsRef = useRef(null);
+  const nutrientsRef = useRef(null);
+  const designAttachmentsRef = useRef(null);
+  const rulesAttachmentsRef = useRef(null);
+  const notesRef = useRef(null);
+
+  const formSections = [
+    { label: 'Dane podstawowe', ref: basicDataRef },
+    { label: 'Certyfikacje', ref: certificationsRef },
+    { label: 'Składniki', ref: ingredientsRef },
+    { label: 'Składniki odżywcze', ref: nutrientsRef },
+    { label: 'Załączniki designu', ref: designAttachmentsRef },
+    { label: 'Załączniki zasad', ref: rulesAttachmentsRef },
+    { label: 'Notatki', ref: notesRef },
+  ];
+
   if (loading) {
     return <div>{t('recipes.details.loading')}</div>;
   }
@@ -1888,8 +1907,13 @@ const RecipeForm = ({ recipeId }) => {
         </Box>
       </Paper>
 
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 0 }}>
+        <FormSectionNav sections={formSections} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+
       {/* Sekcja danych podstawowych */}
       <Paper 
+        ref={basicDataRef}
         elevation={3} 
         sx={{ 
           p: 0, 
@@ -1907,9 +1931,7 @@ const RecipeForm = ({ recipeId }) => {
             gap: 1,
             borderBottom: '1px solid',
             borderColor: 'divider',
-            bgcolor: theme => theme.palette.mode === 'dark' 
-              ? 'rgba(25, 35, 55, 0.5)' 
-              : 'rgba(245, 247, 250, 0.8)'
+            bgcolor: 'action.hover'
           }}
         >
           <ProductIcon color="primary" />
@@ -2131,6 +2153,7 @@ const RecipeForm = ({ recipeId }) => {
 
       {/* Sekcja certyfikacji */}
       <Paper 
+        ref={certificationsRef}
         elevation={3} 
         sx={{ 
           p: 0, 
@@ -2147,9 +2170,7 @@ const RecipeForm = ({ recipeId }) => {
             gap: 1,
             borderBottom: '1px solid',
             borderColor: 'divider',
-            bgcolor: theme => theme.palette.mode === 'dark' 
-              ? 'rgba(25, 35, 55, 0.5)' 
-              : 'rgba(245, 247, 250, 0.8)'
+            bgcolor: 'action.hover'
           }}
         >
           <ScienceIcon color="primary" />
@@ -2254,6 +2275,7 @@ const RecipeForm = ({ recipeId }) => {
 
       {/* Sekcja składników */}
       <Paper 
+        ref={ingredientsRef}
         elevation={3} 
         sx={{ 
           p: 0, 
@@ -2270,9 +2292,7 @@ const RecipeForm = ({ recipeId }) => {
             gap: 1,
             borderBottom: '1px solid',
             borderColor: 'divider',
-            bgcolor: theme => theme.palette.mode === 'dark' 
-              ? 'rgba(25, 35, 55, 0.5)' 
-              : 'rgba(245, 247, 250, 0.8)',
+            bgcolor: 'action.hover',
             justifyContent: 'space-between'
           }}
         >
@@ -2385,7 +2405,7 @@ const RecipeForm = ({ recipeId }) => {
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleIngredientDragEnd}>
               <TableContainer sx={{ borderRadius: '8px', border: '1px solid', borderColor: 'divider' }}>
                 <Table>
-                  <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
+                  <TableHead sx={{ bgcolor: 'action.selected' }}>
                     <TableRow>
                       <TableCell width="3%"></TableCell>
                       <TableCell width="20%"><Typography variant="subtitle2">{t('recipes.ingredients.ingredientSKU')}</Typography></TableCell>
@@ -2438,7 +2458,7 @@ const RecipeForm = ({ recipeId }) => {
                   {/* Wiersz podsumowania - suma wagi i 100% */}
                   <TableFooter>
                     <TableRow sx={{ 
-                      bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.8)' : 'rgba(232, 240, 254, 0.8)',
+                      bgcolor: 'action.selected',
                       '& td': { borderBottom: 'none' }
                     }}>
                       <TableCell />
@@ -2475,7 +2495,7 @@ const RecipeForm = ({ recipeId }) => {
               sx={{ 
                 p: 3, 
                 textAlign: 'center', 
-                bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(25, 35, 55, 0.5)' : 'rgba(245, 247, 250, 0.8)',
+                bgcolor: 'action.hover',
                 borderRadius: '8px',
                 border: '1px dashed',
                 borderColor: 'divider'
@@ -2495,6 +2515,7 @@ const RecipeForm = ({ recipeId }) => {
 
       {/* Sekcja składników odżywczych */}
       <Paper 
+        ref={nutrientsRef}
         elevation={3} 
         sx={{ 
           p: 0, 
@@ -2511,9 +2532,7 @@ const RecipeForm = ({ recipeId }) => {
             gap: 1,
             borderBottom: '1px solid',
             borderColor: 'divider',
-            bgcolor: theme => theme.palette.mode === 'dark' 
-              ? 'rgba(25, 35, 55, 0.5)' 
-              : 'rgba(245, 247, 250, 0.8)',
+            bgcolor: 'action.hover',
             justifyContent: 'space-between'
           }}
         >
@@ -2569,7 +2588,7 @@ const RecipeForm = ({ recipeId }) => {
           {recipeData.micronutrients && recipeData.micronutrients.length > 0 ? (
             <TableContainer sx={{ borderRadius: '8px', border: '1px solid', borderColor: 'divider' }}>
               <Table>
-                <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
+                <TableHead sx={{ bgcolor: 'action.selected' }}>
                   <TableRow>
                     <TableCell width="18%"><Typography variant="subtitle2">{t('recipes.nutrients.component')}</Typography></TableCell>
                     <TableCell width="18%"><Typography variant="subtitle2">{t('recipes.nutrients.name')}</Typography></TableCell>
@@ -2582,7 +2601,7 @@ const RecipeForm = ({ recipeId }) => {
                 </TableHead>
                 <TableBody>
                   {recipeData.micronutrients.map((micronutrient, index) => (
-                    <TableRow key={micronutrient.id || `micronutrient-${index}-${micronutrient.code || 'empty'}`} hover sx={{ '&:nth-of-type(even)': { bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.2)' : 'rgba(245, 247, 250, 0.5)' } }}>
+                    <TableRow key={micronutrient.id || `micronutrient-${index}-${micronutrient.code || 'empty'}`} hover sx={{ '&:nth-of-type(even)': { bgcolor: 'action.hover' } }}>
                       <TableCell>
                         <Autocomplete
                           fullWidth
@@ -2734,12 +2753,8 @@ const RecipeForm = ({ recipeId }) => {
                                   px: 2,
                                   py: 1,
                                   display: 'block',
-                                  bgcolor: theme => theme.palette.mode === 'dark' 
-                                    ? 'rgba(255, 255, 255, 0.08)' 
-                                    : 'grey.100',
-                                  color: theme => theme.palette.mode === 'dark'
-                                    ? 'rgba(255, 255, 255, 0.9)'
-                                    : 'rgba(0, 0, 0, 0.87)',
+                                  bgcolor: 'action.selected',
+                                  color: 'text.primary',
                                   fontWeight: 'bold',
                                   fontSize: '0.75rem'
                                 }}
@@ -2858,7 +2873,7 @@ const RecipeForm = ({ recipeId }) => {
               sx={{ 
                 p: 3, 
                 textAlign: 'center', 
-                bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(25, 35, 55, 0.5)' : 'rgba(245, 247, 250, 0.8)',
+                bgcolor: 'action.hover',
                 borderRadius: '8px',
                 border: '1px dashed',
                 borderColor: 'divider'
@@ -2878,6 +2893,7 @@ const RecipeForm = ({ recipeId }) => {
 
       {/* Sekcja załączników designu - kompaktowa */}
       <Paper 
+        ref={designAttachmentsRef}
         elevation={3} 
         sx={{ 
           p: 0, 
@@ -2894,9 +2910,7 @@ const RecipeForm = ({ recipeId }) => {
             gap: 1,
             borderBottom: '1px solid',
             borderColor: 'divider',
-            bgcolor: theme => theme.palette.mode === 'dark' 
-              ? 'rgba(25, 35, 55, 0.5)' 
-              : 'rgba(245, 247, 250, 0.8)'
+            bgcolor: 'action.hover'
           }}
         >
           <PhotoCameraIcon color="primary" sx={{ fontSize: 20 }} />
@@ -2917,6 +2931,7 @@ const RecipeForm = ({ recipeId }) => {
 
       {/* Sekcja załączników zasad */}
       <Paper 
+        ref={rulesAttachmentsRef}
         elevation={3} 
         sx={{ 
           p: 0, 
@@ -2933,9 +2948,7 @@ const RecipeForm = ({ recipeId }) => {
             gap: 1,
             borderBottom: '1px solid',
             borderColor: 'divider',
-            bgcolor: theme => theme.palette.mode === 'dark' 
-              ? 'rgba(25, 35, 55, 0.5)' 
-              : 'rgba(245, 247, 250, 0.8)'
+            bgcolor: 'action.hover'
           }}
         >
           <GavelIcon color="primary" sx={{ fontSize: 20 }} />
@@ -2956,6 +2969,7 @@ const RecipeForm = ({ recipeId }) => {
 
       {/* Sekcja notatek dodatkowych */}
       <Paper 
+        ref={notesRef}
         elevation={3} 
         sx={{ 
           p: 0, 
@@ -2972,9 +2986,7 @@ const RecipeForm = ({ recipeId }) => {
             gap: 1,
             borderBottom: '1px solid',
             borderColor: 'divider',
-            bgcolor: theme => theme.palette.mode === 'dark' 
-              ? 'rgba(25, 35, 55, 0.5)' 
-              : 'rgba(245, 247, 250, 0.8)'
+            bgcolor: 'action.hover'
           }}
         >
           <EditIcon color="primary" />
@@ -2997,6 +3009,9 @@ const RecipeForm = ({ recipeId }) => {
         </Box>
       </Paper>
 
+        </Box>
+      </Box>
+
       {/* Dialog dodawania produktu do stanów */}
       <Dialog 
         open={createProductDialogOpen} 
@@ -3017,9 +3032,7 @@ const RecipeForm = ({ recipeId }) => {
           gap: 1,
           borderBottom: '1px solid',
           borderColor: 'divider',
-          bgcolor: theme => theme.palette.mode === 'dark' 
-            ? 'rgba(25, 35, 55, 0.5)' 
-            : 'rgba(245, 247, 250, 0.8)'
+          bgcolor: 'action.hover'
         }}>
           <ProductIcon color="primary" />
           <DialogTitle sx={{ p: 0 }}>{t('recipes.createProductDialog.title')}</DialogTitle>
@@ -3212,9 +3225,7 @@ const RecipeForm = ({ recipeId }) => {
           gap: 1,
           borderBottom: '1px solid',
           borderColor: 'divider',
-          bgcolor: theme => theme.palette.mode === 'dark' 
-            ? 'rgba(25, 35, 55, 0.5)' 
-            : 'rgba(245, 247, 250, 0.8)'
+          bgcolor: 'action.hover'
         }}>
           <LinkIcon color="secondary" />
           <DialogTitle sx={{ p: 0 }}>{t('recipes.linkInventoryDialog.title')}</DialogTitle>
@@ -3403,9 +3414,7 @@ const RecipeForm = ({ recipeId }) => {
           gap: 1,
           borderBottom: '1px solid',
           borderColor: 'divider',
-          bgcolor: theme => theme.palette.mode === 'dark' 
-            ? 'rgba(25, 35, 55, 0.5)' 
-            : 'rgba(245, 247, 250, 0.8)'
+          bgcolor: 'action.hover'
         }}>
           <ScienceIcon color="primary" />
           <DialogTitle sx={{ p: 0 }}>{t('recipes.addNutrientDialog.title')}</DialogTitle>
@@ -3545,9 +3554,7 @@ const RecipeForm = ({ recipeId }) => {
           gap: 1,
           borderBottom: '1px solid',
           borderColor: 'divider',
-          bgcolor: theme => theme.palette.mode === 'dark' 
-            ? 'rgba(25, 35, 55, 0.5)' 
-            : 'rgba(245, 247, 250, 0.8)'
+          bgcolor: 'action.hover'
         }}>
           <InventoryIcon color="primary" />
           <DialogTitle sx={{ p: 0 }}>{t('recipes.ingredients.newItemDialog.title')}</DialogTitle>
@@ -3659,9 +3666,7 @@ const RecipeForm = ({ recipeId }) => {
         
         <DialogActions sx={{
           p: 2,
-          bgcolor: theme => theme.palette.mode === 'dark' 
-            ? 'rgba(25, 35, 55, 0.3)' 
-            : 'rgba(245, 247, 250, 0.5)',
+          bgcolor: 'action.hover',
           borderTop: '1px solid',
           borderColor: 'divider'
         }}>
@@ -3711,9 +3716,7 @@ const RecipeForm = ({ recipeId }) => {
           gap: 1,
           borderBottom: '1px solid',
           borderColor: 'divider',
-          bgcolor: theme => theme.palette.mode === 'dark' 
-            ? 'rgba(25, 35, 55, 0.5)' 
-            : 'rgba(245, 247, 250, 0.8)'
+          bgcolor: 'action.hover'
         }}>
           <ProductIcon color="primary" />
           <DialogTitle sx={{ p: 0 }}>{t('recipes.priceListDialog.title')}</DialogTitle>
@@ -3867,9 +3870,7 @@ const RecipeForm = ({ recipeId }) => {
           gap: 1,
           borderBottom: '1px solid',
           borderColor: 'divider',
-          bgcolor: theme => theme.palette.mode === 'dark' 
-            ? 'rgba(25, 35, 55, 0.5)' 
-            : 'rgba(245, 247, 250, 0.8)'
+          bgcolor: 'action.hover'
         }}>
           <SyncIcon color="primary" />
           <DialogTitle sx={{ p: 0 }}>{t('recipes.syncNameDialog.title')}</DialogTitle>
@@ -3889,9 +3890,7 @@ const RecipeForm = ({ recipeId }) => {
             sx={{ 
               p: 2, 
               mb: 2, 
-              bgcolor: theme => theme.palette.mode === 'dark' 
-                ? 'rgba(255,255,255,0.05)' 
-                : 'rgba(0,0,0,0.03)',
+              bgcolor: 'action.hover',
               borderRadius: '8px',
               border: '1px solid',
               borderColor: 'divider'

@@ -70,7 +70,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 
 // Styled components - Clean Design
 const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
-  borderRadius: '5px',
+  borderRadius: '6px',
   margin: '2px 7px',
   padding: '6px 10px',
   border: 'none',
@@ -78,15 +78,15 @@ const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
   '&.Mui-selected': {
     // Clean Design - solidny kolor zamiast gradient
     backgroundColor: theme.palette.mode === 'dark'
-      ? 'rgba(59, 130, 246, 0.15)'
-      : 'rgba(25, 118, 210, 0.12)',
-    color: theme.palette.mode === 'dark' ? '#93c5fd' : '#1d4ed8',
+      ? alpha(theme.palette.primary.main, 0.15)
+      : alpha(theme.palette.primary.main, 0.12),
+    color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.dark,
     fontWeight: 600,
     border: 'none',
     '&:hover': {
       backgroundColor: theme.palette.mode === 'dark'
-        ? 'rgba(59, 130, 246, 0.2)'
-        : 'rgba(25, 118, 210, 0.16)',
+        ? alpha(theme.palette.primary.main, 0.2)
+        : alpha(theme.palette.primary.main, 0.16),
       border: 'none',
     },
   },
@@ -103,7 +103,7 @@ const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
 
 // Clean Design - uproszczony StyledListItem
 const StyledListItem = styled(ListItem)(({ theme }) => ({
-  borderRadius: '5px',
+  borderRadius: '6px',
   margin: '1px 10px',
   padding: '3px 7px',
   border: 'none !important',
@@ -119,23 +119,21 @@ const StyledListItem = styled(ListItem)(({ theme }) => ({
   },
   '&.Mui-selected': {
     backgroundColor: theme.palette.mode === 'dark'
-      ? 'rgba(59, 130, 246, 0.12) !important'
-      : 'rgba(25, 118, 210, 0.1) !important',
-    borderLeft: theme.palette.mode === 'dark' 
-      ? '2px solid #3b82f6' 
-      : '2px solid #1976d2',
+      ? `${alpha(theme.palette.primary.main, 0.12)} !important`
+      : `${alpha(theme.palette.primary.main, 0.1)} !important`,
+    borderLeft: `2px solid ${theme.palette.primary.main}`,
     borderRight: 'none !important',
     borderTop: 'none !important',
     borderBottom: 'none !important',
     outline: 'none !important',
     boxShadow: 'none !important',
     color: theme.palette.mode === 'dark' 
-      ? '#93c5fd' 
-      : '#1d4ed8',
+      ? theme.palette.primary.light 
+      : theme.palette.primary.dark,
     '&:hover': {
       backgroundColor: theme.palette.mode === 'dark'
-        ? 'rgba(59, 130, 246, 0.18) !important'
-        : 'rgba(25, 118, 210, 0.14) !important',
+        ? `${alpha(theme.palette.primary.main, 0.18)} !important`
+        : `${alpha(theme.palette.primary.main, 0.14)} !important`,
       borderRight: 'none !important',
       borderTop: 'none !important',
       borderBottom: 'none !important',

@@ -30,7 +30,7 @@ const EXPENSE_COLLECTION = "expenseInvoices";
 const checkForDuplicateInvoice = async (db, params) => {
   const {
     invoiceNumber, supplierTaxId, supplierName,
-    excludeId, excludeCollection,
+    excludeId, excludeCollection, isProforma,
   } = params;
 
   // Skip check for empty/placeholder invoice numbers
@@ -60,6 +60,11 @@ const checkForDuplicateInvoice = async (db, params) => {
           doc.id === excludeId;
         if (isExcluded) continue;
 
+        const docData = doc.data();
+        if (isProforma !== undefined && docData.isProforma !== undefined) {
+          if (isProforma !== docData.isProforma) continue;
+        }
+
         logger.info("[Duplicate] Dup by taxId in purchase", {
           existingId: doc.id, invoiceNumber,
         });
@@ -86,6 +91,11 @@ const checkForDuplicateInvoice = async (db, params) => {
           excludeCollection === EXPENSE_COLLECTION &&
           doc.id === excludeId;
         if (isExcluded) continue;
+
+        const docData = doc.data();
+        if (isProforma !== undefined && docData.isProforma !== undefined) {
+          if (isProforma !== docData.isProforma) continue;
+        }
 
         logger.info("[Duplicate] Dup by taxId in expense", {
           existingId: doc.id, invoiceNumber,
@@ -120,6 +130,11 @@ const checkForDuplicateInvoice = async (db, params) => {
           doc.id === excludeId;
         if (isExcluded) continue;
 
+        const docData = doc.data();
+        if (isProforma !== undefined && docData.isProforma !== undefined) {
+          if (isProforma !== docData.isProforma) continue;
+        }
+
         logger.info("[Duplicate] Dup by name in purchase", {
           existingId: doc.id, invoiceNumber,
         });
@@ -145,6 +160,11 @@ const checkForDuplicateInvoice = async (db, params) => {
           excludeCollection === EXPENSE_COLLECTION &&
           doc.id === excludeId;
         if (isExcluded) continue;
+
+        const docData = doc.data();
+        if (isProforma !== undefined && docData.isProforma !== undefined) {
+          if (isProforma !== docData.isProforma) continue;
+        }
 
         logger.info("[Duplicate] Dup by name in expense", {
           existingId: doc.id, invoiceNumber,
@@ -176,11 +196,12 @@ const checkForDuplicateInvoice = async (db, params) => {
  * @param {string|null} supplierTaxId - Supplier NIP
  * @param {string} currentSourceId - Current PO/CMR source ID
  * @param {string} [excludeId] - Document ID to exclude
+ * @param {boolean} [isProforma] - Whether current document is a proforma
  * @return {Promise<Object>} Cross-PO duplicate check result
  */
 const checkCrossPoDuplicate = async (
     db, invoiceNumber, supplierTaxId,
-    currentSourceId, excludeId,
+    currentSourceId, excludeId, isProforma,
 ) => {
   if (!invoiceNumber || invoiceNumber === "UNKNOWN" || invoiceNumber === "") {
     return {isDuplicate: false, duplicateType: "none"};
@@ -202,6 +223,10 @@ const checkCrossPoDuplicate = async (
       if (doc.id === excludeId) continue;
 
       const data = doc.data();
+      if (isProforma !== undefined && data.isProforma !== undefined) {
+        if (isProforma !== data.isProforma) continue;
+      }
+
       if (data.sourceId && data.sourceId !== currentSourceId) {
         logger.info("[Duplicate] Cross-PO duplicate found", {
           existingId: doc.id,
@@ -230,7 +255,47 @@ const checkCrossPoDuplicate = async (
   }
 };
 
+/**
+ * Check if an expense invoice can be safely deleted
+ * (no journal entries, payments, or proforma settlements)
+ *
+ * @param {Object} db - Firestore database reference
+ * @param {string} expenseInvoiceId - Expense invoice document ID
+ * @return {Promise<Object>} Safety check result
+ */
+const canSafelyDeleteExpenseInvoice = async (db, expenseInvoiceId) => {
+  const doc = await db.collection(EXPENSE_COLLECTION)
+      .doc(expenseInvoiceId).get();
+  if (!doc.exists) return {canDelete: false, reason: "not_found", blockers: []};
+
+  const data = doc.data();
+  const blockers = [];
+
+  if (data.status === "posted" || data.status === "proforma_posted") {
+    blockers.push("posted");
+  }
+  if (data.journalEntryId) {
+    blockers.push("has_journal_entry");
+  }
+  if (data.proformaJournalEntryId) {
+    blockers.push("has_proforma_journal_entry");
+  }
+  if (data.payments && data.payments.length > 0) {
+    blockers.push("has_payments");
+  }
+  if (data.linkedFinalInvoices && data.linkedFinalInvoices.length > 0) {
+    blockers.push("has_linked_final_invoices");
+  }
+
+  return {
+    canDelete: blockers.length === 0,
+    blockers,
+    data,
+  };
+};
+
 module.exports = {
   checkForDuplicateInvoice,
   checkCrossPoDuplicate,
+  canSafelyDeleteExpenseInvoice,
 };

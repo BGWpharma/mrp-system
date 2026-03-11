@@ -117,6 +117,7 @@ import { getAllCustomers } from '../../services/crm';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
+import { getStatusMainColor } from '../../styles/colorConfig';
 import { useTranslation } from '../../hooks/useTranslation';
 import { calculateMaterialReservationStatus, getReservationStatusColors, checkPODeliveryDelays } from '../../utils/productionUtils';
 import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends, calculateEndDateForTimeline, isWeekend, calculateEndDateWithWorkingHours } from '../../utils/dateUtils';
@@ -149,6 +150,7 @@ import {
 } from '../../styles/muiCommonStyles';
 
 // Import stylów dla react-calendar-timeline
+import { alpha } from '@mui/material/styles';
 import 'react-calendar-timeline/dist/style.css';
 // Import enhanced styles dla ProductionTimeline
 import './ProductionTimeline.css';
@@ -354,21 +356,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'Zaplanowane':
-      case 'scheduled':
-        return '#3788d8';
-      case 'W trakcie':
-        return '#e67e22'; // Ciemniejszy pomarańczowy dla lepszego kontrastu
-      case 'Zakończone':
-        return '#2ecc71';
-      case 'Anulowane':
-        return '#e74c3c';
-      case 'Wstrzymane':
-        return '#9e9e9e';
-      default:
-        return '#95a5a6';
-    }
+    return getStatusMainColor(status);
   };
 
   const statusColor = getStatusColor(task.status);
@@ -1255,21 +1243,7 @@ const ProductionTimeline = React.memo(({
 
   // Funkcje pomocnicze dla kolorów
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'Zaplanowane':
-      case 'scheduled':
-        return '#3788d8';
-      case 'W trakcie':
-        return '#e67e22'; // Ciemniejszy pomarańczowy dla lepszego kontrastu
-      case 'Zakończone':
-        return '#2ecc71';
-      case 'Anulowane':
-        return '#e74c3c';
-      case 'Wstrzymane':
-        return '#9e9e9e';
-      default:
-        return '#95a5a6';
-    }
+    return getStatusMainColor(status);
   };
 
   const getWorkstationColor = useCallback((workstationId) => {
@@ -3632,8 +3606,8 @@ const ProductionTimeline = React.memo(({
               size="small" 
               onClick={() => setMobileDrawerOpen(true)}
               sx={{ 
-                bgcolor: themeMode === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(25, 118, 210, 0.1)',
-                '&:hover': { bgcolor: themeMode === 'dark' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(25, 118, 210, 0.2)' }
+                bgcolor: alpha(muiTheme.palette.primary.main, 0.1),
+                '&:hover': { bgcolor: alpha(muiTheme.palette.primary.main, 0.2) }
               }}
             >
               <MenuIcon />
@@ -4079,7 +4053,7 @@ const ProductionTimeline = React.memo(({
         px: { xs: 1, md: 2 }, 
         pb: { xs: 0.5, md: 1 },
         borderTop: '1px solid',
-        borderColor: themeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+        borderColor: 'divider'
       }}>
         <Box sx={{ 
           display: 'flex', 

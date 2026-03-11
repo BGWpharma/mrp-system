@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Grid, 
   TextField, 
@@ -54,6 +54,7 @@ import {
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useAuth } from '../../../hooks/useAuth';
 import { useTranslation } from '../../../hooks/useTranslation';
+import FormSectionNav from '../../../components/common/FormSectionNav';
 
 /**
  * Komponent wyświetlający podsumowanie wagi i palet dla pojedynczej pozycji CMR
@@ -397,6 +398,31 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   const { mode } = useTheme();
   const { currentUser } = useAuth();
   const { t } = useTranslation('cmr');
+
+  const basicInfoRef = useRef(null);
+  const senderRef = useRef(null);
+  const recipientRef = useRef(null);
+  const carrierRef = useRef(null);
+  const loadingRef = useRef(null);
+  const documentsRef = useRef(null);
+  const vehicleRef = useRef(null);
+  const itemsRef = useRef(null);
+  const feesRef = useRef(null);
+  const notesRef = useRef(null);
+
+  const formSections = [
+    { label: 'Dane podstawowe', ref: basicInfoRef },
+    { label: 'Nadawca', ref: senderRef },
+    { label: 'Odbiorca', ref: recipientRef },
+    { label: 'Przewoźnik', ref: carrierRef },
+    { label: 'Załadunek', ref: loadingRef },
+    { label: 'Dokumenty', ref: documentsRef },
+    { label: 'Pojazd', ref: vehicleRef },
+    { label: 'Pozycje', ref: itemsRef },
+    { label: 'Opłaty', ref: feesRef },
+    { label: 'Uwagi', ref: notesRef },
+  ];
+
   const emptyItem = {
     description: '',
     quantity: '',
@@ -2049,7 +2075,14 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                 </Button>
               </Box>
             </Grid>
+          </Grid>
+          
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 0 }}>
+            <FormSectionNav sections={formSections} />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Grid container spacing={3}>
         
+            <div ref={basicInfoRef}>
             <CmrBasicInfoCard
               formData={formData}
               formErrors={formErrors}
@@ -2060,20 +2093,26 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
               removeLinkedOrder={removeLinkedOrder}
               t={t}
             />
+            </div>
             
+            <div ref={senderRef}>
             <CmrSenderCard
               formData={formData}
               formErrors={formErrors}
               handleChange={handleChange}
             />
+            </div>
                 
+            <div ref={recipientRef}>
             <CmrRecipientCard
               formData={formData}
               formErrors={formErrors}
               handleChange={handleChange}
               t={t}
             />
+            </div>
                 
+            <div ref={carrierRef}>
             <CmrCarrierCard
               formData={formData}
               formErrors={formErrors}
@@ -2086,7 +2125,9 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
               handleOpenDeleteCarrierDialog={handleOpenDeleteCarrierDialog}
               t={t}
             />
+            </div>
         
+        <div ref={loadingRef}>
         {/* Miejsce załadunku i rozładunku */}
         <Grid item xs={12}>
           <Card>
@@ -2143,7 +2184,9 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
             </CardContent>
           </Card>
         </Grid>
+        </div>
         
+        <div ref={documentsRef}>
         {/* Dokumenty i instrukcje */}
         <Grid item xs={12}>
           <Card>
@@ -2183,7 +2226,9 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
             </CardContent>
           </Card>
         </Grid>
+        </div>
         
+        <div ref={vehicleRef}>
         {/* Informacje o pojeździe */}
         <Grid item xs={12}>
           <Card>
@@ -2235,7 +2280,9 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
             </CardContent>
           </Card>
         </Grid>
+        </div>
         
+        <div ref={itemsRef}>
         <CmrItemsSection
           formData={formData}
           formErrors={formErrors}
@@ -2256,7 +2303,9 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
           t={t}
           ItemWeightSummary={ItemWeightSummary}
         />
+        </div>
         
+        <div ref={feesRef}>
         {/* Opłaty i płatności */}
         <Grid item xs={12}>
           <Card>
@@ -2356,7 +2405,9 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
             </CardContent>
           </Card>
         </Grid>
+        </div>
         
+        <div ref={notesRef}>
         {/* Uwagi */}
         <Grid item xs={12}>
           <Card>
@@ -2378,6 +2429,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
             </CardContent>
           </Card>
         </Grid>
+        </div>
         
         {/* Przyciski */}
         <Grid item xs={12}>
@@ -2401,7 +2453,9 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
             </Button>
           </Box>
         </Grid>
-      </Grid>
+              </Grid>
+            </Box>
+          </Box>
     </form>
         
         <OrderItemsSelectorDialog

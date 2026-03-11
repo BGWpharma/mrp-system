@@ -4,7 +4,6 @@ import {
   Typography,
   Grid,
   Paper,
-  Chip,
   Divider,
   Table,
   TableBody,
@@ -25,9 +24,9 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import {
   translateStatus,
   translatePaymentStatus,
-  KANBAN_COLUMN_COLORS,
   getAlowedTransitions
 } from '../../../../services/purchaseOrders';
+import StatusChip from '../../../common/StatusChip';
 import { useTranslation } from '../../../../hooks/useTranslation';
 import { format, parseISO, isValid } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -123,11 +122,7 @@ const POModalDetailsTab = ({ purchaseOrder, userNames, onStatusChange, onRefresh
               <Grid item xs={6}>
                 <Typography variant="caption" color="text.secondary">{t('purchaseOrders.kanban.modal.status')}</Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Chip
-                    label={translateStatus(po?.status)}
-                    size="small"
-                    sx={{ bgcolor: KANBAN_COLUMN_COLORS[po?.status] || '#9E9E9E', color: '#fff' }}
-                  />
+                  <StatusChip status={translateStatus(po?.status)} size="small" />
                   {allowedTransitions.length > 0 && (
                     <>
                       <Button
@@ -148,11 +143,7 @@ const POModalDetailsTab = ({ purchaseOrder, userNames, onStatusChange, onRefresh
                             key={status}
                             onClick={() => { setStatusMenuAnchor(null); onStatusChange(status); }}
                           >
-                            <Chip
-                              label={translateStatus(status)}
-                              size="small"
-                              sx={{ bgcolor: KANBAN_COLUMN_COLORS[status], color: '#fff', mr: 1 }}
-                            />
+                            <StatusChip status={translateStatus(status)} size="small" sx={{ mr: 1 }} />
                           </MenuItem>
                         ))}
                       </Menu>
@@ -314,12 +305,10 @@ const POModalDetailsTab = ({ purchaseOrder, userNames, onStatusChange, onRefresh
                         {change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : '-'}
                       </TableCell>
                       <TableCell sx={{ py: 0.5 }}>
-                        <Chip label={translateStatus(change.oldStatus)} size="small"
-                          sx={{ fontSize: '0.65rem', height: 20, bgcolor: KANBAN_COLUMN_COLORS[change.oldStatus], color: '#fff' }} />
+                        <StatusChip status={translateStatus(change.oldStatus)} size="small" sx={{ fontSize: '0.65rem', height: 20 }} />
                       </TableCell>
                       <TableCell sx={{ py: 0.5 }}>
-                        <Chip label={translateStatus(change.newStatus)} size="small"
-                          sx={{ fontSize: '0.65rem', height: 20, bgcolor: KANBAN_COLUMN_COLORS[change.newStatus], color: '#fff' }} />
+                        <StatusChip status={translateStatus(change.newStatus)} size="small" sx={{ fontSize: '0.65rem', height: 20 }} />
                       </TableCell>
                       <TableCell sx={{ py: 0.5, fontSize: '0.75rem' }}>
                         {userNames[change.changedBy] || change.changedBy || 'System'}

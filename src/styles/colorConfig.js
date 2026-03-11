@@ -6,35 +6,35 @@
 // Podstawowe kolory dla motywów (spójne z ThemeContext)
 const baseColors = {
   light: {
-    background: '#f5f5f5',
+    background: '#f8fafc',
     paper: '#ffffff',
-    paperDarker: '#eaeaea', 
+    paperDarker: '#f1f5f9',
     text: {
-      primary: 'rgba(0, 0, 0, 0.87)',
-      secondary: 'rgba(0, 0, 0, 0.6)',
-      disabled: 'rgba(0, 0, 0, 0.38)',
+      primary: '#1e293b',
+      secondary: '#64748b',
+      disabled: '#94a3b8',
     },
-    divider: 'rgba(0, 0, 0, 0.12)',
+    divider: 'rgba(0, 0, 0, 0.06)',
   },
   dark: {
-    background: '#111827',
-    paper: '#182136',
-    paperDarker: '#0a101f',
+    background: '#0f172a',
+    paper: '#1e293b',
+    paperDarker: '#0f172a',
     text: {
-      primary: '#ffffff',
-      secondary: 'rgba(255, 255, 255, 0.7)',
-      disabled: 'rgba(255, 255, 255, 0.5)',
+      primary: '#f1f5f9',
+      secondary: '#94a3b8',
+      disabled: '#64748b',
     },
-    divider: 'rgba(255, 255, 255, 0.12)',
+    divider: 'rgba(255, 255, 255, 0.08)',
   }
 };
 
 // Pallety kolorów dla obydwu motywów
 const palettes = {
   primary: {
-    light: '#42a5f5',
-    main: '#1976d2',
-    dark: '#1565c0',
+    light: '#3b82f6',
+    main: '#2563eb',
+    dark: '#1d4ed8',
     contrastText: '#ffffff',
   },
   secondary: {
@@ -44,21 +44,21 @@ const palettes = {
     contrastText: '#ffffff',
   },
   success: {
-    light: '#81c784',
-    main: '#4caf50',
-    dark: '#388e3c',
+    light: '#4ade80',
+    main: '#22c55e',
+    dark: '#16a34a',
     contrastText: '#ffffff',
   },
   error: {
-    light: '#e57373',
-    main: '#f44336',
-    dark: '#d32f2f',
+    light: '#f87171',
+    main: '#ef4444',
+    dark: '#dc2626',
     contrastText: '#ffffff',
   },
   warning: {
-    light: '#ffb74d',
-    main: '#ff9800',
-    dark: '#f57c00',
+    light: '#fbbf24',
+    main: '#f59e0b',
+    dark: '#d97706',
     contrastText: 'rgba(0, 0, 0, 0.87)',
   },
   info: {
@@ -72,67 +72,126 @@ const palettes = {
 // Statusy dla komponentów
 const statusColors = {
   pending: {
-    light: '#ffecb3',
-    main: '#ffc107',
-    dark: '#ffa000',
+    light: '#fbbf24',
+    main: '#f59e0b',
+    dark: '#d97706',
     text: 'rgba(0, 0, 0, 0.87)',
   },
   active: {
-    light: '#b3e5fc',
-    main: '#03a9f4',
-    dark: '#0288d1',
+    light: '#4ade80',
+    main: '#22c55e',
+    dark: '#16a34a',
     text: '#ffffff',
   },
   completed: {
-    light: '#c8e6c9',
-    main: '#4caf50',
-    dark: '#388e3c',
+    light: '#60a5fa',
+    main: '#3b82f6',
+    dark: '#2563eb',
     text: '#ffffff',
   },
   cancelled: {
-    light: '#ffcdd2',
-    main: '#f44336',
-    dark: '#d32f2f',
+    light: '#f87171',
+    main: '#ef4444',
+    dark: '#dc2626',
     text: '#ffffff',
   },
   inProgress: {
-    light: '#bbdefb',
-    main: '#2196f3',
-    dark: '#1976d2',
+    light: '#a78bfa',
+    main: '#8b5cf6',
+    dark: '#7c3aed',
     text: '#ffffff',
   },
   onHold: {
-    light: '#e1bee7',
-    main: '#9c27b0',
-    dark: '#7b1fa2',
+    light: '#9ca3af',
+    main: '#6b7280',
+    dark: '#4b5563',
     text: '#ffffff',
   },
+  draft: {
+    light: '#9ca3af',
+    main: '#6b7280',
+    dark: '#4b5563',
+    text: '#ffffff',
+  },
+  shipped: {
+    light: '#a78bfa',
+    main: '#8b5cf6',
+    dark: '#7c3aed',
+    text: '#ffffff',
+  },
+  delivered: {
+    light: '#4ade80',
+    main: '#22c55e',
+    dark: '#16a34a',
+    text: '#ffffff',
+  },
+  confirmed: {
+    light: '#22d3ee',
+    main: '#06b6d4',
+    dark: '#0891b2',
+    text: '#ffffff',
+  },
+  partial: {
+    light: '#fbbf24',
+    main: '#f59e0b',
+    dark: '#d97706',
+    text: 'rgba(0, 0, 0, 0.87)',
+  },
   overdue: {
-    light: '#ffccbc',
-    main: '#ff5722',
-    dark: '#e64a19',
+    light: '#fb923c',
+    main: '#f97316',
+    dark: '#ea580c',
     text: '#ffffff',
   },
   expired: {
-    light: '#d7ccc8',
-    main: '#795548',
-    dark: '#5d4037',
+    light: '#a8a29e',
+    main: '#78716c',
+    dark: '#57534e',
     text: '#ffffff',
   },
 };
 
+// Mapa statusow (PL/EN/lowercase) -> klucz w statusColors / palette.status
+const STATUS_KEY_MAP = {
+  'Szkic': 'draft', 'Draft': 'draft', 'draft': 'draft',
+  'Zaplanowane': 'draft', 'scheduled': 'draft',
+  'Zamówione': 'active', 'ordered': 'active',
+  'Potwierdzone': 'confirmed', 'confirmed': 'confirmed',
+  'Zatwierdzone': 'confirmed', 'approved': 'confirmed',
+  'Wysłane': 'shipped', 'shipped': 'shipped',
+  'W transporcie': 'shipped', 'In Transit': 'shipped',
+  'Wystawiony': 'active', 'Issued': 'active',
+  'Dostarczone': 'delivered', 'delivered': 'delivered',
+  'W trakcie': 'inProgress', 'In Progress': 'inProgress',
+  'Potwierdzenie zużycia': 'inProgress',
+  'Zakończone': 'completed', 'Zakończony': 'completed', 'completed': 'completed',
+  'Anulowane': 'cancelled', 'Anulowany': 'cancelled', 'cancelled': 'cancelled',
+  'Wstrzymane': 'onHold', 'On Hold': 'onHold',
+  'Oczekujące': 'pending', 'pending': 'pending',
+  'Częściowo dostarczone': 'partial', 'partial': 'partial',
+};
+
+const getStatusKeyFromLabel = (statusLabel) => {
+  return STATUS_KEY_MAP[statusLabel] || STATUS_KEY_MAP[statusLabel?.toLowerCase()] || 'draft';
+};
+
+const getStatusMainColor = (statusLabel) => {
+  const key = getStatusKeyFromLabel(statusLabel);
+  return statusColors[key]?.main || statusColors.draft.main;
+};
+
 // Gradientowe tła
 const gradients = {
-  primary: 'linear-gradient(45deg, #1976d2 30%, #42a5f5 90%)',
+  primary: 'linear-gradient(45deg, #1d4ed8 30%, #3b82f6 90%)',
   secondary: 'linear-gradient(45deg, #f50057 30%, #ff4081 90%)',
-  success: 'linear-gradient(45deg, #388e3c 30%, #4caf50 90%)',
-  error: 'linear-gradient(45deg, #d32f2f 30%, #f44336 90%)',
-  warning: 'linear-gradient(45deg, #f57c00 30%, #ff9800 90%)',
-  info: 'linear-gradient(45deg, #0288d1 30%, #29b6f6 90%)',
-  purple: 'linear-gradient(45deg, #7b1fa2 30%, #9c27b0 90%)',
-  orange: 'linear-gradient(45deg, #e64a19 30%, #ff5722 90%)',
-  grey: 'linear-gradient(45deg, #455a64 30%, #607d8b 90%)',
-  dark: 'linear-gradient(45deg, #212121 30%, #424242 90%)',
+  success: 'linear-gradient(45deg, #16a34a 30%, #22c55e 90%)',
+  error: 'linear-gradient(45deg, #dc2626 30%, #ef4444 90%)',
+  warning: 'linear-gradient(45deg, #d97706 30%, #f59e0b 90%)',
+  info: 'linear-gradient(45deg, #0ea5e9 30%, #38bdf8 90%)',
+  purple: 'linear-gradient(45deg, #7c3aed 30%, #8b5cf6 90%)',
+  orange: 'linear-gradient(45deg, #ea580c 30%, #f97316 90%)',
+  grey: 'linear-gradient(45deg, #4b5563 30%, #6b7280 90%)',
+  dark: 'linear-gradient(45deg, #1e293b 30%, #334155 90%)',
 };
 
 // Pomocnicze funkcje dla konwersji kolorów
@@ -163,6 +222,9 @@ export {
   statusColors,
   gradients,
   hexToRgba,
+  STATUS_KEY_MAP,
+  getStatusKeyFromLabel,
+  getStatusMainColor,
 };
 
 // Przydatne przeliczenia dla komponentów

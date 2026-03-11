@@ -1537,16 +1537,16 @@ export const KANBAN_COLUMN_ORDER = [
 ];
 
 export const KANBAN_COLUMN_COLORS = {
-  draft: '#9E9E9E',
-  pending: '#FF9800',
-  approved: '#2196F3',
-  ordered: '#3F51B5',
-  confirmed: '#00BCD4',
-  shipped: '#7C4DFF',
-  delivered: '#4CAF50',
-  partial: '#FFC107',
-  completed: '#388E3C',
-  cancelled: '#F44336'
+  draft: '#6b7280',
+  pending: '#f59e0b',
+  approved: '#3b82f6',
+  ordered: '#2563eb',
+  confirmed: '#06b6d4',
+  shipped: '#8b5cf6',
+  delivered: '#22c55e',
+  partial: '#f59e0b',
+  completed: '#16a34a',
+  cancelled: '#ef4444',
 };
 
 const STATUS_TRANSITIONS = {

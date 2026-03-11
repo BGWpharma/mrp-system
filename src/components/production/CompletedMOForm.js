@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Container, 
   Typography, 
@@ -37,6 +37,7 @@ import {
   getFormButtonStyles,
   getFormActionsStyles 
 } from '../../styles/formStyles';
+import FormSectionNav from '../common/FormSectionNav';
 
 // Funkcja do pobierania szczegółów zadania produkcyjnego (MO) na podstawie numeru MO
 const getMODetailsById = async (moNumber) => {
@@ -135,6 +136,17 @@ const CompletedMOForm = () => {
   const { currentUser } = useAuth();
   const theme = useTheme();
   const { t } = useTranslation('forms');
+
+  const identificationRef = useRef(null);
+  const moReportRef = useRef(null);
+  const lossReportRef = useRef(null);
+  const attachmentsRef = useRef(null);
+  const formSections = [
+    { ref: identificationRef, label: t('sections.identification') },
+    { ref: moReportRef, label: t('sections.moReport') },
+    { ref: lossReportRef, label: t('sections.lossReport') },
+    { ref: attachmentsRef, label: t('sections.attachments') },
+  ];
 
   const [formData, setFormData] = useState({
     email: '',
@@ -855,8 +867,11 @@ const CompletedMOForm = () => {
         )}
         
         <Box component="form" onSubmit={handleSubmit} sx={{ px: { xs: 1, sm: 0 } }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 0 }}>
+          <FormSectionNav sections={formSections} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
           {/* SEKCJA 1 z 4 - IDENTYFIKACJA */}
-          <Box sx={getFormSectionStyles(theme, 'primary')}>
+          <Box ref={identificationRef} sx={getFormSectionStyles(theme, 'primary')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 1, total: 4 })}
             </Typography>
@@ -911,7 +926,7 @@ const CompletedMOForm = () => {
           </Box>
 
           {/* SEKCJA 2 z 4 - INFORMACJE O MO */}
-          <Box sx={getFormSectionStyles(theme, 'warning')}>
+          <Box ref={moReportRef} sx={getFormSectionStyles(theme, 'warning')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 2, total: 4 })}
             </Typography>
@@ -957,7 +972,7 @@ const CompletedMOForm = () => {
           </Box>
 
           {/* SEKCJA 3 z 4 - DANE PRODUKCYJNE I STRATY */}
-          <Box sx={getFormSectionStyles(theme, 'success')}>
+          <Box ref={lossReportRef} sx={getFormSectionStyles(theme, 'success')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 3, total: 4 })}
             </Typography>
@@ -1038,7 +1053,7 @@ const CompletedMOForm = () => {
           </Box>
 
           {/* SEKCJA 4 z 4 - ZAŁĄCZNIKI */}
-          <Box sx={getFormSectionStyles(theme, 'info')}>
+          <Box ref={attachmentsRef} sx={getFormSectionStyles(theme, 'info')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'info.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 4, total: 4 })}
             </Typography>
@@ -1101,6 +1116,8 @@ const CompletedMOForm = () => {
                 />
               </Grid>
             </Grid>
+          </Box>
+          </Box>
           </Box>
 
           {/* PRZYCISKI AKCJI */}

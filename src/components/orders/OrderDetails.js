@@ -94,6 +94,7 @@ import {
   p2,
   p3
 } from '../../styles/muiCommonStyles';
+import StatusChip from '../common/StatusChip';
 
 // 🚀 CACHE SYSTEM dla optymalizacji zapytań
 const orderCache = new Map();
@@ -1415,32 +1416,6 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     }
   };
 
-  // Funkcja renderująca status dokumentu CMR
-  const renderCmrStatus = (status) => {
-    const statusConfig = {
-      [CMR_STATUSES.DRAFT]: { color: '#757575', label: t('orderDetails.cmrStatuses.draft') }, // szary
-      [CMR_STATUSES.ISSUED]: { color: '#2196f3', label: t('orderDetails.cmrStatuses.issued') }, // niebieski
-      [CMR_STATUSES.IN_TRANSIT]: { color: '#ff9800', label: t('orderDetails.cmrStatuses.inTransit') }, // pomarańczowy
-      [CMR_STATUSES.DELIVERED]: { color: '#4caf50', label: t('orderDetails.cmrStatuses.delivered') }, // zielony
-      [CMR_STATUSES.COMPLETED]: { color: '#9c27b0', label: t('orderDetails.cmrStatuses.completed') }, // fioletowy
-      [CMR_STATUSES.CANCELED]: { color: '#f44336', label: t('orderDetails.cmrStatuses.canceled') } // czerwony
-    };
-    
-    const config = statusConfig[status] || { color: '#757575', label: status || t('orderDetails.cmrStatuses.unknown') };
-    
-    return (
-      <Chip 
-        label={config.label}
-        size="small"
-        variant="outlined"
-        sx={{
-          borderColor: config.color,
-          color: config.color,
-          fontWeight: 'medium'
-        }}
-      />
-    );
-  };
 
   // Funkcja weryfikująca czy faktury istnieją i filtrująca nieistniejące
   const verifyInvoices = async (fetchedInvoices) => {
@@ -3085,7 +3060,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                       {cmr.recipient || '-'}
                     </TableCell>
                     <TableCell>
-                      {renderCmrStatus(cmr.status)}
+                      <StatusChip status={cmr.status} size="small" />
                     </TableCell>
                     <TableCell align="right">
                       <Button

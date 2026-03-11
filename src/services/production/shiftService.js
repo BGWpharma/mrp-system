@@ -17,10 +17,10 @@ export const SHIFT_TYPES = {
 };
 
 export const SHIFT_PRESETS = {
-  [SHIFT_TYPES.MORNING]:   { label: 'Ranna',         start: '06:00', end: '14:00', color: '#4caf50' },
-  [SHIFT_TYPES.AFTERNOON]: { label: 'Popołudniowa',  start: '14:00', end: '22:00', color: '#2196f3' },
-  [SHIFT_TYPES.NIGHT]:     { label: 'Nocna',         start: '22:00', end: '06:00', color: '#7c4dff' },
-  [SHIFT_TYPES.OFF]:       { label: 'Wolne',         start: null,    end: null,     color: '#9e9e9e' },
+  [SHIFT_TYPES.MORNING]:   { label: 'Ranna',         start: '06:00', end: '14:00', color: '#22c55e' },
+  [SHIFT_TYPES.AFTERNOON]: { label: 'Popołudniowa',  start: '14:00', end: '22:00', color: '#3b82f6' },
+  [SHIFT_TYPES.NIGHT]:     { label: 'Nocna',         start: '22:00', end: '06:00', color: '#8b5cf6' },
+  [SHIFT_TYPES.OFF]:       { label: 'Wolne',         start: null,    end: null,     color: '#6b7280' },
 };
 
 // ===================== SZABLONY ZMIAN =====================
@@ -48,7 +48,7 @@ export const addShiftTemplate = async (data) => {
       name: data.name,
       startTime: data.startTime,
       endTime: data.endTime,
-      color: data.color || '#4caf50',
+      color: data.color || '#22c55e',
       createdAt: serverTimestamp(),
     });
   } catch (error) {
@@ -89,7 +89,7 @@ export const saveShift = async (data) => {
       shiftType: data.shiftType || SHIFT_TYPES.CUSTOM,
       startTime: data.startTime || null,
       endTime: data.endTime || null,
-      color: data.color || '#4caf50',
+      color: data.color || '#22c55e',
       updatedAt: serverTimestamp(),
     }, { merge: true });
 
@@ -118,7 +118,7 @@ export const saveShiftsBatch = async (shifts) => {
         shiftType: s.shiftType || SHIFT_TYPES.CUSTOM,
         startTime: s.startTime || null,
         endTime: s.endTime || null,
-        color: s.color || '#4caf50',
+        color: s.color || '#22c55e',
         updatedAt: serverTimestamp(),
       }, { merge: true });
     });

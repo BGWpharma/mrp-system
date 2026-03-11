@@ -31,7 +31,6 @@ const Dashboard = () => {
   const { currentUser } = useAuth();
   const { t } = useTranslation('dashboard');
   const theme = useTheme();
-  const isDarkMode = theme.palette.mode === 'dark';
   
   // Stan dla systemu ogłoszeń
   const [announcement, setAnnouncement] = useState('');
@@ -266,7 +265,7 @@ const Dashboard = () => {
                   width: '100%',
                   height: '100%',
                   objectFit: 'contain',
-                  filter: isDarkMode ? 'brightness(1.2)' : 'brightness(1)'
+                  filter: theme.palette.mode === 'dark' ? 'brightness(1.2)' : 'brightness(1)'
                 }}
               />
             </Box>
@@ -312,15 +311,10 @@ const Dashboard = () => {
               borderRadius: 2, 
               border: '1px solid',
               borderColor: 'divider',
-              boxShadow: isDarkMode 
-                ? '0 1px 3px rgba(0, 0, 0, 0.12)'
-                : '0 1px 3px rgba(0, 0, 0, 0.06)',
+              boxShadow: 1,
               transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
               '&:hover': {
-                borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-                boxShadow: isDarkMode 
-                  ? '0 4px 12px rgba(0, 0, 0, 0.15)'
-                  : '0 4px 12px rgba(0, 0, 0, 0.08)',
+                boxShadow: 2,
               }
             }}
           >
@@ -332,7 +326,7 @@ const Dashboard = () => {
                 width: 40,
                 height: 40,
                 borderRadius: 1.5,
-                bgcolor: isDarkMode ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.08)',
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.08)',
                 mr: 2,
               }}>
                 <AnnouncementIcon sx={{ color: 'primary.main', fontSize: 22 }} />
@@ -346,9 +340,9 @@ const Dashboard = () => {
                   onClick={startEditingAnnouncement}
                   sx={{ 
                     ml: 'auto',
-                    bgcolor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                    bgcolor: 'action.hover',
                     '&:hover': {
-                      bgcolor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+                      bgcolor: 'action.selected',
                     }
                   }}
                   title={t('editAnnouncement')}
@@ -398,7 +392,7 @@ const Dashboard = () => {
                   mt: 2,
                   p: 3,
                   borderRadius: 1.5,
-                  bgcolor: isDarkMode ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+                  bgcolor: 'action.hover',
                   border: '1px solid',
                   borderColor: 'divider',
                 }}>
@@ -422,7 +416,7 @@ const Dashboard = () => {
                   mt: 2,
                   p: 3,
                   borderRadius: 1.5,
-                  bgcolor: isDarkMode ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
+                  bgcolor: 'action.hover',
                   border: '1px dashed',
                   borderColor: 'divider',
                   textAlign: 'center'

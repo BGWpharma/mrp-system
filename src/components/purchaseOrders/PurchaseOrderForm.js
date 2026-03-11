@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from '../../hooks/useTranslation';
 import {
@@ -46,6 +46,7 @@ import {
   mb3,
   mt2
 } from '../../styles/muiCommonStyles';
+import FormSectionNav from '../common/FormSectionNav';
 
 
 const PurchaseOrderForm = ({ orderId }) => {
@@ -55,6 +56,20 @@ const PurchaseOrderForm = ({ orderId }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+
+  const basicFieldsRef = useRef(null);
+  const additionalCostsRef = useRef(null);
+  const orderItemsRef = useRef(null);
+  const summaryRef = useRef(null);
+  const invoicesRef = useRef(null);
+
+  const formSections = [
+    { label: 'Dane podstawowe', ref: basicFieldsRef },
+    { label: 'Koszty dodatkowe', ref: additionalCostsRef },
+    { label: 'Pozycje zamówienia', ref: orderItemsRef },
+    { label: 'Podsumowanie', ref: summaryRef },
+    { label: 'Faktury i załączniki', ref: invoicesRef },
+  ];
   
   // Używamy orderId z props, a jeśli nie istnieje, to poId z useParams()
   const currentOrderId = orderId || poId;
@@ -2159,66 +2174,81 @@ const PurchaseOrderForm = ({ orderId }) => {
           </Button>
         </Box>
         
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 0 }}>
+          <FormSectionNav sections={formSections} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
         <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
-            <POBasicFieldsSection
-              poData={poData}
-              suppliers={suppliers}
-              warehouses={warehouses}
-              handleSupplierChange={handleSupplierChange}
-              handleChange={handleChange}
-              handleDateChange={handleDateChange}
-              setPoData={setPoData}
-              currentLanguage={currentLanguage}
-              t={t}
-            />
-            
-            <POAdditionalCostsSection
-              poData={poData}
-              setPoData={setPoData}
-              handleAddAdditionalCost={handleAddAdditionalCost}
-              handleAdditionalCostChange={handleAdditionalCostChange}
-              handleRemoveAdditionalCost={handleRemoveAdditionalCost}
-              currentLanguage={currentLanguage}
-              t={t}
-            />
-          </Grid>
-          
-          <Divider sx={{ my: 3 }} />
-          
-          <POOrderItemsSection
-            poData={poData}
-            setPoData={setPoData}
-            inventoryItems={inventoryItems}
-            handleAddItem={handleAddItem}
-            handleRemoveItem={handleRemoveItem}
-            handleItemChange={handleItemChange}
-            handleItemSelect={handleItemSelect}
-            supplierSuggestions={supplierSuggestions}
-            loadingSupplierSuggestions={loadingSupplierSuggestions}
-            findBestSuppliers={findBestSuppliers}
-            applyBestSupplierPrices={applyBestSupplierPrices}
-            fillMinimumOrderQuantities={fillMinimumOrderQuantities}
-            setDocumentScannerOpen={setDocumentScannerOpen}
-            currentLanguage={currentLanguage}
-            t={t}
-          />
+          <div ref={basicFieldsRef}>
+            <Grid container spacing={3}>
+              <POBasicFieldsSection
+                poData={poData}
+                suppliers={suppliers}
+                warehouses={warehouses}
+                handleSupplierChange={handleSupplierChange}
+                handleChange={handleChange}
+                handleDateChange={handleDateChange}
+                setPoData={setPoData}
+                currentLanguage={currentLanguage}
+                t={t}
+              />
+            </Grid>
+          </div>
 
-          <POSummarySection
-            poData={poData}
-            handleChange={handleChange}
-            t={t}
-          />
+          <div ref={additionalCostsRef}>
+            <Grid container spacing={3}>
+              <POAdditionalCostsSection
+                poData={poData}
+                setPoData={setPoData}
+                handleAddAdditionalCost={handleAddAdditionalCost}
+                handleAdditionalCostChange={handleAdditionalCostChange}
+                handleRemoveAdditionalCost={handleRemoveAdditionalCost}
+                currentLanguage={currentLanguage}
+                t={t}
+              />
+            </Grid>
+          </div>
           
           <Divider sx={{ my: 3 }} />
           
-          <POInvoicesAttachmentsSection
-            poData={poData}
-            currentOrderId={currentOrderId}
-            handleCategorizedAttachmentsChange={handleCategorizedAttachmentsChange}
-            saving={saving}
-            t={t}
-          />
+          <div ref={orderItemsRef}>
+            <POOrderItemsSection
+              poData={poData}
+              setPoData={setPoData}
+              inventoryItems={inventoryItems}
+              handleAddItem={handleAddItem}
+              handleRemoveItem={handleRemoveItem}
+              handleItemChange={handleItemChange}
+              handleItemSelect={handleItemSelect}
+              supplierSuggestions={supplierSuggestions}
+              loadingSupplierSuggestions={loadingSupplierSuggestions}
+              findBestSuppliers={findBestSuppliers}
+              applyBestSupplierPrices={applyBestSupplierPrices}
+              fillMinimumOrderQuantities={fillMinimumOrderQuantities}
+              setDocumentScannerOpen={setDocumentScannerOpen}
+              currentLanguage={currentLanguage}
+              t={t}
+            />
+          </div>
+
+          <div ref={summaryRef}>
+            <POSummarySection
+              poData={poData}
+              handleChange={handleChange}
+              t={t}
+            />
+          </div>
+          
+          <Divider sx={{ my: 3 }} />
+          
+          <div ref={invoicesRef}>
+            <POInvoicesAttachmentsSection
+              poData={poData}
+              currentOrderId={currentOrderId}
+              handleCategorizedAttachmentsChange={handleCategorizedAttachmentsChange}
+              saving={saving}
+              t={t}
+            />
+          </div>
 
           <Box sx={{ mb: 3, mt: 1, display: 'flex', justifyContent: 'flex-end'}}>
             <Button
@@ -2239,6 +2269,8 @@ const PurchaseOrderForm = ({ orderId }) => {
             </Button>
           </Box>
         </form>
+          </Box>
+        </Box>
       </Paper>
       
       {/* Overlay z informacją o zapisywaniu */}

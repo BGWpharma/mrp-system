@@ -70,15 +70,15 @@ import debounce from 'lodash.debounce';
 const getTypeColor = (type) => {
   switch (type) {
     case 'purchaseOrder':
-      return '#3f51b5'; // niebieski
+      return '#3b82f6'; // niebieski
     case 'customerOrder':
-      return '#4caf50'; // zielony
+      return '#22c55e'; // zielony
     case 'productionTask':
-      return '#ff9800'; // pomarańczowy
+      return '#f59e0b'; // pomarańczowy
     case 'inventoryBatch':
-      return '#e91e63'; // różowy
+      return '#8b5cf6'; // fioletowy
     default:
-      return '#9e9e9e'; // szary dla nieznanych typów
+      return '#6b7280'; // szary dla nieznanych typów
   }
 };
 
@@ -626,10 +626,10 @@ const Navbar = ({ sidebarCollapsed }) => {
                       sx={{
                         borderLeft: '4px solid',
                         borderColor: () => {
-                          if (result.type === 'purchaseOrder') return '#3f51b5';
-                          if (result.type === 'customerOrder') return '#4caf50';
-                          if (result.type === 'productionTask') return '#ff9800';
-                          if (result.type === 'inventoryBatch') return '#e91e63';
+                          if (result.type === 'purchaseOrder') return '#3b82f6';
+                          if (result.type === 'customerOrder') return '#22c55e';
+                          if (result.type === 'productionTask') return '#f59e0b';
+                          if (result.type === 'inventoryBatch') return '#8b5cf6';
                           return 'transparent';
                         },
                         cursor: 'pointer'

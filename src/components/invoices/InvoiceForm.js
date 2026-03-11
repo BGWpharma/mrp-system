@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -43,6 +43,7 @@ import {
   CorrectionInvoiceSection
 } from './form';
 import { useInvoiceCalculations, useProformaAllocation, useOrderItemsSelection } from '../../hooks/invoices';
+import FormSectionNav from '../common/FormSectionNav';
 
 const InvoiceForm = ({ invoiceId }) => {
   const [searchParams] = useSearchParams();
@@ -125,6 +126,18 @@ const InvoiceForm = ({ invoiceId }) => {
     showSuccess,
     t
   });
+
+  const basicDataRef = useRef(null);
+  const itemsRef = useRef(null);
+  const correctionRef = useRef(null);
+  const additionalInfoRef = useRef(null);
+
+  const formSections = [
+    { label: t('invoices.form.fields.basicData'), ref: basicDataRef },
+    { label: t('invoices.form.fields.invoiceItems'), ref: itemsRef },
+    { label: t('invoices.form.toggleButtons.correction'), ref: correctionRef },
+    { label: t('invoices.form.fields.additionalInfo'), ref: additionalInfoRef },
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -1152,99 +1165,112 @@ const InvoiceForm = ({ invoiceId }) => {
         </Button>
       </Box>
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          {t('invoices.form.fields.basicData')}
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <InvoiceBasicInfo
-              invoice={invoice}
-              invoiceId={invoiceId}
-              handleChange={handleChange}
-              handleDateChange={handleDateChange}
-              companyInfo={companyInfo}
-              t={t}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <CustomerAndOrderSelector
+<Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 0 }}>
+          <FormSectionNav sections={formSections} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <div ref={basicDataRef}>
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                {t('invoices.form.fields.basicData')}
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <InvoiceBasicInfo
+                    invoice={invoice}
+                    invoiceId={invoiceId}
+                    handleChange={handleChange}
+                    handleDateChange={handleDateChange}
+                    companyInfo={companyInfo}
+                    t={t}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <CustomerAndOrderSelector
+                    invoice={invoice}
+                    setInvoice={setInvoice}
+                    setCustomerDialogOpen={setCustomerDialogOpen}
+                    refreshingCustomer={refreshingCustomer}
+                    refreshCustomerData={refreshCustomerData}
+                    selectedOrderType={selectedOrderType}
+                    selectedOrderId={selectedOrderId}
+                    ordersLoading={ordersLoading}
+                    poSearchLoading={poSearchLoading}
+                    filteredOrders={filteredOrders}
+                    poSearchResults={poSearchResults}
+                    poSearchTerm={poSearchTerm}
+                    setPoSearchTerm={setPoSearchTerm}
+                    handleOrderSelect={handleOrderSelect}
+                    selectedOrder={selectedOrder}
+                    handleOpenOrderItemsDialog={handleOpenOrderItemsDialog}
+                    showSuccess={showSuccess}
+                    t={t}
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
+          </div>
+
+          <div ref={itemsRef}>
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <InvoiceItemsList
+                invoice={invoice}
+                selectedOrder={selectedOrder}
+                selectedOrderType={selectedOrderType}
+                handleOpenOrderItemsDialog={handleOpenOrderItemsDialog}
+                handleAddItem={handleAddItem}
+                handleItemChange={handleItemChange}
+                handleRemoveItem={handleRemoveItem}
+                t={t}
+              />
+
+              <InvoiceTotalsSection
+                invoice={invoice}
+                selectedOrder={selectedOrder}
+                availableProformas={availableProformas}
+                relatedInvoices={relatedInvoices}
+                loadingRelatedInvoices={loadingRelatedInvoices}
+                availableProformaAmount={availableProformaAmount}
+                handleProformaAllocationChange={handleProformaAllocationChange}
+                getTotalAllocatedAmount={getTotalAllocatedAmount}
+                getFilteredProformas={getFilteredProformas}
+                showAllProformas={showAllProformas}
+                setShowAllProformas={setShowAllProformas}
+                t={t}
+              />
+            </Paper>
+          </div>
+
+          <div ref={correctionRef}>
+            <CorrectionInvoiceSection
               invoice={invoice}
               setInvoice={setInvoice}
-              setCustomerDialogOpen={setCustomerDialogOpen}
-              refreshingCustomer={refreshingCustomer}
-              refreshCustomerData={refreshCustomerData}
-              selectedOrderType={selectedOrderType}
-              selectedOrderId={selectedOrderId}
-              ordersLoading={ordersLoading}
-              poSearchLoading={poSearchLoading}
-              filteredOrders={filteredOrders}
-              poSearchResults={poSearchResults}
-              poSearchTerm={poSearchTerm}
-              setPoSearchTerm={setPoSearchTerm}
-              handleOrderSelect={handleOrderSelect}
-              selectedOrder={selectedOrder}
-              handleOpenOrderItemsDialog={handleOpenOrderItemsDialog}
-              showSuccess={showSuccess}
+              handleChange={handleChange}
               t={t}
             />
-          </Grid>
-        </Grid>
-      </Paper>
+          </div>
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <InvoiceItemsList
-          invoice={invoice}
-          selectedOrder={selectedOrder}
-          selectedOrderType={selectedOrderType}
-          handleOpenOrderItemsDialog={handleOpenOrderItemsDialog}
-          handleAddItem={handleAddItem}
-          handleItemChange={handleItemChange}
-          handleRemoveItem={handleRemoveItem}
-          t={t}
-        />
-
-        <InvoiceTotalsSection
-          invoice={invoice}
-          selectedOrder={selectedOrder}
-          availableProformas={availableProformas}
-          relatedInvoices={relatedInvoices}
-          loadingRelatedInvoices={loadingRelatedInvoices}
-          availableProformaAmount={availableProformaAmount}
-          handleProformaAllocationChange={handleProformaAllocationChange}
-          getTotalAllocatedAmount={getTotalAllocatedAmount}
-          getFilteredProformas={getFilteredProformas}
-          showAllProformas={showAllProformas}
-          setShowAllProformas={setShowAllProformas}
-          t={t}
-        />
-      </Paper>
-      
-      <CorrectionInvoiceSection
-        invoice={invoice}
-        setInvoice={setInvoice}
-        handleChange={handleChange}
-        t={t}
-      />
-
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          {t('invoices.form.fields.additionalInfo')}
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              multiline
-              rows={4}
-              label={t('invoices.form.fields.notes')}
-              name="notes"
-              value={invoice.notes || ''}
-              onChange={handleChange}
-            />
-          </Grid>
-        </Grid>
-      </Paper>
+          <div ref={additionalInfoRef}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                {t('invoices.form.fields.additionalInfo')}
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={4}
+                    label={t('invoices.form.fields.notes')}
+                    name="notes"
+                    value={invoice.notes || ''}
+                    onChange={handleChange}
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
+          </div>
+        </Box>
+      </Box>
 
       <CustomerSelectionDialog
         open={customerDialogOpen}

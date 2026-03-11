@@ -60,7 +60,7 @@ import {
 import { getAllCustomers, CUSTOMERS_CACHE_KEY } from '../../../services/crm';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { useTheme as useThemeContext } from '../../../contexts/ThemeContext';
-
+import StatusChip from '../../../components/common/StatusChip';
 
 // Ikony
 import AddIcon from '@mui/icons-material/Add';
@@ -391,43 +391,6 @@ const CmrListPage = () => {
     }
   }, []);
   
-  const renderStatusChip = useCallback((status) => {
-    let color;
-    switch (status) {
-      case CMR_STATUSES.DRAFT:
-        color = '#757575'; // szary
-        break;
-      case CMR_STATUSES.ISSUED:
-        color = '#2196f3'; // niebieski
-        break;
-      case CMR_STATUSES.IN_TRANSIT:
-        color = '#ff9800'; // pomarańczowy
-        break;
-      case CMR_STATUSES.DELIVERED:
-        color = '#4caf50'; // zielony
-        break;
-      case CMR_STATUSES.COMPLETED:
-        color = '#9c27b0'; // fioletowy
-        break;
-      case CMR_STATUSES.CANCELED:
-        color = '#f44336'; // czerwony
-        break;
-      default:
-        color = '#757575'; // szary
-    }
-    
-    return (
-      <Chip 
-        label={status} 
-        size="small"
-        sx={{
-          backgroundColor: color,
-          color: 'white',
-          fontWeight: 'medium'
-        }}
-      />
-    );
-  }, []);
 
   const handlePaymentStatusClick = useCallback((cmr) => {
     setCmrToUpdatePaymentStatus(cmr);
@@ -943,7 +906,7 @@ const CmrListPage = () => {
                       <TableCell>{cmr.recipient}</TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                          {renderStatusChip(cmr.status)}
+                          <StatusChip status={cmr.status} size="small" />
                           {getPaymentStatusChip(cmr.paymentStatus, cmr)}
                         </Box>
                       </TableCell>

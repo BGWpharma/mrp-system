@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Container,
   Typography,
@@ -35,13 +35,23 @@ import {
   getFormButtonStyles,
   getFormActionsStyles 
 } from '../../styles/formStyles';
+import FormSectionNav from '../../components/common/FormSectionNav';
 
 const DefectRegistryFormPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
   const theme = useTheme();
-  
+
+  const identificationRef = useRef(null);
+  const defectDetailsRef = useRef(null);
+  const notesRef = useRef(null);
+  const formSections = [
+    { label: 'Identyfikacja', ref: identificationRef },
+    { label: 'Szczegóły Usterki', ref: defectDetailsRef },
+    { label: 'Dodatkowe Uwagi', ref: notesRef },
+  ];
+
   const isEditMode = new URLSearchParams(location.search).get('edit') === 'true';
   
   const [formData, setFormData] = useState({
@@ -269,8 +279,12 @@ const DefectRegistryFormPage = () => {
                 Sekcja 1 z 4
               </Typography>
 
+              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 0 }}>
+                <FormSectionNav sections={formSections} />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+
               {/* SEKCJA 2 z 4 - IDENTYFIKACJA */}
-              <Box sx={getFormSectionStyles(theme)}>
+              <Box ref={identificationRef} sx={getFormSectionStyles(theme)}>
                 <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
                   Sekcja 2 z 4
                 </Typography>
@@ -328,7 +342,7 @@ const DefectRegistryFormPage = () => {
               </Box>
 
               {/* SEKCJA 3 z 4 - SZCZEGÓŁY USTERKI/SERWISU */}
-              <Box sx={getFormSectionStyles(theme)}>
+              <Box ref={defectDetailsRef} sx={getFormSectionStyles(theme)}>
                 <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
                   Sekcja 3 z 4
                 </Typography>
@@ -427,7 +441,7 @@ const DefectRegistryFormPage = () => {
               </Box>
 
               {/* SEKCJA 4 z 4 - DODATKOWE UWAGI */}
-              <Box sx={getFormSectionStyles(theme)}>
+              <Box ref={notesRef} sx={getFormSectionStyles(theme)}>
                 <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
                   Sekcja 4 z 4
                 </Typography>
@@ -470,6 +484,8 @@ const DefectRegistryFormPage = () => {
                 >
                   {saving ? 'Zapisywanie...' : (isEditMode ? 'Zaktualizuj' : 'Wyślij')}
                 </Button>
+              </Box>
+                </Box>
               </Box>
             </form>
           </Box>

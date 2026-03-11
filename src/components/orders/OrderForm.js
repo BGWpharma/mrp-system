@@ -132,6 +132,7 @@ import {
 import { getExchangeRate } from '../../services/finance';
 import { getLastRecipeUsageInfo } from '../../services/orders';
 import ImportOrderItemsDialog from './ImportOrderItemsDialog';
+import FormSectionNav from '../common/FormSectionNav';
 
 const DEFAULT_ITEM = {
   id: '',
@@ -685,6 +686,20 @@ const OrderForm = ({ orderId }) => {
   const fromPO = location.state?.fromPO || false;
   const poId = location.state?.poId || null;
   const poNumber = location.state?.poNumber || null;
+
+  const basicDataRef = useRef(null);
+  const productsRef = useRef(null);
+  const notesRef = useRef(null);
+  const orderSummaryRef = useRef(null);
+  const invoicesRef = useRef(null);
+
+  const formSections = [
+    { label: t('orderForm.sections.basicData'), ref: basicDataRef },
+    { label: t('orderForm.sections.products'), ref: productsRef },
+    { label: t('orderForm.sections.notes'), ref: notesRef },
+    { label: t('orderForm.sections.orderSummary'), ref: orderSummaryRef },
+    { label: t('orderForm.sections.invoices'), ref: invoicesRef },
+  ];
 
   const handleAddInvoice = () => {
     setInvoices(prev => [
@@ -2380,7 +2395,12 @@ const OrderForm = ({ orderId }) => {
             </Typography>
           </Box>
         )}
+
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 0 }}>
+          <FormSectionNav sections={formSections} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
         
+        <div ref={basicDataRef}>
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
@@ -2516,7 +2536,9 @@ const OrderForm = ({ orderId }) => {
             </Grid>
           </Grid>
         </Paper>
+        </div>
 
+        <div ref={productsRef}>
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
@@ -2638,7 +2660,9 @@ const OrderForm = ({ orderId }) => {
             </Button>
           </Box>
         </Paper>
+        </div>
 
+        <div ref={notesRef}>
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" sx={mb2}>{t('orderForm.sections.notes')}</Typography>
           <TextField
@@ -2652,8 +2676,10 @@ const OrderForm = ({ orderId }) => {
             sx={inputSx}
           />
         </Paper>
+        </div>
         
         {/* Podsumowanie wartości zamówienia na końcu formularza */}
+        <div ref={orderSummaryRef}>
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">{t('orderForm.sections.orderSummary')}</Typography>
@@ -2703,8 +2729,10 @@ const OrderForm = ({ orderId }) => {
             </Grid>
           </Grid>
         </Paper>
+        </div>
 
         {/* Sekcja faktur */}
+        <div ref={invoicesRef}>
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
@@ -2803,6 +2831,10 @@ const OrderForm = ({ orderId }) => {
             </TableContainer>
           )}
         </Paper>
+        </div>
+
+          </Box>
+        </Box>
       </Box>
       
       <Dialog open={isCustomerDialogOpen} onClose={handleCloseCustomerDialog} maxWidth="md" fullWidth>

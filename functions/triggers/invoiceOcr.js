@@ -26,7 +26,7 @@ const {
   SUPPORTED_MIME_TYPES,
 } = require("../utils/ocrService");
 const {convertToPLN} = require("../utils/exchangeRates");
-const {checkForDuplicateInvoice, checkCrossPoDuplicate} = require("../utils/duplicateDetection");
+const {checkForDuplicateInvoice, checkCrossPoDuplicate, canSafelyDeleteExpenseInvoice} = require("../utils/duplicateDetection");
 const {matchAndUpdateSupplier} = require("../utils/supplierMatchingService");
 const {
   matchProformaForPurchaseInvoice,
@@ -111,22 +111,86 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
     invoiceNumber: ocrData.invoiceNumber,
     supplierTaxId: ocrData.supplier?.taxId || null,
     supplierName: ocrData.supplier?.name || "",
+    isProforma,
   });
 
-  // Also check cross-PO duplicate
-  if (!duplicateResult.isDuplicate && sourceInfo.id) {
+  // Always check cross-PO (even if general duplicate found - it may be cross-PO)
+  if (sourceInfo.id) {
     crossPoResult = await checkCrossPoDuplicate(
         db,
         ocrData.invoiceNumber,
         ocrData.supplier?.taxId || null,
         sourceInfo.id,
+        undefined,
+        isProforma,
     );
   }
 
-  const isDuplicate = duplicateResult.isDuplicate ||
-    crossPoResult.isDuplicate;
-  const duplicateInfo = duplicateResult.isDuplicate ?
-    duplicateResult : crossPoResult;
+  // CROSS-PO: link to existing invoice instead of creating a rejected duplicate
+  if (crossPoResult.isDuplicate &&
+      crossPoResult.duplicateType === "cross_po") {
+    logger.info("[OCR] Cross-PO duplicate → linking to existing invoice", {
+      invoiceNumber: ocrData.invoiceNumber,
+      existingId: crossPoResult.existingInvoiceId,
+      existingSourceId: crossPoResult.existingSourceId,
+      currentSourceId: sourceInfo.id,
+    });
+    return {
+      invoiceId: crossPoResult.existingInvoiceId,
+      proformaMatch: {matched: false},
+      crossPoLinked: true,
+      existingSourceId: crossPoResult.existingSourceId,
+    };
+  }
+
+  let isDuplicate = duplicateResult.isDuplicate;
+  const duplicateInfo = duplicateResult;
+
+  // CROSS-COLLECTION: PO-linked invoice has priority over expense duplicate
+  const isPOLinked = sourceInfo.type === "po" || sourceInfo.type === "cmr";
+  const isCrossCollectionDuplicate =
+      isDuplicate && duplicateInfo.existingCollection === "expenseInvoices";
+  let crossCollectionWarning = null;
+
+  if (isDuplicate && isPOLinked && isCrossCollectionDuplicate) {
+    const expenseId = duplicateInfo.existingInvoiceId;
+    logger.info("[OCR] Cross-collection duplicate: PO has priority", {
+      invoiceNumber: ocrData.invoiceNumber,
+      expenseInvoiceId: expenseId,
+      sourceType: sourceInfo.type,
+      sourceId: sourceInfo.id,
+    });
+
+    try {
+      const safetyCheck = await canSafelyDeleteExpenseInvoice(db, expenseId);
+
+      if (safetyCheck.canDelete) {
+        await db.collection("expenseInvoices").doc(expenseId).delete();
+        logger.info("[OCR] Deleted expense duplicate - PO priority", {
+          deletedExpenseId: expenseId,
+        });
+        crossCollectionWarning =
+          `Usunięto duplikat kosztowy (${expenseId}) - priorytet PO`;
+      } else {
+        logger.warn("[OCR] Cannot delete expense duplicate (blockers)", {
+          expenseId,
+          blockers: safetyCheck.blockers,
+        });
+        crossCollectionWarning =
+          `Faktura kosztowa (${expenseId}) nie usunięta ` +
+          `(${safetyCheck.blockers.join(", ")}). Priorytet PO.`;
+      }
+    } catch (delErr) {
+      logger.error("[OCR] Error handling cross-collection duplicate", {
+        error: delErr.message,
+        expenseId,
+      });
+      crossCollectionWarning =
+        `Błąd usuwania duplikatu kosztowego (${expenseId})`;
+    }
+
+    isDuplicate = false;
+  }
 
   if (isDuplicate) {
     logger.warn("[OCR] ⚠️ Duplicate detected", {
@@ -138,7 +202,7 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
     });
   }
 
-  // AUTO-REJECT: duplicates (both regular invoices and proformas)
+  // AUTO-REJECT: true duplicates (same invoice number + supplier, NOT cross-PO)
   const shouldAutoReject = isDuplicate;
   let autoRejectReason = null;
   if (isDuplicate) {
@@ -241,11 +305,17 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
       fileName: sourceInfo.fileName,
     },
 
+    // Multi-PO/CMR linking
+    additionalSources: [],
+    allSourceIds: sourceInfo.id ? [sourceInfo.id] : [],
+
     // OCR metadata
     ocrConfidence: ocrData.parseConfidence,
-    ocrWarnings: isDuplicate ?
-      [...(ocrData.warnings || []), `DUPLIKAT: ${duplicateInfo.message}`] :
-      ocrData.warnings,
+    ocrWarnings: [
+      ...(ocrData.warnings || []),
+      ...(isDuplicate ? [`DUPLIKAT: ${duplicateInfo.message}`] : []),
+      ...(crossCollectionWarning ? [crossCollectionWarning] : []),
+    ],
     ocrRawData: JSON.stringify(ocrData),
 
     // Duplicate detection
@@ -396,7 +466,7 @@ const onInvoiceAttachmentUploaded = onObjectFinalized(
         // Get download URL
         const downloadUrl = await getSignedUrl(bucket, filePath);
 
-        // Create purchaseInvoice document
+        // Create purchaseInvoice document (or link to existing for cross-PO)
         const result = await createPurchaseInvoice(db, ocrData, {
           type: "po",
           id: orderId,
@@ -404,6 +474,56 @@ const onInvoiceAttachmentUploaded = onObjectFinalized(
           downloadUrl: downloadUrl,
           fileName: fileName,
         });
+
+        // CROSS-PO: invoice already exists on another PO → link, don't create
+        if (result.crossPoLinked) {
+          const existingInvoiceId = result.invoiceId;
+
+          let poNumber = null;
+          try {
+            const poDoc = await db.collection("purchaseOrders")
+                .doc(orderId).get();
+            if (poDoc.exists) poNumber = poDoc.data().number || null;
+          } catch (e) {
+            logger.warn("[OCR] Could not fetch PO number for cross-PO link", {
+              error: e.message,
+            });
+          }
+
+          await db.collection("purchaseInvoices")
+              .doc(existingInvoiceId).update({
+                additionalSources: admin.firestore.FieldValue.arrayUnion({
+                  sourceType: "po",
+                  sourceId: orderId,
+                  sourceNumber: poNumber || null,
+                  linkedAt: new Date(),
+                  linkedBy: "cloud_function_ocr_auto_link",
+                }),
+                allSourceIds:
+                  admin.firestore.FieldValue.arrayUnion(orderId),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+
+          await db.collection("purchaseOrders").doc(orderId).update({
+            linkedPurchaseInvoices:
+              admin.firestore.FieldValue.arrayUnion(existingInvoiceId),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          logger.info("[OCR] ✅ Cross-PO linked successfully", {
+            existingInvoiceId,
+            orderId,
+            invoiceNumber: ocrData.invoiceNumber,
+          });
+
+          return {
+            success: true,
+            invoiceId: existingInvoiceId,
+            orderId,
+            crossPoLinked: true,
+          };
+        }
+
         const invoiceId = result.invoiceId;
         const proformaMatch = result.proformaMatch;
 
@@ -600,7 +720,7 @@ const onCmrInvoiceCreated = onDocumentCreated(
           itemsCount: ocrData.items.length,
         });
 
-        // Create purchaseInvoice document
+        // Create purchaseInvoice document (or link to existing for cross-source)
         const cmrResult = await createPurchaseInvoice(db, ocrData, {
           type: "cmr",
           id: invoiceData.cmrId,
@@ -608,6 +728,58 @@ const onCmrInvoiceCreated = onDocumentCreated(
           downloadUrl: invoiceData.downloadURL,
           fileName: invoiceData.fileName,
         });
+
+        // CROSS-SOURCE: invoice already exists on another PO/CMR → link
+        if (cmrResult.crossPoLinked) {
+          const existingInvoiceId = cmrResult.invoiceId;
+
+          let cmrNumber = null;
+          try {
+            const cmrDoc = await db.collection("cmrDocuments")
+                .doc(invoiceData.cmrId).get();
+            if (cmrDoc.exists) cmrNumber = cmrDoc.data().cmrNumber || null;
+          } catch (e) {
+            logger.warn("[OCR] Could not fetch CMR number for cross-link", {
+              error: e.message,
+            });
+          }
+
+          await db.collection("purchaseInvoices")
+              .doc(existingInvoiceId).update({
+                additionalSources: admin.firestore.FieldValue.arrayUnion({
+                  sourceType: "cmr",
+                  sourceId: invoiceData.cmrId,
+                  sourceNumber: cmrNumber || null,
+                  linkedAt: new Date(),
+                  linkedBy: "cloud_function_ocr_auto_link",
+                }),
+                allSourceIds:
+                  admin.firestore.FieldValue.arrayUnion(invoiceData.cmrId),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+
+          await db.collection("cmrInvoices").doc(invoiceId).update({
+            ocrProcessed: true,
+            linkedPurchaseInvoiceId: existingInvoiceId,
+            ocrProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+            ocrInvoiceNumber: ocrData.invoiceNumber,
+            crossPoLinked: true,
+          });
+
+          logger.info("[OCR] ✅ Cross-source CMR linked successfully", {
+            existingInvoiceId,
+            cmrId: invoiceData.cmrId,
+            invoiceNumber: ocrData.invoiceNumber,
+          });
+
+          return {
+            success: true,
+            invoiceId: existingInvoiceId,
+            cmrId: invoiceData.cmrId,
+            crossPoLinked: true,
+          };
+        }
+
         const purchaseInvoiceId = cmrResult.invoiceId;
         const cmrProformaMatch = cmrResult.proformaMatch;
 
@@ -719,25 +891,74 @@ const onInvoiceAttachmentDeleted = onObjectDeleted(
         return null;
       }
 
+      const orderId = poInvoiceMatch[1];
       const fileName = poInvoiceMatch[2];
 
       logger.info("[OCR Cleanup] PO Invoice attachment deleted", {
         filePath,
         fileName,
+        orderId,
       });
 
       const db = admin.firestore();
 
       try {
-        // Find purchaseInvoice by storage path
+        // Find purchaseInvoice by storage path (primary source)
         const invoicesQuery = await db
             .collection("purchaseInvoices")
             .where("sourceFile.storagePath", "==", filePath)
             .get();
 
         if (invoicesQuery.empty) {
-          logger.info("[OCR Cleanup] No matching purchaseInvoice found");
-          return null;
+          // Check if this PO is an additionalSource on another invoice
+          const crossLinkedQuery = await db
+              .collection("purchaseInvoices")
+              .where("allSourceIds", "array-contains", orderId)
+              .get();
+
+          if (crossLinkedQuery.empty) {
+            logger.info("[OCR Cleanup] No matching purchaseInvoice found");
+            return null;
+          }
+
+          // Remove this PO from additionalSources (don't delete the invoice)
+          let unlinkedCount = 0;
+          for (const docSnap of crossLinkedQuery.docs) {
+            const data = docSnap.data();
+            if (data.sourceId === orderId) continue; // primary source, skip
+
+            const updatedAdditional = (data.additionalSources || [])
+                .filter((s) => s.sourceId !== orderId);
+            const updatedAllIds = (data.allSourceIds || [])
+                .filter((id) => id !== orderId);
+
+            await docSnap.ref.update({
+              additionalSources: updatedAdditional,
+              allSourceIds: updatedAllIds,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            try {
+              await db.collection("purchaseOrders").doc(orderId).update({
+                linkedPurchaseInvoices:
+                  admin.firestore.FieldValue.arrayRemove(docSnap.id),
+              });
+            } catch (poErr) {
+              logger.warn("[OCR Cleanup] Failed to remove PO cross-link ref", {
+                error: poErr.message,
+              });
+            }
+
+            logger.info("[OCR Cleanup] Removed additionalSource from invoice", {
+              invoiceId: docSnap.id, removedSourceId: orderId,
+            });
+            unlinkedCount++;
+          }
+
+          logger.info("[OCR Cleanup] ✅ Cross-link cleanup complete", {
+            unlinked: unlinkedCount, filePath,
+          });
+          return {success: true, unlinked: unlinkedCount};
         }
 
         const batch = db.batch();
@@ -1036,25 +1257,184 @@ const retryInvoiceOcr = onCall(
           supplierName: ocrData.supplier?.name || "",
           excludeId: invoiceId,
           excludeCollection: "purchaseInvoices",
+          isProforma,
         });
 
-        if (!retryDuplicateResult.isDuplicate &&
-            invoiceData.sourceId) {
+        // Always check cross-PO (even if general duplicate found)
+        if (invoiceData.sourceId) {
           retryCrossPoResult = await checkCrossPoDuplicate(
               db,
               ocrData.invoiceNumber,
               ocrData.supplier?.taxId || null,
               invoiceData.sourceId,
               invoiceId,
+              isProforma,
           );
         }
 
-        const retryIsDuplicate =
-          retryDuplicateResult.isDuplicate ||
-          retryCrossPoResult.isDuplicate;
-        const retryDuplicateInfo =
-          retryDuplicateResult.isDuplicate ?
-            retryDuplicateResult : retryCrossPoResult;
+        // CROSS-PO on retry: merge this rejected duplicate into the original
+        if (retryCrossPoResult.isDuplicate &&
+            retryCrossPoResult.duplicateType === "cross_po") {
+          const existingInvoiceId = retryCrossPoResult.existingInvoiceId;
+          const currentSourceId = invoiceData.sourceId;
+          const currentSourceType = invoiceData.sourceType || "po";
+
+          logger.info("[OCR Retry] Cross-PO duplicate → merging into original", {
+            existingInvoiceId,
+            currentSourceId,
+            duplicateId: invoiceId,
+          });
+
+          let sourceNumber = invoiceData.sourceNumber || null;
+          if (!sourceNumber && currentSourceId) {
+            try {
+              if (currentSourceType === "po") {
+                const poDoc = await db.collection("purchaseOrders")
+                    .doc(currentSourceId).get();
+                if (poDoc.exists) sourceNumber = poDoc.data().number || null;
+              } else if (currentSourceType === "cmr") {
+                const cmrDoc = await db.collection("cmrDocuments")
+                    .doc(currentSourceId).get();
+                if (cmrDoc.exists) {
+                  sourceNumber = cmrDoc.data().cmrNumber || null;
+                }
+              }
+            } catch (e) {
+              logger.warn("[OCR Retry] Could not fetch source number", {
+                error: e.message,
+              });
+            }
+          }
+
+          // 1. Add this PO/CMR as additionalSource on the original invoice
+          await db.collection("purchaseInvoices")
+              .doc(existingInvoiceId).update({
+                additionalSources: admin.firestore.FieldValue.arrayUnion({
+                  sourceType: currentSourceType,
+                  sourceId: currentSourceId,
+                  sourceNumber: sourceNumber || null,
+                  linkedAt: new Date(),
+                  linkedBy: "cloud_function_ocr_retry_merge",
+                }),
+                allSourceIds:
+                  admin.firestore.FieldValue.arrayUnion(currentSourceId),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+
+          // 2. Update source references: replace duplicate ID with original
+          if (currentSourceType === "po" && currentSourceId) {
+            try {
+              await db.collection("purchaseOrders")
+                  .doc(currentSourceId).update({
+                    linkedPurchaseInvoices:
+                      admin.firestore.FieldValue.arrayRemove(invoiceId),
+                  });
+              await db.collection("purchaseOrders")
+                  .doc(currentSourceId).update({
+                    linkedPurchaseInvoices:
+                      admin.firestore.FieldValue.arrayUnion(existingInvoiceId),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                  });
+            } catch (poErr) {
+              logger.warn("[OCR Retry] Could not update PO references", {
+                error: poErr.message,
+              });
+            }
+          } else if (currentSourceType === "cmr") {
+            try {
+              const cmrQuery = await db.collection("cmrInvoices")
+                  .where("linkedPurchaseInvoiceId", "==", invoiceId)
+                  .limit(5)
+                  .get();
+              for (const cmrDoc of cmrQuery.docs) {
+                await cmrDoc.ref.update({
+                  linkedPurchaseInvoiceId: existingInvoiceId,
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+              }
+              if (!cmrQuery.empty) {
+                logger.info("[OCR Retry] Updated CMR invoice references", {
+                  updatedCmrDocs: cmrQuery.docs.map((d) => d.id),
+                  newTarget: existingInvoiceId,
+                });
+              }
+            } catch (cmrErr) {
+              logger.warn("[OCR Retry] Could not update CMR references", {
+                error: cmrErr.message,
+              });
+            }
+          }
+
+          // 3. Delete the rejected duplicate document
+          await db.collection("purchaseInvoices").doc(invoiceId).delete();
+
+          logger.info("[OCR Retry] ✅ Merged duplicate into original", {
+            deletedDuplicateId: invoiceId,
+            existingInvoiceId,
+            linkedSourceId: currentSourceId,
+          });
+
+          return {
+            success: true,
+            merged: true,
+            existingInvoiceId,
+            deletedDuplicateId: invoiceId,
+          };
+        }
+
+        let retryIsDuplicate = retryDuplicateResult.isDuplicate;
+        const retryDuplicateInfo = retryDuplicateResult;
+
+        // CROSS-COLLECTION: PO-linked invoice has priority over expense dup
+        const isRetryPOLinked =
+            invoiceData.sourceType === "po" ||
+            invoiceData.sourceType === "cmr";
+        const isRetryCrossCollection =
+            retryIsDuplicate &&
+            retryDuplicateInfo.existingCollection === "expenseInvoices";
+        let retryCrossCollectionWarning = null;
+
+        if (retryIsDuplicate && isRetryPOLinked && isRetryCrossCollection) {
+          const expenseId = retryDuplicateInfo.existingInvoiceId;
+          logger.info("[OCR Retry] Cross-collection dup: PO has priority", {
+            invoiceNumber: ocrData.invoiceNumber,
+            expenseInvoiceId: expenseId,
+            sourceType: invoiceData.sourceType,
+            sourceId: invoiceData.sourceId,
+          });
+
+          try {
+            const safetyCheck =
+                await canSafelyDeleteExpenseInvoice(db, expenseId);
+
+            if (safetyCheck.canDelete) {
+              await db.collection("expenseInvoices")
+                  .doc(expenseId).delete();
+              logger.info("[OCR Retry] Deleted expense dup - PO priority", {
+                deletedExpenseId: expenseId,
+              });
+              retryCrossCollectionWarning =
+                `Usunięto duplikat kosztowy (${expenseId}) - priorytet PO`;
+            } else {
+              logger.warn("[OCR Retry] Cannot delete expense dup", {
+                expenseId,
+                blockers: safetyCheck.blockers,
+              });
+              retryCrossCollectionWarning =
+                `Faktura kosztowa (${expenseId}) nie usunięta ` +
+                `(${safetyCheck.blockers.join(", ")}). Priorytet PO.`;
+            }
+          } catch (delErr) {
+            logger.error("[OCR Retry] Error deleting expense dup", {
+              error: delErr.message,
+              expenseId,
+            });
+            retryCrossCollectionWarning =
+              `Błąd usuwania duplikatu kosztowego (${expenseId})`;
+          }
+
+          retryIsDuplicate = false;
+        }
 
         if (retryIsDuplicate) {
           logger.warn("[OCR Retry] Duplicate detected", {
@@ -1065,7 +1445,7 @@ const retryInvoiceOcr = onCall(
           });
         }
 
-        // AUTO-REJECT: duplicates (both regular invoices and proformas)
+        // AUTO-REJECT: true duplicates only (NOT cross-PO)
         const shouldAutoReject = retryIsDuplicate;
         let autoRejectReason = null;
         if (retryIsDuplicate) {
@@ -1145,10 +1525,13 @@ const retryInvoiceOcr = onCall(
           documentType: ocrData.documentType || "invoice",
           isProforma: isProforma,
           ocrConfidence: ocrData.parseConfidence,
-          ocrWarnings: retryIsDuplicate ?
-            [...(ocrData.warnings || []),
-              `DUPLIKAT: ${retryDuplicateInfo.message}`] :
-            ocrData.warnings,
+          ocrWarnings: [
+            ...(ocrData.warnings || []),
+            ...(retryIsDuplicate ?
+              [`DUPLIKAT: ${retryDuplicateInfo.message}`] : []),
+            ...(retryCrossCollectionWarning ?
+              [retryCrossCollectionWarning] : []),
+          ],
           ocrError: admin.firestore.FieldValue.delete(),
           ocrRawData: JSON.stringify(ocrData),
           // duplicate → "rejected", everything else → "pending_review"

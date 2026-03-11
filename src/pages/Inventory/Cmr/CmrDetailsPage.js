@@ -106,6 +106,8 @@ import LabelGenerator from '../../../components/cmr/LabelGenerator';
 import { generateAllDeliveryNoteData, buildAttachedDocumentsWithDN } from '../../../services/logistics/deliveryNoteService';
 import { updateCmrDocument } from '../../../services/logistics';
 import { logger } from '../../../utils/logger';
+import StatusChip from '../../../components/common/StatusChip';
+import StatusStepper from '../../../components/common/StatusStepper';
 
 // Ikony
 import EditIcon from '@mui/icons-material/Edit';
@@ -1586,42 +1588,6 @@ const CmrDetailsPage = () => {
     }
   };
   
-  const renderStatusChip = (status) => {
-    let color;
-    switch (status) {
-      case CMR_STATUSES.DRAFT:
-        color = '#757575'; // szary
-        break;
-      case CMR_STATUSES.ISSUED:
-        color = '#2196f3'; // niebieski
-        break;
-      case CMR_STATUSES.IN_TRANSIT:
-        color = '#ff9800'; // pomarańczowy
-        break;
-      case CMR_STATUSES.DELIVERED:
-        color = '#4caf50'; // zielony
-        break;
-      case CMR_STATUSES.COMPLETED:
-        color = '#9c27b0'; // fioletowy
-        break;
-      case CMR_STATUSES.CANCELED:
-        color = '#f44336'; // czerwony
-        break;
-      default:
-        color = '#757575'; // szary
-    }
-    
-    return (
-      <Chip 
-        label={status} 
-        sx={{
-          backgroundColor: color,
-          color: 'white',
-          fontWeight: 'medium'
-        }}
-      />
-    );
-  };
 
   const getPaymentStatusChip = (paymentStatus) => {
     const status = paymentStatus || CMR_PAYMENT_STATUSES.UNPAID;
@@ -1981,7 +1947,7 @@ const CmrDetailsPage = () => {
               {cmrData.cmrNumber}
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-              {renderStatusChip(cmrData.status)}
+              <StatusChip status={cmrData.status} />
               {getPaymentStatusChip(cmrData.paymentStatus)}
               <Typography variant="body2" color="text.secondary">
                 {t('details.basicInfo.created')}: {formatDate(cmrData.issueDate)}
@@ -2140,6 +2106,15 @@ const CmrDetailsPage = () => {
               </MenuItemComponent>
             </Menu>
           </Box>
+        </Box>
+        {/* Status flow stepper */}
+        <Box sx={{ mt: 2, mb: 1 }}>
+          <StatusStepper
+            steps={[CMR_STATUSES.DRAFT, CMR_STATUSES.ISSUED, CMR_STATUSES.IN_TRANSIT, CMR_STATUSES.DELIVERED, CMR_STATUSES.COMPLETED]}
+            currentStatus={cmrData.status}
+            cancelledStatus={CMR_STATUSES.CANCELED}
+            isCancelled={cmrData.status === CMR_STATUSES.CANCELED}
+          />
         </Box>
       </Paper>
       

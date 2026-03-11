@@ -75,6 +75,8 @@ import { formatCurrency } from '../../utils/formatting';
 import { getUsersDisplayNames } from '../../services/userService';
 import { createPurchaseOrderPdfGenerator } from './PurchaseOrderPdfGenerator';
 import CoAMigrationDialog from './CoAMigrationDialog';
+import StatusChip from '../common/StatusChip';
+import StatusStepper from '../common/StatusStepper';
 
 const PurchaseOrderDetails = ({ orderId }) => {
   const { t } = useTranslation('purchaseOrders');
@@ -1170,34 +1172,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
     navigate('/inventory/forms/unloading-report?edit=true');
   };
   
-  const getStatusChip = (status) => {
-    const statusConfig = {
-      [PURCHASE_ORDER_STATUSES.DRAFT]: { color: '#757575', label: translateStatus(status) }, // oryginalny szary
-      [PURCHASE_ORDER_STATUSES.PENDING]: { color: '#757575', label: translateStatus(status) }, // szary - oczekujące
-      [PURCHASE_ORDER_STATUSES.APPROVED]: { color: '#ffeb3b', label: translateStatus(status) }, // żółty - zatwierdzone
-      [PURCHASE_ORDER_STATUSES.ORDERED]: { color: '#1976d2', label: translateStatus(status) }, // niebieski - zamówione
-      [PURCHASE_ORDER_STATUSES.PARTIAL]: { color: '#81c784', label: translateStatus(status) }, // jasno zielony - częściowo dostarczone
-      [PURCHASE_ORDER_STATUSES.CONFIRMED]: { color: '#2196f3', label: translateStatus(status) }, // oryginalny jasnoniebieski
-      [PURCHASE_ORDER_STATUSES.SHIPPED]: { color: '#1976d2', label: translateStatus(status) }, // oryginalny niebieski
-      [PURCHASE_ORDER_STATUSES.DELIVERED]: { color: '#4caf50', label: translateStatus(status) }, // oryginalny zielony
-      [PURCHASE_ORDER_STATUSES.CANCELLED]: { color: '#f44336', label: translateStatus(status) }, // oryginalny czerwony
-      [PURCHASE_ORDER_STATUSES.COMPLETED]: { color: '#4caf50', label: translateStatus(status) } // oryginalny zielony
-    };
-    
-    const config = statusConfig[status] || { color: '#757575', label: status }; // oryginalny szary
-    
-    return (
-      <Chip 
-        label={config.label} 
-        size="small"
-        onClick={handleStatusClick}
-        sx={{
-          backgroundColor: config.color,
-          color: status === PURCHASE_ORDER_STATUSES.APPROVED ? 'black' : 'white' // czarny tekst na żółtym tle
-        }}
-      />
-    );
-  };
   
   const getPaymentStatusChip = (paymentStatus) => {
     const status = paymentStatus || PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID;
@@ -1627,12 +1601,21 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     <Typography variant="h5" component="h1">
                       {t('purchaseOrders.details.orderNumber', { number: purchaseOrder.number })}
                       <Box component="span" sx={{ ml: 2 }}>
-                        {getStatusChip(purchaseOrder.status)}
+                        <StatusChip status={translateStatus(purchaseOrder.status)} />
                       </Box>
                       <Box component="span" sx={{ ml: 1 }}>
                         {getPaymentStatusChip(purchaseOrder.paymentStatus)}
                       </Box>
                     </Typography>
+                  </Box>
+
+                  <Box sx={{ mt: 2 }}>
+                    <StatusStepper
+                      steps={['Projekt', 'Zamówione', 'Potwierdzone', 'Wysłane', 'Częściowo dostarczone', 'Dostarczone', 'Zakończone']}
+                      currentStatus={translateStatus(purchaseOrder.status)}
+                      cancelledStatus="Anulowane"
+                      isCancelled={purchaseOrder.status === 'cancelled'}
+                    />
                   </Box>
 
                   {purchaseOrder.totalPaidFromInvoices != null && purchaseOrder.totalGross > 0 && (

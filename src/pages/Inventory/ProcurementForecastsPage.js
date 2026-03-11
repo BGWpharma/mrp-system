@@ -92,7 +92,7 @@ const NotesCell = React.memo(({ forecastId, materialIdx, notes, onSave, editLabe
           autoFocus
           multiline
           maxRows={3}
-          sx={{ width: 120 }}
+          sx={{ width: 160 }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSave(); } if (e.key === 'Escape') setEditing(false); }}
         />
         <IconButton size="small" color="primary" onClick={handleSave} sx={{ p: 0.25 }}><SaveIcon sx={{ fontSize: 16 }} /></IconButton>
@@ -105,7 +105,7 @@ const NotesCell = React.memo(({ forecastId, materialIdx, notes, onSave, editLabe
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, cursor: 'pointer' }} onClick={handleOpen}>
         <Tooltip title={notes} placement="left">
-          <Typography variant="caption" color="text.primary" noWrap sx={{ maxWidth: 100 }}>{notes}</Typography>
+          <Typography variant="caption" color="text.primary" noWrap sx={{ maxWidth: 160 }}>{notes}</Typography>
         </Tooltip>
         <EditIcon sx={{ fontSize: 13, color: 'text.disabled', flexShrink: 0 }} />
       </Box>
@@ -434,7 +434,20 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 'bold', width: 32, px: 0.5 }} />
-                {sortableHeader('materialName', t('states.procurementForecasts.details.material'))}
+                <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, fontSize: '0.75rem' }}>
+                  <TableSortLabel
+                    active={materialSortField === 'materialName'}
+                    direction={materialSortField === 'materialName' ? materialSortDirection : 'asc'}
+                    onClick={() => handleMaterialSort('materialName')}
+                  >
+                    <Box>
+                      <Box component="span">{t('states.procurementForecasts.details.material')}</Box>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.65rem', fontWeight: 'normal', lineHeight: 1.2 }}>
+                        {t('states.procurementForecasts.details.category')}
+                      </Typography>
+                    </Box>
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 'bold', py: 0.75, px: 1, fontSize: '0.75rem', width: 50 }}>MO</TableCell>
                 {sortableHeader('requiredQuantity', t('states.procurementForecasts.details.required'), 'right')}
                 <TableCell align="right" sx={{ fontWeight: 'bold', py: 0.75, px: 1, whiteSpace: 'nowrap', fontSize: '0.75rem' }}>
@@ -443,7 +456,7 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                 {sortableHeader('availableQuantity', t('states.procurementForecasts.details.available'), 'right')}
                 {sortableHeader('futureDeliveriesTotal', t('states.procurementForecasts.details.futureDeliveries'), 'right')}
                 {sortableHeader('balanceWithFutureDeliveries', t('states.procurementForecasts.details.balanceWithDeliveries'), 'center')}
-                <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, fontSize: '0.75rem', width: 60 }}>
+                <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, fontSize: '0.75rem', minWidth: 180 }}>
                   {t('states.procurementForecasts.details.notes')}
                 </TableCell>
               </TableRow>
@@ -479,7 +492,14 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                       </TableCell>
                       <TableCell sx={{ px: 1 }}>
                         <Typography variant="body2" fontWeight={500} noWrap>{material.materialName}</Typography>
-                        <Typography variant="caption" color="text.secondary">{material.category}</Typography>
+                        {material.category && (
+                          <Chip
+                            size="small"
+                            label={material.category}
+                            variant="outlined"
+                            sx={{ height: 18, mt: 0.25, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.75 } }}
+                          />
+                        )}
                       </TableCell>
                       <TableCell align="center" sx={{ px: 0.5 }}>
                         {hasMO ? (
@@ -520,7 +540,7 @@ const ProcurementForecastsPage = ({ embedded = false }) => {
                       <TableCell align="center" sx={{ px: 0.5 }}>
                         {getBalanceChip(material.balanceWithFutureDeliveries)}
                       </TableCell>
-                      <TableCell sx={{ px: 0.5, width: 60 }} onClick={(e) => e.stopPropagation()}>
+                      <TableCell sx={{ px: 0.5, minWidth: 180 }} onClick={(e) => e.stopPropagation()}>
                         <NotesCell
                           forecastId={forecast.id}
                           materialIdx={materialIdx}

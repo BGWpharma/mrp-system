@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Container, 
   Typography, 
@@ -44,6 +44,7 @@ import {
   getFormButtonStyles,
   getFormActionsStyles 
 } from '../../styles/formStyles';
+import FormSectionNav from '../common/FormSectionNav';
 
 // Funkcja do pobierania szczegółów zadania produkcyjnego (MO) na podstawie numeru MO
 const getMODetailsById = async (moNumber) => {
@@ -80,6 +81,15 @@ const ProductionShiftForm = () => {
   const { currentUser } = useAuth();
   const theme = useTheme();
   const { t } = useTranslation('forms');
+
+  const identificationRef = useRef(null);
+  const shiftWorkersRef = useRef(null);
+  const shiftReportRef = useRef(null);
+  const formSections = [
+    { ref: identificationRef, label: t('sections.identification') },
+    { ref: shiftWorkersRef, label: t('sections.shiftWorkers') },
+    { ref: shiftReportRef, label: t('sections.shiftReport') },
+  ];
 
   // Używamy hooków do pobierania opcji z bazy danych
   const { options: staffOptions, loading: staffLoading } = useStaffOptions();
@@ -597,8 +607,11 @@ const ProductionShiftForm = () => {
         )}
         
         <Box component="form" onSubmit={handleSubmit} sx={{ px: { xs: 1, sm: 0 } }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 0 }}>
+          <FormSectionNav sections={formSections} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
           {/* SEKCJA 1 z 3 - IDENTYFIKACJA */}
-          <Box sx={getFormSectionStyles(theme, 'primary')}>
+          <Box ref={identificationRef} sx={getFormSectionStyles(theme, 'primary')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 1, total: 3 })}
             </Typography>
@@ -676,7 +689,7 @@ const ProductionShiftForm = () => {
           </Box>
 
           {/* SEKCJA 2 z 3 - PRACOWNICY PRODUKCJI/RODZAJ ZMIANY */}
-          <Box sx={getFormSectionStyles(theme, 'warning')}>
+          <Box ref={shiftWorkersRef} sx={getFormSectionStyles(theme, 'warning')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 2, total: 3 })}
             </Typography>
@@ -749,7 +762,7 @@ const ProductionShiftForm = () => {
           </Box>
 
           {/* SEKCJA 3 z 3 - RAPORT WYKONANYCH CZYNNOŚCI NA ZMIANIE */}
-          <Box sx={getFormSectionStyles(theme, 'success')}>
+          <Box ref={shiftReportRef} sx={getFormSectionStyles(theme, 'success')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
               {t('common.section', { current: 3, total: 3 })}
             </Typography>
@@ -1128,6 +1141,8 @@ const ProductionShiftForm = () => {
             </Grid>
             
             </Grid>
+          </Box>
+          </Box>
           </Box>
 
           {/* PRZYCISKI AKCJI */}

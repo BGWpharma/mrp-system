@@ -1,4 +1,5 @@
 import React from 'react';
+import { getStatusMainColor } from '../../styles/colorConfig';
 import {
   Description as DescriptionIcon,
   Image as ImageIcon,
@@ -146,22 +147,7 @@ export const formatClinicalFileSize = (bytes) => {
 };
 
 export const getStatusColor = (status) => {
-  switch (status) {
-    case 'Zaplanowane':
-      return '#1976d2';
-    case 'W trakcie':
-      return '#ff9800';
-    case 'Potwierdzenie zużycia':
-      return '#2196f3';
-    case 'Zakończone':
-      return '#4caf50';
-    case 'Anulowane':
-      return '#f44336';
-    case 'Wstrzymane':
-      return '#757575';
-    default:
-      return '#757575';
-  }
+  return getStatusMainColor(status);
 };
 
 export const getStatusActions = ({ handlePrintMODetails, handlePrintMaterialsAndLots, isMobile, t }) => {

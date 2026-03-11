@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Container,
   Typography,
@@ -35,13 +35,25 @@ import {
   getFormButtonStyles,
   getFormActionsStyles 
 } from '../../styles/formStyles';
+import FormSectionNav from '../../components/common/FormSectionNav';
 
 const ServiceReportFormPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
   const theme = useTheme();
-  
+
+  const identificationRef = useRef(null);
+  const serviceDateRef = useRef(null);
+  const serviceTasksRef = useRef(null);
+  const notesRef = useRef(null);
+  const formSections = [
+    { label: 'Identyfikacja', ref: identificationRef },
+    { label: 'Data Serwisu', ref: serviceDateRef },
+    { label: 'Zadania Serwisowe', ref: serviceTasksRef },
+    { label: 'Dodatkowe Uwagi', ref: notesRef },
+  ];
+
   // Sprawdź czy jesteśmy w trybie edycji
   const isEditMode = new URLSearchParams(location.search).get('edit') === 'true';
   
@@ -300,8 +312,12 @@ const ServiceReportFormPage = () => {
             </Alert>
 
             <form onSubmit={handleSubmit}>
+              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 0 }}>
+                <FormSectionNav sections={formSections} />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+
               {/* SEKCJA 1 z 5 - IDENTYFIKACJA */}
-              <Box sx={getFormSectionStyles(theme)}>
+              <Box ref={identificationRef} sx={getFormSectionStyles(theme)}>
                 <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
                   Sekcja 1 z 5
                 </Typography>
@@ -359,7 +375,7 @@ const ServiceReportFormPage = () => {
               </Box>
 
               {/* SEKCJA 2 z 5 - DATA SERWISU */}
-              <Box sx={getFormSectionStyles(theme)}>
+              <Box ref={serviceDateRef} sx={getFormSectionStyles(theme)}>
                 <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
                   Sekcja 2 z 5
                 </Typography>
@@ -407,7 +423,7 @@ const ServiceReportFormPage = () => {
               </Box>
 
               {/* SEKCJA 4 z 5 - ZADANIA SERWISOWE */}
-              <Box sx={getFormSectionStyles(theme)}>
+              <Box ref={serviceTasksRef} sx={getFormSectionStyles(theme)}>
                 <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
                   Sekcja 4 z 5
                 </Typography>
@@ -453,7 +469,7 @@ const ServiceReportFormPage = () => {
               </Box>
 
               {/* SEKCJA 5 z 5 - DODATKOWE UWAGI */}
-              <Box sx={getFormSectionStyles(theme)}>
+              <Box ref={notesRef} sx={getFormSectionStyles(theme)}>
                 <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
                   Sekcja 5 z 5
                 </Typography>
@@ -497,6 +513,8 @@ const ServiceReportFormPage = () => {
                 >
                   {saving ? 'Zapisywanie...' : (isEditMode ? 'Zaktualizuj' : 'Wyślij')}
                 </Button>
+              </Box>
+                </Box>
               </Box>
             </form>
           </Box>

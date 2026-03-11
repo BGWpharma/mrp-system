@@ -1,27 +1,4 @@
-/* src/styles/global.css */
-
-/* Theme Variables - Clean Design */
-:root {
-    /* Dark Theme (default) */
-    --background-color: #0f172a;
-    --paper-background: #1e293b;
-    --text-color: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --border-color: rgba(255, 255, 255, 0.06);
-    --hover-background: rgba(255, 255, 255, 0.03);
-    --shadow-color: rgba(0, 0, 0, 0.15);
-}
-
-[data-theme="light"] {
-    /* Light Theme - Clean */
-    --background-color: #f8fafc;
-    --paper-background: #ffffff;
-    --text-color: #1e293b;
-    --text-secondary: #64748b;
-    --border-color: rgba(0, 0, 0, 0.06);
-    --hover-background: rgba(0, 0, 0, 0.02);
-    --shadow-color: rgba(0, 0, 0, 0.06);
-}
+/* src/styles/global.css - Layout, responsive, print */
 
 * {
     box-sizing: border-box;
@@ -30,15 +7,9 @@
 body {
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-        sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background: transparent;
-    color: var(--text-color);
-    transition: all 0.3s ease;
-    position: relative;
     min-height: 100vh;
 }
 
@@ -51,14 +22,14 @@ a {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 .layout {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 .content-container {
@@ -66,8 +37,7 @@ a {
     flex: 1;
     gap: 0;
     position: relative;
-    overflow-x: hidden;
-    /* Minimalny szerokość żeby uniknąć problemów z scrollem na mobile */
+    overflow-x: clip;
     min-width: 0;
 }
 
@@ -76,399 +46,66 @@ a {
     padding: 20px;
     transition: margin-left 0.3s ease, width 0.3s ease;
     min-height: calc(100vh - 64px);
-    /* Wysokość - navbar */
     background-color: transparent;
     box-sizing: border-box;
-    /* Ważne dla flexbox - pozwala na kurczenie poniżej zawartości */
     min-width: 0;
 }
 
-/* Klasa dla zwiniętego sidebar */
 .sidebar-collapsed .main-content {
     margin-left: 56px;
     width: calc(100% - 56px);
 }
 
-/* Klasa dla rozwiniętego sidebar */
 .sidebar-expanded .main-content {
     margin-left: 190px;
     width: calc(100% - 190px);
 }
 
-/* Dashboard cards - Clean Design */
-.dashboard-card {
-    border-radius: 8px;
-    overflow: hidden;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-    background-color: var(--paper-background);
-    border: 1px solid var(--border-color);
-    box-shadow: 0 1px 3px var(--shadow-color);
-}
-
-.dashboard-card:hover {
-    border-color: rgba(0, 0, 0, 0.1);
-    box-shadow: 0 4px 12px var(--shadow-color);
-}
-
-[data-theme="dark"] .dashboard-card:hover {
-    border-color: rgba(255, 255, 255, 0.1);
-}
-
-/* Animacje ładowania dla komponentów */
-.dashboard-card-loading {
-    animation: cardFadeIn 0.6s ease-out forwards;
-    opacity: 0;
-    transform: translateY(20px);
-}
-
-.dashboard-content-loading {
-    animation: contentSlideIn 0.8s ease-out forwards;
-    opacity: 0;
-    transform: translateX(-10px);
-}
-
-.dashboard-stat-loading {
-    animation: statCountUp 1.2s ease-out forwards;
-    opacity: 0;
-}
-
-.dashboard-list-item-loading {
-    animation: listItemSlide 0.5s ease-out forwards;
-    opacity: 0;
-    transform: translateX(30px);
-}
-
-/* Keyframes dla animacji */
-@keyframes cardFadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(20px) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-@keyframes contentSlideIn {
-    from {
-        opacity: 0;
-        transform: translateX(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-@keyframes statCountUp {
-    from {
-        opacity: 0;
-        transform: scale(0.8);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-@keyframes listItemSlide {
-    from {
-        opacity: 0;
-        transform: translateX(30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-/* Animacje hover dla większej interaktywności */
-.dashboard-card:hover .MuiSvgIcon-root {
-    transform: scale(1.1);
-    transition: transform 0.3s ease;
-}
-
-.dashboard-card .MuiSvgIcon-root {
-    transition: transform 0.3s ease;
-}
-
-/* Efekt shimmer dla elementów ładujących się */
-.dashboard-shimmer {
-    background: linear-gradient(90deg, 
-        rgba(255, 255, 255, 0.0) 0%, 
-        rgba(255, 255, 255, 0.2) 50%, 
-        rgba(255, 255, 255, 0.0) 100%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-}
-
-@keyframes shimmer {
-    0% {
-        background-position: -200% 0;
-    }
-    100% {
-        background-position: 200% 0;
-    }
-}
-
-/* Animacje dla liczników */
-.dashboard-counter {
-    animation: counterFadeIn 1s ease-out forwards;
-    opacity: 0;
-}
-
-@keyframes counterFadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Staggered animations for grid items */
-.dashboard-grid-item:nth-child(1) {
-    animation-delay: 0.1s;
-}
-
-.dashboard-grid-item:nth-child(2) {
-    animation-delay: 0.2s;
-}
-
-.dashboard-grid-item:nth-child(3) {
-    animation-delay: 0.3s;
-}
-
-.dashboard-grid-item:nth-child(4) {
-    animation-delay: 0.4s;
-}
-
-.dashboard-grid-item:nth-child(5) {
-    animation-delay: 0.5s;
-}
-
-.dashboard-grid-item:nth-child(6) {
-    animation-delay: 0.6s;
-}
-
-/* Animacje dla przycisków */
-.dashboard-button-loading {
-    position: relative;
-    overflow: hidden;
-}
-
-.dashboard-button-loading::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    animation: buttonShine 1.5s infinite;
-}
-
-@keyframes buttonShine {
-    0% {
-        left: -100%;
-    }
-    100% {
-        left: 100%;
-    }
-}
-
-/* Pulsing animation for loading states */
-.dashboard-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: .5;
-    }
-}
-
-/* Smooth transitions for content changes */
-.dashboard-content-transition {
-    transition: all 0.3s ease-in-out;
-}
-
-/* Enhanced skeleton loading */
-.dashboard-skeleton {
-    background: linear-gradient(90deg, 
-        rgba(255, 255, 255, 0.1) 25%, 
-        rgba(255, 255, 255, 0.2) 50%, 
-        rgba(255, 255, 255, 0.1) 75%);
-    background-size: 200% 100%;
-    animation: skeletonShimmer 1.2s ease-in-out infinite;
-}
-
-@keyframes skeletonShimmer {
-    0% {
-        background-position: -200% 0;
-    }
-    100% {
-        background-position: 200% 0;
-    }
-}
-
-/* Micro-interactions */
-.dashboard-interactive:hover {
-    cursor: pointer;
-    transform: translateY(-2px);
-    transition: transform 0.2s ease;
-}
-
-.dashboard-interactive:active {
-    transform: translateY(0);
-    transition: transform 0.1s ease;
-}
-
-.dashboard-stat-card {
-    padding: 20px;
-    border-radius: 8px;
-    background-color: var(--paper-background);
-    border: 1px solid var(--border-color);
-    box-shadow: 0 1px 3px var(--shadow-color);
-    margin-bottom: 16px;
-}
-
-.stat-value {
-    font-size: 28px;
-    font-weight: bold;
-    margin-bottom: 8px;
-}
-
-.stat-label {
-    font-size: 14px;
-    color: var(--text-secondary);
-    margin-bottom: 16px;
-}
-
-.stat-change {
-    display: inline-flex;
-    align-items: center;
-    font-size: 14px;
-    padding: 4px 8px;
-    border-radius: 6px;
-}
-
-.stat-change.increase {
-    color: #4caf50;
-    background-color: rgba(76, 175, 80, 0.1);
-}
-
-.stat-change.decrease {
-    color: #f44336;
-    background-color: rgba(244, 67, 54, 0.1);
-}
-
-/* Charts container - Clean */
-.chart-container {
-    padding: 16px;
-    border-radius: 8px;
-    background-color: var(--paper-background);
-    border: 1px solid var(--border-color);
-    box-shadow: 0 1px 3px var(--shadow-color);
-    height: 100%;
-}
-
-/* Progress indicators */
-.progress-container {
-    position: relative;
-    margin: 16px 0;
-}
-
-.progress-bar {
-    height: 8px;
-    border-radius: 4px;
-    background-color: rgba(255, 255, 255, 0.1);
-    overflow: hidden;
-}
-
-.progress-bar-fill {
-    height: 100%;
-    border-radius: 4px;
-    transition: width 0.6s ease;
-}
-
-.progress-label {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 8px;
-    font-size: 14px;
-    color: var(--text-secondary);
-}
-
-/* Responsywność */
+/* Responsive */
 @media (max-width: 1100px) {
-    /* Na urządzeniach mobilnych sidebar jest w trybie overlay (temporary),
-       więc nie wpływa na layout - można włączyć horizontal scroll dla treści */
     .app-container,
     .layout {
         overflow-x: visible;
     }
 
     .content-container {
-        overflow-x: auto;
+        overflow-x: clip;
     }
 
     .main-content {
-        padding: 16px;
+        padding: 12px;
         margin-left: 0 !important;
         width: 100% !important;
-        /* Pozwól na scroll horyzontalny dla treści (np. tablica kanban) */
-        overflow-x: auto;
+        overflow-x: clip;
     }
 
-    /* Wyśrodkuj treść względem pełnej szerokości ekranu */
     .sidebar-collapsed .main-content,
     .sidebar-expanded .main-content {
         margin-left: 0;
         width: 100%;
     }
 
-    /* Overlay dla tła sidebara na mobilnych */
     .MuiDrawer-root .MuiBackdrop-root {
         background-color: rgba(0, 0, 0, 0.5);
         opacity: 1 !important;
     }
 
-    /* Sidebar w trybie overlay na urządzeniach mobilnych */
     .MuiDrawer-root.MuiDrawer-temporary .MuiDrawer-paper {
         box-shadow: 4px 0 8px rgba(0, 0, 0, 0.15);
         min-width: 250px;
     }
 
-    /* Upewnij się, że hamburger jest zawsze widoczny i klikalny */
     .MuiIconButton-root[aria-label="menu"] {
         position: relative;
         z-index: 1300;
     }
 
-    /* Style dla przycisku hamburger gdy sidebar jest otwarty */
     .sidebar-open .MuiIconButton-root[aria-label="menu"] {
         display: none !important;
     }
-
-    /* Dodatkowe marginesy dla elementów w widoku mobilnym */
-    .MuiCard-root {
-        margin-bottom: 16px;
-    }
-
-    /* Usuń transformację dla kart w widoku mobilnym */
-    .dashboard-card:hover {
-        transform: none;
-    }
 }
 
-/* Print styles */
+/* Print */
 @media print {
     .main-content {
         margin-left: 0;
@@ -480,87 +117,18 @@ a {
     }
 }
 
-/* Helpers */
-.text-center {
-    text-align: center;
-}
-
-.text-right {
-    text-align: right;
-}
-
-.text-left {
-    text-align: left;
-}
-
-.mt-1 {
-    margin-top: 0.25rem;
-}
-
-.mt-2 {
-    margin-top: 0.5rem;
-}
-
-.mt-3 {
-    margin-top: 1rem;
-}
-
-.mb-1 {
-    margin-bottom: 0.25rem;
-}
-
-.mb-2 {
-    margin-bottom: 0.5rem;
-}
-
-.mb-3 {
-    margin-bottom: 1rem;
-}
-
-.ml-1 {
-    margin-left: 0.25rem;
-}
-
-.ml-2 {
-    margin-left: 0.5rem;
-}
-
-.mr-1 {
-    margin-right: 0.25rem;
-}
-
-.mr-2 {
-    margin-right: 0.5rem;
-}
-
-.p-1 {
-    padding: 0.25rem;
-}
-
-.p-2 {
-    padding: 0.5rem;
-}
-
-/* Transition for theme change */
+/* Theme transition */
 .theme-transition {
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* Dostosowania dla sidebara i przycisku hamburger na urządzeniach mobilnych */
+/* Mobile sidebar fixes */
 .sidebar-open .MuiAppBar-root .MuiIconButton-root[aria-label="menu"] {
     opacity: 0;
     pointer-events: none;
     visibility: hidden;
 }
 
-/* Upewnij się, że drawer jest nad innymi elementami */
 .MuiDrawer-root.MuiDrawer-temporary {
     z-index: 1300 !important;
 }
-
-/* Usuń transformację dla kart w widoku mobilnym */
-
-/* Poprawki dla dostępności */
-/* .MuiModal-root[role="presentation"][aria-hidden="true"] - przeniesione do JS */
-
-/* Upewnij się, że drawer jest nad innymi elementami */

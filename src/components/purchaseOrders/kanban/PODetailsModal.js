@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useNavigate } from 'react-router-dom';
 import {
   getPurchaseOrderById,
@@ -165,6 +166,11 @@ const PODetailsModal = ({ open, orderId, onClose, onSave }) => {
     onClose();
   };
 
+  const handleGoToDetails = () => {
+    navigate(`/purchase-orders/${orderId}`);
+    onClose();
+  };
+
   const statusColor = purchaseOrder ? (KANBAN_COLUMN_COLORS[purchaseOrder.status] || '#9E9E9E') : '#9E9E9E';
 
   return (
@@ -212,6 +218,9 @@ const PODetailsModal = ({ open, orderId, onClose, onSave }) => {
               )}
             </Box>
             <Box sx={{ display: 'flex', gap: 0.5 }}>
+              <IconButton size="small" onClick={handleGoToDetails} title={t('purchaseOrders.kanban.goToDetails', 'Przejdź do szczegółów')}>
+                <OpenInNewIcon fontSize="small" />
+              </IconButton>
               <IconButton size="small" onClick={handleEdit} title={t('purchaseOrders.kanban.edit')}>
                 <EditIcon fontSize="small" />
               </IconButton>

@@ -278,14 +278,14 @@ const AnalyticsDashboardPage = () => {
           mb: 4,
           background: isDarkMode
             ? 'linear-gradient(135deg, #1e293b 0%, #334155 100%)'
-            : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
           color: 'white',
-          borderRadius: 3,
+          borderRadius: 2,
           position: 'relative',
           overflow: 'hidden',
           boxShadow: isDarkMode
             ? '0 4px 20px rgba(0, 0, 0, 0.3)'
-            : '0 4px 20px rgba(102, 126, 234, 0.3)'
+            : '0 4px 20px rgba(37, 99, 235, 0.3)'
         }}
       >
         {/* Dekoracyjne elementy tła */}
