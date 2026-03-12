@@ -159,6 +159,9 @@
       "cmrNumber": "CMR Number",
       "issueDate": "Issue Date",
       "deliveryDate": "Delivery Date",
+      "deliveryDateUpdated": "Delivery date has been updated",
+      "deliveryDateError": "Failed to update delivery date",
+      "clickToEditDate": "Click to change the delivery date",
       "transportType": "Transport Type",
       "created": "Created"
     },

@@ -159,6 +159,9 @@
       "cmrNumber": "Numer CMR",
       "issueDate": "Data wystawienia",
       "deliveryDate": "Data dostawy",
+      "deliveryDateUpdated": "Data dostawy została zaktualizowana",
+      "deliveryDateError": "Nie udało się zaktualizować daty dostawy",
+      "clickToEditDate": "Kliknij, aby zmienić datę dostawy",
       "transportType": "Typ transportu",
       "created": "Utworzono"
     },

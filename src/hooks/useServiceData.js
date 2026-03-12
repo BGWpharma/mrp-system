@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ServiceCacheManager } from '../services/cache/serviceCacheManager';
 
+const EMPTY_ARRAY = [];
+
 /**
  * Uniwersalny hook do pobierania danych z cache na poziomie serwisów.
  * 
@@ -90,7 +92,7 @@ export const useServiceData = (cacheKey, fetchFn, options = {}) => {
     ServiceCacheManager.invalidate(cacheKey);
   }, [cacheKey]);
 
-  return { data: data || [], loading, error, refresh };
+  return { data: data || EMPTY_ARRAY, loading, error, refresh };
 };
 
 export default useServiceData;

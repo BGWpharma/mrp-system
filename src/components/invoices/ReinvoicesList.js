@@ -91,7 +91,7 @@ const ReinvoicesList = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (cachedReinvoices && cachedReinvoices.length >= 0) {
+    if (cachedReinvoices && cachedReinvoices.length > 0) {
       setInvoices(cachedReinvoices);
       setLoading(false);
     } else if (!reinvoicesCacheLoading) {

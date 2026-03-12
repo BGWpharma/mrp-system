@@ -128,7 +128,7 @@ const InvoicesList = () => {
   const tableSort = listState.tableSort;
 
   useEffect(() => {
-    if (cachedInvoices && cachedInvoices.length >= 0) {
+    if (cachedInvoices && cachedInvoices.length > 0) {
       setInvoices(cachedInvoices);
       setLoading(false);
       fetchProformaAmounts(cachedInvoices);

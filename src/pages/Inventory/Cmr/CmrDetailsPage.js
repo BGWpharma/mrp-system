@@ -27,8 +27,10 @@ import {
   Menu,
   MenuItem as MenuItemComponent,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  TextField
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers';
 import { mb3 } from '../../../styles/muiCommonStyles';
 import { useParams, Link as RouterLink } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -61,6 +63,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PrintIcon from '@mui/icons-material/Print';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DescriptionIcon from '@mui/icons-material/Description';
+import CloseIcon from '@mui/icons-material/Close';
 
 const CmrPartiesTransportTab = lazy(() => import('./tabs/CmrPartiesTransportTab'));
 const CmrItemsWeightsTab = lazy(() => import('./tabs/CmrItemsWeightsTab'));
@@ -192,6 +195,9 @@ const CmrDetailsPage = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [anchorEl, setAnchorEl] = useState(null);
   const menuOpen = Boolean(anchorEl);
+  const [editingDeliveryDate, setEditingDeliveryDate] = useState(false);
+  const [savingDeliveryDate, setSavingDeliveryDate] = useState(false);
+  const [deliveryDateValue, setDeliveryDateValue] = useState(null);
 
   // Hooks
   const weights = useCmrWeights();
@@ -217,6 +223,21 @@ const CmrDetailsPage = () => {
   const handleMenuClose = () => setAnchorEl(null);
   const handlePrintFromMenu = () => { handleMenuClose(); handlePrint(); };
   const handleMigrateFromMenu = () => { handleMenuClose(); data.handleMigrateCmr(); };
+
+  const handleDeliveryDateChange = async (newDate) => {
+    try {
+      setSavingDeliveryDate(true);
+      await updateCmrDocument(id, { deliveryDate: newDate }, currentUser.uid);
+      data.setCmrData(prev => ({ ...prev, deliveryDate: newDate }));
+      setEditingDeliveryDate(false);
+      showSuccess(t('details.basicInfo.deliveryDateUpdated', 'Data dostawy została zaktualizowana'));
+    } catch (error) {
+      console.error('Error updating delivery date:', error);
+      showError(t('details.basicInfo.deliveryDateError', 'Nie udało się zaktualizować daty dostawy'));
+    } finally {
+      setSavingDeliveryDate(false);
+    }
+  };
 
   const handleGenerateDeliveryNotes = async () => {
     try {
@@ -417,9 +438,68 @@ const CmrDetailsPage = () => {
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.basicInfo.issueDate')}</Typography>
                       <Typography variant="body1">{formatDate(cmrData.issueDate)}</Typography>
                     </Grid>
-                    <Grid item xs={6} sm={3}>
+                    <Grid item xs={6} sm={3}
+                      sx={{
+                        cursor: editingDeliveryDate ? 'default' : 'pointer',
+                        borderRadius: 1,
+                        '&:hover': editingDeliveryDate ? {} : { backgroundColor: 'action.hover' },
+                        '&:hover .delivery-edit-icon': { opacity: 1 }
+                      }}
+                      onClick={() => {
+                        if (!editingDeliveryDate) {
+                          const current = cmrData.deliveryDate;
+                          setDeliveryDateValue(current ? (current instanceof Date ? current : new Date(current)) : null);
+                          setEditingDeliveryDate(true);
+                        }
+                      }}
+                    >
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.basicInfo.deliveryDate')}</Typography>
-                      <Typography variant="body1">{formatDate(cmrData.deliveryDate)}</Typography>
+                      {editingDeliveryDate ? (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }} onClick={(e) => e.stopPropagation()}>
+                          <DatePicker
+                            value={deliveryDateValue}
+                            onChange={(newDate) => setDeliveryDateValue(newDate)}
+                            onAccept={handleDeliveryDateChange}
+                            disabled={savingDeliveryDate}
+                            slots={{ textField: TextField }}
+                            slotProps={{
+                              textField: {
+                                size: 'small',
+                                autoFocus: true,
+                                sx: { minWidth: 150 },
+                                onKeyDown: (e) => {
+                                  if (e.key === 'Enter' && deliveryDateValue && !isNaN(deliveryDateValue.getTime())) {
+                                    handleDeliveryDateChange(deliveryDateValue);
+                                  }
+                                  if (e.key === 'Escape') setEditingDeliveryDate(false);
+                                }
+                              }
+                            }}
+                          />
+                          <IconButton
+                            size="small"
+                            color="success"
+                            onClick={() => deliveryDateValue && !isNaN(deliveryDateValue.getTime()) && handleDeliveryDateChange(deliveryDateValue)}
+                            disabled={savingDeliveryDate || !deliveryDateValue || isNaN(deliveryDateValue?.getTime())}
+                          >
+                            <CheckIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={() => setEditingDeliveryDate(false)}
+                            disabled={savingDeliveryDate}
+                          >
+                            <CloseIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ) : (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant="body1">
+                            {formatDate(cmrData.deliveryDate) || '-'}
+                          </Typography>
+                          <EditIcon className="delivery-edit-icon" sx={{ fontSize: 14, color: 'text.secondary', opacity: 0, transition: 'opacity 0.2s' }} />
+                        </Box>
+                      )}
                     </Grid>
                     <Grid item xs={6} sm={3}>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.basicInfo.transportType')}</Typography>
