@@ -83,11 +83,11 @@ const WorkTimePage = () => {
   const formattedDate = format(today, 'EEEE, d MMMM yyyy', { locale: pl });
 
   // Granice czasu
-  // Start: nie wcześniej niż teraz (nie cofasz czasu)
-  // Koniec: nie później niż teraz (nie kończysz w przyszłości), ale nie wcześniej niż start
+  // Start: nie wcześniej niż bieżąca minuta
+  // Koniec: nie później niż bieżąca minuta, ale nie wcześniej niż start
   const now = new Date();
-  const minStartTime = now;
-  const maxEndTime = now;
+  const minStartTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), 0, 0);
+  const maxEndTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), 59, 999);
 
   const minEndTime = (() => {
     if (openEntry) {
@@ -147,21 +147,25 @@ const WorkTimePage = () => {
     if (e.key === 'Enter') handleVerifyId();
   };
 
-  // Walidacja startu: nie wcześniej niż teraz
+  // Walidacja startu: nie wcześniej niż bieżąca minuta
   const validateStartTime = (time) => {
     if (!time || isNaN(time.getTime())) return t('validation.selectValidTime');
     const nowCheck = new Date();
-    if (time < nowCheck) {
+    const timeMinutes = time.getHours() * 60 + time.getMinutes();
+    const nowMinutes = nowCheck.getHours() * 60 + nowCheck.getMinutes();
+    if (timeMinutes < nowMinutes) {
       return t('validation.tooEarly', { time: format(nowCheck, 'HH:mm'), margin: 0 });
     }
     return '';
   };
 
-  // Walidacja końca: nie później niż teraz i musi być > start
+  // Walidacja końca: nie później niż bieżąca minuta i musi być > start
   const validateEndTime = (time) => {
     if (!time || isNaN(time.getTime())) return t('validation.selectValidTime');
     const nowCheck = new Date();
-    if (time > nowCheck) {
+    const timeMinutes = time.getHours() * 60 + time.getMinutes();
+    const nowMinutes = nowCheck.getHours() * 60 + nowCheck.getMinutes();
+    if (timeMinutes > nowMinutes) {
       return t('validation.tooLate', { time: format(nowCheck, 'HH:mm'), margin: 0 });
     }
     const startRef = openEntry 

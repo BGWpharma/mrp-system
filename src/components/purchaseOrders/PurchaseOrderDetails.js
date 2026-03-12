@@ -807,6 +807,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
   };
   
   const handleStatusClick = () => {
+    if (!purchaseOrder) return;
     setNewStatus(purchaseOrder.status);
     setStatusDialogOpen(true);
   };
@@ -1238,16 +1239,17 @@ const PurchaseOrderDetails = ({ orderId }) => {
   
 
   
-  const canReceiveItems = purchaseOrder.status === PURCHASE_ORDER_STATUSES.ORDERED || 
-                          purchaseOrder.status === 'ordered' || 
-                          purchaseOrder.status === 'partial' || 
-                          purchaseOrder.status === PURCHASE_ORDER_STATUSES.PARTIAL ||
-                          purchaseOrder.status === PURCHASE_ORDER_STATUSES.CONFIRMED || 
-                          purchaseOrder.status === 'confirmed' ||
-                          purchaseOrder.status === PURCHASE_ORDER_STATUSES.SHIPPED || 
-                          purchaseOrder.status === 'shipped' ||
-                          purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED || 
-                          purchaseOrder.status === 'delivered';
+  const poStatus = purchaseOrder?.status;
+  const canReceiveItems = poStatus === PURCHASE_ORDER_STATUSES.ORDERED || 
+                          poStatus === 'ordered' || 
+                          poStatus === 'partial' || 
+                          poStatus === PURCHASE_ORDER_STATUSES.PARTIAL ||
+                          poStatus === PURCHASE_ORDER_STATUSES.CONFIRMED || 
+                          poStatus === 'confirmed' ||
+                          poStatus === PURCHASE_ORDER_STATUSES.SHIPPED || 
+                          poStatus === 'shipped' ||
+                          poStatus === PURCHASE_ORDER_STATUSES.DELIVERED || 
+                          poStatus === 'delivered';
   
   const handleDownloadPDF = async (hidePricing = false) => {
     if (!purchaseOrder) {
@@ -1437,13 +1439,23 @@ const PurchaseOrderDetails = ({ orderId }) => {
     };
   };
   
+  if (loading || !purchaseOrder) {
+    return (
+      <DetailPageLayout
+        loading={loading}
+        error={!purchaseOrder && !loading}
+        errorMessage={t('purchaseOrders.orderNotFound')}
+        backTo="/purchase-orders"
+        backLabel={t('purchaseOrders.backToList', 'Powrót do listy')}
+        maxWidth="lg"
+      />
+    );
+  }
+
   return (
     <DetailPageLayout
-      loading={loading}
-      error={!purchaseOrder && !loading}
-      errorMessage={t('purchaseOrders.orderNotFound')}
-      backTo="/purchase-orders"
-      backLabel={t('purchaseOrders.backToList', 'Powrót do listy')}
+      loading={false}
+      error={false}
       maxWidth="lg"
     >
       <Box sx={{ mb: 4, ...flexBetween }}>
@@ -1594,9 +1606,11 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   <Box sx={mb2}>
                     <Typography variant="h5" component="h1">
                       {t('purchaseOrders.details.orderNumber', { number: purchaseOrder.number })}
-                      <Box component="span" sx={{ ml: 2 }}>
-                        <StatusChip status={translateStatus(purchaseOrder.status)} />
-                      </Box>
+                      <Tooltip title="Kliknij, aby zmienić status" arrow>
+                        <Box component="span" sx={{ ml: 2, cursor: 'pointer' }} onClick={handleStatusClick}>
+                          <StatusChip status={translateStatus(purchaseOrder.status)} />
+                        </Box>
+                      </Tooltip>
                       <Box component="span" sx={{ ml: 1 }}>
                         {getPaymentStatusChip(purchaseOrder.paymentStatus)}
                       </Box>
