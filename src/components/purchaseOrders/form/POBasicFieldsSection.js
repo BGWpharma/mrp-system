@@ -9,7 +9,8 @@ import {
   MenuItem,
   Autocomplete,
   Box,
-  Button
+  Button,
+  Divider
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -69,70 +70,89 @@ const POBasicFieldsSection = memo(({
   currentLanguage,
   t
 }) => {
+  const fieldGroupSx = {
+    p: 2,
+    borderRadius: 1,
+    bgcolor: 'action.hover',
+  };
+
   return (
     <>
-      <Grid item xs={12} md={6}>
-        <Autocomplete
-          options={suppliers}
-          getOptionLabel={(option) => option.name}
-          value={poData.supplier}
-          onChange={handleSupplierChange}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label={t('purchaseOrders.form.supplier')}
-              required
-              fullWidth
-            />
-          )}
-        />
+      {/* Dostawca i magazyn */}
+      <Grid item xs={12}>
+        <Box sx={fieldGroupSx}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Autocomplete
+                options={suppliers}
+                getOptionLabel={(option) => option.name}
+                value={poData.supplier}
+                onChange={handleSupplierChange}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={t('purchaseOrders.form.supplier')}
+                    required
+                    fullWidth
+                  />
+                )}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth required>
+                <InputLabel>{t('purchaseOrders.form.targetWarehouse')}</InputLabel>
+                <Select
+                  name="targetWarehouseId"
+                  value={poData.targetWarehouseId}
+                  onChange={handleChange}
+                  label={t('purchaseOrders.form.targetWarehouse')}
+                >
+                  <MenuItem value=""><em>{t('purchaseOrders.form.selectWarehouse')}</em></MenuItem>
+                  {warehouses.map((warehouse) => (
+                    <MenuItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </Box>
       </Grid>
 
-      <Grid item xs={12} md={6}>
-        <FormControl fullWidth required>
-          <InputLabel>{t('purchaseOrders.form.targetWarehouse')}</InputLabel>
-          <Select
-            name="targetWarehouseId"
-            value={poData.targetWarehouseId}
-            onChange={handleChange}
-            label={t('purchaseOrders.form.targetWarehouse')}
-          >
-            <MenuItem value=""><em>{t('purchaseOrders.form.selectWarehouse')}</em></MenuItem>
-            {warehouses.map((warehouse) => (
-              <MenuItem key={warehouse.id} value={warehouse.id}>
-                {warehouse.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+      {/* Daty */}
+      <Grid item xs={12}>
+        <Box sx={fieldGroupSx}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
+                <DatePicker
+                  label={t('purchaseOrders.form.orderDate')}
+                  value={parseDateValue(poData.orderDate)}
+                  onChange={(date) => handleDateChange('orderDate', date)}
+                  minDate={new Date('1900-01-01')}
+                  maxDate={new Date('2100-12-31')}
+                  slotProps={{ textField: { fullWidth: true, error: false } }}
+                />
+              </LocalizationProvider>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
+                <DatePicker
+                  label={t('purchaseOrders.form.expectedDeliveryDate')}
+                  value={parseDateValue(poData.expectedDeliveryDate)}
+                  onChange={(date) => handleDateChange('expectedDeliveryDate', date)}
+                  minDate={new Date('1900-01-01')}
+                  maxDate={new Date('2100-12-31')}
+                  slotProps={{ textField: { fullWidth: true, required: true, error: false } }}
+                />
+              </LocalizationProvider>
+            </Grid>
+          </Grid>
+        </Box>
       </Grid>
 
-      <Grid item xs={12} md={6}>
-        <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
-          <DatePicker
-            label={t('purchaseOrders.form.orderDate')}
-            value={parseDateValue(poData.orderDate)}
-            onChange={(date) => handleDateChange('orderDate', date)}
-            minDate={new Date('1900-01-01')}
-            maxDate={new Date('2100-12-31')}
-            slotProps={{ textField: { fullWidth: true, error: false } }}
-          />
-        </LocalizationProvider>
-      </Grid>
-
-      <Grid item xs={12} md={6}>
-        <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
-          <DatePicker
-            label={t('purchaseOrders.form.expectedDeliveryDate')}
-            value={parseDateValue(poData.expectedDeliveryDate)}
-            onChange={(date) => handleDateChange('expectedDeliveryDate', date)}
-            minDate={new Date('1900-01-01')}
-            maxDate={new Date('2100-12-31')}
-            slotProps={{ textField: { fullWidth: true, required: true, error: false } }}
-          />
-        </LocalizationProvider>
-      </Grid>
-
+      {/* Adres dostawy */}
       <Grid item xs={12}>
         <TextField
           name="deliveryAddress"
@@ -143,7 +163,7 @@ const POBasicFieldsSection = memo(({
           multiline
           rows={3}
         />
-        
+
         {poData.supplier && poData.supplier.addresses && poData.supplier.addresses.length > 0 && (
           <Box sx={mt2}>
             <Typography variant="subtitle2" gutterBottom>
@@ -173,35 +193,45 @@ const POBasicFieldsSection = memo(({
         )}
       </Grid>
 
-      <Grid item xs={12} md={6}>
-        <FormControl fullWidth>
-          <InputLabel id="incoterms-label">{t('purchaseOrders.form.incoterms')}</InputLabel>
-          <Select
-            labelId="incoterms-label"
-            name="incoterms"
-            value={poData.incoterms || ''}
-            onChange={handleChange}
-            label={t('purchaseOrders.form.incoterms')}
-          >
-            {INCOTERMS_OPTIONS.map((option) => (
-              <MenuItem key={option.value} value={option.value}>
-                {option.label || t('purchaseOrders.form.selectIncoterms')}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+      <Grid item xs={12}>
+        <Divider />
       </Grid>
 
-      <Grid item xs={12} md={6}>
-        <TextField
-          name="notes"
-          label={t('purchaseOrders.form.notes')}
-          value={poData.notes}
-          onChange={handleChange}
-          fullWidth
-          multiline
-          rows={2}
-        />
+      {/* INCOTERMS i uwagi */}
+      <Grid item xs={12}>
+        <Box sx={fieldGroupSx}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel id="incoterms-label">{t('purchaseOrders.form.incoterms')}</InputLabel>
+                <Select
+                  labelId="incoterms-label"
+                  name="incoterms"
+                  value={poData.incoterms || ''}
+                  onChange={handleChange}
+                  label={t('purchaseOrders.form.incoterms')}
+                >
+                  {INCOTERMS_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label || t('purchaseOrders.form.selectIncoterms')}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                name="notes"
+                label={t('purchaseOrders.form.notes')}
+                value={poData.notes}
+                onChange={handleChange}
+                fullWidth
+                multiline
+                rows={2}
+              />
+            </Grid>
+          </Grid>
+        </Box>
       </Grid>
     </>
   );

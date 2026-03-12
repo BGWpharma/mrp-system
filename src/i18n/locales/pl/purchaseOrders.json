@@ -79,6 +79,18 @@
     "editTitle": "Edycja Zamówienia Zakupu",
     "loadingData": "Ładowanie danych zamówienia...",
     "poNumber": "Numer PO: {{number}}",
+    "sections": {
+      "basicData": "Dane podstawowe",
+      "basicDataDesc": "Dostawca, magazyn docelowy i daty zamówienia",
+      "additionalCosts": "Koszty dodatkowe",
+      "additionalCostsDesc": "Opłaty za cło, transport, ubezpieczenia itp.",
+      "orderItems": "Pozycje zamówienia",
+      "orderItemsDesc": "Produkty, ilości, ceny i rabaty",
+      "summary": "Podsumowanie",
+      "summaryDesc": "Zestawienie kosztów i wartość zamówienia",
+      "invoicesAttachments": "Faktury i załączniki",
+      "invoicesAttachmentsDesc": "CoA, faktury i inne dokumenty"
+    },
     "supplier": "Dostawca",
     "targetWarehouse": "Magazyn docelowy",
     "selectWarehouse": "Wybierz magazyn",

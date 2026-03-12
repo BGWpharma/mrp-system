@@ -6,11 +6,15 @@ import {
   Button,
   Grid,
   Typography,
-  Divider,
   Paper,
   Alert,
   Container
 } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import ListAltIcon from '@mui/icons-material/ListAlt';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { 
@@ -47,6 +51,7 @@ import {
   mt2
 } from '../../styles/muiCommonStyles';
 import FormSectionNav from '../common/FormSectionNav';
+import FormSectionHeader from '../common/FormSectionHeader';
 
 
 const PurchaseOrderForm = ({ orderId }) => {
@@ -64,11 +69,11 @@ const PurchaseOrderForm = ({ orderId }) => {
   const invoicesRef = useRef(null);
 
   const formSections = [
-    { label: 'Dane podstawowe', ref: basicFieldsRef },
-    { label: 'Koszty dodatkowe', ref: additionalCostsRef },
-    { label: 'Pozycje zamówienia', ref: orderItemsRef },
-    { label: 'Podsumowanie', ref: summaryRef },
-    { label: 'Faktury i załączniki', ref: invoicesRef },
+    { label: 'Dane podstawowe', ref: basicFieldsRef, icon: <InfoOutlinedIcon fontSize="small" /> },
+    { label: 'Koszty dodatkowe', ref: additionalCostsRef, icon: <AddCircleOutlineIcon fontSize="small" /> },
+    { label: 'Pozycje zamówienia', ref: orderItemsRef, icon: <ListAltIcon fontSize="small" /> },
+    { label: 'Podsumowanie', ref: summaryRef, icon: <ReceiptLongIcon fontSize="small" /> },
+    { label: 'Faktury i załączniki', ref: invoicesRef, icon: <AttachFileIcon fontSize="small" /> },
   ];
   
   // Używamy orderId z props, a jeśli nie istnieje, to poId z useParams()
@@ -2153,125 +2158,153 @@ const PurchaseOrderForm = ({ orderId }) => {
         )}
       </Box>
       
-      <Paper sx={{ p: 3 }}>
-        {/* Przyciski akcji na samej górze formularza */}
-        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-          <Button
-            variant="outlined"
-            onClick={handleCancel}
-            disabled={saving}
-          >
-            {t('purchaseOrders.form.actions.cancel')}
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            disabled={saving}
-            onClick={handleSubmit}
-          >
-            {saving ? t('purchaseOrders.form.actions.saving') : t('purchaseOrders.form.actions.save')}
-          </Button>
-        </Box>
-        
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 0 }}>
-          <FormSectionNav sections={formSections} />
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-        <form onSubmit={handleSubmit}>
-          <div ref={basicFieldsRef}>
-            <Grid container spacing={3}>
-              <POBasicFieldsSection
+      {/* Przyciski akcji na samej górze formularza */}
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+        <Button
+          variant="outlined"
+          onClick={handleCancel}
+          disabled={saving}
+        >
+          {t('purchaseOrders.form.actions.cancel')}
+        </Button>
+        <Button
+          variant="contained"
+          color="primary"
+          disabled={saving}
+          onClick={handleSubmit}
+        >
+          {saving ? t('purchaseOrders.form.actions.saving') : t('purchaseOrders.form.actions.save')}
+        </Button>
+      </Box>
+
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 0 }}>
+        <FormSectionNav sections={formSections} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <form onSubmit={handleSubmit}>
+
+            {/* Sekcja 1: Dane podstawowe */}
+            <Paper variant="outlined" sx={{ p: 3, mb: 3, borderRadius: 2, borderColor: 'divider' }} ref={basicFieldsRef}>
+              <FormSectionHeader
+                number={1}
+                title={t('purchaseOrders.form.sections.basicData', 'Dane podstawowe')}
+                subtitle={t('purchaseOrders.form.sections.basicDataDesc', 'Dostawca, magazyn docelowy i daty zamówienia')}
+                icon={<InfoOutlinedIcon />}
+              />
+              <Grid container spacing={3}>
+                <POBasicFieldsSection
+                  poData={poData}
+                  suppliers={suppliers}
+                  warehouses={warehouses}
+                  handleSupplierChange={handleSupplierChange}
+                  handleChange={handleChange}
+                  handleDateChange={handleDateChange}
+                  setPoData={setPoData}
+                  currentLanguage={currentLanguage}
+                  t={t}
+                />
+              </Grid>
+            </Paper>
+
+            {/* Sekcja 2: Koszty dodatkowe */}
+            <Paper variant="outlined" sx={{ p: 3, mb: 3, borderRadius: 2, borderColor: 'divider' }} ref={additionalCostsRef}>
+              <FormSectionHeader
+                number={2}
+                title={t('purchaseOrders.form.sections.additionalCosts', 'Koszty dodatkowe')}
+                subtitle={t('purchaseOrders.form.sections.additionalCostsDesc', 'Opłaty za cło, transport, ubezpieczenia itp.')}
+                icon={<AddCircleOutlineIcon />}
+              />
+              <Grid container spacing={3}>
+                <POAdditionalCostsSection
+                  poData={poData}
+                  setPoData={setPoData}
+                  handleAddAdditionalCost={handleAddAdditionalCost}
+                  handleAdditionalCostChange={handleAdditionalCostChange}
+                  handleRemoveAdditionalCost={handleRemoveAdditionalCost}
+                  currentLanguage={currentLanguage}
+                  t={t}
+                />
+              </Grid>
+            </Paper>
+
+            {/* Sekcja 3: Pozycje zamówienia */}
+            <Paper variant="outlined" sx={{ p: 3, mb: 3, borderRadius: 2, borderColor: 'divider' }} ref={orderItemsRef}>
+              <FormSectionHeader
+                number={3}
+                title={t('purchaseOrders.form.sections.orderItems', 'Pozycje zamówienia')}
+                subtitle={t('purchaseOrders.form.sections.orderItemsDesc', 'Produkty, ilości, ceny i rabaty')}
+                icon={<ListAltIcon />}
+              />
+              <POOrderItemsSection
                 poData={poData}
-                suppliers={suppliers}
-                warehouses={warehouses}
-                handleSupplierChange={handleSupplierChange}
+                setPoData={setPoData}
+                inventoryItems={inventoryItems}
+                handleAddItem={handleAddItem}
+                handleRemoveItem={handleRemoveItem}
+                handleItemChange={handleItemChange}
+                handleItemSelect={handleItemSelect}
+                supplierSuggestions={supplierSuggestions}
+                loadingSupplierSuggestions={loadingSupplierSuggestions}
+                findBestSuppliers={findBestSuppliers}
+                applyBestSupplierPrices={applyBestSupplierPrices}
+                fillMinimumOrderQuantities={fillMinimumOrderQuantities}
+                setDocumentScannerOpen={setDocumentScannerOpen}
+                currentLanguage={currentLanguage}
+                t={t}
+              />
+            </Paper>
+
+            {/* Sekcja 4: Podsumowanie */}
+            <Paper variant="outlined" sx={{ p: 3, mb: 3, borderRadius: 2, borderColor: 'divider' }} ref={summaryRef}>
+              <FormSectionHeader
+                number={4}
+                title={t('purchaseOrders.form.sections.summary', 'Podsumowanie')}
+                subtitle={t('purchaseOrders.form.sections.summaryDesc', 'Zestawienie kosztów i wartość zamówienia')}
+                icon={<ReceiptLongIcon />}
+              />
+              <POSummarySection
+                poData={poData}
                 handleChange={handleChange}
-                handleDateChange={handleDateChange}
-                setPoData={setPoData}
-                currentLanguage={currentLanguage}
                 t={t}
               />
-            </Grid>
-          </div>
+            </Paper>
 
-          <div ref={additionalCostsRef}>
-            <Grid container spacing={3}>
-              <POAdditionalCostsSection
+            {/* Sekcja 5: Faktury i załączniki */}
+            <Paper variant="outlined" sx={{ p: 3, mb: 3, borderRadius: 2, borderColor: 'divider' }} ref={invoicesRef}>
+              <FormSectionHeader
+                number={5}
+                title={t('purchaseOrders.form.sections.invoicesAttachments', 'Faktury i załączniki')}
+                subtitle={t('purchaseOrders.form.sections.invoicesAttachmentsDesc', 'CoA, faktury i inne dokumenty')}
+                icon={<AttachFileIcon />}
+              />
+              <POInvoicesAttachmentsSection
                 poData={poData}
-                setPoData={setPoData}
-                handleAddAdditionalCost={handleAddAdditionalCost}
-                handleAdditionalCostChange={handleAdditionalCostChange}
-                handleRemoveAdditionalCost={handleRemoveAdditionalCost}
-                currentLanguage={currentLanguage}
+                currentOrderId={currentOrderId}
+                handleCategorizedAttachmentsChange={handleCategorizedAttachmentsChange}
+                saving={saving}
                 t={t}
               />
-            </Grid>
-          </div>
-          
-          <Divider sx={{ my: 3 }} />
-          
-          <div ref={orderItemsRef}>
-            <POOrderItemsSection
-              poData={poData}
-              setPoData={setPoData}
-              inventoryItems={inventoryItems}
-              handleAddItem={handleAddItem}
-              handleRemoveItem={handleRemoveItem}
-              handleItemChange={handleItemChange}
-              handleItemSelect={handleItemSelect}
-              supplierSuggestions={supplierSuggestions}
-              loadingSupplierSuggestions={loadingSupplierSuggestions}
-              findBestSuppliers={findBestSuppliers}
-              applyBestSupplierPrices={applyBestSupplierPrices}
-              fillMinimumOrderQuantities={fillMinimumOrderQuantities}
-              setDocumentScannerOpen={setDocumentScannerOpen}
-              currentLanguage={currentLanguage}
-              t={t}
-            />
-          </div>
+            </Paper>
 
-          <div ref={summaryRef}>
-            <POSummarySection
-              poData={poData}
-              handleChange={handleChange}
-              t={t}
-            />
-          </div>
-          
-          <Divider sx={{ my: 3 }} />
-          
-          <div ref={invoicesRef}>
-            <POInvoicesAttachmentsSection
-              poData={poData}
-              currentOrderId={currentOrderId}
-              handleCategorizedAttachmentsChange={handleCategorizedAttachmentsChange}
-              saving={saving}
-              t={t}
-            />
-          </div>
-
-          <Box sx={{ mb: 3, mt: 1, display: 'flex', justifyContent: 'flex-end'}}>
-            <Button
-              variant="outlined"
-              onClick={handleCancel}
-              disabled={saving}
-              sx={{ mr: 2 }}
-            >
-              {t('purchaseOrders.form.actions.cancel')}
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              disabled={saving}
-            >
-              {saving ? t('purchaseOrders.form.actions.saving') : t('purchaseOrders.form.actions.save')}
-            </Button>
-          </Box>
-        </form>
-          </Box>
+            <Box sx={{ mb: 3, mt: 1, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={handleCancel}
+                disabled={saving}
+              >
+                {t('purchaseOrders.form.actions.cancel')}
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disabled={saving}
+              >
+                {saving ? t('purchaseOrders.form.actions.saving') : t('purchaseOrders.form.actions.save')}
+              </Button>
+            </Box>
+          </form>
         </Box>
-      </Paper>
+      </Box>
       
       {/* Overlay z informacją o zapisywaniu */}
       <SavingOverlay 

@@ -103,6 +103,18 @@
     "editTitle": "Edit Purchase Order",
     "loadingData": "Loading order data...",
     "poNumber": "PO Number: {{number}}",
+    "sections": {
+      "basicData": "Basic information",
+      "basicDataDesc": "Supplier, target warehouse and order dates",
+      "additionalCosts": "Additional costs",
+      "additionalCostsDesc": "Customs, transport, insurance fees, etc.",
+      "orderItems": "Order items",
+      "orderItemsDesc": "Products, quantities, prices and discounts",
+      "summary": "Summary",
+      "summaryDesc": "Cost breakdown and order value",
+      "invoicesAttachments": "Invoices & attachments",
+      "invoicesAttachmentsDesc": "CoA, invoices and other documents"
+    },
     "supplier": "Supplier",
     "targetWarehouse": "Target warehouse",
     "selectWarehouse": "Select warehouse",
