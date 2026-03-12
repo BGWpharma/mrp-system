@@ -9,21 +9,11 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
-    "@firebase/app": "^0.11.5",
-    "@firebase/auth": "^1.10.1",
-    "@firebase/database": "^1.0.14",
-    "@firebase/firestore": "^4.7.11",
-    "@firebase/functions": "^0.13.1",
-    "@firebase/storage": "^0.13.7",
     "@mui/icons-material": "^6.4.5",
     "@mui/material": "^6.4.5",
-    "@mui/x-date-pickers": "^6.20.2",
+    "@mui/x-date-pickers": "^7.0.0",
     "@react-pdf/renderer": "^4.3.0",
     "@sentry/react": "^10.32.1",
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.2.0",
-    "@testing-library/user-event": "^13.5.0",
     "axios": "^1.8.1",
     "date-fns": "^2.30.0",
     "exceljs": "^4.4.0",
@@ -31,8 +21,6 @@
     "html2canvas": "^1.4.1",
     "i18next": "^25.3.2",
     "i18next-browser-languagedetector": "^8.2.0",
-    "i18next-http-backend": "^3.0.2",
-    "i18next-resources-to-backend": "^1.2.1",
     "is-valid-nip": "^2.0.0",
     "jsbarcode": "^3.12.1",
     "jspdf": "^3.0.1",
@@ -45,12 +33,10 @@
     "react-barcode": "^1.6.1",
     "react-calendar-timeline": "^0.30.0-beta.3",
     "react-dom": "^19.0.0",
-    "react-hot-toast": "^2.5.2",
     "react-i18next": "^15.6.0",
     "react-markdown": "^10.1.0",
     "react-qr-code": "^2.0.15",
     "react-router-dom": "^7.2.0",
-    "react-scripts": "5.0.1",
     "react-to-print": "^3.0.5",
     "react-window": "^2.2.3",
     "recharts": "^2.15.3",
@@ -60,20 +46,13 @@
   },
   "scripts": {
     "prebuild": "node scripts/generate-meta.js",
-    "start": "set PORT=3003 && react-scripts start",
-    "build": "react-scripts build && npm run sentry:sourcemaps",
-    "build:dev": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
+    "start": "vite",
+    "build": "vite build && npm run sentry:sourcemaps",
+    "build:dev": "vite build",
+    "preview": "vite preview",
     "i18n:scan": "i18next-scanner",
     "i18n:split": "node scripts/split-translations.js",
-    "sentry:sourcemaps": "sentry-cli sourcemaps upload --org bgwpharma --project bgw-mrp-system --release mrp-system@0.1.237 ./build/static/js"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "sentry:sourcemaps": "sentry-cli sourcemaps upload --org bgwpharma --project bgw-mrp-system --release mrp-system@0.1.237 ./build/assets"
   },
   "browserslist": {
     "production": [
@@ -89,6 +68,8 @@
   },
   "devDependencies": {
     "@sentry/cli": "^3.0.3",
-    "i18next-scanner": "^4.6.0"
+    "@vitejs/plugin-react-swc": "^4.2.3",
+    "i18next-scanner": "^4.6.0",
+    "vite": "^6.2.0"
   }
 }

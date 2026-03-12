@@ -584,31 +584,40 @@ const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger
   // Oblicz dostępne ilości w partiach uwzględniając rezerwacje
   const calculateBatchAvailableQuantities = async (reservationsData = null) => {
     try {
-      const quantities = {};
       const dataToUse = reservationsData || reservations;
       
-      // Dla każdej rezerwacji z powiązanymi partiami
+      const batchInfoMap = {};
       for (const reservation of dataToUse) {
         if (reservation.linkedBatches && reservation.linkedBatches.length > 0) {
           for (const batch of reservation.linkedBatches) {
-            if (!quantities[batch.batchId]) {
-              // Pobierz rezerwacje dla tej partii
-              const { getBatchReservations } = await import('../../services/inventory');
-              const batchReservations = await getBatchReservations(batch.batchId);
-              
-              const totalReserved = batchReservations.reduce((sum, res) => sum + (res.quantity || 0), 0);
-              const availableQuantity = Math.max(0, batch.quantity - totalReserved);
-              
-              quantities[batch.batchId] = {
-                total: batch.quantity,
-                reserved: totalReserved,
-                available: availableQuantity
-              };
+            if (!batchInfoMap[batch.batchId]) {
+              batchInfoMap[batch.batchId] = batch.quantity;
             }
           }
         }
       }
-      
+
+      const uniqueBatchIds = Object.keys(batchInfoMap);
+      if (uniqueBatchIds.length === 0) {
+        setBatchAvailableQuantities({});
+        return;
+      }
+
+      const { getReservationsForMultipleBatches } = await import('../../services/inventory');
+      const reservationsMap = await getReservationsForMultipleBatches(uniqueBatchIds);
+
+      const quantities = {};
+      for (const batchId of uniqueBatchIds) {
+        const batchReservations = reservationsMap[batchId] || [];
+        const totalReserved = batchReservations.reduce((sum, res) => sum + (res.quantity || 0), 0);
+        const batchTotal = batchInfoMap[batchId];
+        quantities[batchId] = {
+          total: batchTotal,
+          reserved: totalReserved,
+          available: Math.max(0, batchTotal - totalReserved)
+        };
+      }
+
       setBatchAvailableQuantities(quantities);
     } catch (error) {
       console.error('Błąd podczas obliczania dostępnych ilości:', error);

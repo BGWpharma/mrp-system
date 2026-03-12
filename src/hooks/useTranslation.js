@@ -55,7 +55,7 @@ export const useTranslation = (namespace) => {
 
   const translate = useCallback((key, options = {}) => {
     if (!key || typeof key !== 'string') {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.warn('[useTranslation] Nieprawidłowy klucz tłumaczenia:', key);
       }
       return options.defaultValue || options.fallback || '';
@@ -101,7 +101,7 @@ export const useTranslation = (namespace) => {
 
     const translation = t(translationKey, i18nextOptions);
 
-    if (process.env.NODE_ENV === 'development' && !keyFound && translation === key) {
+    if (import.meta.env.DEV && !keyFound && translation === key) {
       console.warn(
         `[useTranslation] Brakujący klucz tłumaczenia: "${key}"`,
         `\n  Namespace: ${namespace || 'default'}`,

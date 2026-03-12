@@ -224,7 +224,8 @@ export const deleteProcurementForecast = async (id) => {
 export const subscribeToProcurementForecasts = (callback) => {
   const q = query(
     collection(db, COLLECTION),
-    orderBy('createdAt', 'desc')
+    orderBy('createdAt', 'desc'),
+    limit(50)
   );
 
   return onSnapshot(q, (snapshot) => {

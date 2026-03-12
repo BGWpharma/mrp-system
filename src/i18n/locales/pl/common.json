@@ -97,6 +97,7 @@
     "archive": "Archiwizuj",
     "unarchive": "Przywróć z archiwum",
     "showArchived": "Pokaż archiwalne",
+    "hideArchived": "Ukryj archiwalne",
     "archived": "Zarchiwizowane",
     "archiveSuccess": "Element został zarchiwizowany",
     "unarchiveSuccess": "Element został przywrócony z archiwum",

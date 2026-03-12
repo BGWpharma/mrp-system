@@ -1,7 +1,7 @@
 // src/config.js
 
 // Konfiguracja API
-export const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 // Inne ustawienia konfiguracyjne
 export const APP_NAME = 'MRP System';

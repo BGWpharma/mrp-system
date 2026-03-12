@@ -67,6 +67,7 @@ const PurchaseOrderForm = ({ orderId }) => {
   const orderItemsRef = useRef(null);
   const summaryRef = useRef(null);
   const invoicesRef = useRef(null);
+  const supplierPriceCacheRef = useRef(new Map());
 
   const formSections = [
     { label: 'Dane podstawowe', ref: basicFieldsRef, icon: <InfoOutlinedIcon fontSize="small" /> },
@@ -817,12 +818,20 @@ const PurchaseOrderForm = ({ orderId }) => {
     console.log(`[DEBUG] handleItemSelect - Wybrano pozycję:`, selectedItem);
     console.log(`[DEBUG] handleItemSelect - minOrderQuantity:`, selectedItem.minOrderQuantity);
     
-    // Sprawdź czy dostawca ma cenę dla tego przedmiotu
     if (poData.supplier && poData.supplier.id) {
       (async () => {
         try {
-          console.log(`[DEBUG] Sprawdzam cenę dla dostawcy ${poData.supplier.id} i produktu ${selectedItem.id}`);
-          const supplierPrice = await getSupplierPriceForItem(selectedItem.id, poData.supplier.id);
+          const PRICE_CACHE_TTL = 5 * 60 * 1000; // 5 min
+          const cacheKey = `${selectedItem.id}_${poData.supplier.id}`;
+          const cached = supplierPriceCacheRef.current.get(cacheKey);
+          let supplierPrice;
+          
+          if (cached && (Date.now() - cached.timestamp) < PRICE_CACHE_TTL) {
+            supplierPrice = cached.data;
+          } else {
+            supplierPrice = await getSupplierPriceForItem(selectedItem.id, poData.supplier.id);
+            supplierPriceCacheRef.current.set(cacheKey, { data: supplierPrice, timestamp: Date.now() });
+          }
           
           if (supplierPrice) {
             console.log(`[DEBUG] Znaleziono cenę dostawcy:`, supplierPrice);

@@ -18,10 +18,10 @@ const AppBreadcrumbs = () => {
   if (pathSegments.length === 0) return null;
 
   const getLabel = (segment) => {
+    if (isIdSegment(segment)) return t('breadcrumbs.details');
     const key = `breadcrumbs.${segment}`;
     const translated = t(key);
     if (translated !== key && translated !== `breadcrumbs.${segment}`) return translated;
-    if (isIdSegment(segment)) return t('breadcrumbs.details');
     return segment;
   };
 

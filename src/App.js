@@ -242,7 +242,7 @@ const ErrorFallback = ({ error, componentStack, resetError, eventId }) => {
       <Typography variant="body1" color="text.secondary" sx={{ mb: 2, maxWidth: 600 }}>
         {t('errorBoundary.description')}
       </Typography>
-      {process.env.NODE_ENV === 'development' && error && (
+      {import.meta.env.DEV && error && (
         <Box sx={{ 
           backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
           padding: 2, 

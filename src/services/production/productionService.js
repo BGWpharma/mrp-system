@@ -1781,7 +1781,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       if (oldStatus !== updates.status) {
         // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
         try {
-          const { createRealtimeStatusChangeNotification } = require('../notificationService');
+          const { createRealtimeStatusChangeNotification } = await import('../notificationService');
           
           // Określ użytkowników, którzy powinni otrzymać powiadomienie
           // Na przykład: użytkownik wykonujący zmianę oraz opcjonalnie menadżerowie produkcji
@@ -1801,7 +1801,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           
           // Fallback do starego systemu powiadomień, jeśli Realtime Database nie zadziała
           try {
-            const { createStatusChangeNotification } = require('../notificationService');
+            const { createStatusChangeNotification } = await import('../notificationService');
             await createStatusChangeNotification(
               userId,
               'productionTask',

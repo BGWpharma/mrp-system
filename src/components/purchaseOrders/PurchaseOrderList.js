@@ -11,7 +11,7 @@ import {
 import { format, isValid } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon, Sync as SyncIcon, Assessment as ReportIcon, Warning as WarningIcon, Archive as ArchiveIcon, Unarchive as UnarchiveIcon } from '@mui/icons-material';
-import FormControlLabel from '@mui/material/FormControlLabel';
+import ArchiveFilterChip from '../common/ArchiveFilterChip';
 import Badge from '@mui/material/Badge';
 import { 
   getAllPurchaseOrders, 
@@ -943,15 +943,9 @@ const PurchaseOrderList = () => {
             </IconButton>
           </Tooltip>
           
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={showArchived}
-                onChange={(e) => setShowArchived(e.target.checked)}
-                size="small"
-              />
-            }
-            label={t('common:common.showArchived')}
+          <ArchiveFilterChip
+            showArchived={showArchived}
+            onToggle={() => setShowArchived(prev => !prev)}
           />
 
           <Tooltip title={t('common:common.refreshDataClearCache')}>

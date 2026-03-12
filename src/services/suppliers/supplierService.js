@@ -224,21 +224,52 @@ export const getBestSupplierPricesForItems = async (items) => {
   }
   
   try {
-    const result = {};
-    
-    // Dla każdej pozycji znajdź najlepszą cenę dostawcy
+    const itemQuantities = {};
     for (const item of items) {
-      if (item.itemId || item.id) {
-        const itemId = item.itemId || item.id;
-        const quantity = item.quantity || 1;
-        
-        const bestPrice = await getBestSupplierPriceForItem(itemId, quantity);
-        if (bestPrice) {
-          result[itemId] = bestPrice;
-        }
+      const itemId = item.itemId || item.id;
+      if (itemId) {
+        itemQuantities[itemId] = item.quantity || 1;
       }
     }
-    
+
+    const uniqueIds = Object.keys(itemQuantities);
+    if (uniqueIds.length === 0) return {};
+
+    const CHUNK_SIZE = 30;
+    const allPriceDocs = [];
+
+    for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+      const chunk = uniqueIds.slice(i, i + CHUNK_SIZE);
+      const q = query(
+        collection(db, 'inventorySupplierPrices'),
+        where('itemId', 'in', chunk)
+      );
+      const snapshot = await getDocs(q);
+      snapshot.forEach(d => allPriceDocs.push({ id: d.id, ...d.data() }));
+    }
+
+    const pricesByItem = {};
+    for (const price of allPriceDocs) {
+      if (price.isActive === false) continue;
+      if (!pricesByItem[price.itemId]) {
+        pricesByItem[price.itemId] = [];
+      }
+      pricesByItem[price.itemId].push(price);
+    }
+
+    const result = {};
+    for (const itemId of uniqueIds) {
+      const prices = pricesByItem[itemId];
+      if (!prices || prices.length === 0) continue;
+
+      const qty = itemQuantities[itemId];
+      const validPrices = prices.filter(p => (p.minQuantity || 0) <= qty);
+      const finalPrices = validPrices.length > 0 ? validPrices : prices;
+
+      finalPrices.sort((a, b) => (a.price || 0) - (b.price || 0));
+      result[itemId] = finalPrices[0];
+    }
+
     return result;
   } catch (error) {
     console.error('Błąd podczas pobierania najlepszych cen dostawców:', error);

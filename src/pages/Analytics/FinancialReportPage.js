@@ -49,7 +49,7 @@ import {
   exportReportToCSV,
   getReportStatistics,
   getFilterOptions
-} from '../../services/finance';
+} from '../../services/finance/financialReportService';
 import { formatCurrency } from '../../utils/formatting';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';

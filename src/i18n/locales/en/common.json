@@ -96,6 +96,7 @@
     "archive": "Archive",
     "unarchive": "Restore from archive",
     "showArchived": "Show archived",
+    "hideArchived": "Hide archived",
     "archived": "Archived",
     "archiveSuccess": "Item has been archived",
     "unarchiveSuccess": "Item has been restored from archive",

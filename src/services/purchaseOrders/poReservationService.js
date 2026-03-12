@@ -543,7 +543,7 @@ export const getAvailablePOItems = async (materialId) => {
     // Pobierz wszystkie PO które mają dozwolone statusy dla rezerwacji
     const poQuery = query(
       collection(db, PURCHASE_ORDERS_COLLECTION),
-      where('status', 'in', ['draft', 'pending', 'approved', 'ordered', 'partial', 'shipped'])
+      where('status', 'in', ['draft', 'pending', 'approved', 'ordered', 'confirmed', 'partial', 'shipped'])
     );
     
     const poSnapshot = await getDocs(poQuery);

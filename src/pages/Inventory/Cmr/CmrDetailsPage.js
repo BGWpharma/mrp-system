@@ -1,25 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Container, 
-  Typography, 
-  Box, 
-  Paper, 
-  Grid, 
-  Divider, 
-  Button, 
-  Card, 
-  CardHeader, 
+import React, { useState, lazy, Suspense } from 'react';
+import {
+  Typography,
+  Box,
+  Paper,
+  Grid,
+  Divider,
+  Button,
+  Card,
+  CardHeader,
   CardContent,
   CircularProgress,
   Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Alert,
-  AlertTitle,
   styled,
   Dialog,
   DialogActions,
@@ -38,104 +29,45 @@ import {
   ListItemIcon,
   ListItemText
 } from '@mui/material';
-// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
-import { 
-  flexCenter, 
-  flexBetween, 
-  flexColumn,
-  flexCenterGap1,
-  flexCenterGap2,
-  loadingContainer, 
-  emptyStateContainer,
-  mb1,
-  mb2, 
-  mb3,
-  mt1,
-  mt2,
-  mr1,
-  p2,
-  p3,
-  textCenter,
-  textSecondary,
-  typographyBold,
-  alertMb2
-} from '../../../styles/muiCommonStyles';
-import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
+import { mb3 } from '../../../styles/muiCommonStyles';
+import { useParams, Link as RouterLink } from 'react-router-dom';
 import { format } from 'date-fns';
 import pl from 'date-fns/locale/pl';
-import { useAuth } from '../../../hooks/useAuth';
-import { useNotification } from '../../../hooks/useNotification';
-import { useTranslation } from '../../../hooks/useTranslation';
-import { 
-  getCmrDocumentById, 
-  updateCmrStatus, 
+import {
   CMR_STATUSES,
   CMR_PAYMENT_STATUSES,
   getTransportTypeLabel,
   translatePaymentStatus,
-  updateCmrPaymentStatus,
-  migrateCmrToNewFormat,
-  uploadCmrAttachment,
-  getCmrAttachments,
-  deleteCmrAttachment,
-  uploadCmrInvoice,
-  getCmrInvoices,
-  deleteCmrInvoice,
-  uploadCmrOtherAttachment,
-  getCmrOtherAttachments,
-  deleteCmrOtherAttachment,
   uploadCmrDeliveryNote,
-  getCmrDeliveryNotes,
-  deleteCmrDeliveryNote
+  updateCmrDocument
 } from '../../../services/logistics';
-import { getOrderById } from '../../../services/orders';
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs 
-} from 'firebase/firestore';
-import { db } from '../../../services/firebase/config';
-import { 
-  calculatePalletWeights, 
-  calculateBoxWeights, 
-  getInventoryDataFromBatches 
-} from '../../../utils/calculations';
-import LabelsDisplayDialog from '../../../components/cmr/LabelsDisplayDialog';
-import LabelGenerator from '../../../components/cmr/LabelGenerator';
 import { generateAllDeliveryNoteData, buildAttachedDocumentsWithDN } from '../../../services/logistics/deliveryNoteService';
-import { updateCmrDocument } from '../../../services/logistics';
-import { logger } from '../../../utils/logger';
+import LabelsDisplayDialog from '../../../components/cmr/LabelsDisplayDialog';
 import StatusChip from '../../../components/common/StatusChip';
 import StatusStepper from '../../../components/common/StatusStepper';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import DetailPageLayout from '../../../components/common/DetailPageLayout';
 
-// Ikony
+import { useCmrData, useCmrWeights, useCmrAttachments, useCmrLabels, useCmrStatus } from '../../../hooks/cmr';
+
 import EditIcon from '@mui/icons-material/Edit';
-import PrintIcon from '@mui/icons-material/Print';
-import EventIcon from '@mui/icons-material/Event';
-import BusinessIcon from '@mui/icons-material/Business';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import PersonIcon from '@mui/icons-material/Person';
-import InventoryIcon from '@mui/icons-material/Inventory';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FileCopyIcon from '@mui/icons-material/FileCopy';
-import AttachFileIcon from '@mui/icons-material/AttachFile';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import DeleteIcon from '@mui/icons-material/Delete';
-import DownloadIcon from '@mui/icons-material/Download';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import LabelIcon from '@mui/icons-material/Label';
 import GridViewIcon from '@mui/icons-material/GridView';
 import WarningIcon from '@mui/icons-material/Warning';
 import CheckIcon from '@mui/icons-material/Check';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import ReceiptIcon from '@mui/icons-material/Receipt';
+import PrintIcon from '@mui/icons-material/Print';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import DescriptionIcon from '@mui/icons-material/Description';
 
-// TabPanel component
+const CmrPartiesTransportTab = lazy(() => import('./tabs/CmrPartiesTransportTab'));
+const CmrItemsWeightsTab = lazy(() => import('./tabs/CmrItemsWeightsTab'));
+const CmrFinanceTab = lazy(() => import('./tabs/CmrFinanceTab'));
+const CmrAdditionalTab = lazy(() => import('./tabs/CmrAdditionalTab'));
+const CmrPrintView = lazy(() => import('./CmrPrintView'));
+
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
 
@@ -163,10 +95,8 @@ function a11yProps(index) {
   };
 }
 
-// Globalne style CSS dla drukowania
 const GlobalStyles = styled('style')({});
 
-// Treść globalnych stylów CSS do drukowania
 const globalPrintCss = `
   @media print {
     body * {
@@ -250,438 +180,44 @@ const globalPrintCss = `
   }
 `;
 
+const LazyFallback = (
+  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+    <CircularProgress />
+  </Box>
+);
+
 const CmrDetailsPage = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const { currentUser } = useAuth();
-  const { showSuccess, showError } = useNotification();
-  const { t } = useTranslation('cmr');
-  
-  const [loading, setLoading] = useState(true);
-  const [cmrData, setCmrData] = useState(null);
-  const [linkedOrders, setLinkedOrders] = useState([]);
-  const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
-  const [newPaymentStatus, setNewPaymentStatus] = useState('');
-  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
-  
-  // Stan dla Tabs
+
   const [activeTab, setActiveTab] = useState(0);
-  
-  // Stany dla odpowiedzi formularzy
-  const [loadingFormResponses, setLoadingFormResponses] = useState([]);
-  const [loadingFormResponsesLoading, setLoadingFormResponsesLoading] = useState(false);
-  
-  // Stany dla dialogu walidacji formularzy załadunku przed zmianą statusu na transport
-  const [loadingFormValidationDialogOpen, setLoadingFormValidationDialogOpen] = useState(false);
-  const [pendingStatusChange, setPendingStatusChange] = useState(null);
-  
-  // Stany dla szczegółów wag
-  const [itemsWeightDetails, setItemsWeightDetails] = useState([]);
-  const [weightDetailsLoading, setWeightDetailsLoading] = useState(false);
-  const [weightSummary, setWeightSummary] = useState({
-    totalWeight: 0,
-    totalPallets: 0,
-    totalBoxes: 0,
-    itemsBreakdown: []
-  });
-  
-  // Stany dla dialogów
-  const [labelsDialogOpen, setLabelsDialogOpen] = useState(false);
-  const [currentLabels, setCurrentLabels] = useState([]);
-  const [currentLabelType, setCurrentLabelType] = useState('unknown');
-  
-  // Stan dla menu
   const [anchorEl, setAnchorEl] = useState(null);
-  
-  // Stany dla załączników
-  const [attachments, setAttachments] = useState([]);
-  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
-  const [uploadingAttachment, setUploadingAttachment] = useState(false);
-  
-  // Stany dla faktur
-  const [invoices, setInvoices] = useState([]);
-  const [invoicesLoading, setInvoicesLoading] = useState(false);
-  const [uploadingInvoice, setUploadingInvoice] = useState(false);
-
-  // Stany dla innych załączników
-  const [otherAttachments, setOtherAttachments] = useState([]);
-  const [otherAttachmentsLoading, setOtherAttachmentsLoading] = useState(false);
-  const [uploadingOtherAttachment, setUploadingOtherAttachment] = useState(false);
-
-  // Stany dla Delivery Notes
-  const [deliveryNoteAttachments, setDeliveryNoteAttachments] = useState([]);
-  const [deliveryNoteAttachmentsLoading, setDeliveryNoteAttachmentsLoading] = useState(false);
-  const [uploadingDeliveryNote, setUploadingDeliveryNote] = useState(false);
-  
   const menuOpen = Boolean(anchorEl);
-  
-  useEffect(() => {
-    fetchCmrDocument();
-  }, [id]);
-  
-  // Funkcja do obliczania szczegółów wag dla pozycji CMR
-  const calculateItemsWeightDetails = async (items) => {
-    if (!items || items.length === 0) {
-      setItemsWeightDetails([]);
-      setWeightSummary({
-        totalWeight: 0,
-        totalPallets: 0,
-        totalBoxes: 0,
-        itemsBreakdown: []
-      });
-      return;
-    }
 
-    setWeightDetailsLoading(true);
-    
-    try {
-      const weightDetails = [];
-      let totalWeight = 0;
-      let totalPallets = 0;
-      let totalBoxes = 0;
+  // Hooks
+  const weights = useCmrWeights();
+  const data = useCmrData(id, weights.calculateItemsWeightDetails);
+  const attachmentHook = useCmrAttachments(id, data.cmrData, data.fetchCmrDocument);
+  const labels = useCmrLabels(data.cmrData, weights.itemsWeightDetails);
+  const status = useCmrStatus({
+    id,
+    cmrData: data.cmrData,
+    setCmrData: data.setCmrData,
+    fetchCmrDocument: data.fetchCmrDocument,
+    loadingFormResponses: data.loadingFormResponses,
+    fetchDeliveryNoteAttachments: attachmentHook.fetchDeliveryNoteAttachments
+  });
 
-      for (const item of items) {
-        const weight = parseFloat(item.weight) || 0;
-        totalWeight += weight;
+  const { cmrData, loading, linkedOrders, formatDate, isEditable, navigate, currentUser, showSuccess, showError, t } = data;
 
-        // Sprawdź czy pozycja ma powiązane partie
-        if (item.linkedBatches && item.linkedBatches.length > 0) {
-          try {
-            const inventoryData = await getInventoryDataFromBatches(item.linkedBatches);
-            
-            if (inventoryData) {
-              // Oblicz szczegóły palet - działa niezależnie od kartonów
-              const palletData = calculatePalletWeights({
-                quantity: parseFloat(item.quantity) || 0,
-                unitWeight: inventoryData.weight || 0,
-                itemsPerBox: inventoryData.itemsPerBox || 0,
-                boxesPerPallet: inventoryData.boxesPerPallet || 0
-              });
+  const handleEdit = () => navigate(`/inventory/cmr/${id}/edit`);
+  const handleBack = () => navigate('/inventory/cmr');
+  const handleTabChange = (event, newValue) => setActiveTab(newValue);
+  const handlePrint = () => window.print();
+  const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
+  const handlePrintFromMenu = () => { handleMenuClose(); handlePrint(); };
+  const handleMigrateFromMenu = () => { handleMenuClose(); data.handleMigrateCmr(); };
 
-              // Oblicz szczegóły kartonów tylko jeśli pozycja ma kartony
-              let boxData = { fullBox: null, partialBox: null, totalBoxes: 0 };
-              if (inventoryData.itemsPerBox && inventoryData.itemsPerBox > 0) {
-                boxData = calculateBoxWeights({
-                  quantity: parseFloat(item.quantity) || 0,
-                  unitWeight: inventoryData.weight || 0,
-                  itemsPerBox: inventoryData.itemsPerBox
-                });
-              }
-
-              totalPallets += palletData.palletsCount;
-              totalBoxes += boxData.totalBoxes;
-
-              weightDetails.push({
-                itemId: item.id || item.description,
-                description: item.description,
-                quantity: item.quantity,
-                unit: item.unit,
-                weight: weight,
-                barcode: inventoryData.barcode, // Dodaj kod kreskowy na głównym poziomie
-                hasDetailedData: true,
-                palletsCount: palletData.palletsCount,
-                pallets: palletData.pallets,
-                boxesCount: boxData.totalBoxes,
-                boxes: boxData,
-                hasBoxes: inventoryData.itemsPerBox && inventoryData.itemsPerBox > 0, // Dodaj flagę czy pozycja ma kartony
-                linkedBatches: item.linkedBatches.map(batch => ({
-                  ...batch,
-                  // Uzupełnij dane partii z pełnych danych z bazy jeśli są dostępne
-                  ...(inventoryData.batchData ? {
-                    orderNumber: inventoryData.batchData.orderNumber,
-                    moNumber: inventoryData.batchData.moNumber,
-                    expiryDate: inventoryData.batchData.expiryDate,
-                    lotNumber: inventoryData.batchData.lotNumber,
-                    batchNumber: inventoryData.batchData.batchNumber
-                  } : {})
-                })),
-                inventoryData: {
-                  itemsPerBox: inventoryData.itemsPerBox || 0,
-                  boxesPerPallet: inventoryData.boxesPerPallet || 0,
-                  unitWeight: inventoryData.weight,
-                  barcode: inventoryData.barcode
-                }
-              });
-            } else {
-              // Brak szczegółowych danych
-              weightDetails.push({
-                itemId: item.id || item.description,
-                description: item.description,
-                quantity: item.quantity,
-                unit: item.unit,
-                weight: weight,
-                barcode: inventoryData?.barcode, // Dodaj kod kreskowy jeśli dostępny
-                hasDetailedData: false,
-                palletsCount: 0,
-                pallets: [],
-                boxesCount: 0,
-                boxes: { fullBox: null, partialBox: null },
-                linkedBatches: item.linkedBatches.map(batch => ({
-                  ...batch,
-                  // Uzupełnij dane partii z pełnych danych z bazy jeśli są dostępne
-                  ...(inventoryData?.batchData ? {
-                    orderNumber: inventoryData.batchData.orderNumber,
-                    moNumber: inventoryData.batchData.moNumber,
-                    expiryDate: inventoryData.batchData.expiryDate,
-                    lotNumber: inventoryData.batchData.lotNumber,
-                    batchNumber: inventoryData.batchData.batchNumber
-                  } : {})
-                })),
-                inventoryData: null
-              });
-            }
-          } catch (error) {
-            console.error('Błąd podczas obliczania wagi dla pozycji:', error);
-            // Dodaj pozycję bez szczegółów w przypadku błędu
-            weightDetails.push({
-              itemId: item.id || item.description,
-              description: item.description,
-              quantity: item.quantity,
-              unit: item.unit,
-              weight: weight,
-              barcode: null, // Brak kodu kreskowego przy błędzie
-              hasDetailedData: false,
-              palletsCount: 0,
-              pallets: [],
-              boxesCount: 0,
-              boxes: { fullBox: null, partialBox: null },
-              linkedBatches: item.linkedBatches,
-              inventoryData: null,
-              error: error.message
-            });
-          }
-        } else {
-          // Pozycja bez powiązanych partii
-          weightDetails.push({
-            itemId: item.id || item.description,
-            description: item.description,
-            quantity: item.quantity,
-            unit: item.unit,
-            weight: weight,
-            barcode: null, // Brak kodu kreskowego bez powiązanych partii
-            hasDetailedData: false,
-            palletsCount: 0,
-            pallets: [],
-            boxesCount: 0,
-            boxes: { fullBox: null, partialBox: null },
-            linkedBatches: item.linkedBatches || [],
-            inventoryData: null
-          });
-        }
-      }
-
-      setItemsWeightDetails(weightDetails);
-      setWeightSummary({
-        totalWeight: Number(totalWeight.toFixed(3)),
-        totalPallets,
-        totalBoxes,
-        itemsBreakdown: weightDetails
-      });
-
-    } catch (error) {
-      console.error('Błąd podczas obliczania szczegółów wag:', error);
-      showError(t('details.errors.loadingWeights'));
-    } finally {
-      setWeightDetailsLoading(false);
-    }
-  };
-  
-  // Funkcja pobierania odpowiedzi formularzy załadunku dla danego CMR
-  const fetchLoadingFormResponses = async (cmrNumber) => {
-    if (!cmrNumber) return;
-    
-    setLoadingFormResponsesLoading(true);
-    try {
-      logger.log('🔍 Searching for loading forms with CMR number:', cmrNumber);
-      
-      // Sprawdź różne warianty numeru CMR
-      const cmrVariants = [
-        cmrNumber,                    // Oryginalny numer (np. "CMR 08-07-2025 COR")
-        cmrNumber.replace('CMR ', ''), // Bez prefiksu (np. "08-07-2025 COR")
-        cmrNumber.replace(' COR', ''), // Bez sufiksu (np. "CMR 08-07-2025")
-        cmrNumber.replace('CMR ', '').replace(' COR', ''), // Tylko data (np. "08-07-2025")
-        `CMR ${cmrNumber}`,          // Z dodatkowym prefiksem (na wszelki wypadek)
-      ].filter((variant, index, array) => array.indexOf(variant) === index); // Usuń duplikaty
-      
-      logger.log('🔍 Checking CMR variants:', cmrVariants);
-      
-      // Jedno zapytanie 'in' zamiast pętli po wariantach
-      const loadingQuery = query(
-        collection(db, 'Forms/ZaladunekTowaru/Odpowiedzi'), 
-        where('cmrNumber', 'in', cmrVariants)
-      );
-      const loadingSnapshot = await getDocs(loadingQuery);
-      
-      logger.log(`📄 Found ${loadingSnapshot.docs.length} loading form responses for variants:`, cmrVariants);
-      
-      let loadingData = loadingSnapshot.docs.map(doc => {
-        const data = doc.data();
-        logger.log('📝 Processing document:', doc.id, 'with CMR:', data.cmrNumber);
-        return {
-          id: doc.id,
-          ...data,
-          fillDate: data.fillDate?.toDate(),
-          loadingDate: data.loadingDate?.toDate(),
-          formType: 'loading'
-        };
-      });
-      
-      // Jeśli nadal nic nie znaleziono, pokaż wszystkie numery CMR w kolekcji dla debugowania
-      if (loadingData.length === 0) {
-        logger.log('🔍 No results found for any variant. Let me check all CMR numbers in the collection...');
-        const allDocsQuery = query(collection(db, 'Forms/ZaladunekTowaru/Odpowiedzi'));
-        const allDocsSnapshot = await getDocs(allDocsQuery);
-        logger.log('📋 All CMR numbers in collection:');
-        allDocsSnapshot.docs.forEach((doc, index) => {
-          const data = doc.data();
-          logger.log(`${index + 1}. CMR: "${data.cmrNumber}" (type: ${typeof data.cmrNumber})`);
-        });
-      }
-
-      // Sortowanie odpowiedzi od najnowszych (według daty wypełnienia)
-      const sortByFillDate = (a, b) => {
-        const dateA = a.fillDate || new Date(0);
-        const dateB = b.fillDate || new Date(0);
-        return new Date(dateB) - new Date(dateA); // Od najnowszych
-      };
-
-      setLoadingFormResponses(loadingData.sort(sortByFillDate));
-      logger.log('✅ Set', loadingData.length, 'loading form responses');
-    } catch (error) {
-      console.error('Błąd podczas pobierania odpowiedzi formularzy załadunku:', error);
-      setLoadingFormResponses([]);
-    } finally {
-      setLoadingFormResponsesLoading(false);
-    }
-  };
-  
-  const fetchCmrDocument = async () => {
-    try {
-      setLoading(true);
-      const data = await getCmrDocumentById(id);
-      setCmrData(data);
-      
-      // Oblicz szczegóły wag dla pozycji CMR
-      if (data && data.items && data.items.length > 0) {
-        await calculateItemsWeightDetails(data.items);
-      }
-      
-      // Pobierz odpowiedzi formularzy załadunku dla tego CMR
-      if (data && data.cmrNumber) {
-        logger.log('🚛 CMR Document loaded with number:', data.cmrNumber, '(type:', typeof data.cmrNumber, ')');
-        fetchLoadingFormResponses(data.cmrNumber);
-      } else {
-        logger.log('❌ No CMR number found in document data:', data);
-      }
-      
-      // Debug: Wyświetl strukturę danych CMR (można usunąć po testach)
-      logger.log('CMR data:', data);
-      logger.log('linkedOrderId:', data.linkedOrderId);
-      logger.log('linkedOrderIds:', data.linkedOrderIds);
-      logger.log('linkedOrderNumbers:', data.linkedOrderNumbers);
-      
-      // Pobierz dane powiązanych zamówień klienta
-      const ordersToFetch = [];
-      
-      // Sprawdź nowy format (wiele zamówień)
-      if (data.linkedOrderIds && Array.isArray(data.linkedOrderIds) && data.linkedOrderIds.length > 0) {
-        ordersToFetch.push(...data.linkedOrderIds);
-      }
-      
-      // Sprawdź stary format (pojedyncze zamówienie) - dla kompatybilności wstecznej
-      if (data.linkedOrderId && !ordersToFetch.includes(data.linkedOrderId)) {
-        ordersToFetch.push(data.linkedOrderId);
-      }
-      
-      // Pobierz dane wszystkich powiązanych zamówień
-      if (ordersToFetch.length > 0) {
-        try {
-          const orderPromises = ordersToFetch.map(orderId => getOrderById(orderId));
-          const orderResults = await Promise.allSettled(orderPromises);
-          
-          const validOrders = orderResults
-            .filter(result => result.status === 'fulfilled' && result.value !== null)
-            .map(result => result.value);
-          
-          setLinkedOrders(validOrders);
-          
-          // Loguj błędy dla zamówień, których nie udało się pobrać
-          orderResults.forEach((result, index) => {
-            if (result.status === 'rejected') {
-              console.error(`Błąd podczas pobierania zamówienia ${ordersToFetch[index]}:`, result.reason);
-            }
-          });
-        } catch (orderError) {
-          console.error('Błąd podczas pobierania powiązanych zamówień:', orderError);
-          // Nie przerywamy procesu - CMR może istnieć bez powiązanych zamówień
-        }
-      }
-    } catch (error) {
-      console.error('Błąd podczas pobierania dokumentu CMR:', error);
-      showError(t('details.errors.loadingDocument'));
-      navigate('/inventory/cmr');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const handleEdit = () => {
-    logger.log('handleEdit wywołane z id:', id);
-    logger.log('Próba nawigacji do:', `/inventory/cmr/${id}/edit`);
-    navigate(`/inventory/cmr/${id}/edit`);
-  };
-  
-  const handleBack = () => {
-    navigate('/inventory/cmr');
-  };
-
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
-  };
-  
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleBoxLabel = () => {
-    if (itemsWeightDetails.length === 0) {
-      showError('Brak danych do wygenerowania etykiet kartonów');
-      return;
-    }
-    
-    // Filtruj tylko pozycje które mają kartony
-    const itemsWithBoxes = itemsWeightDetails.filter(item => 
-      item.hasDetailedData && item.hasBoxes && item.boxesCount > 0
-    );
-    
-    if (itemsWithBoxes.length === 0) {
-      showError('Żadna z pozycji nie ma przypisanych kartonów');
-      return;
-    }
-    
-    const labels = LabelGenerator.generateBoxLabels(cmrData, itemsWithBoxes);
-    setCurrentLabels(labels);
-    setCurrentLabelType('box');
-    setLabelsDialogOpen(true);
-  };
-
-  const handlePalletLabel = () => {
-    if (itemsWeightDetails.length === 0) {
-      showError('Brak danych do wygenerowania etykiet palet');
-      return;
-    }
-    const labels = LabelGenerator.generatePalletLabels(cmrData, itemsWeightDetails);
-    setCurrentLabels(labels);
-    setCurrentLabelType('pallet');
-    setLabelsDialogOpen(true);
-  };
-
-  const handleLabelsDialogClose = () => {
-    setLabelsDialogOpen(false);
-    setCurrentLabels([]);
-    setCurrentLabelType('unknown');
-  };
-  
   const handleGenerateDeliveryNotes = async () => {
     try {
       if (!cmrData.items || cmrData.items.length === 0) {
@@ -699,7 +235,7 @@ const CmrDetailsPage = () => {
             attachedDocuments: newAttachedDocs,
             deliveryNotes: dnMetadata
           }, currentUser.uid);
-          setCmrData(prev => ({
+          data.setCmrData(prev => ({
             ...prev,
             attachedDocuments: newAttachedDocs,
             deliveryNotes: dnMetadata
@@ -712,7 +248,7 @@ const CmrDetailsPage = () => {
       const pdfBlob = pdf.output('blob');
       try {
         await uploadCmrDeliveryNote(pdfBlob, id, currentUser.uid, filename);
-        fetchDeliveryNoteAttachments();
+        attachmentHook.fetchDeliveryNoteAttachments();
       } catch (uploadErr) {
         console.error('Failed to save DN attachment:', uploadErr);
       }
@@ -731,1197 +267,6 @@ const CmrDetailsPage = () => {
     }
   };
 
-
-  const handleGenerateOfficialCmr = async () => {
-    try {
-      // Opcje optymalizacji PDF dla różnych scenariuszy
-      // System automatycznie wykrywa typ urządzenia i dostosowuje parametry:
-      // - Mobile (telefony): 150 DPI, jakość JPEG 75% → rozmiar ~3-5MB
-      // - Tablet: 180 DPI, jakość JPEG 85% → rozmiar ~5-8MB  
-      // - Desktop: 200 DPI, jakość JPEG 90% → rozmiar ~8-12MB
-      // (poprzednie ustawienia: 300 DPI, PNG → rozmiar 160MB)
-      const pdfOptimizationOptions = {
-        // Automatyczna detekcja urządzenia (domyślnie)
-        // dpi: 150,        // Można nadpisać DPI ręcznie (50-300)
-        // quality: 0.85,   // Można nadpisać jakość JPEG ręcznie (0.1-1.0)
-      };
-
-      // Lista tła dla każdej kopii
-      const backgroundTemplates = [
-        'cmr-template-1.svg',
-        'cmr-template-2.svg', 
-        'cmr-template-3.svg',
-        'cmr-template-4.svg'
-      ];
-
-      const generatedDocuments = [];
-
-      // Pobierz główny szablon z polami formularza
-      const mainTemplateResponse = await fetch('/templates/cmr-template.svg');
-      if (!mainTemplateResponse.ok) {
-        throw new Error('Nie udało się pobrać głównego szablonu CMR');
-      }
-      const mainTemplateText = await mainTemplateResponse.text();
-
-      // Generuj każdy z 4 szablonów
-      for (let i = 0; i < backgroundTemplates.length; i++) {
-        const backgroundTemplateName = backgroundTemplates[i];
-        const copyNumber = i + 1;
-
-        try {
-          // Pobierz szablon tła
-          const bgResponse = await fetch(`/templates/cmr/${backgroundTemplateName}`);
-          if (!bgResponse.ok) {
-            throw new Error(`Nie udało się pobrać tła ${backgroundTemplateName}`);
-          }
-          const bgImageBlob = await bgResponse.blob();
-          
-          // Konwertuj tło na base64
-          const reader = new FileReader();
-          const base64BgData = await new Promise((resolve, reject) => {
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(bgImageBlob);
-          });
-
-          // Skopiuj główny szablon i zastąp tło
-          let svgText = mainTemplateText;
-          
-          // Zastąp tło w szablonie
-          svgText = svgText.replace(
-            '<rect id="template-background" width="793.33331" height="1122.6667" fill="white" />',
-            `<image id="template-background" href="${base64BgData}" width="793.33331" height="1122.6667" />`
-          );
-
-          // Utworz parser DOM dla SVG
-          const parser = new DOMParser();
-          const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
-          
-          // Sprawdź, czy szablon został poprawnie sparsowany
-          const parseError = svgDoc.querySelector('parsererror');
-          if (parseError) {
-            console.error(`Błąd parsowania SVG dla szablonu ${copyNumber}:`, parseError);
-            throw new Error(`Nie udało się przetworzyć szablonu CMR ${copyNumber}`);
-          }
-          
-          // Funkcja do dodawania tekstu do pola formularza
-          const addTextToField = (svgDoc, fieldId, text, fontSize = '7px', fontWeight = 'normal') => {
-            if (!text) return;
-            
-            // Znajdź pole formularza po ID
-            const field = svgDoc.getElementById(fieldId);
-            if (!field) {
-              logger.warn(`Nie znaleziono pola o ID: ${fieldId}`);
-              return;
-            }
-            
-            // Pobierz współrzędne i wymiary pola
-            const x = parseFloat(field.getAttribute('x')) + 5;
-            const y = parseFloat(field.getAttribute('y')) + 15;
-            const width = parseFloat(field.getAttribute('width'));
-            const height = parseFloat(field.getAttribute('height'));
-            
-            // Utwórz element tekstowy
-            const textElement = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            textElement.setAttribute('x', x);
-            textElement.setAttribute('y', y);
-            textElement.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
-            textElement.setAttribute('font-size', fontSize);
-            textElement.setAttribute('font-weight', fontWeight);
-            textElement.setAttribute('fill', 'black');
-            
-            // Podziel tekst na linie
-            const lines = text.toString().split('\n');
-            
-            // Dostosowanie wysokości linii w zależności od pola
-            let lineHeight;
-            if (fieldId === 'field-goods' || fieldId === 'field-packages' ||
-                fieldId === 'field-weight' || fieldId === 'field-volume' ||
-                fieldId === 'field-statistical-number' || fieldId === 'field-marks' ||
-                fieldId === 'field-packing') {
-              lineHeight = parseInt(fontSize) * 1.6; // Wyważona wysokość dla pól w tabeli towarów - kompromis między zwartym a czytelnym
-            } else {
-              lineHeight = parseInt(fontSize) * 1.2; // Standardowa wysokość dla pozostałych pól
-            }
-            
-            lines.forEach((line, index) => {
-              // Jeśli tekst jest zbyt długi dla pola, podziel go na kilka linii
-              const maxCharsPerLine = Math.floor(width / (parseInt(fontSize) * 0.6));
-              let currentLine = line;
-              let lineCount = 0;
-              
-              while (currentLine.length > 0) {
-                const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-                tspan.setAttribute('x', x);
-                
-                if (currentLine.length <= maxCharsPerLine) {
-                  tspan.textContent = currentLine;
-                  tspan.setAttribute('y', y + (index * lineHeight) + (lineCount * lineHeight));
-                  textElement.appendChild(tspan);
-                  break;
-                } else {
-                  // Znajdź ostatnią spację przed maxCharsPerLine
-                  let cutIndex = maxCharsPerLine;
-                  while (cutIndex > 0 && currentLine.charAt(cutIndex) !== ' ') {
-                    cutIndex--;
-                  }
-                  
-                  // Jeśli nie znaleziono spacji, przetnij po prostu po maxCharsPerLine znaków
-                  if (cutIndex === 0) {
-                    cutIndex = maxCharsPerLine;
-                  }
-                  
-                  const linePart = currentLine.substring(0, cutIndex);
-                  tspan.textContent = linePart;
-                  tspan.setAttribute('y', y + (index * lineHeight) + (lineCount * lineHeight));
-                  textElement.appendChild(tspan);
-                  
-                  currentLine = currentLine.substring(cutIndex).trim();
-                  lineCount++;
-                  
-                  // Sprawdź, czy nie wychodzimy poza wysokość pola
-                  if (y + (index * lineHeight) + (lineCount * lineHeight) > y + height) {
-                    break;
-                  }
-                }
-              }
-            });
-            
-            // Dodaj element tekstowy do dokumentu
-            const formFields = svgDoc.getElementById('form-fields');
-            if (formFields) {
-              formFields.appendChild(textElement);
-            } else {
-              logger.warn('Nie znaleziono grupy form-fields w dokumencie SVG');
-              svgDoc.documentElement.appendChild(textElement);
-            }
-          };
-          
-          // Funkcja do mapowania danych na pola w dokumencie
-          const fillDocumentFields = (svgDoc) => {
-            // Formatowanie daty w formie DD.MM.YYYY
-            const formatDateSimple = (date) => {
-              if (!date) return '';
-              
-              // Obsługa timestampu Firestore
-              if (date && typeof date === 'object' && typeof date.toDate === 'function') {
-                date = date.toDate();
-              }
-              
-              let dateObj;
-              if (typeof date === 'string') {
-                dateObj = new Date(date);
-              } else {
-                dateObj = date;
-              }
-              
-              if (isNaN(dateObj.getTime())) {
-                return '';
-              }
-              
-              const day = dateObj.getDate().toString().padStart(2, '0');
-              const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-              const year = dateObj.getFullYear();
-              
-              return `${day}.${month}.${year}`;
-            };
-            
-            // Mapowanie danych CMR na pola w szablonie
-            
-            // Dane nadawcy
-            const senderText = [
-              cmrData.sender,
-              cmrData.senderAddress,
-              `${cmrData.senderPostalCode || ''} ${cmrData.senderCity || ''}`,
-              cmrData.senderCountry
-            ].filter(Boolean).join('\n');
-            addTextToField(svgDoc, 'field-sender', senderText, '7px');
-            
-            // Dane odbiorcy
-            const recipientText = [
-              cmrData.recipient,
-              cmrData.recipientAddress
-            ].filter(Boolean).join('\n');
-            addTextToField(svgDoc, 'field-recipient', recipientText, '7px');
-            
-            // Miejsce przeznaczenia
-            addTextToField(svgDoc, 'field-destination', cmrData.deliveryPlace, '7px');
-            
-            // Miejsce i data załadowania
-            const loadingText = `${cmrData.loadingPlace || ''}\n${formatDateSimple(cmrData.loadingDate) || ''}`;
-            addTextToField(svgDoc, 'field-loading-place-date', loadingText, '7px');
-            
-            // Miejsce wystawienia (adres z miejsca załadowania)
-            addTextToField(svgDoc, 'field-issue-place-address', cmrData.loadingPlace || '', '7px');
-            
-            // Załączone dokumenty
-            addTextToField(svgDoc, 'field-documents', cmrData.attachedDocuments, '7px');
-            
-            // Numery rejestracyjne (dodane w dwóch miejscach)
-            const vehicleRegText = `${cmrData.vehicleInfo?.vehicleRegistration || ''} / ${cmrData.vehicleInfo?.trailerRegistration || ''}`;
-            addTextToField(svgDoc, 'field-vehicle-registration', vehicleRegText, '7px');
-            addTextToField(svgDoc, 'field-vehicle-registration-2', vehicleRegText, '7px');
-            
-            // Dane o towarach
-            if (cmrData.items && cmrData.items.length > 0) {
-              const items = cmrData.items;
-              
-              // Cechy i numery (pole 6)
-              let marksText = items.map((item, index) =>
-                index === 0 ? item.id || '' : '\n\n' + (item.id || '')
-              ).join('');
-              addTextToField(svgDoc, 'field-marks', marksText, '6px');
-
-              // Ilość sztuk (pole 7) - główna ilość
-              let packagesText = items.map((item, index) =>
-                index === 0 ? item.quantity?.toString() || '' : '\n\n' + (item.quantity?.toString() || '')
-              ).join('');
-              addTextToField(svgDoc, 'field-packages', packagesText, '6px');
-
-              // Kontekst ilości zamówionej - mniejsza czcionka, italic, pod główną ilością
-              const packagesField = svgDoc.getElementById('field-packages');
-              if (packagesField) {
-                const baseX = parseFloat(packagesField.getAttribute('x')) + 5;
-                const baseY = parseFloat(packagesField.getAttribute('y')) + 15;
-                const itemLineHeight = parseInt('6') * 1.6;
-
-                items.forEach((item, index) => {
-                  if (!item.orderItemTotalQuantity) return;
-                  const contextText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                  contextText.setAttribute('x', baseX);
-                  contextText.setAttribute('y', baseY + (index * 2 * itemLineHeight) + itemLineHeight);
-                  contextText.setAttribute('font-family', 'Arial, Helvetica, sans-serif');
-                  contextText.setAttribute('font-size', '4.5px');
-                  contextText.setAttribute('font-style', 'italic');
-                  contextText.setAttribute('fill', '#555');
-                  contextText.textContent = `(z ${item.orderItemTotalQuantity} zam.)`;
-                  const formFields = svgDoc.getElementById('form-fields');
-                  if (formFields) formFields.appendChild(contextText);
-                });
-              }
-
-              // Sposób opakowania (pole 8)
-              let packingText = items.map((item, index) =>
-                index === 0 ? item.unit || '' : '\n\n' + (item.unit || '')
-              ).join('');
-              addTextToField(svgDoc, 'field-packing', packingText, '6px');
-
-              // Rodzaj towaru (pole 9)
-              let goodsText = items.map((item, index) =>
-                index === 0 ? item.description || '' : '\n\n' + (item.description || '')
-              ).join('');
-              addTextToField(svgDoc, 'field-goods', goodsText, '6px');
-
-              // Numer Statystyczny (pole 10) - numer CO z którego pochodzi pozycja
-              let statisticalNumberText = items.map((item, index) => {
-                let coNumber = '';
-
-                // Sprawdź czy pozycja ma informacje o zamówieniu z którego pochodzi
-                if (item.originalOrderItem && item.originalOrderItem.orderNumber) {
-                  coNumber = item.originalOrderItem.orderNumber;
-                } else if (item.orderNumber) {
-                  coNumber = item.orderNumber;
-                } else {
-                  // Fallback - użyj pierwszego numeru z linkedOrderNumbers jeśli dostępny
-                  if (cmrData.linkedOrderNumbers && cmrData.linkedOrderNumbers.length > 0) {
-                    coNumber = cmrData.linkedOrderNumbers[0];
-                  } else if (cmrData.linkedOrders && cmrData.linkedOrders.length > 0) {
-                    coNumber = cmrData.linkedOrders[0].orderNumber || '';
-                  }
-                }
-
-                logger.log(`CMR pozycja ${index + 1}: towar="${item.description}", CO="${coNumber}"`);
-                return index === 0 ? coNumber : '\n\n' + coNumber;
-              }).join('');
-              addTextToField(svgDoc, 'field-statistical-number', statisticalNumberText, '6.5px');
-
-              // Waga brutto (pole 11)
-              let weightsText = items.map((item, index) =>
-                index === 0 ? item.weight?.toString() || '' : '\n\n' + (item.weight?.toString() || '')
-              ).join('');
-              addTextToField(svgDoc, 'field-weight', weightsText, '6.5px');
-
-              // Objętość (pole 12)
-              let volumesText = items.map((item, index) =>
-                index === 0 ? item.volume?.toString() || '' : '\n\n' + (item.volume?.toString() || '')
-              ).join('');
-              addTextToField(svgDoc, 'field-volume', volumesText, '6.5px');
-            }
-            
-            // Dane przewoźnika
-            const carrierText = [
-              cmrData.carrier,
-              cmrData.carrierAddress,
-              `${cmrData.carrierPostalCode || ''} ${cmrData.carrierCity || ''}`,
-              cmrData.carrierCountry
-            ].filter(Boolean).join('\n');
-            addTextToField(svgDoc, 'field-carrier', carrierText, '7px');
-            
-            // Zastrzeżenia i uwagi
-            addTextToField(svgDoc, 'field-reservations', cmrData.reservations, '7px');
-            
-            // Instrukcje nadawcy
-            addTextToField(svgDoc, 'field-instructions', cmrData.instructionsFromSender, '7px');
-            
-            // Postanowienia specjalne
-            addTextToField(svgDoc, 'field-special-agreements', cmrData.specialAgreements, '7px');
-            
-            // Numer CMR w środkowej części dokumentu
-            addTextToField(svgDoc, 'field-cmr-number-middle', `${cmrData.cmrNumber || ''}`, '7px', 'bold');
-            
-            // Informacje do zapłaty (pole payment)
-            const paymentText = cmrData.paymentMethod === 'sender' ? 'Płaci nadawca' : 
-                               cmrData.paymentMethod === 'recipient' ? 'Płaci odbiorca' : '';
-            addTextToField(svgDoc, 'field-payment', paymentText, '7px');
-            addTextToField(svgDoc, 'field-payer-bottom', paymentText, '7px');
-            
-            // Pełny numer CMR w dolnej części
-            addTextToField(svgDoc, 'field-full-cmr-number', `${cmrData.cmrNumber}`, '7px', 'bold');
-            
-            // Miejsce i data wystawienia
-            const formatDateSimple2 = (date) => {
-              if (!date) return '';
-              
-              // Obsługa timestampu Firestore
-              if (date && typeof date === 'object' && typeof date.toDate === 'function') {
-                date = date.toDate();
-              }
-              
-              let dateObj;
-              if (typeof date === 'string') {
-                dateObj = new Date(date);
-              } else {
-                dateObj = date;
-              }
-              
-              if (isNaN(dateObj.getTime())) {
-                return '';
-              }
-              
-              const day = dateObj.getDate().toString().padStart(2, '0');
-              const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-              const year = dateObj.getFullYear();
-              
-              return `${day}.${month}.${year}`;
-            };
-            
-            const issuePlaceDate = `${cmrData.issuePlace || ''} ${formatDateSimple2(cmrData.issueDate) || ''}`;
-            addTextToField(svgDoc, 'field-issue-place-date', issuePlaceDate, '7px');
-          };
-          
-          // Wypełnij pola w obecnym szablonie
-          fillDocumentFields(svgDoc);
-          
-          // Przekształć dokument z powrotem do tekstu
-          const serializer = new XMLSerializer();
-          const updatedSvgString = serializer.serializeToString(svgDoc);
-          
-          // Dodaj do listy wygenerowanych dokumentów
-          generatedDocuments.push({
-            svgString: updatedSvgString,
-            copyNumber: copyNumber,
-            backgroundTemplate: backgroundTemplateName
-          });
-          
-        } catch (templateError) {
-          console.error(`Błąd podczas generowania szablonu ${copyNumber}:`, templateError);
-          showError(`Nie udało się wygenerować kopii ${copyNumber}: ${templateError.message}`);
-        }
-      }
-      
-      // Funkcja do konwersji SVG na obraz z optymalizacją dla urządzeń mobilnych
-      const convertSvgToImage = async (svgString, options = {}) => {
-        return new Promise((resolve, reject) => {
-          try {
-            // Detekcja urządzenia mobilnego
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const isTablet = /iPad|Android(?=.*Mobile)/i.test(navigator.userAgent);
-            
-            // Konfiguracja DPI w zależności od urządzenia
-            let dpi;
-            if (isMobile && !isTablet) {
-              dpi = 150; // Telefony - niższa rozdzielczość dla szybkości
-            } else if (isTablet) {
-              dpi = 180; // Tablety - średnia rozdzielczość
-            } else {
-              dpi = 200; // Desktop - wyższa rozdzielczość, ale nie 300dpi
-            }
-            
-            // Możliwość nadpisania DPI przez opcje
-            if (options.dpi) {
-              dpi = options.dpi;
-            }
-            
-            // Oblicz rozmiar canvas (A4: 210x297mm)
-            const pxPerMm = dpi / 25.4; // Konwersja DPI na piksele na milimetr
-            const canvasWidth = Math.round(210 * pxPerMm);
-            const canvasHeight = Math.round(297 * pxPerMm);
-            
-            logger.log(`CMR PDF Optymalizacja: Urządzenie: ${isMobile ? 'Mobile' : isTablet ? 'Tablet' : 'Desktop'}, DPI: ${dpi}, Rozmiar: ${canvasWidth}x${canvasHeight}`);
-            
-            // Utwórz element Canvas z optymalizowanym rozmiarem
-            const canvas = document.createElement('canvas');
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-            const context = canvas.getContext('2d');
-            
-            // Ustaw wysoką jakość renderowania
-            context.imageSmoothingEnabled = true;
-            context.imageSmoothingQuality = 'high';
-            
-            // Utwórz tymczasowy obraz
-            const img = new Image();
-            
-            // Obsługa zakończenia ładowania obrazu
-            img.onload = function() {
-              // Wyczyść kanwę białym tłem i narysuj obraz
-              context.fillStyle = 'white';
-              context.fillRect(0, 0, canvas.width, canvas.height);
-              context.drawImage(img, 0, 0, canvas.width, canvas.height);
-              
-              // Konfiguracja jakości kompresji JPEG
-              let quality;
-              if (isMobile && !isTablet) {
-                quality = 0.75; // Telefony - wyższa kompresja dla mniejszego rozmiaru
-              } else if (isTablet) {
-                quality = 0.85; // Tablety - średnia kompresja
-              } else {
-                quality = 0.90; // Desktop - niższa kompresja dla lepszej jakości
-              }
-              
-              // Możliwość nadpisania jakości przez opcje
-              if (options.quality) {
-                quality = options.quality;
-              }
-              
-              // Konwertuj Canvas do obrazu JPEG z kompresją
-              const imgData = canvas.toDataURL('image/jpeg', quality);
-              
-              // Logowanie informacji o optymalizacji
-              const originalSize = Math.round(canvasWidth * canvasHeight * 4 / 1024 / 1024); // MB (RGBA)
-              logger.log(`CMR PDF: Optymalizacja zakończona. Szacowany rozmiar przed kompresją: ~${originalSize}MB, Jakość JPEG: ${Math.round(quality * 100)}%`);
-              
-              resolve(imgData);
-            };
-            
-            // Obsługa błędu ładowania obrazu
-            img.onerror = function(error) {
-              console.error('Błąd ładowania SVG:', error);
-              reject(new Error('Nie udało się załadować obrazu SVG'));
-            };
-            
-            // Ustaw źródło obrazu na kod SVG (zakodowany Base64)
-            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
-          } catch (error) {
-            console.error('Błąd konwersji SVG:', error);
-            reject(new Error('Błąd podczas konwersji SVG'));
-          }
-        });
-      };
-      
-      // Przygotuj dokumenty do drukowania
-      try {
-        const printImages = [];
-        
-        // Konwertuj wszystkie dokumenty na obrazy z optymalizacją
-        logger.log(`🔄 CMR PDF: Rozpoczynam konwersję ${generatedDocuments.length} dokumentów z optymalizacją dla urządzeń mobilnych`);
-        
-        for (let i = 0; i < generatedDocuments.length; i++) {
-          const docData = generatedDocuments[i];
-          try {
-            logger.log(`📄 CMR PDF: Konwersja kopii ${docData.copyNumber} (${i + 1}/${generatedDocuments.length})`);
-            const imgData = await convertSvgToImage(docData.svgString, pdfOptimizationOptions);
-            printImages.push(imgData);
-          } catch (imageError) {
-            console.error(`❌ Błąd konwersji kopii ${docData.copyNumber} do obrazu:`, imageError);
-          }
-        }
-        
-        logger.log(`✅ CMR PDF: Konwersja zakończona. Przygotowano ${printImages.length} obrazów`);
-        
-        if (printImages.length > 0) {
-          // Szacowanie rozmiaru po optymalizacji
-          const estimatedSizePerImage = printImages[0].length / 1024 / 1024; // MB
-          const totalEstimatedSize = estimatedSizePerImage * printImages.length;
-          logger.log(`📊 CMR PDF: Szacowany rozmiar po optymalizacji: ~${totalEstimatedSize.toFixed(1)}MB (${estimatedSizePerImage.toFixed(1)}MB na stronę)`);
-        }
-        
-        if (printImages.length === 0) {
-          throw new Error('Nie udało się przygotować żadnych obrazów do drukowania');
-        }
-        
-        // Utwórz nowe okno do drukowania
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) {
-          throw new Error('Nie udało się otworzyć okna drukowania. Sprawdź ustawienia blokowania popup.');
-        }
-        
-        // Przygotuj HTML do drukowania
-        const htmlContent = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>CMR ${cmrData.cmrNumber || 'dokument'} - Drukowanie</title>
-            <style>
-              @page {
-                size: A4;
-                margin: 0;
-              }
-              
-              * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-              }
-              
-              body {
-                font-family: Arial, sans-serif;
-                background: white;
-              }
-              
-              .page {
-                width: 210mm;
-                height: 297mm;
-                page-break-after: always;
-                position: relative;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              }
-              
-              .page:last-child {
-                page-break-after: avoid;
-              }
-              
-              .page img {
-                width: 100%;
-                height: 100%;
-                object-fit: contain;
-              }
-              
-              @media print {
-                body {
-                  -webkit-print-color-adjust: exact;
-                  print-color-adjust: exact;
-                }
-                
-                .page {
-                  page-break-inside: avoid;
-                }
-              }
-            </style>
-          </head>
-          <body>
-            ${printImages.map((imgData, index) => `
-              <div class="page">
-                <img src="${imgData}" alt="CMR Kopia ${index + 1}" />
-              </div>
-            `).join('')}
-          </body>
-          </html>
-        `;
-        
-        // Wpisz HTML do okna drukowania
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
-        
-        // Poczekaj na załadowanie obrazów i uruchom drukowanie
-        printWindow.onload = () => {
-          setTimeout(() => {
-            printWindow.focus();
-            printWindow.print();
-            
-            // Opcjonalnie zamknij okno po drukowaniu (niektóre przeglądarki to robią automatycznie)
-            printWindow.onafterprint = () => {
-              printWindow.close();
-            };
-          }, 1000); // Krótkie opóźnienie aby obrazy się załadowały
-        };
-        
-        showSuccess(`✅ Przygotowano ${printImages.length} kopii dokumentu CMR do drukowania (zoptymalizowano dla urządzeń mobilnych)`);
-        
-      } catch (printError) {
-        console.error('Błąd podczas przygotowywania do drukowania:', printError);
-        showError('Nie udało się przygotować dokumentów do drukowania: ' + printError.message);
-        
-        // Fallback - spróbuj wygenerować PDF do pobrania
-        try {
-          const { jsPDF } = await import('jspdf');
-          
-          const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4',
-            compress: true,    // Włącz kompresję PDF
-            precision: 2       // Ogranicz precyzję do 2 miejsc po przecinku
-          });
-          
-          let isFirstPage = true;
-          
-          logger.log(`🔄 CMR PDF Fallback: Generowanie PDF z ${generatedDocuments.length} stronami z optymalizacją`);
-          
-          for (let i = 0; i < generatedDocuments.length; i++) {
-            const docData = generatedDocuments[i];
-            try {
-              logger.log(`📄 CMR PDF Fallback: Przetwarzanie kopii ${docData.copyNumber} (${i + 1}/${generatedDocuments.length})`);
-              const imgData = await convertSvgToImage(docData.svgString, pdfOptimizationOptions);
-              
-              if (!isFirstPage) {
-                pdf.addPage();
-              }
-              
-              // Używamy JPEG zamiast PNG dla mniejszego rozmiaru pliku
-              pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
-              isFirstPage = false;
-              
-            } catch (imageError) {
-              console.error(`❌ Błąd konwersji kopii ${docData.copyNumber}:`, imageError);
-            }
-          }
-          
-          if (!isFirstPage) {
-            pdf.save(`CMR-${cmrData.cmrNumber || 'dokument'}-wszystkie-kopie.pdf`);
-            showSuccess('✅ Wygenerowano zoptymalizowany plik PDF (rozmiar zmniejszony z ~160MB do ~3-12MB)');
-          }
-          
-        } catch (fallbackError) {
-          console.error('Błąd fallback PDF:', fallbackError);
-          showError('Nie udało się przygotować dokumentów w żaden sposób');
-        }
-      }
-
-    } catch (error) {
-      console.error('Błąd podczas generowania dokumentu CMR:', error);
-      showError('Nie udało się wygenerować dokumentu CMR: ' + error.message);
-    }
-  };
-  
-  // Funkcja sprawdzająca czy można zmienić status na transport
-  const handleTransportValidation = (newStatus) => {
-    // Sprawdź czy to zmiana na status "W transporcie"
-    if (newStatus === CMR_STATUSES.IN_TRANSIT) {
-      // Sprawdź czy istnieją odpowiedzi z formularzy załadunku
-      if (loadingFormResponses.length === 0) {
-        showError(t('details.errors.cannotStartTransport'));
-        return;
-      }
-      
-      // Wyświetl dialog z odpowiedziami z formularza przed zmianą statusu
-      setPendingStatusChange(newStatus);
-      setLoadingFormValidationDialogOpen(true);
-    } else {
-      // Dla innych statusów, wykonaj bezpośrednio zmianę
-      executeStatusChange(newStatus);
-    }
-  };
-
-  const executeStatusChange = async (newStatus) => {
-    try {
-      const result = await updateCmrStatus(id, newStatus, currentUser.uid);
-      
-      // Sprawdź czy zmiana statusu zawiera informacje o rezerwacjach
-      if (newStatus === CMR_STATUSES.IN_TRANSIT && result.reservationResult) {
-        const { reservationResult } = result;
-        
-        let message = `Status dokumentu CMR zmieniony na: ${newStatus}.`;
-        
-        if (reservationResult.success) {
-          message += ` Pomyślnie zarezerwowano wszystkie partie.`;
-          
-          if (reservationResult.reservationResults && reservationResult.reservationResults.length > 0) {
-            const details = reservationResult.reservationResults.map(res => 
-              `• ${res.itemName}: ${res.quantity} ${res.unit} z partii ${res.batchNumber}`
-            ).join('\n');
-            
-            message += `\n\nSzczegóły rezerwacji:\n${details}`;
-          }
-          
-          showSuccess(message);
-        } else {
-          message += ` Wystąpiły problemy z rezerwacją partii.`;
-          
-          if (reservationResult.errors && reservationResult.errors.length > 0) {
-            const errorDetails = reservationResult.errors.map(err => 
-              `• ${err.itemName} (partia ${err.batchNumber}): ${err.error}`
-            ).join('\n');
-            
-            message += `\n\nBłędy:\n${errorDetails}`;
-          }
-          
-          if (reservationResult.reservationResults && reservationResult.reservationResults.length > 0) {
-            const successDetails = reservationResult.reservationResults.map(res => 
-              `• ${res.itemName}: ${res.quantity} ${res.unit} z partii ${res.batchNumber}`
-            ).join('\n');
-            
-            message += `\n\nPomyślne rezerwacje:\n${successDetails}`;
-          }
-          
-          showError(message);
-        }
-        
-        // Dodatkowe informacje o statystykach
-        if (reservationResult.statistics) {
-          const stats = reservationResult.statistics;
-          logger.log(`Statystyki rezerwacji: ${stats.successCount} sukces(ów), ${stats.errorCount} błąd(ów) z ${stats.totalAttempted} prób`);
-        }
-      } 
-      // Sprawdź czy zmiana statusu zawiera informacje o dostarczeniu
-      else if (newStatus === CMR_STATUSES.DELIVERED && result.deliveryResult) {
-        const { deliveryResult } = result;
-        
-        let message = `Status dokumentu CMR zmieniony na: ${newStatus}.`;
-        
-        if (deliveryResult.success) {
-          message += ` Pomyślnie przetworzono dostarczenie - anulowano rezerwacje i wydano produkty.`;
-          
-          if (deliveryResult.deliveryResults && deliveryResult.deliveryResults.length > 0) {
-            const details = deliveryResult.deliveryResults.map(res => 
-              `• ${res.itemName}: wydano ${res.quantity} ${res.unit} z partii ${res.batchNumber}`
-            ).join('\n');
-            
-            message += `\n\nSzczegóły wydania:\n${details}`;
-          }
-          
-          showSuccess(message);
-        } else {
-          message += ` Wystąpiły problemy podczas przetwarzania dostarczenia.`;
-          
-          if (deliveryResult.errors && deliveryResult.errors.length > 0) {
-            const errorDetails = deliveryResult.errors.map(err => 
-              `• ${err.itemName} ${err.batchNumber ? `(partia ${err.batchNumber})` : ''}: ${err.error}`
-            ).join('\n');
-            
-            message += `\n\nBłędy:\n${errorDetails}`;
-          }
-          
-          if (deliveryResult.deliveryResults && deliveryResult.deliveryResults.length > 0) {
-            const successDetails = deliveryResult.deliveryResults.map(res => 
-              `• ${res.itemName}: wydano ${res.quantity} ${res.unit} z partii ${res.batchNumber}`
-            ).join('\n');
-            
-            message += `\n\nPomyślne operacje:\n${successDetails}`;
-          }
-          
-          showError(message);
-        }
-        
-        // Dodatkowe informacje o statystykach
-        if (deliveryResult.statistics) {
-          const stats = deliveryResult.statistics;
-          logger.log(`Statystyki dostarczenia: ${stats.successCount} sukces(ów), ${stats.errorCount} błąd(ów) z ${stats.totalAttempted} prób`);
-        }
-      } else {
-        showSuccess(`Status dokumentu CMR zmieniony na: ${newStatus}`);
-      }
-
-      // Auto-generate and save Delivery Notes PDF when status changes to "W transporcie"
-      if (newStatus === CMR_STATUSES.IN_TRANSIT && cmrData.items && cmrData.items.length > 0) {
-        try {
-          const { pdf, filename, text: dnText, metadata: dnMetadata } =
-            await generateAllDeliveryNoteData(cmrData.items, cmrData);
-
-          const pdfBlob = pdf.output('blob');
-          await uploadCmrDeliveryNote(pdfBlob, id, currentUser.uid, filename);
-
-          if (dnText) {
-            const newAttachedDocs = buildAttachedDocumentsWithDN(cmrData.attachedDocuments, dnText);
-            await updateCmrDocument(id, {
-              attachedDocuments: newAttachedDocs,
-              deliveryNotes: dnMetadata
-            }, currentUser.uid);
-          }
-
-          fetchDeliveryNoteAttachments();
-          showSuccess(t('details.deliveryNotes.autoGenerated'));
-        } catch (dnError) {
-          console.error('Error auto-generating Delivery Notes:', dnError);
-        }
-      }
-
-      fetchCmrDocument();
-    } catch (error) {
-      console.error('Błąd podczas zmiany statusu dokumentu CMR:', error);
-      showError('Nie udało się zmienić statusu dokumentu CMR: ' + error.message);
-    }
-  };
-
-  // Funkcja obsługująca potwierdzenie zmiany statusu po wyświetleniu formularzy
-  const handleConfirmStatusChange = () => {
-    setLoadingFormValidationDialogOpen(false);
-    if (pendingStatusChange) {
-      executeStatusChange(pendingStatusChange);
-      setPendingStatusChange(null);
-    }
-  };
-
-  // Funkcja obsługująca anulowanie zmiany statusu
-  const handleCancelStatusChange = () => {
-    setLoadingFormValidationDialogOpen(false);
-    setPendingStatusChange(null);
-  };
-  
-  const formatDate = (date) => {
-    if (!date) return '-';
-    
-    try {
-      let dateObj = date;
-      
-      // Obsługa timestampu Firestore
-      if (date && typeof date === 'object' && typeof date.toDate === 'function') {
-        dateObj = date.toDate();
-      }
-      // Obsługa stringów
-      else if (typeof date === 'string') {
-        dateObj = new Date(date);
-      }
-      // Obsługa obiektów z sekundami (Firestore Timestamp format)
-      else if (date && typeof date === 'object' && date.seconds) {
-        dateObj = new Date(date.seconds * 1000);
-      }
-      
-      // Sprawdź czy data jest poprawna
-      if (isNaN(dateObj.getTime())) {
-        return String(date);
-      }
-      
-      return format(dateObj, 'dd MMMM yyyy', { locale: pl });
-    } catch (e) {
-      logger.warn('Błąd formatowania daty:', e, date);
-      return String(date);
-    }
-  };
-  
-
-  const getPaymentStatusChip = (paymentStatus) => {
-    const status = paymentStatus || CMR_PAYMENT_STATUSES.UNPAID;
-    const label = translatePaymentStatus(status);
-    let color = '#f44336'; // czerwony domyślny dla nie opłacone
-    
-    switch (status) {
-      case CMR_PAYMENT_STATUSES.PAID:
-        color = '#4caf50'; // zielony - opłacone
-        break;
-      case CMR_PAYMENT_STATUSES.UNPAID:
-      default:
-        color = '#f44336'; // czerwony - nie opłacone
-        break;
-    }
-    
-    return (
-      <Chip 
-        label={label} 
-        size="small"
-        clickable
-        onClick={handlePaymentStatusClick}
-        sx={{
-          backgroundColor: color,
-          color: 'white',
-          cursor: 'pointer',
-          '&:hover': {
-            opacity: 0.8
-          }
-        }}
-      />
-    );
-  };
-
-  const handlePaymentStatusClick = () => {
-    setNewPaymentStatus(cmrData?.paymentStatus || CMR_PAYMENT_STATUSES.UNPAID);
-    setPaymentStatusDialogOpen(true);
-  };
-
-  const handlePaymentStatusUpdate = async () => {
-    try {
-      await updateCmrPaymentStatus(id, newPaymentStatus, currentUser.uid);
-      setPaymentStatusDialogOpen(false);
-      
-      // Odśwież dane dokumentu CMR
-      await fetchCmrDocument();
-      
-      showSuccess('Status płatności został zaktualizowany');
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji statusu płatności:', error);
-      showError('Nie udało się zaktualizować statusu płatności');
-    } finally {
-      setNewPaymentStatus('');
-      setPaymentStatusDialogOpen(false);
-    }
-  };
-
-  const handleMigrateCmr = async () => {
-    try {
-      const result = await migrateCmrToNewFormat(id);
-      if (result.success) {
-        showSuccess(result.message);
-        // Odśwież dane CMR po migracji
-        fetchCmrDocument();
-      }
-    } catch (error) {
-      console.error('Błąd podczas migracji CMR:', error);
-      showError('Nie udało się zmigrować CMR do nowego formatu');
-    }
-  };
-
-  const handleMenuOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handlePrintFromMenu = () => {
-    handleMenuClose();
-    handlePrint();
-  };
-
-  const handleMigrateFromMenu = () => {
-    handleMenuClose();
-    handleMigrateCmr();
-  };
-
-  // Funkcja do pobierania załączników
-  const fetchAttachments = async () => {
-    try {
-      setAttachmentsLoading(true);
-      const attachmentsList = await getCmrAttachments(id);
-      setAttachments(attachmentsList);
-    } catch (error) {
-      console.error('Błąd podczas pobierania załączników:', error);
-      showError('Nie udało się pobrać załączników');
-    } finally {
-      setAttachmentsLoading(false);
-    }
-  };
-
-  // Funkcja do przesyłania załącznika
-  const handleAttachmentUpload = async (event) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    const file = files[0];
-    
-    try {
-      setUploadingAttachment(true);
-      const newAttachment = await uploadCmrAttachment(file, id, currentUser.uid);
-      setAttachments(prev => [newAttachment, ...prev]);
-      showSuccess(`Załącznik "${file.name}" został przesłany pomyślnie`);
-      
-      // Jeśli CMR ma status "Dostarczone", automatycznie zmień na "Zakończone"
-      if (cmrData.status === CMR_STATUSES.DELIVERED) {
-        try {
-          const result = await updateCmrStatus(id, CMR_STATUSES.COMPLETED, currentUser.uid);
-          if (result.success) {
-            // Odśwież dane CMR, aby zaktualizować wyświetlany status
-            await fetchCmrDocument();
-            showSuccess('Status CMR został automatycznie zmieniony na "Zakończone"');
-          }
-        } catch (statusError) {
-          console.error('Błąd podczas automatycznej zmiany statusu CMR:', statusError);
-          showError(`Załącznik dodano, ale nie udało się zmienić statusu: ${statusError.message}`);
-        }
-      }
-    } catch (error) {
-      console.error('Błąd podczas przesyłania załącznika:', error);
-      showError(error.message || 'Nie udało się przesłać załącznika');
-    } finally {
-      setUploadingAttachment(false);
-    }
-  };
-
-  // Funkcja do usuwania załącznika
-  const handleAttachmentDelete = async (attachmentId, fileName) => {
-    setConfirmDialog({
-      open: true,
-      title: 'Potwierdzenie usunięcia',
-      message: `Czy na pewno chcesz usunąć załącznik "${fileName}"?`,
-      onConfirm: async () => {
-        setConfirmDialog(prev => ({ ...prev, open: false }));
-        try {
-          await deleteCmrAttachment(attachmentId, currentUser.uid);
-          setAttachments(prev => prev.filter(att => att.id !== attachmentId));
-          showSuccess(`Załącznik "${fileName}" został usunięty`);
-        } catch (error) {
-          console.error('Błąd podczas usuwania załącznika:', error);
-          showError('Nie udało się usunąć załącznika');
-        }
-      }
-    });
-  };
-
-  // Funkcja do pobierania faktur
-  const fetchInvoices = async () => {
-    try {
-      setInvoicesLoading(true);
-      const invoicesList = await getCmrInvoices(id);
-      setInvoices(invoicesList);
-    } catch (error) {
-      console.error('Błąd podczas pobierania faktur:', error);
-      showError('Nie udało się pobrać faktur');
-    } finally {
-      setInvoicesLoading(false);
-    }
-  };
-
-  // Funkcja do przesyłania faktury
-  const handleInvoiceUpload = async (event) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    const file = files[0];
-
-    try {
-      setUploadingInvoice(true);
-      const newInvoice = await uploadCmrInvoice(file, id, currentUser.uid);
-      setInvoices(prev => [newInvoice, ...prev]);
-      showSuccess(`Faktura "${file.name}" została przesłana pomyślnie`);
-    } catch (error) {
-      console.error('Błąd podczas przesyłania faktury:', error);
-      showError(error.message || 'Nie udało się przesłać faktury');
-    } finally {
-      setUploadingInvoice(false);
-    }
-  };
-
-  // Funkcja do usuwania faktury
-  const handleInvoiceDelete = async (invoiceId, fileName) => {
-    setConfirmDialog({
-      open: true,
-      title: 'Potwierdzenie usunięcia',
-      message: `Czy na pewno chcesz usunąć fakturę "${fileName}"?`,
-      onConfirm: async () => {
-        setConfirmDialog(prev => ({ ...prev, open: false }));
-        try {
-          await deleteCmrInvoice(invoiceId, currentUser.uid);
-          setInvoices(prev => prev.filter(inv => inv.id !== invoiceId));
-          showSuccess(`Faktura "${fileName}" została usunięta`);
-        } catch (error) {
-          console.error('Błąd podczas usuwania faktury:', error);
-          showError('Nie udało się usunąć faktury');
-        }
-      }
-    });
-  };
-
-  // Funkcja do pobierania innych załączników
-  const fetchOtherAttachments = async () => {
-    try {
-      setOtherAttachmentsLoading(true);
-      const attachmentsList = await getCmrOtherAttachments(id);
-      setOtherAttachments(attachmentsList);
-    } catch (error) {
-      console.error('Błąd podczas pobierania innych załączników:', error);
-      showError('Nie udało się pobrać innych załączników');
-    } finally {
-      setOtherAttachmentsLoading(false);
-    }
-  };
-
-  const fetchDeliveryNoteAttachments = async () => {
-    try {
-      setDeliveryNoteAttachmentsLoading(true);
-      const notesList = await getCmrDeliveryNotes(id);
-      setDeliveryNoteAttachments(notesList);
-    } catch (error) {
-      console.error('Błąd podczas pobierania Delivery Notes:', error);
-    } finally {
-      setDeliveryNoteAttachmentsLoading(false);
-    }
-  };
-
-  const handleDeliveryNoteUpload = async (event) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    setUploadingDeliveryNote(true);
-    try {
-      let uploadedCount = 0;
-      for (const file of files) {
-        if (file.size > 20 * 1024 * 1024) {
-          showError(`Plik "${file.name}" przekracza limit 20MB`);
-          continue;
-        }
-        await uploadCmrDeliveryNote(file, id, currentUser.uid, file.name);
-        uploadedCount++;
-      }
-      if (uploadedCount > 0) {
-        fetchDeliveryNoteAttachments();
-        showSuccess('Delivery Note przesłany pomyślnie');
-      }
-    } catch (error) {
-      console.error('Błąd podczas przesyłania Delivery Note:', error);
-      showError(error.message || 'Nie udało się przesłać Delivery Note');
-    } finally {
-      setUploadingDeliveryNote(false);
-      event.target.value = '';
-    }
-  };
-
-  // Funkcja do przesyłania innego załącznika
-  const handleOtherAttachmentUpload = async (event) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    const file = files[0];
-
-    try {
-      setUploadingOtherAttachment(true);
-      const newAttachment = await uploadCmrOtherAttachment(file, id, currentUser.uid);
-      setOtherAttachments(prev => [newAttachment, ...prev]);
-      showSuccess(`Załącznik "${file.name}" został przesłany pomyślnie`);
-    } catch (error) {
-      console.error('Błąd podczas przesyłania załącznika:', error);
-      showError(error.message || 'Nie udało się przesłać załącznika');
-    } finally {
-      setUploadingOtherAttachment(false);
-    }
-  };
-
-  // Funkcja do usuwania innego załącznika
-  const handleOtherAttachmentDelete = async (attachmentId, fileName) => {
-    setConfirmDialog({
-      open: true,
-      title: 'Potwierdzenie usunięcia',
-      message: `Czy na pewno chcesz usunąć załącznik "${fileName}"?`,
-      onConfirm: async () => {
-        setConfirmDialog(prev => ({ ...prev, open: false }));
-        try {
-          await deleteCmrOtherAttachment(attachmentId, currentUser.uid);
-          setOtherAttachments(prev => prev.filter(att => att.id !== attachmentId));
-          showSuccess(`Załącznik "${fileName}" został usunięty`);
-        } catch (error) {
-          console.error('Błąd podczas usuwania załącznika:', error);
-          showError('Nie udało się usunąć załącznika');
-        }
-      }
-    });
-  };
-
-  // Funkcja formatowania rozmiaru pliku
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  // Pobierz załączniki i faktury przy pierwszym załadowaniu
-  useEffect(() => {
-    if (id) {
-      fetchAttachments();
-      fetchInvoices();
-      fetchOtherAttachments();
-      fetchDeliveryNoteAttachments();
-    }
-  }, [id]);
-  
-  const isEditable = cmrData?.status === CMR_STATUSES.DRAFT || cmrData?.status === CMR_STATUSES.ISSUED || cmrData?.status === CMR_STATUSES.COMPLETED;
-  logger.log('CMR Status:', cmrData?.status);
-  logger.log('Is Editable:', isEditable);
-  logger.log('CMR_STATUSES.DRAFT:', CMR_STATUSES.DRAFT);
-  logger.log('CMR_STATUSES.ISSUED:', CMR_STATUSES.ISSUED);
-  
   return (
     <DetailPageLayout
       loading={loading}
@@ -1934,8 +279,8 @@ const CmrDetailsPage = () => {
       {cmrData && (
         <>
       <GlobalStyles>{globalPrintCss}</GlobalStyles>
-      
-      {/* Header z tytułem i akcjami */}
+
+      {/* Header */}
       <Paper sx={{ p: 3, mb: 3 }} className="no-print">
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexDirection: { xs: 'column', md: 'row' } }}>
           <Box sx={{ mb: { xs: 2, md: 0 } }}>
@@ -1944,166 +289,94 @@ const CmrDetailsPage = () => {
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
               <StatusChip status={cmrData.status} />
-              {getPaymentStatusChip(cmrData.paymentStatus)}
+              {status.getPaymentStatusChip(cmrData.paymentStatus)}
               <Typography variant="body2" color="text.secondary">
                 {t('details.basicInfo.created')}: {formatDate(cmrData.issueDate)}
               </Typography>
             </Box>
           </Box>
-          
-          {/* Grupa przycisków akcji */}
+
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-            <Button
-              variant="outlined"
-              startIcon={<ArrowBackIcon />}
-              onClick={handleBack}
-              sx={{ minWidth: 'auto' }}
-            >
+            <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={handleBack} sx={{ minWidth: 'auto' }}>
               {t('details.backToList')}
             </Button>
-            
+
             {isEditable && (
-              <Button
-                variant="contained"
-                startIcon={<EditIcon />}
-                onClick={handleEdit}
-                color="primary"
-              >
+              <Button variant="contained" startIcon={<EditIcon />} onClick={handleEdit} color="primary">
                 {t('details.editDocument')}
               </Button>
             )}
-            
-            {/* Przyciski zmiany statusu */}
+
             {cmrData.status === CMR_STATUSES.DRAFT && (
-              <Button 
-                variant="contained" 
-                color="primary"
-                onClick={() => handleTransportValidation(CMR_STATUSES.ISSUED)}
-              >
+              <Button variant="contained" color="primary" onClick={() => status.handleTransportValidation(CMR_STATUSES.ISSUED)}>
                 {t('details.statusActions.setIssued')}
               </Button>
             )}
-            
+
             {cmrData.status === CMR_STATUSES.ISSUED && (
-              <Button 
-                variant="contained" 
-                color="warning"
-                onClick={() => handleTransportValidation(CMR_STATUSES.IN_TRANSIT)}
-              >
+              <Button variant="contained" color="warning" onClick={() => status.handleTransportValidation(CMR_STATUSES.IN_TRANSIT)}>
                 {t('details.statusActions.setInTransit')}
               </Button>
             )}
-            
+
             {cmrData.status === CMR_STATUSES.IN_TRANSIT && (
-              <Button 
-                variant="contained" 
-                color="success"
-                onClick={() => handleTransportValidation(CMR_STATUSES.DELIVERED)}
-              >
+              <Button variant="contained" color="success" onClick={() => status.handleTransportValidation(CMR_STATUSES.DELIVERED)}>
                 {t('details.statusActions.setDelivered')}
               </Button>
             )}
-            
+
             {cmrData.status === CMR_STATUSES.DELIVERED && (
-              <Button 
-                variant="contained" 
-                color="info"
-                onClick={() => handleTransportValidation(CMR_STATUSES.COMPLETED)}
-              >
+              <Button variant="contained" color="info" onClick={() => status.handleTransportValidation(CMR_STATUSES.COMPLETED)}>
                 {t('details.statusActions.setCompleted')}
               </Button>
             )}
-            
-            {(cmrData.status === CMR_STATUSES.DRAFT || 
-              cmrData.status === CMR_STATUSES.ISSUED) && (
-              <Button 
-                variant="contained" 
-                color="error"
-                onClick={() => handleTransportValidation(CMR_STATUSES.CANCELED)}
-              >
+
+            {(cmrData.status === CMR_STATUSES.DRAFT || cmrData.status === CMR_STATUSES.ISSUED) && (
+              <Button variant="contained" color="error" onClick={() => status.handleTransportValidation(CMR_STATUSES.CANCELED)}>
                 {t('details.statusActions.setCanceled')}
               </Button>
             )}
-            
-            <Button
-              variant="outlined"
-              startIcon={<FileCopyIcon />}
-              onClick={handleGenerateOfficialCmr}
-              color="success"
-            >
+
+            <Button variant="outlined" startIcon={<FileCopyIcon />} onClick={data.handleGenerateOfficialCmr} color="success">
               {t('details.actions.generateOfficialCMR')}
             </Button>
 
-            <Button
-              variant="outlined"
-              startIcon={<DescriptionIcon />}
-              onClick={handleGenerateDeliveryNotes}
-              color="info"
-              disabled={!cmrData.items || cmrData.items.length === 0}
-            >
+            <Button variant="outlined" startIcon={<DescriptionIcon />} onClick={handleGenerateDeliveryNotes} color="info" disabled={!cmrData.items || cmrData.items.length === 0}>
               {t('details.actions.deliveryNotes')}
             </Button>
 
-            
-            {/* Grupa przycisków etykiet - tylko gdy dostępne są szczegółowe dane wag */}
-            {weightSummary && (weightSummary.totalPallets > 0 || weightSummary.totalBoxes > 0) && (
-            <Box sx={{ display: 'flex', gap: 0.5 }}>
-              <Button
-                variant="outlined"
-                startIcon={<LabelIcon />}
-                onClick={handleBoxLabel}
-                size="small"
-                color="secondary"
-                disabled={weightSummary.totalBoxes === 0 || !itemsWeightDetails.some(item => item.hasDetailedData && item.hasBoxes)}
-              >
-                  {t('details.actions.boxLabels', { count: weightSummary.totalBoxes })}
-              </Button>
-              
-              <Button
-                variant="outlined"
-                startIcon={<GridViewIcon />}
-                onClick={handlePalletLabel}
-                size="small"
-                color="secondary"
-                  disabled={weightSummary.totalPallets === 0}
-              >
-                  {t('details.actions.palletLabels', { count: weightSummary.totalPallets })}
-              </Button>
-            </Box>
+            {weights.weightSummary && (weights.weightSummary.totalPallets > 0 || weights.weightSummary.totalBoxes > 0) && (
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                <Button variant="outlined" startIcon={<LabelIcon />} onClick={labels.handleBoxLabel} size="small" color="secondary"
+                  disabled={weights.weightSummary.totalBoxes === 0 || !weights.itemsWeightDetails.some(item => item.hasDetailedData && item.hasBoxes)}>
+                  {t('details.actions.boxLabels', { count: weights.weightSummary.totalBoxes })}
+                </Button>
+                <Button variant="outlined" startIcon={<GridViewIcon />} onClick={labels.handlePalletLabel} size="small" color="secondary"
+                  disabled={weights.weightSummary.totalPallets === 0}>
+                  {t('details.actions.palletLabels', { count: weights.weightSummary.totalPallets })}
+                </Button>
+              </Box>
             )}
-            
-            {/* Menu z dodatkowymi opcjami */}
-            <IconButton
-              onClick={handleMenuOpen}
-              size="small"
-              sx={{ ml: 1 }}
-            >
+
+            <IconButton onClick={handleMenuOpen} size="small" sx={{ ml: 1 }}>
               <MoreVertIcon />
             </IconButton>
-            
-            <Menu
-              anchorEl={anchorEl}
-              open={menuOpen}
-              onClose={handleMenuClose}
+
+            <Menu anchorEl={anchorEl} open={menuOpen} onClose={handleMenuClose}
               transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-            >
+              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}>
               <MenuItemComponent onClick={handlePrintFromMenu}>
-                <ListItemIcon>
-                  <PrintIcon fontSize="small" />
-                </ListItemIcon>
+                <ListItemIcon><PrintIcon fontSize="small" /></ListItemIcon>
                 <ListItemText>{t('details.actions.print')}</ListItemText>
               </MenuItemComponent>
               <MenuItemComponent onClick={handleMigrateFromMenu}>
-                <ListItemIcon>
-                  <RefreshIcon fontSize="small" />
-                </ListItemIcon>
+                <ListItemIcon><RefreshIcon fontSize="small" /></ListItemIcon>
                 <ListItemText>{t('details.actions.migrate')}</ListItemText>
               </MenuItemComponent>
             </Menu>
           </Box>
         </Box>
-        {/* Status flow stepper */}
+
         <Box sx={{ mt: 2, mb: 1 }}>
           <StatusStepper
             steps={[CMR_STATUSES.DRAFT, CMR_STATUSES.ISSUED, CMR_STATUSES.IN_TRANSIT, CMR_STATUSES.DELIVERED, CMR_STATUSES.COMPLETED]}
@@ -2113,18 +386,10 @@ const CmrDetailsPage = () => {
           />
         </Box>
       </Paper>
-      
 
-      
-      {/* Nawigacja kartami */}
+      {/* Tabs navigation */}
       <Paper sx={mb3} className="no-print">
-        <Tabs 
-          value={activeTab} 
-          onChange={handleTabChange} 
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
-        >
+        <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto" sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tab label={t('details.tabs.basic')} {...a11yProps(0)} />
           <Tab label={t('details.tabs.partiesTransport')} {...a11yProps(1)} />
           <Tab label={t('details.tabs.itemsWeights')} {...a11yProps(2)} />
@@ -2133,1498 +398,147 @@ const CmrDetailsPage = () => {
         </Tabs>
       </Paper>
 
-      {/* Zawartość kart */}
+      {/* Tab content */}
       <div className="no-print">
-        {/* KARTA 1: PODSTAWOWE */}
+        {/* Tab 0: Basic - inline */}
         <TabPanel value={activeTab} index={0}>
           <Grid container spacing={3}>
-        {/* Lewa kolumna - Informacje podstawowe i powiązane zamówienia */}
-        <Grid item xs={12} lg={8}>
-          {/* Informacje podstawowe */}
-          <Card sx={mb3}>
-            <CardHeader 
-              title={t('details.basicInfo.title')} 
-              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-              sx={{ pb: 1 }}
-            />
-            <Divider />
-            <CardContent>
-              <Grid container spacing={3}>
-                <Grid item xs={6} sm={3}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    {t('details.basicInfo.cmrNumber')}
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                    {cmrData.cmrNumber}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    {t('details.basicInfo.issueDate')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {formatDate(cmrData.issueDate)}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    {t('details.basicInfo.deliveryDate')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {formatDate(cmrData.deliveryDate)}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    {t('details.basicInfo.transportType')}
-                  </Typography>
-                  <Typography variant="body1">
-                    {getTransportTypeLabel(cmrData.transportType) || '-'}
-                  </Typography>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-
-          {/* Powiązane zamówienia klienta */}
-          {linkedOrders.length > 0 && (
-            <Card sx={mb3}>
-              <CardHeader 
-                title={t('details.linkedOrders.title', { count: linkedOrders.length })}
-                titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                sx={{ pb: 1 }}
-              />
-              <Divider />
-              <CardContent>
-                <Grid container spacing={2}>
-                  {linkedOrders.map((order, index) => (
-                    <Grid item xs={12} key={order.id}>
-                      <Paper
-                        variant="outlined"
-                        component={RouterLink}
-                        to={`/orders/${order.id}`}
-                        sx={{ 
-                          p: 2,
-                          cursor: 'pointer',
-                          textDecoration: 'none',
-                          display: 'block',
-                          '&:hover': {
-                            backgroundColor: 'action.hover',
-                            borderColor: 'primary.main'
-                          }
-                        }}
-                      >
-                        <Grid container spacing={2} alignItems="center">
-                          <Grid item xs={12} sm={6}>
-                            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                              {t('details.linkedOrders.orderNumber')}
-                            </Typography>
-                            <Typography 
-                              variant="body1" 
-                              sx={{ 
-                                color: 'primary.main',
-                                fontWeight: 600
-                              }}
-                            >
-                              {order.orderNumber}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                              {t('details.linkedOrders.customer')}
-                            </Typography>
-                            <Typography variant="body1">
-                              {order.customer?.name || '-'}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={6} sm={3}>
-                            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                              {t('details.linkedOrders.orderDate')}
-                            </Typography>
-                            <Typography variant="body2">
-                              {formatDate(order.orderDate)}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={6} sm={3}>
-                            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                              {t('details.linkedOrders.status')}
-                            </Typography>
-                            <Chip 
-                              label={order.status} 
-                              size="small"
-                              color={
-                                order.status === 'Dostarczone' ? 'success' :
-                                order.status === 'W realizacji' ? 'warning' :
-                                order.status === 'Anulowane' ? 'error' : 'default'
-                              }
-                            />
-                          </Grid>
-                        </Grid>
-                      </Paper>
-                    </Grid>
-                  ))}
-                </Grid>
-              </CardContent>
-            </Card>
-          )}
-        </Grid>
-        
-        {/* Prawa kolumna - Strony, transport, płatności */}
-        <Grid item xs={12} lg={4}>
-          {/* Strony */}
-          <Card sx={mb3}>
-            <CardHeader 
-              title={t('details.parties.title')} 
-              titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-              sx={{ pb: 1 }}
-            />
-            <Divider />
-            <CardContent>
-              <Box sx={mb3}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                  {t('details.parties.sender')}
-                </Typography>
-                <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
-                  {cmrData.sender}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {cmrData.senderAddress}
-                  {cmrData.senderPostalCode && cmrData.senderCity && (
-                    <><br />{cmrData.senderPostalCode} {cmrData.senderCity}</>
-                  )}
-                  {cmrData.senderCountry && (
-                    <>, {cmrData.senderCountry}</>
-                  )}
-                </Typography>
-              </Box>
-              
-              <Box sx={mb3}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                  {t('details.parties.recipient')}
-                </Typography>
-                <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
-                  {cmrData.recipient}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
-                  {cmrData.recipientAddress}
-                </Typography>
-              </Box>
-              
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                  {t('details.parties.carrier')}
-                </Typography>
-                <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
-                  {cmrData.carrier}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {cmrData.carrierAddress}
-                  {cmrData.carrierPostalCode && cmrData.carrierCity && (
-                    <><br />{cmrData.carrierPostalCode} {cmrData.carrierCity}</>
-                  )}
-                  {cmrData.carrierCountry && (
-                    <>, {cmrData.carrierCountry}</>
-                  )}
-                </Typography>
-              </Box>
-                        </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-
-
-    </TabPanel>
-
-        {/* KARTA 2: STRONY I TRANSPORT */}
-        <TabPanel value={activeTab} index={1}>
-          <Grid container spacing={3}>
-            {/* Strony */}
-            <Grid item xs={12}>
-              <Card>
-                <CardHeader 
-                  title={t('details.parties.title')} 
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
-                />
+            <Grid item xs={12} lg={8}>
+              <Card sx={mb3}>
+                <CardHeader title={t('details.basicInfo.title')} titleTypographyProps={{ variant: 'h6', fontWeight: 600 }} sx={{ pb: 1 }} />
                 <Divider />
                 <CardContent>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} md={4}>
-                      <Box sx={mb3}>
-                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                          {t('details.parties.sender')}
-                        </Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
-                          {cmrData.sender}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {cmrData.senderAddress}
-                          {cmrData.senderPostalCode && cmrData.senderCity && (
-                            <><br />{cmrData.senderPostalCode} {cmrData.senderCity}</>
-                          )}
-                          {cmrData.senderCountry && (
-                            <>, {cmrData.senderCountry}</>
-                          )}
-                        </Typography>
-                      </Box>
+                    <Grid item xs={6} sm={3}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.basicInfo.cmrNumber')}</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 500 }}>{cmrData.cmrNumber}</Typography>
                     </Grid>
-                    
-                    <Grid item xs={12} md={4}>
-                      <Box sx={mb3}>
-                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                          {t('details.parties.recipient')}
-                        </Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
-                          {cmrData.recipient}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
-                          {cmrData.recipientAddress}
-                        </Typography>
-                      </Box>
+                    <Grid item xs={6} sm={3}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.basicInfo.issueDate')}</Typography>
+                      <Typography variant="body1">{formatDate(cmrData.issueDate)}</Typography>
                     </Grid>
-                    
-                    <Grid item xs={12} md={4}>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                          {t('details.parties.carrier')}
-                        </Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
-                          {cmrData.carrier}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {cmrData.carrierAddress}
-                          {cmrData.carrierPostalCode && cmrData.carrierCity && (
-                            <><br />{cmrData.carrierPostalCode} {cmrData.carrierCity}</>
-                          )}
-                          {cmrData.carrierCountry && (
-                            <>, {cmrData.carrierCountry}</>
-                          )}
-                        </Typography>
-                      </Box>
+                    <Grid item xs={6} sm={3}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.basicInfo.deliveryDate')}</Typography>
+                      <Typography variant="body1">{formatDate(cmrData.deliveryDate)}</Typography>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.basicInfo.transportType')}</Typography>
+                      <Typography variant="body1">{getTransportTypeLabel(cmrData.transportType) || '-'}</Typography>
                     </Grid>
                   </Grid>
                 </CardContent>
               </Card>
-            </Grid>
 
-            {/* Transport i lokalizacje */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardHeader 
-                  title={t('details.transport.title')} 
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
-                />
-                <Divider />
-                <CardContent>
-                  <Box sx={mb3}>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                      {t('details.transport.loadingPlace')}
-                    </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {cmrData.loadingPlace || '-'}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600, display: 'block', mt: 1 }}>
-                      {t('details.transport.loadingDate')}
-                    </Typography>
-                    <Typography variant="body2">
-                      {formatDate(cmrData.loadingDate)}
-                    </Typography>
-                  </Box>
-                  
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                      {t('details.transport.deliveryPlace')}
-                    </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {cmrData.deliveryPlace || '-'}
-                    </Typography>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Informacje o pojeździe */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardHeader 
-                  title={t('details.vehicle.title')} 
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
-                />
-                <Divider />
-                <CardContent>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        {t('details.vehicle.vehicleRegistration')}
-                      </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                        {cmrData.vehicleInfo?.vehicleRegistration || '-'}
-                      </Typography>
-                    </Grid>
-                    
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        {t('details.vehicle.trailerRegistration')}
-                      </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                        {cmrData.vehicleInfo?.trailerRegistration || '-'}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </TabPanel>
-
-        {/* KARTA 3: ELEMENTY I WAGI */}
-        <TabPanel value={activeTab} index={2}>
-          <Grid container spacing={3}>
-            {/* Elementy dokumentu CMR */}
-            <Grid item xs={12}>
-              <Card>
-                <CardHeader 
-                  title={t('details.items.title')} 
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
-                />
-                <Divider />
-                <CardContent>
-                  {weightDetailsLoading ? (
-                    <Box sx={loadingContainer}>
-                      <CircularProgress />
-                      <Typography variant="body1" sx={{ ml: 2 }}>
-                        {t('details.loading.weights')}
-                      </Typography>
-                    </Box>
-                  ) : cmrData.items && cmrData.items.length > 0 ? (
-                    <TableContainer>
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Lp.</TableCell>
-                            <TableCell>{t('details.items.description')}</TableCell>
-                            <TableCell>Zamówienie</TableCell>
-                            <TableCell>Pozycja CO</TableCell>
-                            <TableCell>{t('details.items.quantity')}</TableCell>
-                            <TableCell>{t('details.items.unit')}</TableCell>
-                            <TableCell>{t('details.items.weight')}</TableCell>
-                            <TableCell>{t('details.palletDetails.title')}</TableCell>
-                            <TableCell>{t('details.boxDetails.title')}</TableCell>
-                            <TableCell>{t('details.items.weightDetails')}</TableCell>
-                            <TableCell>{t('details.items.batchInfo')}</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {cmrData.items.map((item, index) => {
-                            const weightDetail = itemsWeightDetails.find(detail => 
-                              detail.itemId === (item.id || item.description)
-                            );
-                            
-                            // Znajdź powiązane zamówienie
-                            const linkedOrder = item.orderId ? linkedOrders.find(o => o.id === item.orderId) : null;
-                            
-                            // Znajdź pozycję zamówienia
-                            const orderItem = linkedOrder && item.orderItemId ? 
-                              linkedOrder.items?.find(oi => oi.id === item.orderItemId) : null;
-                            
-                            return (
-                            <TableRow key={item.id || index}>
-                              <TableCell>{index + 1}</TableCell>
-                              <TableCell>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  {item.description}
-                                  {item.isEco === true && (
-                                    <Chip label="ECO" size="small" color="success" variant="outlined" sx={{ fontSize: '0.65rem', height: 18, ml: 0.5 }} />
-                                  )}
-                                  {item.isEco === false && item.orderNumber && (
-                                    <Chip label="STD" size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 18, ml: 0.5 }} />
-                                  )}
-                                </Box>
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
-                                  {item.orderNumber || linkedOrder?.orderNumber || 
-                                    <em style={{ color: '#999' }}>Brak przypisania</em>
-                                  }
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
-                                  {item.orderItemName || orderItem?.name || (item.originalOrderItem?.name) || 
-                                    <em style={{ color: '#999' }}>-</em>
-                                  }
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                {item.quantity}
-                                {item.orderItemTotalQuantity && (
-                                  <Typography variant="caption" display="block" color="text.secondary">
-                                    z {item.orderItemTotalQuantity} {item.unit || 'szt.'} zamówionych
-                                  </Typography>
-                                )}
-                              </TableCell>
-                              <TableCell>{item.unit}</TableCell>
-                              <TableCell>{item.weight}</TableCell>
-                                <TableCell>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Box>
-                                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                        {weightDetail?.palletsCount || 0}
-                                      </Typography>
-                                      {item.volume && (
-                                        <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
-                                          ({item.volume} m³)
-                                        </Typography>
-                                      )}
-                                    </Box>
-                                    {weightDetail?.hasDetailedData && (
-                                      <Chip 
-                                        size="small" 
-                                        color="success" 
-                                        label="✓"
-                                        sx={{ height: 20, minWidth: 20 }}
-                                      />
-                                    )}
-                                  </Box>
-                                </TableCell>
-                                <TableCell>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                      {weightDetail?.boxesCount || 0}
-                                    </Typography>
-                                    {weightDetail?.hasDetailedData && (
-                                      <Chip 
-                                        size="small" 
-                                        color="success" 
-                                        label="✓"
-                                        sx={{ height: 20, minWidth: 20 }}
-                                      />
-                                    )}
-                                  </Box>
-                                </TableCell>
-                                <TableCell>
-                                  {weightDetail?.hasDetailedData ? (
-                                    <Box>
-                                      {/* Szczegóły palet */}
-                                      {weightDetail.pallets && weightDetail.pallets.length > 0 && (
-                                        <Box sx={mb1}>
-                                          <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                                            {t('details.palletDetails.title')}:
-                                          </Typography>
-                                          {weightDetail.pallets.map((pallet, palletIndex) => (
-                                            <Typography key={palletIndex} variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
-                                              #{pallet.palletNumber}: {pallet.totalWeight} kg 
-                                              ({pallet.boxesCount} kart., {pallet.itemsCount} szt.)
-                                              {!pallet.isFull && ' (niepełna)'}
-                                            </Typography>
-                                          ))}
-                                        </Box>
-                                      )}
-                                      
-                                      {/* Szczegóły kartonów - tylko gdy pozycja ma kartony */}
-                                      {weightDetail.hasBoxes && weightDetail.boxes && (weightDetail.boxes.fullBox || weightDetail.boxes.partialBox) && (
-                                        <Box>
-                                          <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
-                                            {t('details.boxDetails.title')}:
-                                          </Typography>
-                                          {weightDetail.boxes.fullBox && (
-                                            <Typography variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
-                                              Pełny: {weightDetail.boxes.fullBox.totalWeight} kg 
-                                              ({weightDetail.boxes.fullBox.itemsCount} szt.)
-                                              {weightDetail.boxes.fullBoxesCount > 1 && ` ×${weightDetail.boxes.fullBoxesCount}`}
-                                            </Typography>
-                                          )}
-                                          {weightDetail.boxes.partialBox && (
-                                            <Typography variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
-                                              Niepełny: {weightDetail.boxes.partialBox.totalWeight} kg 
-                                              ({weightDetail.boxes.partialBox.itemsCount} szt.)
-                                            </Typography>
-                                          )}
-                                        </Box>
-                                      )}
-                                      
-                                      {/* Parametry magazynowe */}
-                                      {weightDetail.inventoryData && (
-                                        <Typography variant="caption" display="block" sx={{ 
-                                          fontSize: '0.7rem', 
-                                          color: 'text.secondary',
-                                          mt: 0.5 
-                                        }}>
-                                          {weightDetail.hasBoxes ? (
-                                            `${weightDetail.inventoryData.itemsPerBox} szt./karton, ${weightDetail.inventoryData.boxesPerPallet} kart./paleta`
-                                          ) : (
-                                            'Pozycja bez kartonów - pakowanie bezpośrednio na palety'
-                                          )}
-                                        </Typography>
-                                      )}
-                                    </Box>
-                                  ) : (
-                                    <Typography variant="caption" sx={{ 
-                                      fontStyle: 'italic', 
-                                      color: 'warning.main',
-                                      fontSize: '0.75rem'
-                                    }}>
-                                      {weightDetail?.error ? 
-                                        `Błąd: ${weightDetail.error}` : 
-                                        'Brak danych magazynowych'
-                                      }
-                                    </Typography>
-                                  )}
-                                </TableCell>
-                              <TableCell>
-                                {item.linkedBatches && item.linkedBatches.length > 0 ? (
-                                  <Box>
-                                    {item.linkedBatches.map((batch, batchIndex) => (
-                                      <Typography key={batch.id} variant="body2" sx={{ fontSize: '0.9rem' }}>
-                                        {batch.batchNumber || batch.lotNumber || '-'} 
-                                        ({batch.quantity} {batch.unit || t('common:common.pieces')})
-                                        {batchIndex < item.linkedBatches.length - 1 ? '; ' : ''}
-                                      </Typography>
-                                    ))}
-                                  </Box>
-                                ) : (
-                                  <Typography variant="body2" sx={{ fontSize: '0.9rem', fontStyle: 'italic' }}>
-                                    Brak powiązanych partii
-                                  </Typography>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  ) : (
-                    <Typography variant="body1" sx={{ textAlign: 'center', py: 2 }}>
-                      {t('details.items.noItems')}
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Podsumowanie wag CMR */}
-            {weightSummary && (weightSummary.totalPallets > 0 || weightSummary.totalBoxes > 0) && (
-              <Grid item xs={12}>
-                <Card>
-                  <CardHeader 
-                    title={t('details.weightSummary.title')} 
-                    titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                    sx={{ pb: 1 }}
-                  />
+              {linkedOrders.length > 0 && (
+                <Card sx={mb3}>
+                  <CardHeader title={t('details.linkedOrders.title', { count: linkedOrders.length })} titleTypographyProps={{ variant: 'h6', fontWeight: 600 }} sx={{ pb: 1 }} />
                   <Divider />
                   <CardContent>
-                    <Grid container spacing={3}>
-                      {/* Podsumowanie główne */}
-                      <Grid item xs={12} md={4}>
-                        <Paper sx={{ 
-              p: 2, 
-              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'info.dark' : 'info.light', 
-              border: 1, 
-              borderColor: 'info.main' 
-            }}>
-                          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, color: 'info.main' }}>
-                            {t('details.weightSummary.totalSummary')}
-                          </Typography>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <Typography variant="body2">{t('details.weightSummary.totalWeight')}:</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                {weightSummary.totalWeight} kg
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <Typography variant="body2">{t('details.weightSummary.totalPallets')}:</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                {weightSummary.totalPallets}
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <Typography variant="body2">{t('details.weightSummary.totalBoxes')}:</Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                {weightSummary.totalBoxes}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Paper>
-                      </Grid>
-
-                      {/* Szczegółowy rozkład wag */}
-                      <Grid item xs={12} md={8}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>
-                          {t('details.weightSummary.detailedBreakdown')}
-                        </Typography>
-                        <TableContainer component={Paper} variant="outlined">
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow sx={{ bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.50' }}>
-                                <TableCell sx={{ fontWeight: 'bold' }}>{t('details.weightSummary.position')}</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>{t('details.weightSummary.weight')}</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>{t('details.weightSummary.pallets')}</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>{t('details.weightSummary.boxes')}</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>{t('details.weightSummary.dataStatus')}</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {weightSummary.itemsBreakdown.map((item, index) => (
-                                <TableRow key={index}>
-                                  <TableCell>
-                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                      {item.description}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                      {item.quantity} {item.unit}
-                                      {item.orderItemTotalQuantity && (
-                                        <> (z {item.orderItemTotalQuantity} zamówionych)</>
-                                      )}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                      {item.weight}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography variant="body2">
-                                      {item.palletsCount}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography variant="body2">
-                                      {item.boxesCount}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Chip 
-                                      size="small"
-                                      label={item.hasDetailedData ? t('details.weightSummary.detailed') : t('details.weightSummary.basic')}
-                                      color={item.hasDetailedData ? 'success' : 'warning'}
-                                      variant={item.hasDetailedData ? 'filled' : 'outlined'}
-                                    />
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      </Grid>
-                    </Grid>
-
-                    {/* Informacje o metodzie obliczania */}
-                    <Alert severity="info" sx={mt2}>
-                      <Typography variant="body2">
-                        <strong>{t('details.calculationInfo.title')}</strong><br />
-                        • {t('details.calculationInfo.detailedAvailable')}<br />
-                        • {t('details.calculationInfo.weightsInclude')}<br />
-                        • {t('details.calculationInfo.basicOnly')}
-                      </Typography>
-                    </Alert>
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
-          </Grid>
-        </TabPanel>
-
-        {/* KARTA 4: FINANSE I USTALENIA */}
-        <TabPanel value={activeTab} index={3}>
-          <Grid container spacing={3}>
-            {/* Dokumenty i instrukcje */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardHeader 
-                  title={t('details.documentsInstructions.title')} 
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
-                />
-                <Divider />
-                <CardContent>
-                  <Box sx={mb3}>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                      {t('details.documentsInstructions.attachedDocuments')}
-                    </Typography>
-                    <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                      {cmrData.attachedDocuments || '-'}
-                    </Typography>
-                  </Box>
-                  
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                      {t('details.documentsInstructions.senderInstructions')}
-                    </Typography>
-                    <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                      {cmrData.instructionsFromSender || '-'}
-                    </Typography>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            
-            {/* Opłaty i płatności */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardHeader 
-                  title={t('details.feesPayments.title')} 
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
-                />
-                <Divider />
-                <CardContent>
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        {t('details.feesPayments.freight')}
-                      </Typography>
-                      <Typography variant="body1">
-                        {cmrData.freight || '-'}
-                      </Typography>
-                    </Grid>
-                    
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        {t('details.feesPayments.additionalCosts')}
-                      </Typography>
-                      <Typography variant="body1">
-                        {cmrData.carriage || '-'}
-                      </Typography>
-                    </Grid>
-                    
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        {t('details.feesPayments.discounts')}
-                      </Typography>
-                      <Typography variant="body1">
-                        {cmrData.discounts || '-'}
-                      </Typography>
-                    </Grid>
-                    
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        {t('details.feesPayments.balance')}
-                      </Typography>
-                      <Typography variant="body1">
-                        {cmrData.balance || '-'}
-                      </Typography>
-                    </Grid>
-                    
-                    <Grid item xs={12} sx={mt1}>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        {t('details.feesPayments.paymentMethod')}
-                      </Typography>
-                      <Typography variant="body1">
-                        {cmrData.paymentMethod === 'sender' ? t('details.feesPayments.paymentBySender') : 
-                         cmrData.paymentMethod === 'recipient' ? t('details.feesPayments.paymentByRecipient') : 
-                         t('details.feesPayments.otherPaymentMethod')}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Ustalenia szczególne i uwagi */}
-            <Grid item xs={12}>
-              <Card>
-                <CardHeader 
-                  title={t('details.specialAgreements.title')} 
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
-                />
-                <Divider />
-                <CardContent>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        {t('details.specialAgreements.specialAgreements')}
-                      </Typography>
-                      <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                        {cmrData.specialAgreements || '-'}
-                      </Typography>
-                    </Grid>
-                    
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        {t('details.specialAgreements.carrierReservations')}
-                      </Typography>
-                      <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                        {cmrData.reservations || '-'}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </TabPanel>
-
-        {/* KARTA 5: DODATKOWE */}
-        <TabPanel value={activeTab} index={4}>
-          <Grid container spacing={3}>
-            {/* Uwagi i informacje dodatkowe */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardHeader 
-                  title={t('details.additionalInfo.notesAndAdditionalInfo')} 
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
-                />
-                <Divider />
-                <CardContent>
-                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {cmrData.notes || t('details.additionalInfo.noNotes')}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Raporty załadunku towaru */}
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardHeader 
-                  title={t('details.loadingReports.title', { count: loadingFormResponses.length })}
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 1 }}
-                />
-                <Divider />
-                <CardContent>
-                  {loadingFormResponsesLoading ? (
-                    <Box sx={loadingContainer}>
-                      <CircularProgress />
-                    </Box>
-                  ) : loadingFormResponses.length === 0 ? (
-                    <Typography variant="body1" color="text.secondary">
-                      {t('details.loadingReports.noReports')}
-                    </Typography>
-                  ) : (
-                    <Grid container spacing={3}>
-                      {loadingFormResponses.map((report, index) => (
-                        <Grid item xs={12} key={index}>
-                          <Paper sx={{ p: 3, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', opacity: 0.8 }}>
-                            <Typography variant="subtitle2" gutterBottom sx={{ color: 'warning.main', fontWeight: 'bold' }}>
-                              {t('details.loadingReports.reportTitle', { number: index + 1 })} - {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : t('details.common.notSet')}
-                            </Typography>
-                            
-                            <Grid container spacing={2}>
-                              {/* Podstawowe informacje */}
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.employee')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.employeeName || t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.position')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.position || t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.fillTime')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.fillTime || t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.loadingDate')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.loadingDate ? format(report.loadingDate, 'dd.MM.yyyy', { locale: pl }) : t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.loadingTime')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.loadingTime || t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.carrier')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.carrierName || t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.vehicleRegistration')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.vehicleRegistration || t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.vehicleTechnicalCondition')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.vehicleTechnicalCondition || t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
-                              {/* Informacje o towarze */}
-                              <Grid item xs={12}>
-                                <Divider sx={{ my: 2 }} />
-                                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-                                  {t('details.loadingReports.goodsInfo')}
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.client')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.clientName || t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.orderNumber')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.orderNumber || t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.palletQuantity')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.palletQuantity || t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6} md={3}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.weightSummary.weight')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.weight || t('details.common.notProvided')}
-                                </Typography>
-                              </Grid>
-                              
+                    <Grid container spacing={2}>
+                      {linkedOrders.map((order) => (
+                        <Grid item xs={12} key={order.id}>
+                          <Paper variant="outlined" component={RouterLink} to={`/orders/${order.id}`}
+                            sx={{ p: 2, cursor: 'pointer', textDecoration: 'none', display: 'block', '&:hover': { backgroundColor: 'action.hover', borderColor: 'primary.main' } }}>
+                            <Grid container spacing={2} alignItems="center">
                               <Grid item xs={12} sm={6}>
-                                <Typography variant="body2" color="text.secondary">
-                                  {t('details.loadingReports.palletProductName')}
-                                </Typography>
-                                <Typography variant="body1">
-                                  {report.palletProductName || t('details.common.notProvided')}
-                                </Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.linkedOrders.orderNumber')}</Typography>
+                                <Typography variant="body1" sx={{ color: 'primary.main', fontWeight: 600 }}>{order.orderNumber}</Typography>
                               </Grid>
-                              
-                              {/* Uwagi */}
-                              {(report.notes || report.goodsNotes) && (
-                                <>
-                                  <Grid item xs={12}>
-                                    <Divider sx={{ my: 2 }} />
-                                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-                                      {t('details.loadingReports.notes')}
-                                    </Typography>
-                                  </Grid>
-                                  
-                                  {report.notes && (
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="body2" color="text.secondary">
-                                        {t('details.loadingReports.generalNotes')}
-                                      </Typography>
-                                      <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                                        {report.notes}
-                                      </Typography>
-                                    </Grid>
-                                  )}
-                                  
-                                  {report.goodsNotes && (
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="body2" color="text.secondary">
-                                        {t('details.loadingReports.goodsNotes')}
-                                      </Typography>
-                                      <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                                        {report.goodsNotes}
-                                      </Typography>
-                                    </Grid>
-                                  )}
-                                </>
-                              )}
-                              
-
+                              <Grid item xs={12} sm={6}>
+                                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.linkedOrders.customer')}</Typography>
+                                <Typography variant="body1">{order.customer?.name || '-'}</Typography>
+                              </Grid>
+                              <Grid item xs={6} sm={3}>
+                                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.linkedOrders.orderDate')}</Typography>
+                                <Typography variant="body2">{formatDate(order.orderDate)}</Typography>
+                              </Grid>
+                              <Grid item xs={6} sm={3}>
+                                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.linkedOrders.status')}</Typography>
+                                <Chip label={order.status} size="small"
+                                  color={order.status === 'Dostarczone' ? 'success' : order.status === 'W realizacji' ? 'warning' : order.status === 'Anulowane' ? 'error' : 'default'} />
+                              </Grid>
                             </Grid>
                           </Paper>
                         </Grid>
                       ))}
                     </Grid>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
             </Grid>
 
-            {/* Wszystkie załączniki CMR */}
-            <Grid item xs={12}>
-              <Card>
-                <CardHeader 
-                  title={
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <AttachFileIcon sx={{ mr: 1 }} />
-                      {t('details.attachments.allTitle', { count: attachments.length + invoices.length + deliveryNoteAttachments.length + otherAttachments.length })}
-                    </Box>
-                  }
-                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  sx={{ pb: 0 }}
-                />
-                <CardContent sx={{ pt: 1 }}>
-                  {/* Kompaktowy rząd przycisków upload */}
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-                    <input accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.txt,.xls,.xlsx,.bmp,.tiff" style={{ display: 'none' }} id="cmr-attachment-upload" type="file" onChange={handleAttachmentUpload} disabled={uploadingAttachment} />
-                    <label htmlFor="cmr-attachment-upload">
-                      <Button variant="outlined" component="span" size="small" startIcon={uploadingAttachment ? <CircularProgress size={14} /> : <CloudUploadIcon />} disabled={uploadingAttachment}>
-                        {t('details.attachments.attachment')}
-                      </Button>
-                    </label>
-
-                    <input accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" style={{ display: 'none' }} id="cmr-invoice-upload" type="file" onChange={handleInvoiceUpload} disabled={uploadingInvoice} />
-                    <label htmlFor="cmr-invoice-upload">
-                      <Button variant="outlined" component="span" size="small" color="success" startIcon={uploadingInvoice ? <CircularProgress size={14} color="success" /> : <ReceiptIcon />} disabled={uploadingInvoice}>
-                        {t('details.attachments.invoice')}
-                      </Button>
-                    </label>
-
-                    <input accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.zip,.txt" style={{ display: 'none' }} id="cmr-other-upload" type="file" onChange={handleOtherAttachmentUpload} disabled={uploadingOtherAttachment} />
-                    <label htmlFor="cmr-other-upload">
-                      <Button variant="outlined" component="span" size="small" color="info" startIcon={uploadingOtherAttachment ? <CircularProgress size={14} color="info" /> : <AttachFileIcon />} disabled={uploadingOtherAttachment}>
-                        {t('details.attachments.other')}
-                      </Button>
-                    </label>
-
-                    <input accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style={{ display: 'none' }} id="cmr-dn-upload" type="file" onChange={handleDeliveryNoteUpload} disabled={uploadingDeliveryNote} />
-                    <label htmlFor="cmr-dn-upload">
-                      <Button variant="outlined" component="span" size="small" color="success" startIcon={uploadingDeliveryNote ? <CircularProgress size={14} color="success" /> : <DescriptionIcon />} disabled={uploadingDeliveryNote}>
-                        DN
-                      </Button>
-                    </label>
-                  </Box>
-
-                  {/* Jedna tabela ze wszystkimi plikami */}
-                  {(attachmentsLoading || invoicesLoading || otherAttachmentsLoading || deliveryNoteAttachmentsLoading) ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><CircularProgress size={24} /></Box>
-                  ) : (attachments.length + invoices.length + deliveryNoteAttachments.length + otherAttachments.length) === 0 ? (
-                    <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
-                      {t('details.attachments.noAttachments')}
+            <Grid item xs={12} lg={4}>
+              <Card sx={mb3}>
+                <CardHeader title={t('details.parties.title')} titleTypographyProps={{ variant: 'h6', fontWeight: 600 }} sx={{ pb: 1 }} />
+                <Divider />
+                <CardContent>
+                  <Box sx={mb3}>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.parties.sender')}</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>{cmrData.sender}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {cmrData.senderAddress}
+                      {cmrData.senderPostalCode && cmrData.senderCity && (<><br />{cmrData.senderPostalCode} {cmrData.senderCity}</>)}
+                      {cmrData.senderCountry && (<>, {cmrData.senderCountry}</>)}
                     </Typography>
-                  ) : (
-                    <TableContainer component={Paper} variant="outlined">
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                            <TableCell sx={{ fontWeight: 'bold', width: 55, py: 0.5 }}>{t('details.attachments.type')}</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold', py: 0.5 }}>{t('details.attachments.fileName')}</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold', width: 80, py: 0.5 }}>{t('details.attachments.size')}</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold', width: 110, py: 0.5 }}>{t('details.attachments.date')}</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold', width: 100, py: 0.5 }} align="center">{t('details.attachments.actions')}</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {/* Delivery Notes */}
-                          {deliveryNoteAttachments.map((note) => (
-                            <TableRow key={`dn-${note.id}`} hover>
-                              <TableCell sx={{ py: 0.5 }}>
-                                <Box sx={{ bgcolor: 'success.light', color: 'success.dark', px: 0.75, py: 0.25, borderRadius: 1, fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' }}>DN</Box>
-                              </TableCell>
-                              <TableCell sx={{ py: 0.5 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main', cursor: 'pointer', textDecoration: 'underline', '&:hover': { color: 'success.dark' } }} onClick={() => window.open(note.downloadURL, '_blank')}>
-                                  {note.fileName}
-                                </Typography>
-                              </TableCell>
-                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{formatFileSize(note.size)}</Typography></TableCell>
-                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{note.uploadedAt ? format(note.uploadedAt, 'dd.MM.yy HH:mm', { locale: pl }) : '-'}</Typography></TableCell>
-                              <TableCell align="center" sx={{ py: 0.5 }}>
-                                <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
-                                  <IconButton size="small" onClick={() => window.open(note.downloadURL, '_blank')}><OpenInNewIcon sx={{ fontSize: 16 }} /></IconButton>
-                                  <IconButton size="small" href={note.downloadURL} component="a" download={note.fileName}><DownloadIcon sx={{ fontSize: 16 }} /></IconButton>
-                                  <IconButton size="small" color="error" onClick={() => { setConfirmDialog({ open: true, title: 'Potwierdzenie usunięcia', message: t('details.attachments.confirmDeleteFile', { name: note.fileName }), onConfirm: async () => { setConfirmDialog(prev => ({ ...prev, open: false })); try { await deleteCmrDeliveryNote(note.id, currentUser.uid); setDeliveryNoteAttachments(prev => prev.filter(n => n.id !== note.id)); showSuccess(t('details.attachments.deleted')); } catch (err) { showError(err.message); } } }); }}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton>
-                                </Box>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-
-                          {/* Załączniki */}
-                          {attachments.map((att) => (
-                            <TableRow key={`att-${att.id}`} hover>
-                              <TableCell sx={{ py: 0.5 }}>
-                                <Box sx={{ bgcolor: att.contentType?.includes('pdf') ? 'error.light' : att.contentType?.startsWith('image/') ? 'warning.light' : 'grey.300', color: att.contentType?.includes('pdf') ? 'error.dark' : att.contentType?.startsWith('image/') ? 'warning.dark' : 'grey.700', px: 0.75, py: 0.25, borderRadius: 1, fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' }}>
-                                  {att.contentType?.includes('pdf') ? 'PDF' : att.contentType?.startsWith('image/') ? 'IMG' : 'FILE'}
-                                </Box>
-                              </TableCell>
-                              <TableCell sx={{ py: 0.5 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'primary.main', cursor: 'pointer', textDecoration: 'underline', '&:hover': { color: 'primary.dark' } }} onClick={() => window.open(att.downloadURL, '_blank')}>
-                                  {att.fileName}
-                                </Typography>
-                              </TableCell>
-                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{formatFileSize(att.size)}</Typography></TableCell>
-                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{att.uploadedAt ? format(att.uploadedAt, 'dd.MM.yy HH:mm', { locale: pl }) : '-'}</Typography></TableCell>
-                              <TableCell align="center" sx={{ py: 0.5 }}>
-                                <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
-                                  <IconButton size="small" onClick={() => window.open(att.downloadURL, '_blank')}><OpenInNewIcon sx={{ fontSize: 16 }} /></IconButton>
-                                  <IconButton size="small" href={att.downloadURL} component="a" download={att.fileName}><DownloadIcon sx={{ fontSize: 16 }} /></IconButton>
-                                  <IconButton size="small" color="error" onClick={() => handleAttachmentDelete(att.id, att.fileName)}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton>
-                                </Box>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-
-                          {/* Faktury */}
-                          {invoices.map((inv) => (
-                            <TableRow key={`inv-${inv.id}`} hover>
-                              <TableCell sx={{ py: 0.5 }}>
-                                <Box sx={{ bgcolor: 'success.light', color: 'success.dark', px: 0.75, py: 0.25, borderRadius: 1, fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' }}>FV</Box>
-                              </TableCell>
-                              <TableCell sx={{ py: 0.5 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main', cursor: 'pointer', textDecoration: 'underline', '&:hover': { color: 'success.dark' } }} onClick={() => window.open(inv.downloadURL, '_blank')}>
-                                  {inv.fileName}
-                                </Typography>
-                              </TableCell>
-                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{formatFileSize(inv.size)}</Typography></TableCell>
-                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{inv.uploadedAt ? format(inv.uploadedAt, 'dd.MM.yy HH:mm', { locale: pl }) : '-'}</Typography></TableCell>
-                              <TableCell align="center" sx={{ py: 0.5 }}>
-                                <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
-                                  <IconButton size="small" onClick={() => window.open(inv.downloadURL, '_blank')}><OpenInNewIcon sx={{ fontSize: 16 }} /></IconButton>
-                                  <IconButton size="small" href={inv.downloadURL} component="a" download={inv.fileName}><DownloadIcon sx={{ fontSize: 16 }} /></IconButton>
-                                  <IconButton size="small" color="error" onClick={() => handleInvoiceDelete(inv.id, inv.fileName)}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton>
-                                </Box>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-
-                          {/* Inne */}
-                          {otherAttachments.map((att) => (
-                            <TableRow key={`other-${att.id}`} hover>
-                              <TableCell sx={{ py: 0.5 }}>
-                                <Box sx={{ bgcolor: 'info.light', color: 'info.dark', px: 0.75, py: 0.25, borderRadius: 1, fontSize: '0.7rem', fontWeight: 'bold', display: 'inline-block' }}>{t('details.attachments.otherBadge')}</Box>
-                              </TableCell>
-                              <TableCell sx={{ py: 0.5 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'info.main', cursor: 'pointer', textDecoration: 'underline', '&:hover': { color: 'info.dark' } }} onClick={() => window.open(att.downloadURL, '_blank')}>
-                                  {att.fileName}
-                                </Typography>
-                              </TableCell>
-                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{formatFileSize(att.size)}</Typography></TableCell>
-                              <TableCell sx={{ py: 0.5 }}><Typography variant="caption" color="text.secondary">{att.uploadedAt ? format(att.uploadedAt, 'dd.MM.yy HH:mm', { locale: pl }) : '-'}</Typography></TableCell>
-                              <TableCell align="center" sx={{ py: 0.5 }}>
-                                <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
-                                  <IconButton size="small" onClick={() => window.open(att.downloadURL, '_blank')}><OpenInNewIcon sx={{ fontSize: 16 }} /></IconButton>
-                                  <IconButton size="small" href={att.downloadURL} component="a" download={att.fileName}><DownloadIcon sx={{ fontSize: 16 }} /></IconButton>
-                                  <IconButton size="small" color="error" onClick={() => handleOtherAttachmentDelete(att.id, att.fileName)}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton>
-                                </Box>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
+                  </Box>
+                  <Box sx={mb3}>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.parties.recipient')}</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>{cmrData.recipient}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>{cmrData.recipientAddress}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>{t('details.parties.carrier')}</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>{cmrData.carrier}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {cmrData.carrierAddress}
+                      {cmrData.carrierPostalCode && cmrData.carrierCity && (<><br />{cmrData.carrierPostalCode} {cmrData.carrierCity}</>)}
+                      {cmrData.carrierCountry && (<>, {cmrData.carrierCountry}</>)}
+                    </Typography>
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
           </Grid>
         </TabPanel>
-      </div>
-    
-      {/* Wersja do druku */}
-      <Box sx={{ display: 'none' }} className="print-container">
-        <Box className="print-header">
-          <Typography variant="h4" gutterBottom>
-            DOKUMENT CMR
-          </Typography>
-          <Typography variant="h5">
-            {cmrData.cmrNumber}
-          </Typography>
-          <Typography variant="subtitle1">
-            Status: {cmrData.status}
-          </Typography>
-        </Box>
-        
-        <Box className="print-section">
-          <Typography variant="h6" className="print-section-title">
-            {t('details.basicInfo.title')}
-          </Typography>
-          
-          <Box className="print-grid">
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.basicInfo.cmrNumber')}</Typography>
-              <Typography className="print-value">{cmrData.cmrNumber}</Typography>
-            </Box>
-            
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.basicInfo.issueDate')}</Typography>
-              <Typography className="print-value">{formatDate(cmrData.issueDate)}</Typography>
-            </Box>
-            
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.basicInfo.deliveryDate')}</Typography>
-              <Typography className="print-value">{formatDate(cmrData.deliveryDate)}</Typography>
-            </Box>
-            
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.basicInfo.transportType')}</Typography>
-              <Typography className="print-value">{getTransportTypeLabel(cmrData.transportType) || '-'}</Typography>
-            </Box>
-          </Box>
-        </Box>
-        
-        <Box className="print-section">
-          <Typography variant="h6" className="print-section-title">
-            {t('details.parties.title')}
-          </Typography>
-          
-          <Box className="print-grid">
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.parties.sender')}</Typography>
-              <Typography className="print-value" sx={{ fontWeight: 'bold' }}>{cmrData.sender}</Typography>
-              <Typography className="print-value">{cmrData.senderAddress}</Typography>
-              <Typography className="print-value">
-                {cmrData.senderPostalCode} {cmrData.senderCity}, {cmrData.senderCountry}
-              </Typography>
-            </Box>
-            
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.parties.recipient')}</Typography>
-              <Typography className="print-value" sx={{ fontWeight: 'bold' }}>{cmrData.recipient}</Typography>
-              <Typography className="print-value" sx={{ whiteSpace: 'pre-line' }}>
-                {cmrData.recipientAddress}
-              </Typography>
-            </Box>
-          </Box>
-          
-          <Box sx={{ mt: 3 }}>
-            <Typography className="print-label">{t('details.parties.carrier')}</Typography>
-            <Typography className="print-value" sx={{ fontWeight: 'bold' }}>{cmrData.carrier}</Typography>
-            <Typography className="print-value">{cmrData.carrierAddress}</Typography>
-            <Typography className="print-value">
-              {cmrData.carrierPostalCode} {cmrData.carrierCity}, {cmrData.carrierCountry}
-            </Typography>
-          </Box>
-        </Box>
-        
-        <Box className="print-section">
-          <Typography variant="h6" className="print-section-title">
-            Miejsce załadunku i rozładunku
-          </Typography>
-          
-          <Box className="print-grid">
-            <Box className="print-grid-item">
-              <Typography className="print-label">Miejsce załadunku</Typography>
-              <Typography className="print-value">{cmrData.loadingPlace || '-'}</Typography>
-              <Typography className="print-label" sx={mt1}>Data załadunku</Typography>
-              <Typography className="print-value">{formatDate(cmrData.loadingDate)}</Typography>
-            </Box>
-            
-            <Box className="print-grid-item">
-              <Typography className="print-label">Miejsce dostawy</Typography>
-              <Typography className="print-value">{cmrData.deliveryPlace || '-'}</Typography>
-            </Box>
-          </Box>
-        </Box>
-        
-        <Box className="print-section">
-          <Typography variant="h6" className="print-section-title">
-            {t('details.vehicle.title')}
-          </Typography>
-          
-          <Box className="print-grid">
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.vehicle.vehicleRegistration')}</Typography>
-              <Typography className="print-value">{cmrData.vehicleInfo?.vehicleRegistration || '-'}</Typography>
-            </Box>
-            
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.vehicle.trailerRegistration')}</Typography>
-              <Typography className="print-value">{cmrData.vehicleInfo?.trailerRegistration || '-'}</Typography>
-            </Box>
-          </Box>
-        </Box>
-        
-        <Box className="print-section">
-          <Typography variant="h6" className="print-section-title">
-            {t('details.items.title')}
-          </Typography>
-          
-          {cmrData.items && cmrData.items.length > 0 ? (
-            <Table className="print-table">
-              <TableHead>
-                <TableRow>
-                  <TableCell>#</TableCell>
-                  <TableCell>{t('details.items.description')}</TableCell>
-                  <TableCell>{t('details.items.quantity')}</TableCell>
-                  <TableCell>{t('details.items.unit')}</TableCell>
-                  <TableCell>{t('details.items.weight')}</TableCell>
-                  <TableCell>{t('details.common.pallets')}</TableCell>
-                  <TableCell>{t('details.common.boxes')}</TableCell>
-                  <TableCell>{t('details.items.batchInfo')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {cmrData.items.map((item, index) => {
-                  const weightDetail = itemsWeightDetails.find(detail => 
-                    detail.itemId === (item.id || item.description)
-                  );
-                  
-                  return (
-                  <TableRow key={item.id || index}>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        {item.description}
-                        {item.isEco === true && (
-                          <Chip label="ECO" size="small" color="success" variant="outlined" sx={{ fontSize: '0.65rem', height: 18 }} />
-                        )}
-                        {item.isEco === false && item.orderNumber && (
-                          <Chip label="STD" size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 18 }} />
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      {item.quantity}
-                      {item.orderItemTotalQuantity && (
-                        <Typography variant="caption" display="block" color="text.secondary">
-                          z {item.orderItemTotalQuantity} zam.
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>{item.unit}</TableCell>
-                    <TableCell>{item.weight}</TableCell>
-                      <TableCell>{weightDetail?.palletsCount || 0}</TableCell>
-                      <TableCell>{weightDetail?.boxesCount || 0}</TableCell>
-                    <TableCell>
-                      {item.linkedBatches && item.linkedBatches.length > 0 ? (
-                        <Box>
-                          {item.linkedBatches.map((batch, batchIndex) => (
-                            <Typography key={batch.id} variant="body2" sx={{ fontSize: '0.9rem' }}>
-                              {batch.batchNumber || batch.lotNumber || '-'} 
-                              ({batch.quantity} {batch.unit || t('common:common.pieces')})
-                              {batchIndex < item.linkedBatches.length - 1 ? '; ' : ''}
-                            </Typography>
-                          ))}
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" sx={{ fontSize: '0.9rem', fontStyle: 'italic' }}>
-                          -
-                        </Typography>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          ) : (
-            <Typography variant="body1" sx={{ textAlign: 'center', py: 2 }}>
-              {t('details.items.noItems')}
-            </Typography>
-          )}
-        </Box>
-        
-        <Box className="print-section">
-          <Typography variant="h6" className="print-section-title">
-            {t('details.feesPayments.title')}
-          </Typography>
-          
-          <Box className="print-grid">
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.feesPayments.freight')}</Typography>
-              <Typography className="print-value">{cmrData.freight || '-'}</Typography>
-            </Box>
-            
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.feesPayments.additionalCosts')}</Typography>
-              <Typography className="print-value">{cmrData.carriage || '-'}</Typography>
-            </Box>
-            
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.feesPayments.discounts')}</Typography>
-              <Typography className="print-value">{cmrData.discounts || '-'}</Typography>
-            </Box>
-            
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.feesPayments.balance')}</Typography>
-              <Typography className="print-value">{cmrData.balance || '-'}</Typography>
-            </Box>
-            
-            <Box className="print-grid-item">
-              <Typography className="print-label">{t('details.feesPayments.paymentMethod')}</Typography>
-              <Typography className="print-value">
-                {cmrData.paymentMethod === 'sender' ? t('details.feesPayments.paymentBySender') : 
-                 cmrData.paymentMethod === 'recipient' ? t('details.feesPayments.paymentByRecipient') : 
-                 t('details.feesPayments.otherPaymentMethod')}
-              </Typography>
-            </Box>
-          </Box>
-          
-          <Box sx={{ mt: 3 }}>
-            <Typography className="print-label">{t('details.specialAgreements.specialAgreements')}</Typography>
-            <Typography className="print-value" sx={{ whiteSpace: 'pre-wrap' }}>
-              {cmrData.specialAgreements || '-'}
-            </Typography>
-          </Box>
-          
-          <Box sx={{ mt: 3 }}>
-            <Typography className="print-label">{t('details.specialAgreements.carrierReservations')}</Typography>
-            <Typography className="print-value" sx={{ whiteSpace: 'pre-wrap' }}>
-              {cmrData.reservations || '-'}
-            </Typography>
-          </Box>
-        </Box>
-        
-        {cmrData.notes && (
-          <Box className="print-section">
-            <Typography variant="h6" className="print-section-title">
-              {t('details.additionalInfo.notesAndAdditionalInfo')}
-            </Typography>
-            <Typography className="print-value" sx={{ whiteSpace: 'pre-wrap' }}>
-              {cmrData.notes}
-            </Typography>
-          </Box>
-        )}
-        
-        <Box className="print-footer">
-          <Box className="print-signature">
-            <Typography variant="body2">Podpis nadawcy</Typography>
-          </Box>
-          <Box className="print-signature">
-            <Typography variant="body2">Podpis przewoźnika</Typography>
-          </Box>
-          <Box className="print-signature">
-            <Typography variant="body2">Podpis odbiorcy</Typography>
-          </Box>
-        </Box>
-      </Box>
 
-      {/* Dialog walidacji formularzy załadunku przed zmianą statusu na transport */}
-      <Dialog
-        open={loadingFormValidationDialogOpen}
-        onClose={handleCancelStatusChange}
-        maxWidth="lg"
-        fullWidth
-      >
+        {/* Tab 1-4: Lazy loaded */}
+        <TabPanel value={activeTab} index={1}>
+          <Suspense fallback={LazyFallback}>
+            <CmrPartiesTransportTab cmrData={cmrData} formatDate={formatDate} t={t} />
+          </Suspense>
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={2}>
+          <Suspense fallback={LazyFallback}>
+            <CmrItemsWeightsTab cmrData={cmrData} linkedOrders={linkedOrders}
+              itemsWeightDetails={weights.itemsWeightDetails} weightDetailsLoading={weights.weightDetailsLoading}
+              weightSummary={weights.weightSummary} t={t} />
+          </Suspense>
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={3}>
+          <Suspense fallback={LazyFallback}>
+            <CmrFinanceTab cmrData={cmrData} t={t} />
+          </Suspense>
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={4}>
+          <Suspense fallback={LazyFallback}>
+            <CmrAdditionalTab cmrData={cmrData} t={t}
+              loadingFormResponses={data.loadingFormResponses}
+              loadingFormResponsesLoading={data.loadingFormResponsesLoading}
+              attachmentProps={attachmentHook} />
+          </Suspense>
+        </TabPanel>
+      </div>
+
+      {/* Print view */}
+      <Suspense fallback={null}>
+        <CmrPrintView cmrData={cmrData} itemsWeightDetails={weights.itemsWeightDetails} formatDate={formatDate} t={t} />
+      </Suspense>
+
+      {/* Loading form validation dialog */}
+      <Dialog open={status.loadingFormValidationDialogOpen} onClose={status.handleCancelStatusChange} maxWidth="lg" fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <WarningIcon color="warning" />
@@ -3633,296 +547,183 @@ const CmrDetailsPage = () => {
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={mb3}>
-            {t('details.loadingReports.dialogDescription', { count: loadingFormResponses.length })}
+            {t('details.loadingReports.dialogDescription', { count: data.loadingFormResponses.length })}
           </DialogContentText>
-          
-          {loadingFormResponses.length > 0 && (
+
+          {data.loadingFormResponses.length > 0 && (
             <Grid container spacing={2}>
-              {loadingFormResponses.map((report, index) => (
+              {data.loadingFormResponses.map((report, index) => (
                 <Grid item xs={12} key={index}>
                   <Paper sx={{ p: 2, backgroundColor: 'background.default', border: 1, borderColor: 'divider' }}>
                     <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                       {t('details.loadingReports.formTitle', { number: index + 1 })} - {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : t('details.common.notSet')}
                     </Typography>
-                    
-                                         <Grid container spacing={2}>
-                       {/* Informacje podstawowe o wypełnieniu */}
-                       <Grid item xs={12}>
-                         <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
-                           {t('details.loadingReports.formInfoTitle')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.employeeEmail')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.email || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.employee')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.employeeName || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.position')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.position || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.fillTime')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.fillTime || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       {/* Informacje o załadunku */}
-                       <Grid item xs={12}>
-                         <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
-                           {t('details.loadingReports.loadingInfoTitle')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.loadingDate')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.loadingDate ? format(report.loadingDate, 'dd.MM.yyyy', { locale: pl }) : t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.loadingTime')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.loadingTime || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.carrier')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.carrierName || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.vehicleRegistration')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.vehicleRegistration || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.vehicleTechnicalCondition')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.vehicleTechnicalCondition || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       {/* Informacje o towarze */}
-                       <Grid item xs={12}>
-                         <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
-                           {t('details.loadingReports.goodsInfo')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.client')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.clientName || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.orderNumber')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.orderNumber || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.loadingReports.palletQuantity')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.palletQuantity || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       <Grid item xs={12} sm={6} md={3}>
-                         <Typography variant="caption" color="text.secondary">
-                           {t('details.weightSummary.weight')}
-                         </Typography>
-                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.weight || t('details.common.notProvided')}
-                         </Typography>
-                       </Grid>
-                       
-                       {report.palletProductName && (
-                         <Grid item xs={12}>
-                           <Typography variant="caption" color="text.secondary">
-                             {t('details.loadingReports.productNamePallet')}
-                           </Typography>
-                           <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                             {report.palletProductName}
-                           </Typography>
-                         </Grid>
-                       )}
-                       
-                       {/* Uwagi */}
-                       {(report.notes || report.goodsNotes) && (
-                         <>
-                           <Grid item xs={12}>
-                             <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
-                               {t('details.loadingReports.notes')}
-                             </Typography>
-                           </Grid>
-                           
-                           {report.notes && (
-                             <Grid item xs={12} sm={6}>
-                               <Typography variant="caption" color="text.secondary">
-                                 {t('details.loadingReports.loadingNotes')}
-                               </Typography>
-                               <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                                 {report.notes}
-                               </Typography>
-                             </Grid>
-                           )}
-                           
-                           {report.goodsNotes && (
-                             <Grid item xs={12} sm={6}>
-                               <Typography variant="caption" color="text.secondary">
-                                 {t('details.loadingReports.goodsNotes')}
-                               </Typography>
-                               <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                                 {report.goodsNotes}
-                               </Typography>
-                             </Grid>
-                           )}
-                         </>
-                       )}
-                       
-                       {/* Załączniki */}
-                       {report.documentsUrl && (
-                         <>
-                           <Grid item xs={12}>
-                             <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
-                               {t('details.attachments.title')}
-                             </Typography>
-                           </Grid>
-                           
-                           <Grid item xs={12}>
-                             <Button
-                               variant="outlined"
-                               size="small"
-                               href={report.documentsUrl}
-                               target="_blank"
-                               rel="noopener noreferrer"
-                               startIcon={<FileCopyIcon />}
-                             >
-                               {report.documentsName || t('details.loadingReports.downloadAttachment')}
-                             </Button>
-                           </Grid>
-                         </>
-                       )}
-                     </Grid>
+
+                    <Grid container spacing={2}>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
+                          {t('details.loadingReports.formInfoTitle')}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.employeeEmail')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.email || t('details.common.notProvided')}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.employee')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.employeeName || t('details.common.notProvided')}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.position')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.position || t('details.common.notProvided')}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.fillTime')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.fillTime || t('details.common.notProvided')}</Typography>
+                      </Grid>
+
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
+                          {t('details.loadingReports.loadingInfoTitle')}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.loadingDate')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.loadingDate ? format(report.loadingDate, 'dd.MM.yyyy', { locale: pl }) : t('details.common.notProvided')}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.loadingTime')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.loadingTime || t('details.common.notProvided')}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.carrier')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.carrierName || t('details.common.notProvided')}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.vehicleRegistration')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.vehicleRegistration || t('details.common.notProvided')}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.vehicleTechnicalCondition')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.vehicleTechnicalCondition || t('details.common.notProvided')}</Typography>
+                      </Grid>
+
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
+                          {t('details.loadingReports.goodsInfo')}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.client')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.clientName || t('details.common.notProvided')}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.orderNumber')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.orderNumber || t('details.common.notProvided')}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.loadingReports.palletQuantity')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.palletQuantity || t('details.common.notProvided')}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography variant="caption" color="text.secondary">{t('details.weightSummary.weight')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.weight || t('details.common.notProvided')}</Typography>
+                      </Grid>
+
+                      {report.palletProductName && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">{t('details.loadingReports.productNamePallet')}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>{report.palletProductName}</Typography>
+                        </Grid>
+                      )}
+
+                      {(report.notes || report.goodsNotes) && (
+                        <>
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
+                              {t('details.loadingReports.notes')}
+                            </Typography>
+                          </Grid>
+                          {report.notes && (
+                            <Grid item xs={12} sm={6}>
+                              <Typography variant="caption" color="text.secondary">{t('details.loadingReports.loadingNotes')}</Typography>
+                              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{report.notes}</Typography>
+                            </Grid>
+                          )}
+                          {report.goodsNotes && (
+                            <Grid item xs={12} sm={6}>
+                              <Typography variant="caption" color="text.secondary">{t('details.loadingReports.goodsNotes')}</Typography>
+                              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{report.goodsNotes}</Typography>
+                            </Grid>
+                          )}
+                        </>
+                      )}
+
+                      {report.documentsUrl && (
+                        <>
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
+                              {t('details.attachments.title')}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Button variant="outlined" size="small" href={report.documentsUrl} target="_blank" rel="noopener noreferrer" startIcon={<FileCopyIcon />}>
+                              {report.documentsName || t('details.loadingReports.downloadAttachment')}
+                            </Button>
+                          </Grid>
+                        </>
+                      )}
+                    </Grid>
                   </Paper>
                 </Grid>
               ))}
             </Grid>
           )}
-        
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancelStatusChange} color="inherit">
-            {t('dialogs.cancel')}
-          </Button>
-          <Button 
-            onClick={handleConfirmStatusChange} 
-            color="warning" 
-            variant="contained"
-            startIcon={<CheckIcon />}
-          >
+          <Button onClick={status.handleCancelStatusChange} color="inherit">{t('dialogs.cancel')}</Button>
+          <Button onClick={status.handleConfirmStatusChange} color="warning" variant="contained" startIcon={<CheckIcon />}>
             {t('details.loadingReports.confirmTransport')}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Dialog zmiany statusu płatności */}
-      <Dialog
-        open={paymentStatusDialogOpen}
-        onClose={() => setPaymentStatusDialogOpen(false)}
-      >
+      {/* Payment status dialog */}
+      <Dialog open={status.paymentStatusDialogOpen} onClose={() => status.setPaymentStatusDialogOpen(false)}>
         <DialogTitle>{t('details.dialogs.changePaymentStatusTitle')}</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={mb2}>
-            {t('details.dialogs.selectNewPaymentStatus')}
-          </DialogContentText>
+          <DialogContentText sx={{ mb: 2 }}>{t('details.dialogs.selectNewPaymentStatus')}</DialogContentText>
           <FormControl fullWidth>
             <InputLabel>{t('common:common.paymentStatus')}</InputLabel>
-            <Select
-              value={newPaymentStatus}
-              onChange={(e) => setNewPaymentStatus(e.target.value)}
-              label={t('common:common.paymentStatus')}
-            >
-              <MenuItem value={CMR_PAYMENT_STATUSES.UNPAID}>
-                {translatePaymentStatus(CMR_PAYMENT_STATUSES.UNPAID)}
-              </MenuItem>
-              <MenuItem value={CMR_PAYMENT_STATUSES.PAID}>
-                {translatePaymentStatus(CMR_PAYMENT_STATUSES.PAID)}
-              </MenuItem>
+            <Select value={status.newPaymentStatus} onChange={(e) => status.setNewPaymentStatus(e.target.value)} label={t('common:common.paymentStatus')}>
+              <MenuItem value={CMR_PAYMENT_STATUSES.UNPAID}>{translatePaymentStatus(CMR_PAYMENT_STATUSES.UNPAID)}</MenuItem>
+              <MenuItem value={CMR_PAYMENT_STATUSES.PAID}>{translatePaymentStatus(CMR_PAYMENT_STATUSES.PAID)}</MenuItem>
             </Select>
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPaymentStatusDialogOpen(false)}>{t('dialogs.cancel')}</Button>
-          <Button onClick={handlePaymentStatusUpdate} color="primary">{t('dialogs.update')}</Button>
+          <Button onClick={() => status.setPaymentStatusDialogOpen(false)}>{t('dialogs.cancel')}</Button>
+          <Button onClick={status.handlePaymentStatusUpdate} color="primary">{t('dialogs.update')}</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Dialog generowania etykiet */}
+      {/* Labels dialog */}
       <LabelsDisplayDialog
-        open={labelsDialogOpen}
-        onClose={handleLabelsDialogClose}
-        labels={currentLabels}
+        open={labels.labelsDialogOpen}
+        onClose={labels.handleLabelsDialogClose}
+        labels={labels.currentLabels}
         title={t('details.dialogs.labelsTitle', { cmrNumber: cmrData?.cmrNumber || '' })}
         cmrData={cmrData}
-        itemsWeightDetails={itemsWeightDetails}
-        labelType={currentLabelType}
+        itemsWeightDetails={weights.itemsWeightDetails}
+        labelType={labels.currentLabelType}
       />
 
       <ConfirmDialog
-        open={confirmDialog.open}
-        title={confirmDialog.title}
-        message={confirmDialog.message}
-        onConfirm={confirmDialog.onConfirm}
-        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        open={attachmentHook.confirmDialog.open}
+        title={attachmentHook.confirmDialog.title}
+        message={attachmentHook.confirmDialog.message}
+        onConfirm={attachmentHook.confirmDialog.onConfirm}
+        onCancel={() => attachmentHook.setConfirmDialog(prev => ({ ...prev, open: false }))}
       />
         </>
       )}
@@ -3930,4 +731,4 @@ const CmrDetailsPage = () => {
   );
 };
 
-export default CmrDetailsPage; 
+export default CmrDetailsPage;

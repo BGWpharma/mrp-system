@@ -81,7 +81,7 @@ import {
   searchRecipesForQuotation,
   getRecipeForQuotation,
   DEFAULT_COST_PER_MINUTE
-} from '../../../services/products';
+} from '../../../services/products/quotationService';
 
 // Jednostki dostępne dla komponentów
 const AVAILABLE_UNITS = [

@@ -1044,7 +1044,28 @@ export const updateSupplierPricesFromCompletedPO = async (purchaseOrderId, userI
     let updatedCount = 0;
     const errors = [];
     
-    // Przetwórz każdą pozycję zamówienia
+    // Prefetch: pobierz jednym zapytaniem wszystkie ceny tego dostawcy
+    const supplierPricesRef = FirebaseQueryBuilder.getCollectionRef(COLLECTIONS.INVENTORY_SUPPLIER_PRICES);
+    const allPricesQuery = query(supplierPricesRef, where('supplierId', '==', supplierId));
+    const allPricesSnapshot = await getDocs(allPricesQuery);
+    
+    const existingPricesMap = new Map();
+    allPricesSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.isActive !== false && data.itemId) {
+        if (!existingPricesMap.has(data.itemId)) {
+          existingPricesMap.set(data.itemId, {
+            id: doc.id,
+            ...data,
+            createdAt: convertTimestampToDate(data.createdAt),
+            updatedAt: convertTimestampToDate(data.updatedAt),
+            validFrom: convertTimestampToDate(data.validFrom),
+            validTo: convertTimestampToDate(data.validTo)
+          });
+        }
+      }
+    });
+    
     for (const item of purchaseOrder.items) {
       try {
         const itemId = item.inventoryItemId || item.itemId;
@@ -1052,15 +1073,13 @@ export const updateSupplierPricesFromCompletedPO = async (purchaseOrderId, userI
           continue;
         }
         
-        // Konwertuj cenę na liczbę (podobnie jak w starym inventoryService)
         const unitPrice = parseFloat(item.unitPrice);
         if (isNaN(unitPrice) || unitPrice <= 0) {
           console.log(`Nieprawidłowa cena dla pozycji ${item.name}: ${item.unitPrice}, pomijam`);
           continue;
         }
         
-        // Sprawdź czy istnieje cena dla tego dostawcy
-        const existingPrice = await getSupplierPriceForItem(itemId, supplierId);
+        const existingPrice = existingPricesMap.get(itemId) || null;
         
         if (existingPrice && updateExisting) {
           // Aktualizuj istniejącą cenę

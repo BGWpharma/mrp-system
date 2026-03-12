@@ -55,7 +55,7 @@ import { pl } from 'date-fns/locale';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { AdminRoute } from '../../components/common/AdminRoute';
+import AdminRoute from '../../components/common/AdminRoute';
 import {
   getBugReports,
   getBugReportById,

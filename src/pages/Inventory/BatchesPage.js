@@ -79,6 +79,7 @@ import { getTaskById } from '../../services/production/productionService';
 import BatchVisualization from '../../components/inventory/BatchVisualization';
 import BatchDetailsDialog from '../../components/inventory/BatchDetailsDialog';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import ArchiveFilterChip from '../../components/common/ArchiveFilterChip';
 
 const LabelDialog = lazy(() => import('../../components/inventory/LabelDialog'));
 
@@ -1110,22 +1111,12 @@ const BatchesPage = () => {
                   }
                 />
 
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={showArchived}
-                      onChange={(e) => {
-                        setShowArchived(e.target.checked);
-                        setPage(0);
-                      }}
-                      size="small"
-                    />
-                  }
-                  label={
-                    <Typography variant="body2">
-                      {t('common:common.showArchived')}
-                    </Typography>
-                  }
+                <ArchiveFilterChip
+                  showArchived={showArchived}
+                  onToggle={() => {
+                    setShowArchived(prev => !prev);
+                    setPage(0);
+                  }}
                 />
               </Box>
               <Tooltip title={t('inventory.batches.refreshData')}>

@@ -33,8 +33,6 @@ import {
   DialogActions,
   Divider,
   Link,
-  FormControlLabel,
-  Checkbox,
   useTheme,
   useMediaQuery
 } from '@mui/material';
@@ -86,6 +84,7 @@ import { db } from '../../services/firebase/config';
 import { useOrderListState } from '../../contexts/OrderListStateContext';
 import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 import { useBroadcastSync } from '../../hooks/useBroadcastSync';
+import ArchiveFilterChip from '../common/ArchiveFilterChip';
 import EmptyState from '../common/EmptyState';
 import TableSkeleton from '../common/TableSkeleton';
 
@@ -1601,15 +1600,9 @@ const OrdersList = () => {
             sx={{ width: 300 }}
           />
 
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={showArchived}
-                onChange={(e) => setShowArchived(e.target.checked)}
-                size="small"
-              />
-            }
-            label={t('common.showArchived', { ns: 'common' })}
+          <ArchiveFilterChip
+            showArchived={showArchived}
+            onToggle={() => setShowArchived(prev => !prev)}
             sx={{ ml: 1 }}
           />
 

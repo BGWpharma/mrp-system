@@ -9,9 +9,9 @@ const PERFORMANCE_CONFIG = {
   // Próg czasu (ms) po którym operacja jest uznawana za wolną
   slowOperationThreshold: 1500,
   // Czy włączyć performance tracking (domyślnie tak w produkcji)
-  enablePerformanceTracking: process.env.NODE_ENV === 'production' || process.env.REACT_APP_SENTRY_DEBUG === 'true',
+  enablePerformanceTracking: import.meta.env.PROD || import.meta.env.VITE_SENTRY_DEBUG === 'true',
   // Procent operacji do śledzenia (1.0 = 100%, 0.1 = 10%)
-  performanceSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0
+  performanceSampleRate: import.meta.env.PROD ? 0.1 : 1.0
 };
 
 /**

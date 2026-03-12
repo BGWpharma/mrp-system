@@ -5,6 +5,7 @@ import * as Sentry from "@sentry/react";
 import App from './App';
 import './styles/global.css';
 import './styles/enhancements.css';
+import packageJson from '../package.json';
 
 // Automatyczny reload przy błędzie ładowania chunków (po nowym deployu)
 window.addEventListener('error', (event) => {
@@ -24,24 +25,21 @@ window.addEventListener('error', (event) => {
   }
 });
 
-// Pobierz wersję z package.json dla release tracking
-const packageJson = require('../package.json');
-
 // Inicjalizacja Sentry - musi być przed renderowaniem aplikacji
 Sentry.init({
-  dsn: process.env.REACT_APP_SENTRY_DSN || "https://8093cd8a26e8f37781f1c68a01d7903b@o4510675622887424.ingest.de.sentry.io/4510675634552912",
+  dsn: import.meta.env.VITE_SENTRY_DSN || "https://8093cd8a26e8f37781f1c68a01d7903b@o4510675622887424.ingest.de.sentry.io/4510675634552912",
   
   // Release tracking - śledzenie błędów per wersja
-  release: process.env.REACT_APP_SENTRY_RELEASE || `mrp-system@${packageJson.version}`,
+  release: import.meta.env.VITE_SENTRY_RELEASE || `mrp-system@${packageJson.version}`,
   
   // Dist - dodatkowa identyfikacja (opcjonalne)
-  dist: process.env.REACT_APP_BUILD_NUMBER || packageJson.version,
+  dist: import.meta.env.VITE_BUILD_NUMBER || packageJson.version,
   
   // Określenie środowiska
-  environment: process.env.REACT_APP_SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development',
+  environment: import.meta.env.VITE_SENTRY_ENVIRONMENT || import.meta.env.MODE || 'development',
   
   // Performance Monitoring - procent transakcji do monitorowania
-  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+  tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
   
   // Session Replay - opcjonalne
   replaysSessionSampleRate: 0.1, // 10% sesji
@@ -112,8 +110,8 @@ console.error = function(...args) {
   
   // Wyślij do Sentry (tylko w produkcji lub jeśli jest włączone debug)
   const shouldSendToSentry = 
-    process.env.NODE_ENV === 'production' || 
-    process.env.REACT_APP_SENTRY_DEBUG === 'true';
+    import.meta.env.PROD || 
+    import.meta.env.VITE_SENTRY_DEBUG === 'true';
   
   if (shouldSendToSentry) {
     try {

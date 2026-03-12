@@ -100,3 +100,29 @@ export { useTaskDebugState } from './useTaskDebugState';
 
 // Stan UI materiałów (zakładki, oczekujące zamówienia, ładowanie partii, koszty)
 export { useTaskMaterialUIState } from './useTaskMaterialUIState';
+
+// ===== FAZA 3: Hooki Timeline (ProductionTimeline) =====
+
+// Stan danych timeline (tasks, workstations, customers, fetch)
+export { useTimelineState } from './useTimelineState';
+
+// Stan widoku timeline (zoom, skala, suwak, canvas)
+export { useTimelineView } from './useTimelineView';
+
+// Stan filtrów timeline (groupBy, workstations, customers, zaawansowane filtry)
+export { useTimelineFilters } from './useTimelineFilters';
+
+// Ustawienia timeline (kolory, tryb edycji, PO delivery, mobile)
+export { useTimelineSettings } from './useTimelineSettings';
+
+// Edycja zadań timeline (dialog, undo, move, resize, select)
+export { useTimelineEdit } from './useTimelineEdit';
+
+// Tooltip timeline (tooltip danych, PO tooltip)
+export { useTimelineTooltip } from './useTimelineTooltip';
+
+// Drag & drop timeline (przeciąganie kafelków)
+export { useTimelineDrag } from './useTimelineDrag';
+
+// Touch/gesture timeline (wheel, pinch, swipe, touchpad)
+export { useTimelineTouch } from './useTimelineTouch';

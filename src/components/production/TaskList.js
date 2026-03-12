@@ -134,6 +134,7 @@ import {
 import { useTranslation } from '../../hooks/useTranslation';
 import { calculateMaterialReservationStatus, getReservationStatusColors } from '../../utils/productionUtils';
 import TaskStatusChip from './shared/TaskStatusChip';
+import ArchiveFilterChip from '../common/ArchiveFilterChip';
 
 // ===============================================
 // 🚀 OPTYMALIZACJA: Memoizowany komponent wiersza tabeli
@@ -2140,16 +2141,10 @@ const TaskList = () => {
               </Select>
             </FormControl>
 
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={showArchived}
-                  onChange={(e) => setShowArchived(e.target.checked)}
-                  size="small"
-                />
-              }
-              label={t('common:common.showArchived')}
-              sx={{ ml: 1, whiteSpace: 'nowrap' }}
+            <ArchiveFilterChip
+              showArchived={showArchived}
+              onToggle={() => setShowArchived(prev => !prev)}
+              sx={{ ml: 1 }}
             />
           </Box>
           

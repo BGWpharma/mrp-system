@@ -194,17 +194,17 @@ if (!i18n.isInitialized) {
       escapeValue: false,
     },
     
-    debug: process.env.NODE_ENV === 'development',
+    debug: import.meta.env.DEV,
     
-    saveMissing: process.env.NODE_ENV === 'development',
+    saveMissing: import.meta.env.DEV,
     missingKeyHandler: (lng, ns, key) => {
       const message = `Missing translation key: ${ns}:${key} for language: ${lng}`;
       
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.warn(`[i18n] ${message}`);
       }
       
-      if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
+      if (import.meta.env.PROD && typeof window !== 'undefined') {
         try {
           import('@sentry/react').then(Sentry => {
             Sentry.captureMessage(message, {

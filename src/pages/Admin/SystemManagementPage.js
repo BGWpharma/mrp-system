@@ -185,9 +185,11 @@ const SystemManagementPage = () => {
             lastPriceUpdateReason: batchesSnapshot.docs[0].data().lastPriceUpdateReason || 'N/A'
           };
           
-          // Sprawdź czy partia jest używana w jakimś zadaniu
           const batchId = batchesSnapshot.docs[0].id;
-          const tasksSnapshot = await getDocs(query(collection(db, 'tasks'), limit(50)));
+          const [tasksSnapshot, ordersSnapshot] = await Promise.all([
+            getDocs(query(collection(db, 'tasks'), limit(50))),
+            getDocs(query(collection(db, 'orders'), limit(50)))
+          ]);
           
           for (const taskDoc of tasksSnapshot.docs) {
             const taskData = taskDoc.data();
@@ -211,9 +213,6 @@ const SystemManagementPage = () => {
             }
             
             if (found) {
-              // Sprawdź czy zadanie jest powiązane z zamówieniem
-              const ordersSnapshot = await getDocs(query(collection(db, 'orders'), limit(50)));
-              
               for (const orderDoc of ordersSnapshot.docs) {
                 const orderData = orderDoc.data();
                 const items = orderData.items || [];

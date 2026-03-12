@@ -384,8 +384,9 @@
 
 /* ===== TOOLTIP STYLES ===== */
 .MuiTooltip-tooltip {
-  background: var(--timeline-surface) !important;
-  border: 1px solid var(--timeline-border) !important;
+  background: #1e293b !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
   box-shadow: var(--timeline-shadow-lg) !important;
   border-radius: var(--timeline-radius-sm) !important;
   font-size: 0.75rem !important;
@@ -393,17 +394,7 @@
   padding: 6px 10px !important;
 }
 
-[data-theme='dark'] .MuiTooltip-tooltip {
-  background: #1e293b !important;
-  color: #f1f5f9 !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-}
-
 .MuiTooltip-arrow {
-  color: var(--timeline-surface) !important;
-}
-
-[data-theme='dark'] .MuiTooltip-arrow {
   color: #1e293b !important;
 }
 

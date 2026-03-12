@@ -320,7 +320,7 @@ export const getOrderById = async (id, { forceServer = false } = {}) => {
         } else if (typeof dateValue === 'string' || typeof dateValue === 'number') {
           const converted = new Date(dateValue);
           if (isNaN(converted.getTime())) {
-            if (process.env.NODE_ENV === 'development') {
+            if (import.meta.env.DEV) {
               console.warn(`Nieprawidłowa data ${fieldName} w zamówieniu ${orderData.orderNumber || orderDoc.id}: ${dateValue}`);
             }
             return null;
@@ -329,7 +329,7 @@ export const getOrderById = async (id, { forceServer = false } = {}) => {
         }
         return null;
       } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           console.warn(`Błąd konwersji daty ${fieldName} w zamówieniu ${orderData.orderNumber || orderDoc.id}:`, error);
         }
         return null;
@@ -539,7 +539,7 @@ export const createOrder = async (orderData, userId) => {
     
     // Tworzenie powiadomienia o nowym zamówieniu
     try {
-      const { createRealtimeNotification } = require('../notificationService');
+      const { createRealtimeNotification } = await import('../notificationService');
       
       // ID użytkowników, którzy powinni otrzymać powiadomienie
       // W tym przypadku wysyłamy powiadomienie do użytkownika, który utworzył zamówienie
@@ -599,7 +599,7 @@ export const createPurchaseOrder = async (orderData, userId) => {
     
     // Tworzenie powiadomienia o nowym zamówieniu zakupowym
     try {
-      const { createRealtimeNotification } = require('../notificationService');
+      const { createRealtimeNotification } = await import('../notificationService');
       
       // ID użytkowników, którzy powinni otrzymać powiadomienie
       const userIds = [userId];
@@ -1015,7 +1015,7 @@ export const updateOrderStatus = async (orderId, status, userId) => {
       
       // Jeśli zaimportowano usługę powiadomień, utwórz powiadomienie o zmianie statusu
       try {
-        const { createRealtimeStatusChangeNotification } = require('../notificationService');
+        const { createRealtimeStatusChangeNotification } = await import('../notificationService');
         
         // Pobierz wszystkich administratorów, którzy powinni otrzymać powiadomienie
         // W tym przypadku powiadomienie wysyłamy tylko do użytkownika, który zmienił status,
@@ -1036,7 +1036,7 @@ export const updateOrderStatus = async (orderId, status, userId) => {
         
         // Fallback do starego systemu powiadomień, jeśli Realtime Database nie zadziała
         try {
-          const { createStatusChangeNotification } = require('../notificationService');
+          const { createStatusChangeNotification } = await import('../notificationService');
           await createStatusChangeNotification(
             userId,
             'order',

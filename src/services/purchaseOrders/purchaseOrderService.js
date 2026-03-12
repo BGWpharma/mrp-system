@@ -1374,7 +1374,7 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
       
       // Spróbuj utworzyć powiadomienie w czasie rzeczywistym
       try {
-        const { createRealtimeStatusChangeNotification } = require('../notificationService');
+        const { createRealtimeStatusChangeNotification } = await import('../notificationService');
         
         // Powiadomienie wysyłamy nie tylko do użytkownika, który zmienił status,
         // ale do wszystkich administratorów
@@ -1397,7 +1397,7 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
         
         // Fallback do starego systemu powiadomień, jeśli Realtime Database nie zadziała
         try {
-          const { createStatusChangeNotification } = require('../notificationService');
+          const { createStatusChangeNotification } = await import('../notificationService');
           await createStatusChangeNotification(
             userId,
             'purchaseOrder',

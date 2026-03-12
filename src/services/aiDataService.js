@@ -2,6 +2,7 @@ import { db } from './firebase/config';
 import { 
   collection, 
   getDocs, 
+  getCountFromServer,
   query, 
   where, 
   orderBy, 
@@ -1596,40 +1597,43 @@ export const enrichBusinessDataWithAnalysis = (businessData) => {
  */
 export const getMRPSystemSummary = async () => {
   try {
-    // Pobierz podstawowe statystyki - bez limitów dla pełnego dostępu do danych
+    const excludedStatuses = ['completed', 'cancelled'];
+
+    const [
+      totalInventorySnap,
+      totalOrdersSnap,
+      totalTasksSnap,
+      totalSuppliersSnap,
+      activeOrdersSnap,
+      activeTasksSnap,
+      pendingPOSnap,
+    ] = await Promise.all([
+      getCountFromServer(collection(db, 'inventory')),
+      getCountFromServer(collection(db, 'orders')),
+      getCountFromServer(collection(db, 'tasks')),
+      getCountFromServer(collection(db, 'suppliers')),
+      getCountFromServer(query(collection(db, 'orders'), where('status', 'not-in', excludedStatuses))),
+      getCountFromServer(query(collection(db, 'tasks'), where('status', 'not-in', excludedStatuses))),
+      getCountFromServer(query(collection(db, 'purchaseOrders'), where('status', 'not-in', excludedStatuses))),
+    ]);
+
+    // itemsLowOnStock wymaga porównania dwóch pól (quantity <= minQuantity),
+    // co nie jest możliwe po stronie Firestore — używamy cache z pełnego odczytu
     const inventoryItems = await getDataWithCache('inventory', getInventoryItems, {});
-    const customerOrders = await getDataWithCache('orders', getCustomerOrders, {});
-    const productionTasks = await getDataWithCache('productionTasks', getProductionTasks, {});
-    const suppliers = await getDataWithCache('suppliers', getSuppliers, {});
-    const purchaseOrders = await getDataWithCache('purchaseOrders', getPurchaseOrders, {});
-    
-    // Oblicz bieżące statystyki
-    const activeOrders = customerOrders.filter(order => 
-      order.status !== 'completed' && order.status !== 'cancelled'
-    ).length;
-    
-    const activeProductionTasks = productionTasks.filter(task => 
-      task.status !== 'completed' && task.status !== 'cancelled'
-    ).length;
-    
     const itemsLowOnStock = inventoryItems.filter(item => 
       (item.quantity <= item.minQuantity) && item.minQuantity > 0
     ).length;
-    
-    const pendingPurchaseOrders = purchaseOrders.filter(po => 
-      po.status !== 'completed' && po.status !== 'cancelled'
-    ).length;
-    
+
     return {
       timestamp: new Date().toISOString(),
-      totalInventoryItems: inventoryItems.length,
-      totalOrders: customerOrders.length,
-      totalProductionTasks: productionTasks.length,
-      totalSuppliers: suppliers.length,
-      activeOrders,
-      activeProductionTasks,
+      totalInventoryItems: totalInventorySnap.data().count,
+      totalOrders: totalOrdersSnap.data().count,
+      totalProductionTasks: totalTasksSnap.data().count,
+      totalSuppliers: totalSuppliersSnap.data().count,
+      activeOrders: activeOrdersSnap.data().count,
+      activeProductionTasks: activeTasksSnap.data().count,
       itemsLowOnStock,
-      pendingPurchaseOrders
+      pendingPurchaseOrders: pendingPOSnap.data().count
     };
   } catch (error) {
     console.error('Błąd podczas pobierania podsumowania systemu MRP:', error);
@@ -1647,26 +1651,20 @@ export const getMRPSystemSummary = async () => {
 export const getBatchesWithPOData = async () => {
   try {
     return getDataWithCache('materialBatches', async () => {
-      console.log('Pobieranie danych o partiach materiałów z zamówieniami zakupowymi...');
-      
-      // Pobierz wszystkie partie magazynowe bez limitów
       const batchesQuery = query(
         collection(db, 'inventoryBatches'),
-        orderBy('createdAt', 'desc') // Sortuj po dacie utworzenia
+        where('purchaseOrderDetails.id', '!=', null),
+        orderBy('createdAt', 'desc'),
+        limit(200)
       );
       
       const batchesSnapshot = await getDocs(batchesQuery);
       
-      // Przetwórz wyniki
-      const batches = batchesSnapshot.docs
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-        .filter(batch => batch.purchaseOrderDetails && batch.purchaseOrderDetails.id);
+      const batches = batchesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
       
-      console.log(`Pobrano ${batchesSnapshot.docs.length} dokumentów, ${batches.length} z powiązaniami z PO`);
-      console.log(`Łącznie pobrano ${batches.length} partii z powiązaniami z zamówieniami zakupowymi`);
       return batches;
     });
   } catch (error) {

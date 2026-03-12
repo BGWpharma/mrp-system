@@ -25,7 +25,7 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondary,
+
   Dialog,
   DialogTitle,
   DialogContent,

@@ -89,6 +89,7 @@ const AIChatFAB = () => {
   
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const historyCacheRef = useRef({ data: null, timestamp: 0 });
 
   // Ukryj FAB na stronie AI Assistant (pełna wersja)
   const isAIAssistantPage = location.pathname === '/ai-assistant';
@@ -113,12 +114,21 @@ const AIChatFAB = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const HISTORY_CACHE_TTL = 5 * 60 * 1000; // 5 min
     const fetchHistory = async () => {
       if (!currentUser?.uid || !open) return;
+
+      const cache = historyCacheRef.current;
+      if (cache.data && (Date.now() - cache.timestamp) < HISTORY_CACHE_TTL) {
+        setConversationHistory(cache.data);
+        return;
+      }
+
       try {
         setLoadingHistory(true);
         const history = await getUserConversations(currentUser.uid, 20);
         if (cancelled) return;
+        historyCacheRef.current = { data: history, timestamp: Date.now() };
         setConversationHistory(history);
       } catch (error) {
         console.error('Błąd pobierania historii:', error);
@@ -306,8 +316,8 @@ const AIChatFAB = () => {
       if (!convId) {
         convId = await createConversation(currentUser.uid);
         setConversationId(convId);
-        // Odśwież historię po utworzeniu nowej konwersacji
         const history = await getUserConversations(currentUser.uid, 20);
+        historyCacheRef.current = { data: history, timestamp: Date.now() };
         setConversationHistory(history);
       }
 
