@@ -306,6 +306,9 @@ export const createCmrDocument = async (cmrData, userId) => {
           createdAt: serverTimestamp(),
           createdBy: userId
         };
+
+        if (item.productionTaskId) itemData.productionTaskId = item.productionTaskId;
+        if (item.productionTaskNumber) itemData.productionTaskNumber = item.productionTaskNumber;
         
         // Jeśli element ma powiązane partie, zapisz je jako część danych elementu
         if (item.linkedBatches && item.linkedBatches.length > 0) {
@@ -422,6 +425,9 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
           createdAt: serverTimestamp(),
           createdBy: userId
         };
+
+        if (item.productionTaskId) itemData.productionTaskId = item.productionTaskId;
+        if (item.productionTaskNumber) itemData.productionTaskNumber = item.productionTaskNumber;
         
         // Jeśli element ma powiązane partie, zapisz je jako część danych elementu
         if (item.linkedBatches && item.linkedBatches.length > 0) {

@@ -24,6 +24,7 @@
       "procurementForecasts": "Prognozy zakupowe"
     },
     "table": {
+      "name": "SKU",
       "sku": "SKU",
       "category": "Kategoria",
       "casNumber": "Numer CAS",

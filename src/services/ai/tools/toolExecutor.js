@@ -2656,6 +2656,7 @@ export class ToolExecutor {
       batches: [],
       productionTasks: [],
       customerOrders: [],
+      cmrDocuments: [],
       direction: params.direction || 'both'
     };
     
@@ -2809,6 +2810,34 @@ export class ToolExecutor {
     flow.productionTasks = Array.from(new Map(flow.productionTasks.map(item => [item.id, item])).values());
     flow.customerOrders = Array.from(new Map(flow.customerOrders.map(item => [item.id, item])).values());
     flow.purchaseOrders = Array.from(new Map(flow.purchaseOrders.map(item => [item.id, item])).values());
+
+    // Traceability -> CMR: zbierz CMR z partii (shippedInCmr) i MO (cmrDocuments)
+    if (params.direction === 'forward' || params.direction === 'both') {
+      const cmrIds = new Set();
+
+      for (const batch of flow.batches) {
+        if (batch.shippedInCmr && Array.isArray(batch.shippedInCmr)) {
+          batch.shippedInCmr.forEach(entry => { if (entry.cmrId) cmrIds.add(entry.cmrId); });
+        }
+      }
+      for (const task of flow.productionTasks) {
+        if (task.cmrDocuments && Array.isArray(task.cmrDocuments)) {
+          task.cmrDocuments.forEach(entry => { if (entry.cmrId) cmrIds.add(entry.cmrId); });
+        }
+      }
+
+      for (const cmrId of cmrIds) {
+        try {
+          const cmrDoc = await getDoc(doc(db, 'cmrDocuments', cmrId));
+          if (cmrDoc.exists()) {
+            flow.cmrDocuments.push({ id: cmrDoc.id, ...cmrDoc.data() });
+          }
+        } catch (error) {
+          console.warn(`[ToolExecutor] ⚠️ Błąd przy pobieraniu CMR ${cmrId}:`, error.message);
+        }
+      }
+      flow.cmrDocuments = Array.from(new Map(flow.cmrDocuments.map(item => [item.id, item])).values());
+    }
     
     // Usuń szczegóły jeśli nie są potrzebne
     if (!params.includeDetails) {
@@ -2816,6 +2845,7 @@ export class ToolExecutor {
       flow.productionTasks = flow.productionTasks.map(({ id, moNumber, productName, status }) => ({ id, moNumber, productName, status }));
       flow.customerOrders = flow.customerOrders.map(({ id, orderNumber, customerName, status }) => ({ id, orderNumber, customerName, status }));
       flow.purchaseOrders = flow.purchaseOrders.map(({ id, poNumber, supplierName, status }) => ({ id, poNumber, supplierName, status }));
+      flow.cmrDocuments = flow.cmrDocuments.map(({ id, cmrNumber, status }) => ({ id, cmrNumber, status }));
     }
     
     return {
@@ -2824,7 +2854,8 @@ export class ToolExecutor {
         purchaseOrders: flow.purchaseOrders.length,
         batches: flow.batches.length,
         productionTasks: flow.productionTasks.length,
-        customerOrders: flow.customerOrders.length
+        customerOrders: flow.customerOrders.length,
+        cmrDocuments: flow.cmrDocuments.length
       }
     };
   }
@@ -3929,7 +3960,6 @@ export class ToolExecutor {
       
       // Znajdź zadania produkcyjne które mogły użyć tej partii (przez moNumber jeśli istnieje)
       if (initialBatch.moNumber) {
-        // Sprawdź czy są inne partie lub zadania powiązane
         const relatedTasksQuery = query(
           collection(db, COLLECTION_MAPPING.production_tasks),
           where('moNumber', '==', initialBatch.moNumber),
@@ -3939,6 +3969,33 @@ export class ToolExecutor {
         const relatedTasksSnapshot = await getDocs(relatedTasksQuery);
         if (!relatedTasksSnapshot.empty) {
           console.log(`[ToolExecutor] ✅ Znaleziono ${relatedTasksSnapshot.docs.length} powiązanych zadań`);
+        }
+      }
+
+      // Traceability Batch -> CMR: sprawdź shippedInCmr na partii
+      if (initialBatch.shippedInCmr && initialBatch.shippedInCmr.length > 0) {
+        for (const cmrEntry of initialBatch.shippedInCmr) {
+          if (cmrEntry.cmrId) {
+            try {
+              const cmrDoc = await getDoc(doc(db, 'cmrDocuments', cmrEntry.cmrId));
+              if (cmrDoc.exists()) {
+                const cmr = cmrDoc.data();
+                traceability.chain.push({
+                  step: 'shipment',
+                  type: 'CMR Document',
+                  cmrId: cmrDoc.id,
+                  cmrNumber: cmr.cmrNumber || cmrEntry.cmrNumber,
+                  status: cmr.status,
+                  shipmentDate: cmrEntry.shipmentDate,
+                  shippedQuantity: cmrEntry.quantity,
+                  recipient: cmr.recipient?.name || null
+                });
+                console.log(`[ToolExecutor] ✅ Znaleziono CMR: ${cmr.cmrNumber}`);
+              }
+            } catch (error) {
+              console.warn(`[ToolExecutor] ⚠️ Błąd przy pobieraniu CMR ${cmrEntry.cmrId}:`, error.message);
+            }
+          }
         }
       }
     }
@@ -3970,6 +4027,12 @@ export class ToolExecutor {
           displayId: step.batchNumber || step.lotNumber || step.batchId
         };
       }
+      if (step.type === 'CMR Document') {
+        return {
+          ...step,
+          displayId: step.cmrNumber || step.cmrId
+        };
+      }
       return step;
     });
     
@@ -3981,7 +4044,8 @@ export class ToolExecutor {
         purchaseOrders: traceability.chain.filter(c => c.type === 'Purchase Order').length,
         materialBatches: traceability.chain.filter(c => c.type === 'Material Batch' || c.type === 'Inventory Batch').length,
         productionTasks: traceability.chain.filter(c => c.type === 'Manufacturing Order').length,
-        customerOrders: traceability.chain.filter(c => c.type === 'Customer Order').length
+        customerOrders: traceability.chain.filter(c => c.type === 'Customer Order').length,
+        cmrDocuments: traceability.chain.filter(c => c.type === 'CMR Document').length
       },
       isEmpty: traceability.chain.length === 0,
       warning: traceability.chain.length === 0 ? "⚠️ BRAK DANYCH - Nie można utworzyć łańcucha traceability." : null

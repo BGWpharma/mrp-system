@@ -332,7 +332,8 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
       orderItemId: orderItem.id,
       orderId: orderItem.orderId,
       orderNumber: orderItem.orderNumber,
-      // Dodaj informacje o potencjalnej recepturze
+      productionTaskId: orderItem.productionTaskId || null,
+      productionTaskNumber: orderItem.productionTaskNumber || null,
       originalOrderItem: orderItem
     };
 

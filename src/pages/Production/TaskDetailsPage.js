@@ -116,7 +116,7 @@ import {
   getRequiredQuantityForReservation as getRequiredQuantityForReservationPure,
 } from '../../utils/validation';
 import { db } from '../../services/firebase/config';
-import { getDoc, doc, updateDoc, serverTimestamp, collection, query, where, getDocs, limit, orderBy, runTransaction } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, serverTimestamp, collection, query, where, getDocs, limit, orderBy, runTransaction, arrayUnion } from 'firebase/firestore';
 import { useVisibilityAwareSnapshot } from '../../hooks/useVisibilityAwareSnapshot';
 // ✅ FAZA A: firebase/storage imports przeniesione do useFileHandlers
 // ✅ FAZA 2+: generateEndProductReportPDF przeniesione do useTaskReportFetcher
@@ -2158,11 +2158,17 @@ const TaskDetailsPage = () => {
                 userId: currentUser.uid
               });
               
-              // ⚡ ATOMOWA aktualizacja ilości w partii
+              // ⚡ ATOMOWA aktualizacja ilości w partii + traceability Batch -> MO
               transaction.update(batchRef, {
                 quantity: newQuantity,
                 updatedAt: serverTimestamp(),
-                updatedBy: currentUser.uid
+                updatedBy: currentUser.uid,
+                usedInTasks: arrayUnion({
+                  taskId: id,
+                  moNumber: task.moNumber || '',
+                  quantity: consumeQuantity,
+                  timestamp: new Date().toISOString()
+                })
               });
               
               // ⚡ ATOMOWE dodanie wpisu w historii transakcji (w tej samej transakcji!)
@@ -2223,7 +2229,13 @@ const TaskDetailsPage = () => {
                   transaction.update(batchRef, {
                     quantity: newQuantity,
                     updatedAt: serverTimestamp(),
-                    updatedBy: currentUser.uid
+                    updatedBy: currentUser.uid,
+                    usedInTasks: arrayUnion({
+                      taskId: id,
+                      moNumber: task.moNumber || '',
+                      quantity: consumeQuantity,
+                      timestamp: new Date().toISOString()
+                    })
                   });
                   
                   const historyRef = doc(collection(db, 'inventoryTransactions'));

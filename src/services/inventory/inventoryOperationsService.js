@@ -12,7 +12,8 @@ import {
   where,
   serverTimestamp,
   increment,
-  Timestamp
+  Timestamp,
+  arrayUnion
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { 
@@ -200,6 +201,14 @@ export const receiveInventory = async (itemId, quantity, transactionData, userId
           validatedQuantity,
           validatedUserId
         );
+
+        // Traceability PO -> Batch: zapisz ID wygenerowanej partii na PO
+        if (batchRef?.id) {
+          const poRef = doc(db, 'purchaseOrders', transactionData.orderId);
+          await updateDoc(poRef, {
+            generatedBatchIds: arrayUnion(batchRef.id)
+          });
+        }
       } catch (error) {
         console.error('Błąd podczas aktualizacji zamówienia zakupowego:', error);
         // Kontynuuj mimo błędu - przyjęcie towaru jest ważniejsze

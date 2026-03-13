@@ -876,7 +876,7 @@ NOWE MOŻLIWOŚCI:
     type: "function",
     function: {
       name: "trace_material_flow",
-      description: "Śledzi przepływ materiału przez system: PO → Partia → MO → Produkt → CO. Używany do traceability i analizy pochodzenia materiałów. Użyj gdy użytkownik pyta 'skąd pochodzi', 'gdzie poszedł materiał', 'traceability'.",
+      description: "Śledzi przepływ materiału przez system: PO → Partia → MO → Produkt → CO → CMR. Używany do traceability i analizy pochodzenia materiałów. Użyj gdy użytkownik pyta 'skąd pochodzi', 'gdzie poszedł materiał', 'traceability', 'wysyłka', 'CMR'.",
       parameters: {
         type: "object",
         properties: {
@@ -1118,7 +1118,7 @@ NOWE MOŻLIWOŚCI:
     type: "function",
     function: {
       name: "calculate_batch_traceability",
-      description: "🔍 Oblicza pełny łańcuch traceability (śledzenie pochodzenia) dla partii produktu lub materiału. BACKWARD: PO (zakup) → Batch (partia surowca) → MO (produkcja) → Batch (partia produktu). FORWARD: Batch (partia produktu) → CO (zamówienie klienta). Używa consumedMaterials z zadań produkcyjnych. Użyj gdy użytkownik pyta o pochodzenie partii, traceability LOT, z jakiego zamówienia pochodzi, gdzie trafiła partia.",
+      description: "🔍 Oblicza pełny łańcuch traceability (śledzenie pochodzenia) dla partii produktu lub materiału. BACKWARD: PO (zakup) → Batch (partia surowca) → MO (produkcja) → Batch (partia produktu). FORWARD: Batch (partia produktu) → CO (zamówienie klienta) → CMR (wysyłka). Używa consumedMaterials, usedInTasks, shippedInCmr i cmrDocuments z zadań produkcyjnych. Użyj gdy użytkownik pyta o pochodzenie partii, traceability LOT, z jakiego zamówienia pochodzi, gdzie trafiła partia, wysyłkę CMR.",
       parameters: {
         type: "object",
         properties: {

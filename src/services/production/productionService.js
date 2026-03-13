@@ -3172,7 +3172,13 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             
             await updateDoc(batchRef, {
               quantity: increment(-batchAssignment.quantity),
-              updatedAt: serverTimestamp()
+              updatedAt: serverTimestamp(),
+              usedInTasks: arrayUnion({
+                taskId: taskId,
+                moNumber: task.moNumber || '',
+                quantity: batchAssignment.quantity,
+                timestamp: new Date().toISOString()
+              })
             });
             
             // Dodaj transakcję dla każdej wykorzystanej partii

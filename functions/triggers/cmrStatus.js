@@ -89,6 +89,12 @@ const onCmrStatusUpdate = onDocumentUpdated(
             );
           }
 
+          // Aktualizuj powiązane MO (production tasks) z danymi CMR
+          await updateProductionTaskCmrData(db, cmrId, cmrData.cmrNumber, cmrItems);
+
+          // Aktualizuj partie (batches) z danymi CMR
+          await updateBatchCmrData(db, cmrId, cmrData.cmrNumber, cmrItems);
+
           logger.info("✅ Successfully updated shipped quantities for CMR", {
             cmrId,
             cmrNumber: cmrData.cmrNumber,
@@ -276,6 +282,90 @@ function normalizeProductName(name) {
       .replace(/omega3/g, "omega")
       .replace(/omegacaps/g, "omega")
       .replace(/caps$/g, ""); // usuń "caps" na końcu
+}
+
+/**
+ * Aktualizuje zadania produkcyjne (MO) z danymi CMR — traceability MO -> CMR
+ * @param {Object} db - Instancja Firestore
+ * @param {string} cmrId - ID dokumentu CMR
+ * @param {string} cmrNumber - Numer CMR
+ * @param {Array} cmrItems - Lista pozycji CMR
+ */
+async function updateProductionTaskCmrData(db, cmrId, cmrNumber, cmrItems) {
+  const taskIds = new Set();
+  for (const item of cmrItems) {
+    if (item.productionTaskId) {
+      taskIds.add(item.productionTaskId);
+    }
+  }
+
+  if (taskIds.size === 0) {
+    logger.info("No production tasks linked to CMR items", {cmrId});
+    return;
+  }
+
+  const shipmentDate = new Date().toISOString();
+  const updatePromises = [...taskIds].map((taskId) => {
+    const taskRef = db.collection("productionTasks").doc(taskId);
+    return taskRef.update({
+      cmrDocuments: admin.firestore.FieldValue.arrayUnion({
+        cmrId,
+        cmrNumber,
+        shipmentDate,
+        status: "W transporcie",
+      }),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch((err) => {
+      logger.warn(`Failed to update MO ${taskId} with CMR data`, {error: err.message});
+    });
+  });
+
+  await Promise.all(updatePromises);
+  logger.info(`Updated ${taskIds.size} production tasks with CMR data`, {cmrId, cmrNumber});
+}
+
+/**
+ * Aktualizuje partie (batches) z danymi CMR — traceability Batch -> CMR
+ * @param {Object} db - Instancja Firestore
+ * @param {string} cmrId - ID dokumentu CMR
+ * @param {string} cmrNumber - Numer CMR
+ * @param {Array} cmrItems - Lista pozycji CMR
+ */
+async function updateBatchCmrData(db, cmrId, cmrNumber, cmrItems) {
+  const batchUpdates = new Map();
+
+  for (const item of cmrItems) {
+    if (!item.linkedBatches || !Array.isArray(item.linkedBatches)) continue;
+    for (const batch of item.linkedBatches) {
+      if (!batch.id) continue;
+      const existing = batchUpdates.get(batch.id) || 0;
+      batchUpdates.set(batch.id, existing + (parseFloat(batch.quantity) || 0));
+    }
+  }
+
+  if (batchUpdates.size === 0) {
+    logger.info("No batches linked to CMR items", {cmrId});
+    return;
+  }
+
+  const shipmentDate = new Date().toISOString();
+  const updatePromises = [...batchUpdates.entries()].map(([batchId, quantity]) => {
+    const batchRef = db.collection("inventoryBatches").doc(batchId);
+    return batchRef.update({
+      shippedInCmr: admin.firestore.FieldValue.arrayUnion({
+        cmrId,
+        cmrNumber,
+        quantity,
+        shipmentDate,
+      }),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch((err) => {
+      logger.warn(`Failed to update batch ${batchId} with CMR data`, {error: err.message});
+    });
+  });
+
+  await Promise.all(updatePromises);
+  logger.info(`Updated ${batchUpdates.size} batches with CMR data`, {cmrId, cmrNumber});
 }
 
 module.exports = {onCmrStatusUpdate};
