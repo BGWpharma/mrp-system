@@ -449,13 +449,35 @@
         "estimatedDuration": "Estimated Production Time",
         "totalPlannedTime": "Total planned production time",
         "timePerUnit": "Production Time Per Unit",
-        "scheduledStart": "Scheduled start date and time",
-        "plannedEnd": "Planned end date and time",
+        "scheduledStart": "Scheduled start date",
+        "plannedEnd": "Planned end date",
         "workstation": "Production workstation",
         "location": "location",
         "notSpecified": "Not specified",
         "hours": "hours",
-        "minutesPerUnit": "min./unit"
+        "minutesPerUnit": "min./unit",
+        "processingCostPerUnit": "Processing cost per unit",
+        "totalProcessingCost": "Total"
+    },
+    "kpi": {
+        "productCard": "Product",
+        "progressCard": "Production Progress",
+        "timeCard": "Production Time",
+        "planned": "Planned",
+        "completed": "Completed",
+        "ofPlanned": "of planned",
+        "timePerUnit": "per unit",
+        "totalTime": "total",
+        "scheduledStart": "Start",
+        "scheduledEnd": "End",
+        "noTimeData": "No time data"
+    },
+    "productInfo": {
+        "title": "Product Information",
+        "recipeAndInventory": "Recipe & Inventory"
+    },
+    "timePlanning": {
+        "title": "Time & Planning"
     },
     "endProductBatch": {
         "lotNumber": "LOT Number",

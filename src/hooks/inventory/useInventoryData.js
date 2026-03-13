@@ -28,13 +28,13 @@ export function useInventoryData() {
   const [expiredCount, setExpiredCount] = useState(0);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [isInitialized, setIsInitialized] = useState(false);
   const [mainTableLoading, setMainTableLoading] = useState(false);
   const [showContent, setShowContent] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
 
   const isFirstRender = useRef(true);
+  const isPageEffectMounted = useRef(false);
   const searchTermTimerRef = useRef(null);
   const searchCategoryTimerRef = useRef(null);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
@@ -62,7 +62,7 @@ export function useInventoryData() {
     return map;
   }, [customers]);
 
-  const fetchInventoryItems = async (newSortField = null, newSortOrder = null) => {
+  const fetchInventoryItems = async (newSortField = null, newSortOrder = null, forceRefresh = false) => {
     if (currentTab === 0) {
       setMainTableLoading(true);
       setShowContent(false);
@@ -71,11 +71,6 @@ export function useInventoryData() {
     }
 
     try {
-      if (isFirstRender.current) {
-        await cleanupMicroReservations();
-        isFirstRender.current = false;
-      }
-
       const sortFieldToUse = newSortField || tableSort.field;
       const sortOrderToUse = newSortOrder || tableSort.order;
       const warehouseFilter = currentTab === 0 ? null : (selectedWarehouse || null);
@@ -88,7 +83,7 @@ export function useInventoryData() {
         searchCategory: debouncedSearchCategory.trim() !== '' ? debouncedSearchCategory : null,
         sortField: sortFieldToUse,
         sortOrder: sortOrderToUse,
-        forceRefresh: false
+        forceRefresh
       });
 
       if (result && result.items) {
@@ -128,7 +123,16 @@ export function useInventoryData() {
   };
 
   useEffect(() => {
-    fetchInventoryItems(tableSort.field, tableSort.order);
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      cleanupMicroReservations().catch(err => {
+        console.error('Cleanup micro reservations failed:', err);
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchInventoryItems(tableSort.field, tableSort.order, true);
     fetchExpiryData();
 
     const handleInventoryUpdate = () => {
@@ -178,12 +182,20 @@ export function useInventoryData() {
   }, [selectedWarehouse]);
 
   useEffect(() => {
-    if (!isInitialized) {
-      setIsInitialized(true);
+    if (!isPageEffectMounted.current) {
+      isPageEffectMounted.current = true;
       return;
     }
     fetchInventoryItems(tableSort.field, tableSort.order);
-  }, [page, pageSize, isInitialized]);
+  }, [page, pageSize]);
+
+  useEffect(() => {
+    if (!isPageEffectMounted.current) return;
+    if (currentTab === 0) {
+      fetchInventoryItems(tableSort.field, tableSort.order);
+      fetchExpiryData();
+    }
+  }, [currentTab]);
 
   const handleDelete = async (id) => {
     setConfirmDialog({

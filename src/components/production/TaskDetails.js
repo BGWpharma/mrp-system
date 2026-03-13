@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Grid, Paper, Typography, Box, Button, Chip, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, IconButton, Collapse, Tooltip } from '@mui/material';
+import { Grid, Paper, Typography, Box, Button, Chip, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, IconButton, Collapse, Tooltip, useTheme } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { 
   ShoppingCart as ShoppingCartIcon,
@@ -12,7 +12,8 @@ import {
   Receipt as ReceiptIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  Euro as EuroIcon
+  Euro as EuroIcon,
+  Link as LinkIcon
 } from '@mui/icons-material';
 import { formatDateTime } from '../../utils/formatting';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -30,8 +31,9 @@ const chunkArray = (array, size) => {
   return chunks;
 };
 
-const TaskDetails = ({ task }) => {
+const TaskDetails = ({ task, hideProductionTime = false }) => {
   const { t } = useTranslation('taskDetails');
+  const theme = useTheme();
   const { showError } = useNotification();
   const [workstation, setWorkstation] = useState(null);
   const [relatedBatches, setRelatedBatches] = useState([]);
@@ -202,34 +204,41 @@ const TaskDetails = ({ task }) => {
     return () => { cancelled = true; };
   }, [task?.moNumber, materialBatchesKey, consumedMaterialsKey, showError]);
   
-  // Styl dla nagłówka sekcji z ikoną zwijania/rozwijania
   const sectionHeaderStyle = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     cursor: 'pointer',
-    mb: expandedSections ? 2 : 0,
     py: 0.5,
-    pl: 0.5,
+    px: 1,
     borderRadius: 1,
+    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
     '&:hover': {
-      bgcolor: 'rgba(0, 0, 0, 0.04)'
+      bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'
     }
   };
+
+  const relatedOrdersCount = (hasCustomerOrder ? 1 : 0)
+    + (task?.purchaseOrders?.length || 0)
+    + (task?.linkedPurchaseOrders?.length || 0);
   
   return (
     <>
       <Grid item xs={12}>
-        <Paper sx={{ p: 2, mb: 2 }}>
+        <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
           <Box 
             sx={sectionHeaderStyle}
             onClick={() => toggleSection('relatedOrders')}
           >
-            <Tooltip title="Kliknij, aby zwinąć/rozwinąć sekcję">
-              <Typography variant="h6">
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ShoppingCartIcon color="primary" fontSize="small" />
+              <Typography variant="h6" sx={{ fontSize: '1.1rem' }}>
                 {t('sections.relatedOrders')}
               </Typography>
-            </Tooltip>
+              {relatedOrdersCount > 0 && (
+                <Chip label={relatedOrdersCount} size="small" color="primary" variant="outlined" sx={{ height: 22, fontSize: '0.75rem' }} />
+              )}
+            </Box>
             <IconButton size="small">
               {expandedSections.relatedOrders ? <ExpandLessIcon /> : <ExpandMoreIcon />}
             </IconButton>
@@ -372,16 +381,19 @@ const TaskDetails = ({ task }) => {
         </Paper>
       </Grid>
       
-      {task?.scheduledDate && (
+      {!hideProductionTime && task?.scheduledDate && (
         <Grid item xs={12}>
-          <Paper sx={{ p: 2, mb: 2 }}>
+          <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
             <Box 
               sx={sectionHeaderStyle}
               onClick={() => toggleSection('productionTime')}
             >
-              <Typography variant="h6">
-                {t('sections.productionTimeInfo')}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ScheduleIcon color="primary" fontSize="small" />
+                <Typography variant="h6" sx={{ fontSize: '1.1rem' }}>
+                  {t('sections.productionTimeInfo')}
+                </Typography>
+              </Box>
               <IconButton size="small">
                 {expandedSections.productionTime ? <ExpandLessIcon /> : <ExpandMoreIcon />}
               </IconButton>
@@ -467,68 +479,22 @@ const TaskDetails = ({ task }) => {
         </Grid>
       )}
       
-      {/* Nowa sekcja dla informacji o partii produktu */}
-      {hasProductBatchInfo && (
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Box 
-              sx={sectionHeaderStyle}
-              onClick={() => toggleSection('productBatch')}
-            >
-              <Typography variant="h6">
-                {t('sections.endProductBatchData')}
-              </Typography>
-              <IconButton size="small">
-                {expandedSections.productBatch ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-              </IconButton>
-            </Box>
-            
-            <Collapse in={expandedSections.productBatch}>
-              {task.lotNumber && (
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <BatchIcon color="primary" sx={{ mr: 1 }} />
-                  <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
-                    {t('endProductBatch.lotNumber')}:
-                  </Typography>
-                  <Typography variant="body1" component="span" sx={{ ml: 1 }}>
-                    {task.lotNumber}
-                  </Typography>
-                </Box>
-              )}
-              
-              {task.expiryDate && (
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <DateIcon color="primary" sx={{ mr: 1 }} />
-                  <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
-                    {t('endProductBatch.expiryDate')}:
-                  </Typography>
-                  <Typography variant="body1" component="span" sx={{ ml: 1 }}>
-                    {task.expiryDate instanceof Date 
-                      ? task.expiryDate.toLocaleDateString('pl-PL')
-                      : typeof task.expiryDate === 'string'
-                        ? new Date(task.expiryDate).toLocaleDateString('pl-PL')
-                        : task.expiryDate && task.expiryDate.toDate
-                          ? task.expiryDate.toDate().toLocaleDateString('pl-PL')
-                          : t('productionTimeInfo.notSpecified')}
-                  </Typography>
-                </Box>
-              )}
-            </Collapse>
-          </Paper>
-        </Grid>
-      )}
+      {/* Product batch info is now shown in BasicDataTab */}
       
-      {/* Wyświetl partie materiałów zarezerwowane dla tego MO */}
       {relatedBatches.length > 0 && (
         <Grid item xs={12}>
-          <Paper sx={{ p: 2, mb: 2 }}>
+          <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
             <Box 
               sx={sectionHeaderStyle}
               onClick={() => toggleSection('materialBatches')}
             >
-              <Typography variant="h6">
-                {t('sections.materialBatches')}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <BatchIcon color="primary" fontSize="small" />
+                <Typography variant="h6" sx={{ fontSize: '1.1rem' }}>
+                  {t('sections.materialBatches')}
+                </Typography>
+                <Chip label={relatedBatches.length} size="small" color="info" variant="outlined" sx={{ height: 22, fontSize: '0.75rem' }} />
+              </Box>
               <IconButton size="small">
                 {expandedSections.materialBatches ? <ExpandLessIcon /> : <ExpandMoreIcon />}
               </IconButton>
@@ -591,14 +557,20 @@ const TaskDetails = ({ task }) => {
       
       {task?.relatedPurchaseOrders?.length > 0 && (
         <Grid item xs={12}>
-          <Paper sx={{ p: 2, mb: 2 }}>
+          <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
             <Box 
               sx={sectionHeaderStyle}
               onClick={() => toggleSection('linkedPurchaseOrders')}
             >
-              <Typography variant="h6">
-                {t('sections.poReservations')}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <LinkIcon color="primary" fontSize="small" />
+                <Typography variant="h6" sx={{ fontSize: '1.1rem' }}>
+                  {t('sections.poReservations')}
+                </Typography>
+                {task.relatedPurchaseOrders?.length > 0 && (
+                  <Chip label={task.relatedPurchaseOrders.length} size="small" color="secondary" variant="outlined" sx={{ height: 22, fontSize: '0.75rem' }} />
+                )}
+              </Box>
               <IconButton size="small">
                 {expandedSections.linkedPurchaseOrders ? <ExpandLessIcon /> : <ExpandMoreIcon />}
               </IconButton>
