@@ -1451,11 +1451,11 @@ const EnhancedMixingPlan = ({
       sx={{ 
         p: isMobile ? 2 : 1.5, 
         mb: 1.5,
-        // 🚀 GPU acceleration dla płynnego przewijania
+        borderRadius: 2,
         transform: 'translateZ(0)',
         willChange: 'scroll-position',
-        WebkitOverflowScrolling: 'touch', // iOS smooth scroll
-        contain: 'layout style', // Izolacja re-renderów
+        WebkitOverflowScrolling: 'touch',
+        contain: 'layout style',
       }}
     >
       {/* Nagłówek z przyciskami - responsywny */}
@@ -1467,7 +1467,8 @@ const EnhancedMixingPlan = ({
         mb: 1.5,
         gap: isMobile ? 2 : 0
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <AssignmentIcon color="primary" fontSize="small" />
           <Typography variant="h6" sx={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>
             {t('mixingPlan.title')}
           </Typography>

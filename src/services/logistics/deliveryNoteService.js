@@ -152,7 +152,7 @@ export const generateDeliveryNoteNumber = (orderNumber, isEco) => {
  */
 export const buildAttachedDocumentsWithDN = (existingDocs, dnText) => {
   if (!dnText) return existingDocs || '';
-  const cleaned = (existingDocs || '').replace(/\n?Delivery Notes:\n[\s\S]*$/, '').trim();
+  const cleaned = (existingDocs || '').replace(/\n?(?:Delivery Notes:\n|DN: )[\s\S]*$/, '').trim();
   return cleaned ? `${cleaned}\n${dnText}` : dnText;
 };
 
@@ -193,7 +193,7 @@ export const generateDeliveryNoteText = async (items, { resolvedItems: preResolv
     return summary;
   });
 
-  return 'Delivery Notes:\n' + lines.join('\n');
+  return 'DN: ' + lines.join('; ');
 };
 
 /**

@@ -344,6 +344,7 @@
         "machineSelector": "Maszyna dla odczytów",
         "noMachine": "Brak",
         "addRecord": "Dodaj wpis",
+        "noHistory": "Brak historii produkcji dla tego zadania",
         "table": {
             "quantity": "Ilość",
             "startTime": "Start",
@@ -354,6 +355,14 @@
             "comment": "Komentarz",
             "actions": "Akcje"
         }
+    },
+    "productionPlanKpi": {
+        "sessions": "Sesje produkcyjne",
+        "totalProduced": "Wyprodukowano",
+        "totalTime": "Czas produkcji",
+        "lastSession": "Ostatnia",
+        "avgPerSession": "Śr. czas / sesję",
+        "noSessions": "Brak sesji"
     },
     "materialsSummary": {
         "title": "Podsumowanie kosztów materiałów",

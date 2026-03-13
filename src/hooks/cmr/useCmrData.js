@@ -281,6 +281,8 @@ export function useCmrData(id, calculateItemsWeightDetails) {
                 fieldId === 'field-statistical-number' || fieldId === 'field-marks' ||
                 fieldId === 'field-packing') {
               lineHeight = parseInt(fontSize) * 1.6;
+            } else if (fieldId === 'field-documents') {
+              lineHeight = parseInt(fontSize) * 1.15;
             } else {
               lineHeight = parseInt(fontSize) * 1.2;
             }
@@ -375,7 +377,7 @@ export function useCmrData(id, calculateItemsWeightDetails) {
 
             addTextToField(svgDoc, 'field-issue-place-address', cmrData.loadingPlace || '', '7px');
 
-            addTextToField(svgDoc, 'field-documents', cmrData.attachedDocuments, '7px');
+            addTextToField(svgDoc, 'field-documents', cmrData.attachedDocuments, '5.5px');
 
             const vehicleRegText = `${cmrData.vehicleInfo?.vehicleRegistration || ''} / ${cmrData.vehicleInfo?.trailerRegistration || ''}`;
             addTextToField(svgDoc, 'field-vehicle-registration', vehicleRegText, '7px');

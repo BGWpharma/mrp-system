@@ -344,6 +344,7 @@
         "machineSelector": "Machine for readings",
         "noMachine": "None",
         "addRecord": "Add Record",
+        "noHistory": "No production history for this task",
         "table": {
             "quantity": "Quantity",
             "startTime": "Start",
@@ -354,6 +355,14 @@
             "comment": "Comment",
             "actions": "Actions"
         }
+    },
+    "productionPlanKpi": {
+        "sessions": "Production Sessions",
+        "totalProduced": "Produced",
+        "totalTime": "Production Time",
+        "lastSession": "Last",
+        "avgPerSession": "Avg. time / session",
+        "noSessions": "No sessions"
     },
     "materialsSummary": {
         "title": "Material Costs Summary",
